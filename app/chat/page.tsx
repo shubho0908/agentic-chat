@@ -5,16 +5,6 @@ import { authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
-interface User {
-  id: string;
-  email: string;
-  name?: string | null;
-  image?: string | null;
-  emailVerified: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
 export default function ChatPage() {
   const { data: sessionResponse, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['session'],
@@ -29,8 +19,7 @@ export default function ChatPage() {
   });
 
   // Extract user from the session response
-  const user = sessionResponse && typeof sessionResponse === 'object' && 'user' in sessionResponse ? 
-    (sessionResponse as { user?: User }).user : null;
+  const user = sessionResponse?.data?.user
 
   if (isLoading) {
     return (
