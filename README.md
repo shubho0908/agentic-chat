@@ -1,36 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agentic Chat
 
-## Getting Started
+Multi-modal AI chat platform with intelligent query routing, semantic caching, and autonomous agent orchestration.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+A scalable conversational AI system that implements dynamic query classification and routing to specialized handlers. The architecture supports multi-modal interactions including text generation, image synthesis, document intelligence, and autonomous research capabilities while maintaining conversational state through semantic caching layers.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Semantic Caching Layer**  
+Implements semantic similarity-based response caching for text conversations. Supports BYOK (Bring Your Own Key) model providers including OpenAI and Gemini APIs for inference flexibility.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Query Classification & Routing**  
+Decision node analyzes incoming queries and routes to appropriate handlers based on intent classification. Supports dynamic switching between agent invocation and direct response paths.
 
-## Learn More
+**Document Intelligence (RAG + OCR)**  
+Retrieval-Augmented Generation system with re-ranking for improved relevance. OCR pipeline processes document images and scans through async queue architecture for scalability.
 
-To learn more about Next.js, take a look at the following resources:
+**Autonomous Research Agent**  
+Opt-in research mode that performs multi-step information gathering and synthesis. Operates in isolated mode with web search capabilities. Supports export to Notion API, Google Docs API, DOCX, and Markdown formats.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Multi-Agent Workflows**  
+Distributed agent orchestration framework enabling async collaboration between specialized agents. Agents maintain access to RAG, web search, and OCR subsystems with mutual exclusion from research mode.
