@@ -2,7 +2,7 @@ import { qdrantClient, SIMILARITY_THRESHOLD } from "@/constants/qdrant";
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: process.env.OPENAI_SECRET_KEY,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function ensureCollection(embeddingDimension: number) {
