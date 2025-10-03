@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.42",
+    "@qdrant/js-client-rest": "^1.15.1",
     "ai": "^5.0.60",
     "next": "15.5.4",
     "openai": "^6.1.0",
