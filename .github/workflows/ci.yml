@@ -26,7 +26,6 @@ jobs:
         env:
           CI: true
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
@@ -53,7 +52,6 @@ jobs:
         env:
           CI: true
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
