@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Chat - Intelligent Conversations",
+  title: "Agentic chat - Intelligent Conversations",
   description: "Chat with AI assistant powered by OpenAI with semantic caching",
 };
 

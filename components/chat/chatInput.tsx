@@ -74,12 +74,8 @@ export function ChatInput({
         <div className="flex min-h-screen flex-col items-center justify-center p-6">
           <div className="w-full max-w-2xl space-y-8">
             <div className="text-center space-y-4">
-              <div className="mx-auto flex size-24 items-center justify-center rounded-3xl bg-primary shadow-lg">
-                <Sparkles className="size-12 text-primary-foreground" />
-              </div>
-
               <h1 className="text-5xl font-bold tracking-tight text-foreground">
-                AI Chat
+                Agentic chat
               </h1>
 
               <p className="text-lg text-muted-foreground">

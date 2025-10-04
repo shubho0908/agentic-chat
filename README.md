@@ -1,6 +1,6 @@
 # Agentic Chat
 
-Multi-modal AI chat platform with intelligent query routing, semantic caching, and autonomous agent orchestration.
+Multi-modal Agentic chat platform with intelligent query routing, semantic caching, and autonomous agent orchestration.
 
 ## Overview
 
