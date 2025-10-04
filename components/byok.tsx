@@ -125,32 +125,34 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] focus-visible:outline-none">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto focus-visible:outline-none">
         <DialogHeader>
           <DialogTitle>OpenAI API Configuration</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm">
             Configure your OpenAI API key and select a model. Your credentials
             are stored securely in your browser.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-6 py-4">
+        <div className="grid gap-4 sm:gap-6 py-3 sm:py-4">
           <ApiKeyInput value={apiKey} onChange={setApiKey} />
           <ModelSelector selectedModel={selectedModel} onModelSelect={setSelectedModel} />
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 sm:gap-2">
           {isConfigured && (
-            <Button className="rounded-xl" variant="outline" onClick={handleClear}>
-              Clear Settings
+            <Button className="rounded-xl text-sm" variant="outline" onClick={handleClear}>
+              <span className="hidden xs:inline">Clear Settings</span>
+              <span className="xs:hidden">Clear</span>
             </Button>
           )}
           <Button
-            className="rounded-xl"
+            className="rounded-xl text-sm"
             onClick={handleSave}
             disabled={!apiKey.trim() || !selectedModel || !isValidApiKey(apiKey)}
           >
-            Save Configuration
+            <span className="hidden xs:inline">Save Configuration</span>
+            <span className="xs:hidden">Save</span>
           </Button>
         </DialogFooter>
       </DialogContent>

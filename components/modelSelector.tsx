@@ -56,28 +56,28 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
             variant="outline"
             role="combobox"
             aria-expanded={comboboxOpen}
-            className="w-full justify-between h-auto min-h-[52px] px-4 py-2.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-0"
+            className="w-full justify-between h-auto min-h-[52px] px-3 sm:px-4 py-2.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-0"
           >
             {selectedModelData ? (
               <div className="flex flex-col items-start gap-1 flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm">{selectedModelData.name}</span>
+                  <span className="font-semibold text-xs sm:text-sm truncate">{selectedModelData.name}</span>
                   {getCategoryIcon(selectedModelData.category)}
                 </div>
-                <span className="text-xs text-muted-foreground line-clamp-1">
+                <span className="text-xs text-muted-foreground line-clamp-1 text-left">
                   {selectedModelData.description}
                 </span>
               </div>
             ) : (
-              <span className="text-muted-foreground">Select model...</span>
+              <span className="text-muted-foreground text-xs sm:text-sm">Select model...</span>
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[460px] p-0 focus-visible:outline-none" align="start">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] p-0 focus-visible:outline-none" align="start">
           <Command className="rounded-lg">
             <CommandInput placeholder="Search models..." className="h-10 border-0 focus-visible:outline-none focus-visible:ring-0 focus:outline-none focus:ring-0 text-sm" />
-            <CommandList>
+            <CommandList className="max-h-[300px] overflow-y-auto">
               <CommandEmpty className="text-sm py-6">No model found.</CommandEmpty>
               {(["reasoning", "chat", "legacy"] as const).map((category) => (
                 groupedModels[category].length > 0 && (

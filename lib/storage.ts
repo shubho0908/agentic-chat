@@ -71,6 +71,12 @@ export async function hashApiKey(apiKey: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+export async function getApiKeyHash(): Promise<string | null> {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+  return hashApiKey(apiKey);
+}
+
 export function removeApiKey(): void {
   if (!isLocalStorageAvailable()) return;
   try {

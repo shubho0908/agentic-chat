@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import OpenAI from "openai";
 import type { Message } from "@/lib/schemas/chat";
-import { getEncodedApiKey, getModel } from "@/lib/storage";
+import { getApiKey, getModel, getApiKeyHash } from "@/lib/storage";
+import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 
 interface UseChatOptions {
   initialMessages?: Message[];
@@ -35,8 +37,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const assistantMessageId = `assistant-${Date.now()}`;
       let assistantContent = "";
 
-      const encodedApiKey = getEncodedApiKey();
+      const apiKey = getApiKey();
       const model = getModel();
+
+      if (!apiKey) {
+        toast.error("API key not found");
+        return;
+      }
+
+      if (!model) {
+        toast.error("Model not selected");
+        return;
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -46,7 +58,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           content: "",
           id: assistantMessageId,
           timestamp: Date.now(),
-          model: model || undefined,
+          model: model,
         },
       ]);
       setIsLoading(true);
@@ -54,65 +66,27 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       try {
         abortControllerRef.current = new AbortController();
 
-        const requestBody: {
-          messages: { role: string; content: string }[];
-          encodedApiKey?: string;
-          model?: string;
-        } = {
-          messages: [...messages, userMessage].map(({ role, content }) => ({
-            role,
-            content,
-          })),
-        };
-
-        if (encodedApiKey) {
-          requestBody.encodedApiKey = encodedApiKey;
+        const userHash = await getApiKeyHash();
+        
+        if (!userHash) {
+          throw new Error("Failed to generate user hash");
         }
 
-        if (model) {
-          requestBody.model = model;
-        }
-
-        const response = await fetch("/api/chat", {
+        const cacheCheckResponse = await fetch("/api/cache/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            query: content.trim(),
+            userHash,
+          }),
           signal: abortControllerRef.current.signal,
         });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to send message");
-        }
-
-        const contentType = response.headers.get("content-type");
-        
-        if (contentType?.includes("application/json")) {
-          const data = await response.json();
-          assistantContent = data.content;
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: assistantContent }
-                : msg
-            )
-          );
-        } else {
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-
-          if (!reader) {
-            throw new Error("Response body is not readable");
-          }
-
-          while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            assistantContent += chunk;
-
+        if (cacheCheckResponse.ok) {
+          const cacheData = await cacheCheckResponse.json();
+          
+          if (cacheData.cached) {
+            assistantContent = cacheData.response;
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -120,7 +94,66 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                   : msg
               )
             );
+            setIsLoading(false);
+            return;
           }
+        }
+
+        const openai = new OpenAI({
+          apiKey: apiKey,
+          dangerouslyAllowBrowser: true,
+        });
+
+        const messagesForAPI = [
+          {
+            role: "system" as const,
+            content: DEFAULT_ASSISTANT_PROMPT,
+          },
+          ...messages.map(({ role, content }) => ({
+            role: role as "user" | "assistant" | "system",
+            content,
+          })),
+          {
+            role: "user" as const,
+            content: content.trim(),
+          },
+        ];
+
+        const stream = await openai.chat.completions.create({
+          model: model,
+          messages: messagesForAPI,
+          stream: true,
+        });
+
+        for await (const chunk of stream) {
+          if (abortControllerRef.current?.signal.aborted) {
+            break;
+          }
+
+          const delta = chunk.choices[0]?.delta?.content || "";
+          assistantContent += delta;
+
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: assistantContent }
+                : msg
+            )
+          );
+        }
+
+        if (assistantContent && !abortControllerRef.current?.signal.aborted) {
+          await fetch("/api/cache/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: content.trim(),
+              response: assistantContent,
+              userHash,
+            }),
+          }).catch(() => {
+            // Silent fail for cache save
+          });
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {

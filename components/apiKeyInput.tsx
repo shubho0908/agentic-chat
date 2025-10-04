@@ -19,7 +19,7 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor="api-key">API Key</Label>
+      <Label htmlFor="api-key" className="text-sm">API Key</Label>
       <div className="relative">
         <Input
           id="api-key"
@@ -28,8 +28,7 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            "focus-visible:outline-none focus-visible:ring-0",
-            value ? "pr-20" : "",
+            "focus-visible:outline-none focus-visible:ring-0 text-sm pr-10",
             value && !isValidApiKey(value) ? "border-destructive" : ""
           )}
         />
@@ -41,13 +40,13 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
             className="absolute right-1 top-1 h-7 w-7"
             onClick={() => setShowApiKey(!showApiKey)}
           >
-            {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showApiKey ? <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
             <span className="sr-only">{showApiKey ? "Hide" : "Show"} API key</span>
           </Button>
         )}
       </div>
       {value && !isValidApiKey(value) ? (
-        <p className="text-xs text-destructive">
+        <p className="text-xs text-destructive break-words">
           Invalid format. Must be sk-..., sk-proj-..., or sk-svcacct-...
         </p>
       ) : (
@@ -57,7 +56,7 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
             href="https://platform.openai.com/api-keys"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline hover:text-foreground"
+            className="underline hover:text-foreground break-all"
           >
             OpenAI Platform
           </Link>
