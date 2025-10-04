@@ -70,7 +70,7 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
                   {message.content}
                 </p>
               ) : (
-                <AIThinkingAnimation />
+                <AIThinkingAnimation model={message.model} />
               )}
             </div>
           </div>

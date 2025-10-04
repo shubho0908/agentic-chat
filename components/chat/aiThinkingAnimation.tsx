@@ -2,25 +2,43 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { OPENAI_MODELS } from "@/constants/openai-models";
 
-const thinkingMessages = [
-  "Processing your request...",
-  "Analyzing the best response...",
-  "Gathering insights...",
-  "Crafting the perfect answer...",
-  "Almost there...",
+const normalThinkingMessages = ["Processing your request..."];
+
+const reasoningThinkingMessages = [
+  "Analyzing the problem...",
+  "Reasoning through solutions...",
+  "Evaluating approaches...",
+  "Synthesizing insights...",
+  "Formulating response...",
 ];
 
-export function AIThinkingAnimation() {
+interface AIThinkingAnimationProps {
+  model?: string;
+}
+
+export function AIThinkingAnimation({ model }: AIThinkingAnimationProps) {
   const [messageIndex, setMessageIndex] = useState(0);
 
+  const modelCategory = model
+    ? OPENAI_MODELS.find((m) => m.id === model)?.category
+    : "chat";
+
+  const isReasoningModel = modelCategory === "reasoning";
+  const thinkingMessages = isReasoningModel
+    ? reasoningThinkingMessages
+    : normalThinkingMessages;
+
   useEffect(() => {
+    if (!isReasoningModel) return;
+
     const interval = setInterval(() => {
       setMessageIndex((prev) => (prev + 1) % thinkingMessages.length);
     }, 1500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isReasoningModel, thinkingMessages.length]);
 
   return (
     <motion.div
