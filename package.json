@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start",
+    "dev": "NODE_OPTIONS='--use-openssl-ca' next dev --turbopack",
+    "build": "NODE_OPTIONS='--use-openssl-ca' next build --turbopack",
+    "start": "NODE_OPTIONS='--use-openssl-ca' next start",
     "lint": "eslint"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@tanstack/react-query": "^5.90.2",
     "@tanstack/react-query-devtools": "^5.90.2",
+    "@uploadthing/react": "^7.3.3",
     "ai": "^5.0.60",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -33,6 +34,7 @@
     "react-dom": "19.1.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
+    "uploadthing": "^7.7.4",
     "zod": "^4.1.11"
   },
   "devDependencies": {
