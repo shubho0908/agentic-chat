@@ -27,6 +27,7 @@ jobs:
           CI: true
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API: ${{ secrets.QDRANT_API }}
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
         run: npm run lint
@@ -53,6 +54,7 @@ jobs:
           CI: true
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API: ${{ secrets.QDRANT_API }}
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
         run: npm run build
