@@ -7,6 +7,7 @@ export const messageSchema = z.object({
   content: z.string(),
   id: z.string().optional(),
   timestamp: z.number().optional(),
+  model: z.string().optional(),
 });
 
 export const chatRequestSchema = z.object({

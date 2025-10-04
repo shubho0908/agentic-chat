@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import type { Message } from "@/lib/schemas/chat";
+import { getEncodedApiKey, getModel } from "@/lib/storage";
 
 interface UseChatOptions {
   initialMessages?: Message[];
@@ -34,6 +35,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const assistantMessageId = `assistant-${Date.now()}`;
       let assistantContent = "";
 
+      const encodedApiKey = getEncodedApiKey();
+      const model = getModel();
+
       setMessages((prev) => [
         ...prev,
         userMessage,
@@ -42,22 +46,37 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           content: "",
           id: assistantMessageId,
           timestamp: Date.now(),
+          model: model || undefined,
         },
       ]);
       setIsLoading(true);
 
       try {
         abortControllerRef.current = new AbortController();
-        
+
+        const requestBody: {
+          messages: { role: string; content: string }[];
+          encodedApiKey?: string;
+          model?: string;
+        } = {
+          messages: [...messages, userMessage].map(({ role, content }) => ({
+            role,
+            content,
+          })),
+        };
+
+        if (encodedApiKey) {
+          requestBody.encodedApiKey = encodedApiKey;
+        }
+
+        if (model) {
+          requestBody.model = model;
+        }
+
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [...messages, userMessage].map(({ role, content }) => ({
-              role,
-              content,
-            })),
-          }),
+          body: JSON.stringify(requestBody),
           signal: abortControllerRef.current.signal,
         });
 

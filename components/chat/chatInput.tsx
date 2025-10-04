@@ -72,13 +72,13 @@ export function ChatInput({
         </div>
 
         <div className="flex min-h-screen flex-col items-center justify-center p-6">
-          <div className="w-full max-w-2xl space-y-8 animate-in fade-in zoom-in duration-500">
+          <div className="w-full max-w-2xl space-y-8">
             <div className="text-center space-y-4">
-              <div className="mx-auto flex size-24 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-2xl shadow-purple-500/30">
-                <Sparkles className="size-12 text-white" />
+              <div className="mx-auto flex size-24 items-center justify-center rounded-3xl bg-primary shadow-lg">
+                <Sparkles className="size-12 text-primary-foreground" />
               </div>
 
-              <h1 className="bg-gradient-to-br from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-5xl font-bold tracking-tight text-transparent">
+              <h1 className="text-5xl font-bold tracking-tight text-foreground">
                 AI Chat
               </h1>
 
@@ -88,8 +88,7 @@ export function ChatInput({
             </div>
 
             <form onSubmit={handleSubmit} className="relative">
-            <div className="relative rounded-3xl bg-gradient-to-br from-muted/80 via-muted/50 to-muted/30 p-1 shadow-2xl backdrop-blur-xl transition-all duration-300 hover:shadow-purple-500/20 focus-within:shadow-purple-500/30">
-              <div className="relative rounded-[22px] bg-background">
+            <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:bg-muted focus-within:shadow-xl">
               <Textarea
                 ref={textareaRef}
                 value={input}
@@ -122,13 +121,12 @@ export function ChatInput({
                     type="submit"
                     disabled={!input.trim() || isLoading || disabled}
                     size="icon"
-                    className="size-11 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg transition-all hover:scale-105 hover:shadow-xl hover:shadow-purple-500/30 disabled:opacity-50 disabled:hover:scale-100"
+                    className="size-11 rounded-full"
                   >
                     <Send className="size-5" />
                     <span className="sr-only">Send message</span>
                   </Button>
                 )}
-              </div>
               </div>
             </div>
 
@@ -182,7 +180,7 @@ export function ChatInput({
                   type="submit"
                   disabled={!input.trim() || isLoading || disabled}
                   size="icon"
-                  className="size-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-md transition-all hover:shadow-lg disabled:opacity-50"
+                  className="size-10 rounded-xl"
                 >
                   <Send className="size-4" />
                   <span className="sr-only">Send message</span>

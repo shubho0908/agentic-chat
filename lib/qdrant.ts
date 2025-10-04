@@ -44,12 +44,22 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
-export async function searchSemanticCache(queryEmbedding: number[]): Promise<string | null> {
+export async function searchSemanticCache(queryEmbedding: number[], userHash: string): Promise<string | null> {
   try {
     const searchResult = await qdrantClient.search(process.env.CACHE_COLLECTION_NAME as string, {
       vector: queryEmbedding,
       limit: 1,
       with_payload: true,
+      filter: {
+        must: [
+          {
+            key: "userHash",
+            match: {
+              value: userHash
+            }
+          }
+        ]
+      }
     });
 
     if (
@@ -57,7 +67,7 @@ export async function searchSemanticCache(queryEmbedding: number[]): Promise<str
       searchResult[0].score !== undefined &&
       searchResult[0].score >= SIMILARITY_THRESHOLD
     ) {
-      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)})`);
+      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}) for user: ${userHash.substring(0, 8)}...`);
       return searchResult[0].payload?.answer as string;
     }
 
@@ -68,7 +78,7 @@ export async function searchSemanticCache(queryEmbedding: number[]): Promise<str
   }
 }
 
-export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[]): Promise<void> {
+export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userHash: string): Promise<void> {
   try {
     await qdrantClient.upsert(process.env.CACHE_COLLECTION_NAME as string, {
       wait: true,
@@ -77,6 +87,7 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
           id: Date.now(),
           vector: queryEmbedding,
           payload: {
+            userHash: userHash,
             question: userQuery,
             answer: answer,
             timestamp: new Date().toISOString()
@@ -85,7 +96,7 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
       ],
     });
 
-    console.log("💾 Added to semantic cache");
+    console.log(`💾 Added to semantic cache for user: ${userHash.substring(0, 8)}...`);
   } catch (error) {
     console.error("Error adding to semantic cache:", error);
   }
