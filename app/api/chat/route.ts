@@ -1,5 +1,5 @@
 import { streamText, createTextStreamResponse } from 'ai';
-import { openai } from '@ai-sdk/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import { DEFAULT_ASSISTANT_PROMPT } from '../../../lib/prompts';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache, ensureCollection } from '@/lib/qdrant';
@@ -11,9 +11,27 @@ const ChatRequestSchema = z.object({
       content: z.string(),
     })
   ),
+  encodedApiKey: z.string().min(1, 'API key is required'),
+  model: z.string().min(1, 'Model is required'),
 });
 
 export const maxDuration = 30;
+
+function decodeApiKey(encoded: string): string {
+  try {
+    return decodeURIComponent(atob(encoded));
+  } catch {
+    throw new Error('Invalid API key format');
+  }
+}
+
+async function hashApiKey(apiKey: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(apiKey);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export async function POST(req: Request) {
   try {
@@ -33,7 +51,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const { messages } = parsedBody.data;
+    const { messages, encodedApiKey, model } = parsedBody.data;
+
+    const apiKey = decodeApiKey(encodedApiKey);
+    const userHash = await hashApiKey(apiKey);
 
     const lastUserMessage = messages.filter(msg => msg.role === 'user').pop();
     
@@ -44,7 +65,7 @@ export async function POST(req: Request) {
     
     if (lastUserMessage) {
       queryEmbedding = await generateEmbedding(lastUserMessage.content);
-      cachedResponse = await searchSemanticCache(queryEmbedding);
+      cachedResponse = await searchSemanticCache(queryEmbedding, userHash);
     }
 
     if (cachedResponse) {
@@ -71,19 +92,30 @@ export async function POST(req: Request) {
       })),
     ];
 
+    const customOpenAI = createOpenAI({
+      apiKey: apiKey,
+    });
+    const modelProvider = customOpenAI(model);
+
     const result = streamText({
-      model: openai(process.env.OPENAI_MODEL as string),
+      model: modelProvider,
       messages: messagesWithSystemPrompt,
       onFinish: async ({ text }) => {
         if (lastUserMessage && queryEmbedding) {
-          await addToSemanticCache(lastUserMessage.content, text, queryEmbedding);
+          await addToSemanticCache(lastUserMessage.content, text, queryEmbedding, userHash);
         }
       },
     });
 
     return createTextStreamResponse(result);
   } catch (error) {
-    console.error('Error in chat API:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('API key')) {
+      console.error('API key error - details omitted for security');
+    } else {
+      console.error('Error in chat API:', errorMessage);
+    }
 
     if (error instanceof z.ZodError) {
       return new Response(

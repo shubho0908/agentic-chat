@@ -1,8 +1,10 @@
 import { memo } from "react";
-import { User, Bot } from "lucide-react";
+import { User } from "lucide-react";
 import type { Message } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
+import { OpenAIIcon } from "@/components/icons/openai-icon";
+import { OPENAI_MODELS } from "@/constants/openai-models";
 
 interface ChatMessageProps {
   message: Message;
@@ -20,6 +22,10 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
   
   if (message.role === "system") return null;
 
+  const modelName = message.model
+    ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
+    : "AI Assistant";
+
   return (
     <div
       className={cn(
@@ -32,16 +38,16 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
           <div className="flex-shrink-0">
             <div
               className={cn(
-                "flex size-8 items-center justify-center rounded-full ring-2 ring-offset-2 transition-all",
+                "flex size-8 items-center justify-center rounded-full transition-all",
                 isUser
-                  ? "bg-gradient-to-br from-blue-500 to-blue-600 ring-blue-200 dark:ring-blue-900"
-                  : "bg-gradient-to-br from-purple-500 to-purple-600 ring-purple-200 dark:ring-purple-900"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary text-secondary-foreground"
               )}
             >
               {isUser ? (
-                <User className="size-4 text-white" />
+                <User className="size-4" />
               ) : (
-                <Bot className="size-4 text-white" />
+                <OpenAIIcon className="size-4" />
               )}
             </div>
           </div>
@@ -49,7 +55,7 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
           <div className="flex-1 space-y-2 overflow-hidden">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">
-                {isUser ? "You" : "AI Assistant"}
+                {isUser ? "You" : modelName}
               </span>
               {message.timestamp && (
                 <span className="text-xs text-muted-foreground">
