@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import type { Message } from "@/lib/schemas/chat";
 import { getApiKey, getModel, getApiKeyHash } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
+import { useSaveToCache } from "./useSemanticCache";
 
 interface UseChatOptions {
   initialMessages?: Message[];
@@ -22,6 +23,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const saveToCache = useSaveToCache();
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -130,29 +132,25 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             break;
           }
 
-          const delta = chunk.choices[0]?.delta?.content || "";
-          assistantContent += delta;
+          const delta = chunk.choices[0]?.delta?.content;
+          if (delta) {
+            assistantContent += delta;
 
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: assistantContent }
-                : msg
-            )
-          );
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: assistantContent }
+                  : msg
+              )
+            );
+          }
         }
 
         if (assistantContent && !abortControllerRef.current?.signal.aborted) {
-          await fetch("/api/cache/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              query: content.trim(),
-              response: assistantContent,
-              userHash,
-            }),
-          }).catch(() => {
-            // Silent fail for cache save
+          saveToCache.mutate({
+            query: content.trim(),
+            response: assistantContent,
+            userHash,
           });
         }
       } catch (err) {
@@ -172,7 +170,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         abortControllerRef.current = null;
       }
     },
-    [messages, isLoading]
+    [messages, isLoading, saveToCache]
   );
 
   const clearChat = useCallback(() => {

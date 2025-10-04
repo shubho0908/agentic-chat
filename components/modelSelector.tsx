@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { OPENAI_MODELS, type OpenAIModel } from "@/constants/openai-models";
-import { getCategoryIcon, getCategoryLabel } from "../utils/byokUtils";
+import { getCategoryGroupLabel, ModelIcon, CategoryBadge } from "../utils/byokUtils";
 
 interface ModelSelectorProps {
   selectedModel: string;
@@ -61,8 +61,9 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
             {selectedModelData ? (
               <div className="flex flex-col items-start gap-1 flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-center gap-2">
+                  <ModelIcon />
                   <span className="font-semibold text-xs sm:text-sm truncate">{selectedModelData.name}</span>
-                  {getCategoryIcon(selectedModelData.category)}
+                  <CategoryBadge category={selectedModelData.category} />
                 </div>
                 <span className="text-xs text-muted-foreground line-clamp-1 text-left">
                   {selectedModelData.description}
@@ -78,14 +79,15 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
           <Command className="rounded-lg">
             <CommandInput placeholder="Search models..." className="h-10 border-0 focus-visible:outline-none focus-visible:ring-0 focus:outline-none focus:ring-0 text-sm" />
             <CommandList className="max-h-[300px] overflow-y-auto">
-              <CommandEmpty className="text-sm py-6">No model found.</CommandEmpty>
+              <CommandEmpty className="text-sm py-6 text-center">No model found.</CommandEmpty>
               {(["reasoning", "chat", "legacy"] as const).map((category) => (
                 groupedModels[category].length > 0 && (
-                  <CommandGroup key={category} heading={getCategoryLabel(category)} className="px-3 py-2">
+                  <CommandGroup key={category} heading={getCategoryGroupLabel(category)} className="px-3 py-2">
                     {groupedModels[category].map((model) => (
                       <CommandItem
                         key={model.id}
                         value={model.id}
+                        keywords={[model.name, model.description, model.category, getCategoryGroupLabel(model.category)]}
                         onSelect={(currentValue) => {
                           onModelSelect(currentValue);
                           setComboboxOpen(false);
@@ -105,11 +107,12 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                         />
                         <div className="flex flex-col gap-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
+                            <ModelIcon />
                             <span className={cn(
                               "font-semibold text-sm",
                               selectedModel === model.id && "text-primary"
                             )}>{model.name}</span>
-                            {getCategoryIcon(model.category)}
+                            <CategoryBadge category={model.category} />
                           </div>
                           <span className="text-xs text-muted-foreground leading-relaxed">
                             {model.description} • {model.contextWindow.toLocaleString()} tokens
