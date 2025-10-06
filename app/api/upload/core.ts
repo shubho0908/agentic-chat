@@ -2,6 +2,8 @@ import { createUploadthing, type FileRouter, UTFiles } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { z } from "zod";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 const f = createUploadthing();
 
@@ -23,28 +25,30 @@ export const ourFileRouter = {
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
   })
-    .input(z.object({ userHash: z.string().min(1) }))
-    .middleware(async ({ input, files }) => {
-      const { userHash } = input;
+    .input(z.object({}))
+    .middleware(async ({ files }) => {
+      const session = await auth.api.getSession({ headers: await headers() });
 
-      if (!userHash) throw new UploadThingError("Unauthorized");
+      if (!session?.user) throw new UploadThingError("Unauthorized");
+
+      const userId = session.user.id;
 
       const fileOverrides = files.map((file) => ({
         ...file,
-        customId: `${userHash}/${Date.now()}-${file.name}`,
+        customId: `${userId}/${Date.now()}-${file.name}`,
       }));
 
-      return { userHash, [UTFiles]: fileOverrides };
+      return { userId, [UTFiles]: fileOverrides };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("RAG document upload complete for userHash:", metadata.userHash.substring(0, 8) + "...");
+      console.log("RAG document upload complete for userId:", metadata.userId);
       console.log("File url:", file.ufsUrl);
       console.log("File name:", file.name);
       console.log("File type:", file.type);
       console.log("Custom ID:", file.customId);
 
       return { 
-        uploadedBy: metadata.userHash, 
+        uploadedBy: metadata.userId, 
         url: file.ufsUrl,
         name: file.name,
         type: file.type,

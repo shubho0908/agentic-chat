@@ -8,21 +8,16 @@ interface CacheCheckResponse {
 interface CacheSavePayload {
   query: string;
   response: string;
-  userHash: string;
 }
 
-export function useSemanticCache(query: string, userHash: string | null, enabled: boolean = true) {
+export function useSemanticCache(query: string, enabled: boolean = true) {
   return useQuery<CacheCheckResponse>({
-    queryKey: ["agentic-chat-cache", query, userHash],
+    queryKey: ["agentic-chat-cache", query],
     queryFn: async () => {
-      if (!userHash) {
-        throw new Error("User hash is required");
-      }
-
       const response = await fetch("/api/cache/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, userHash }),
+        body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
@@ -31,9 +26,9 @@ export function useSemanticCache(query: string, userHash: string | null, enabled
 
       return response.json();
     },
-    enabled: enabled && !!query && !!userHash,
-    staleTime: 5 * 60 * 1000, // 5 minutes - complements Qdrant cache
-    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    enabled: enabled && !!query,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
@@ -41,11 +36,11 @@ export function useSaveToCache() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ query, response, userHash }: CacheSavePayload) => {
+    mutationFn: async ({ query, response }: CacheSavePayload) => {
       const res = await fetch("/api/cache/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, response, userHash }),
+        body: JSON.stringify({ query, response }),
       });
 
       if (!res.ok) {
@@ -55,12 +50,10 @@ export function useSaveToCache() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      // Invalidate the cache query to update the local cache state
       queryClient.invalidateQueries({
-        queryKey: ["agentic-chat-cache", variables.query, variables.userHash],
+        queryKey: ["agentic-chat-cache", variables.query],
       });
     },
-    // Silent fail - don't throw if cache save fails
     onError: (error) => {
       console.error("Cache save error:", error);
     },

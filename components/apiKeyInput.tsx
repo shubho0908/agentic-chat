@@ -56,7 +56,7 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
             href="https://platform.openai.com/api-keys"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline hover:text-foreground break-all"
+            className="underline hover:text-foreground break-all cursor-pointer"
           >
             OpenAI Platform
           </Link>

@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUploadThing } from "@/utils/uploadthing";
 import { toast } from "sonner";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
@@ -62,18 +63,26 @@ export function FileUploadButton({ onFilesSelected, disabled, currentFileCount =
         disabled={disabled}
       />
 
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={disabled}
-        className="size-10 rounded-xl transition-colors"
-        title="Attach files"
-      >
-        <Paperclip className="size-4" />
-        <span className="sr-only">Attach files</span>
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              className="size-10 rounded-xl transition-colors"
+            >
+              <Paperclip className="size-4" />
+              <span className="sr-only">Attach files</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Attach files</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </>
   );
 }

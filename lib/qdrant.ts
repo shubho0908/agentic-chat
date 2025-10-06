@@ -44,7 +44,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 }
 
-export async function searchSemanticCache(queryEmbedding: number[], userHash: string): Promise<string | null> {
+export async function searchSemanticCache(queryEmbedding: number[], userId: string): Promise<string | null> {
   try {
     const searchResult = await qdrantClient.search(process.env.CACHE_COLLECTION_NAME as string, {
       vector: queryEmbedding,
@@ -53,9 +53,9 @@ export async function searchSemanticCache(queryEmbedding: number[], userHash: st
       filter: {
         must: [
           {
-            key: "userHash",
+            key: "userId",
             match: {
-              value: userHash
+              value: userId
             }
           }
         ]
@@ -67,7 +67,7 @@ export async function searchSemanticCache(queryEmbedding: number[], userHash: st
       searchResult[0].score !== undefined &&
       searchResult[0].score >= SIMILARITY_THRESHOLD
     ) {
-      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}) for user: ${userHash.substring(0, 8)}...`);
+      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}) for user: ${userId}`);
       return searchResult[0].payload?.answer as string;
     }
 
@@ -78,7 +78,7 @@ export async function searchSemanticCache(queryEmbedding: number[], userHash: st
   }
 }
 
-export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userHash: string): Promise<void> {
+export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userId: string): Promise<void> {
   try {
     await qdrantClient.upsert(process.env.CACHE_COLLECTION_NAME as string, {
       wait: true,
@@ -87,7 +87,7 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
           id: Date.now(),
           vector: queryEmbedding,
           payload: {
-            userHash: userHash,
+            userId: userId,
             question: userQuery,
             answer: answer,
             timestamp: new Date().toISOString()
@@ -96,7 +96,7 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
       ],
     });
 
-    console.log(`💾 Added to semantic cache for user: ${userHash.substring(0, 8)}...`);
+    console.log(`💾 Added to semantic cache for user: ${userId}`);
   } catch (error) {
     console.error("Error adding to semantic cache:", error);
   }

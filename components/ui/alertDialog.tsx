@@ -111,7 +111,7 @@ function AlertDialogAction({
   return (
     <DialogPrimitive.Close
       className={cn(
-        "inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50 cursor-pointer",
         className
       )}
       {...props}
@@ -126,7 +126,7 @@ function AlertDialogCancel({
   return (
     <DialogPrimitive.Close
       className={cn(
-        "mt-2 inline-flex h-10 items-center justify-center rounded-xl bg-muted px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-50 sm:mt-0",
+        "mt-2 inline-flex h-10 items-center justify-center rounded-xl bg-muted px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:mt-0",
         className
       )}
       {...props}

@@ -1,9 +1,8 @@
 "use client";
 
 import { type RefObject, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/themeToggle";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +15,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alertDialog";
 import { BYOK } from "@/components/byok";
+import { AuthModal } from "@/components/authModal";
+import { UserMenu } from "@/components/userMenu";
+import { useSession } from "@/lib/auth-client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatHeaderProps {
   onConfigured: (configured: boolean) => void;
@@ -25,14 +28,15 @@ interface ChatHeaderProps {
   autoOpenByok?: boolean;
 }
 
-export function ChatHeader({ 
-  onConfigured, 
-  onNewChat, 
+export function ChatHeader({
+  onConfigured,
+  onNewChat,
   showNewChat = false,
   byokTriggerRef,
-  autoOpenByok = false 
+  autoOpenByok = false
 }: ChatHeaderProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { data: session, isPending } = useSession();
 
   function handleNewChat() {
     onNewChat();
@@ -41,11 +45,6 @@ export function ChatHeader({
 
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-      <BYOK 
-        autoOpen={autoOpenByok}
-        onConfigured={onConfigured}
-        triggerRef={byokTriggerRef}
-      />
       {showNewChat && (
         <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <AlertDialogTrigger asChild>
@@ -74,7 +73,36 @@ export function ChatHeader({
           </AlertDialogContent>
         </AlertDialog>
       )}
-      <ThemeToggle />
+      {isPending ? (
+        <>
+          <Skeleton className="h-9 w-24 rounded-xl" />
+          <Skeleton className="size-9 rounded-full" />
+        </>
+      ) : (
+        <>
+          {session ? (
+            <>
+              <BYOK
+                autoOpen={autoOpenByok}
+                onConfigured={onConfigured}
+                triggerRef={byokTriggerRef}
+              />
+              <UserMenu />
+            </>
+          ) : (
+            <AuthModal>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
+              >
+                <LogIn className="size-4" />
+                <span className="hidden sm:inline">Login</span>
+              </Button>
+            </AuthModal>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import OpenAI from "openai";
 import type { Message } from "@/lib/schemas/chat";
-import { getApiKey, getModel, getApiKeyHash } from "@/lib/storage";
+import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { useSaveToCache } from "./useSemanticCache";
 
@@ -39,13 +38,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const assistantMessageId = `assistant-${Date.now()}`;
       let assistantContent = "";
 
-      const apiKey = getApiKey();
       const model = getModel();
-
-      if (!apiKey) {
-        toast.error("API key not found");
-        return;
-      }
 
       if (!model) {
         toast.error("Model not selected");
@@ -68,18 +61,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       try {
         abortControllerRef.current = new AbortController();
 
-        const userHash = await getApiKeyHash();
-        
-        if (!userHash) {
-          throw new Error("Failed to generate user hash");
-        }
-
         const cacheCheckResponse = await fetch("/api/cache/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: content.trim(),
-            userHash,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -101,11 +87,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           }
         }
 
-        const openai = new OpenAI({
-          apiKey: apiKey,
-          dangerouslyAllowBrowser: true,
-        });
-
         const messagesForAPI = [
           {
             role: "system" as const,
@@ -121,28 +102,57 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
         ];
 
-        const stream = await openai.chat.completions.create({
-          model: model,
-          messages: messagesForAPI,
-          stream: true,
+        const response = await fetch('/api/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages: messagesForAPI,
+            stream: true,
+          }),
+          signal: abortControllerRef.current.signal,
         });
 
-        for await (const chunk of stream) {
-          if (abortControllerRef.current?.signal.aborted) {
-            break;
-          }
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to send message');
+        }
 
-          const delta = chunk.choices[0]?.delta?.content;
-          if (delta) {
-            assistantContent += delta;
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
 
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMessageId
-                  ? { ...msg, content: assistantContent }
-                  : msg
-              )
-            );
+        if (!reader) {
+          throw new Error('No response stream');
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
+
+          for (const line of lines) {
+            const data = line.replace(/^data: /, '').trim();
+            
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                assistantContent += parsed.content;
+
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: assistantContent }
+                      : msg
+                  )
+                );
+              }
+            } catch {
+            }
           }
         }
 
@@ -150,7 +160,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           saveToCache.mutate({
             query: content.trim(),
             response: assistantContent,
-            userHash,
           });
         }
       } catch (err) {
