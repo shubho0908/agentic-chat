@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface ApiKeyResponse {
   exists: boolean;
-  apiKey: string | null;
+  maskedKey: string | null;
+  updatedAt: string | null;
 }
 
 export function useApiKey() {
@@ -15,9 +16,9 @@ export function useApiKey() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          return { exists: false, apiKey: null };
+          return { exists: false, maskedKey: null, updatedAt: null };
         }
-        throw new Error("Failed to fetch API key");
+        throw new Error("Failed to fetch API key status");
       }
 
       return response.json();

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FilePreviewProps {
   files: File[];
@@ -145,9 +146,18 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
                       </div>
                     )}
                     <div className="flex flex-col min-w-0 flex-1">
-                      <span className="text-xs font-medium truncate max-w-[120px]" title={file.name}>
-                        {file.name}
-                      </span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs font-medium truncate max-w-[120px]">
+                              {file.name}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{file.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <span className="text-[10px] text-muted-foreground/70">
                         {formatFileSize(file.size)}
                       </span>

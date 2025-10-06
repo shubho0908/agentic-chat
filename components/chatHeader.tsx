@@ -18,6 +18,7 @@ import { BYOK } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
 import { useSession } from "@/lib/auth-client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatHeaderProps {
   onConfigured: (configured: boolean) => void;
@@ -72,7 +73,12 @@ export function ChatHeader({
           </AlertDialogContent>
         </AlertDialog>
       )}
-      {!isPending && (
+      {isPending ? (
+        <>
+          <Skeleton className="h-9 w-24 rounded-xl" />
+          <Skeleton className="size-9 rounded-full" />
+        </>
+      ) : (
         <>
           {session ? (
             <>

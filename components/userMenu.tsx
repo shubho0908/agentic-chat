@@ -90,9 +90,6 @@ export function UserMenu() {
                   <span className="flex-1 text-left">
                     {theme === "dark" ? "Light Mode" : "Dark Mode"}
                   </span>
-                  <div className="text-xs text-muted-foreground px-2 py-0.5 bg-accent/50 rounded">
-                    {theme === "dark" ? "☀️" : "🌙"}
-                  </div>
                 </>
               )}
               {!mounted && (

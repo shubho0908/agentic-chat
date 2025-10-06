@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { OPENAI_MODELS, DEFAULT_MODEL } from "@/constants/openai-models";
 import { useApiKey, useApiKeyMutations } from "@/hooks/useApiKey";
@@ -41,10 +42,6 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
     if (!isLoading) {
       onConfigured?.(isConfigured);
 
-      if (isConfigured && apiKeyData?.apiKey) {
-        setApiKey(apiKeyData.apiKey);
-      }
-
       if (!isConfigured && autoOpen) {
         const timer = setTimeout(() => {
           setOpen(true);
@@ -52,7 +49,7 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
         return () => clearTimeout(timer);
       }
     }
-  }, [isConfigured, isLoading, autoOpen, onConfigured, apiKeyData]);
+  }, [isConfigured, isLoading, autoOpen, onConfigured]);
 
   useEffect(() => {
     const storedModel = getModel();
@@ -62,12 +59,12 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
   }, []);
 
   const handleSave = async () => {
-    if (!apiKey.trim()) {
+    if (!isConfigured && !apiKey.trim()) {
       toast.error("Please enter your OpenAI API key");
       return;
     }
 
-    if (!isValidApiKey(apiKey)) {
+    if (apiKey.trim() && !isValidApiKey(apiKey)) {
       toast.error("Invalid API key format", {
         description: "Valid formats: sk-..., sk-proj-..., or sk-svcacct-..."
       });
@@ -75,10 +72,14 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
     }
 
     try {
-      await saveApiKeyMutation.mutateAsync(apiKey);
+      if (apiKey.trim()) {
+        await saveApiKeyMutation.mutateAsync(apiKey);
+      }
+      
       const modelSaved = saveModel(selectedModel);
 
       if (modelSaved) {
+        setApiKey("");
         toast.success("Settings saved successfully", {
           description: `Model: ${OPENAI_MODELS.find(m => m.id === selectedModel)?.name}`,
         });
@@ -144,7 +145,35 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
         </DialogHeader>
 
         <div className="grid gap-4 sm:gap-6 py-3 sm:py-4">
-          <ApiKeyInput value={apiKey} onChange={setApiKey} />
+          {isConfigured && apiKeyData?.maskedKey && (
+            <div className="rounded-lg border border-border/60 bg-muted/30 p-3 sm:p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground mb-1">Current API Key</p>
+                  <p className="text-sm font-mono break-all">{apiKeyData.maskedKey}</p>
+                  {apiKeyData.updatedAt && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last updated: {new Date(apiKeyData.updatedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  <div className="size-2 rounded-full bg-green-500" title="Active" />
+                </div>
+              </div>
+            </div>
+          )}
+          <div>
+            <Label htmlFor="api-key" className="text-sm">
+              {isConfigured ? "Update API Key (optional)" : "API Key"}
+            </Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              {isConfigured 
+                ? "Enter a new key only if you want to replace the existing one" 
+                : "Your API key will be encrypted and stored securely"}
+            </p>
+            <ApiKeyInput value={apiKey} onChange={setApiKey} />
+          </div>
           <ModelSelector selectedModel={selectedModel} onModelSelect={setSelectedModel} />
         </div>
 
@@ -158,10 +187,15 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
           <Button
             className="rounded-xl text-sm"
             onClick={handleSave}
-            disabled={!apiKey.trim() || !selectedModel || !isValidApiKey(apiKey) || saveApiKeyMutation.isPending}
+            disabled={
+              (!isConfigured && !apiKey.trim()) || 
+              !selectedModel || 
+              (apiKey.trim() && !isValidApiKey(apiKey)) || 
+              saveApiKeyMutation.isPending
+            }
           >
             <span className="hidden xs:inline">
-              {saveApiKeyMutation.isPending ? "Saving..." : "Save Configuration"}
+              {saveApiKeyMutation.isPending ? "Saving..." : isConfigured ? "Update Settings" : "Save Configuration"}
             </span>
             <span className="xs:hidden">
               {saveApiKeyMutation.isPending ? "..." : "Save"}

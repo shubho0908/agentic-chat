@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { encryptApiKey, decryptApiKey } from '@/lib/encryption';
+import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
 
 export async function POST(request: NextRequest) {
@@ -43,8 +43,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error saving API key:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to save API key' },
       { status: 500 }
@@ -65,26 +64,34 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { encryptedApiKey: true },
+      select: { 
+        encryptedApiKey: true,
+        apiKeyUpdatedAt: true,
+      },
     });
 
     if (!user?.encryptedApiKey) {
       return NextResponse.json(
-        { exists: false, apiKey: null },
+        { 
+          exists: false, 
+          maskedKey: null,
+          updatedAt: null,
+        },
         { status: 200 }
       );
     }
 
     const decrypted = decryptApiKey(user.encryptedApiKey);
+    const masked = maskApiKey(decrypted);
 
     return NextResponse.json({
       exists: true,
-      apiKey: decrypted,
+      maskedKey: masked,
+      updatedAt: user.apiKeyUpdatedAt,
     });
-  } catch (error) {
-    console.error('Error retrieving API key:', error);
+  } catch {
     return NextResponse.json(
-      { error: 'Failed to retrieve API key' },
+      { error: 'Failed to retrieve API key status' },
       { status: 500 }
     );
   }
@@ -110,8 +117,7 @@ export async function DELETE() {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting API key:', error);
+  } catch {
     return NextResponse.json(
       { error: 'Failed to delete API key' },
       { status: 500 }

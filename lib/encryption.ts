@@ -32,8 +32,7 @@ export function encryptApiKey(plaintext: string): string {
     
     // Format: iv:authTag:encrypted
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
-  } catch (error) {
-    console.error('Encryption error:', error);
+  } catch {
     throw new Error('Failed to encrypt API key');
   }
 }
@@ -58,12 +57,22 @@ export function decryptApiKey(encrypted: string): string {
     decrypted += decipher.final('utf8');
     
     return decrypted;
-  } catch (error) {
-    console.error('Decryption error:', error);
+  } catch {
     throw new Error('Failed to decrypt API key');
   }
 }
 
 export function hashApiKey(apiKey: string): string {
   return createHash('sha256').update(apiKey).digest('hex');
+}
+
+export function maskApiKey(apiKey: string): string {
+  if (!apiKey || apiKey.length < 8) {
+    return '••••••••';
+  }
+  
+  const prefix = apiKey.slice(0, 7);
+  const lastFour = apiKey.slice(-4);
+  
+  return `${prefix}...${lastFour}`;
 }
