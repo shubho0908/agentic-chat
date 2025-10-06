@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/themeToggle";
 import {
@@ -16,6 +16,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alertDialog";
 import { BYOK } from "@/components/byok";
+import { AuthModal } from "@/components/authModal";
+import { useSession } from "@/lib/auth-client";
 
 interface ChatHeaderProps {
   onConfigured: (configured: boolean) => void;
@@ -33,6 +35,7 @@ export function ChatHeader({
   autoOpenByok = false 
 }: ChatHeaderProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { data: session, isPending } = useSession();
 
   function handleNewChat() {
     onNewChat();
@@ -41,11 +44,28 @@ export function ChatHeader({
 
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-      <BYOK 
-        autoOpen={autoOpenByok}
-        onConfigured={onConfigured}
-        triggerRef={byokTriggerRef}
-      />
+      {!isPending && (
+        <>
+          {session ? (
+            <BYOK 
+              autoOpen={autoOpenByok}
+              onConfigured={onConfigured}
+              triggerRef={byokTriggerRef}
+            />
+          ) : (
+            <AuthModal>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
+              >
+                <LogIn className="size-4" />
+                <span className="hidden sm:inline">Login</span>
+              </Button>
+            </AuthModal>
+          )}
+        </>
+      )}
       {showNewChat && (
         <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <AlertDialogTrigger asChild>
