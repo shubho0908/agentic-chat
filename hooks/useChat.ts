@@ -2,7 +2,6 @@ import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import type { Message } from "@/lib/schemas/chat";
 import { getModel } from "@/lib/storage";
-import { getApiKeyHash } from "./useApiKey";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { useSaveToCache } from "./useSemanticCache";
 
@@ -62,18 +61,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       try {
         abortControllerRef.current = new AbortController();
 
-        const userHash = await getApiKeyHash();
-        
-        if (!userHash) {
-          throw new Error("Failed to generate user hash");
-        }
-
         const cacheCheckResponse = await fetch("/api/cache/check", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: content.trim(),
-            userHash,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -168,7 +160,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           saveToCache.mutate({
             query: content.trim(),
             response: assistantContent,
-            userHash,
           });
         }
       } catch (err) {

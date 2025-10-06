@@ -1,14 +1,24 @@
 import { z } from 'zod';
 import { generateEmbedding, addToSemanticCache, ensureCollection } from '@/lib/qdrant';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 const CacheSaveSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   response: z.string().min(1, 'Response is required'),
-  userHash: z.string().min(1, 'User hash is required'),
 });
 
 export async function POST(req: Request) {
   try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    
+    if (!session?.user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     const requestBody = await req.json();
     const parsedBody = CacheSaveSchema.safeParse(requestBody);
 
@@ -25,12 +35,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const { query, response, userHash } = parsedBody.data;
+    const { query, response } = parsedBody.data;
 
     await ensureCollection(3072);
 
     const queryEmbedding = await generateEmbedding(query);
-    await addToSemanticCache(query, response, queryEmbedding, userHash);
+    await addToSemanticCache(query, response, queryEmbedding, session.user.id);
 
     return new Response(
       JSON.stringify({

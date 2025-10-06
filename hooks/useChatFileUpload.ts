@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useUploadThing } from "@/utils/uploadthing";
-import { getApiKeyHash } from "./useApiKey";
 import { toast } from "sonner";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
 
@@ -29,16 +28,7 @@ export function useChatFileUpload() {
 
     setIsUploading(true);
     try {
-      const userHash = await getApiKeyHash();
-      if (!userHash) {
-        toast.error("Authentication required", {
-          description: "Please configure your API key first",
-        });
-        setIsUploading(false);
-        return false;
-      }
-
-      await startUpload(selectedFiles, { userHash });
+      await startUpload(selectedFiles, {});
       return true;
     } catch (error) {
       toast.error("Upload failed", {

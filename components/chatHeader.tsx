@@ -27,12 +27,12 @@ interface ChatHeaderProps {
   autoOpenByok?: boolean;
 }
 
-export function ChatHeader({ 
-  onConfigured, 
-  onNewChat, 
+export function ChatHeader({
+  onConfigured,
+  onNewChat,
   showNewChat = false,
   byokTriggerRef,
-  autoOpenByok = false 
+  autoOpenByok = false
 }: ChatHeaderProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: session, isPending } = useSession();
@@ -44,31 +44,6 @@ export function ChatHeader({
 
   return (
     <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-      {!isPending && (
-        <>
-          {session ? (
-            <>
-              <BYOK 
-                autoOpen={autoOpenByok}
-                onConfigured={onConfigured}
-                triggerRef={byokTriggerRef}
-              />
-              <UserMenu />
-            </>
-          ) : (
-            <AuthModal>
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
-              >
-                <LogIn className="size-4" />
-                <span className="hidden sm:inline">Login</span>
-              </Button>
-            </AuthModal>
-          )}
-        </>
-      )}
       {showNewChat && (
         <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <AlertDialogTrigger asChild>
@@ -96,6 +71,31 @@ export function ChatHeader({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+      {!isPending && (
+        <>
+          {session ? (
+            <>
+              <BYOK
+                autoOpen={autoOpenByok}
+                onConfigured={onConfigured}
+                triggerRef={byokTriggerRef}
+              />
+              <UserMenu />
+            </>
+          ) : (
+            <AuthModal>
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
+              >
+                <LogIn className="size-4" />
+                <span className="hidden sm:inline">Login</span>
+              </Button>
+            </AuthModal>
+          )}
+        </>
       )}
     </div>
   );

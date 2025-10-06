@@ -73,29 +73,3 @@ export function useApiKeyMutations() {
     deleteApiKey,
   };
 }
-
-export async function getApiKeyHash(): Promise<string | null> {
-  try {
-    const response = await fetch("/api/settings/api-key", {
-      method: "GET",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    if (!data.exists || !data.apiKey) {
-      return null;
-    }
-
-    const encoder = new TextEncoder();
-    const encodedData = encoder.encode(data.apiKey);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", encodedData);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  } catch (error) {
-    console.error("Error getting API key hash:", error);
-    return null;
-  }
-}
