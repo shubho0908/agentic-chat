@@ -5,26 +5,37 @@ import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUploadThing } from "@/utils/uploadthing";
 import { toast } from "sonner";
+import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
 
 interface FileUploadButtonProps {
   onFilesSelected: (files: File[]) => void;
   disabled?: boolean;
+  currentFileCount?: number;
 }
 
-export function FileUploadButton({ onFilesSelected, disabled }: FileUploadButtonProps) {
+export function FileUploadButton({ onFilesSelected, disabled, currentFileCount = 0 }: FileUploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { routeConfig } = useUploadThing("ragDocumentUploader");
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      const maxFiles = 5;
-      if (files.length > maxFiles) {
-        toast.error("Too many files", {
-          description: `You can only upload up to ${maxFiles} files at once`,
+      const remainingSlots = MAX_FILE_ATTACHMENTS - currentFileCount;
+      
+      if (remainingSlots <= 0) {
+        toast.error("Maximum files reached", {
+          description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files total`,
         });
         return;
       }
+      
+      if (files.length > remainingSlots) {
+        toast.error("Too many files", {
+          description: `You can only add ${remainingSlots} more file(s)`,
+        });
+        return;
+      }
+      
       onFilesSelected(files);
     }
     if (fileInputRef.current) {

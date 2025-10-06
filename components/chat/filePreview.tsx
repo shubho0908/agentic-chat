@@ -96,22 +96,22 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
         >
           <div className="border-b border-border/50 px-3 pt-3 pb-2 relative">
             {canScrollLeft && (
-              <button
+              <Button
                 type="button"
                 onClick={() => scroll("left")}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                className="absolute cursor-pointer left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
               >
-                <ChevronLeft className="size-4" />
-              </button>
+                <ChevronLeft className="size-4 text-foreground" />
+              </Button>
             )}
             {canScrollRight && (
-              <button
+              <Button
                 type="button"
                 onClick={() => scroll("right")}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                className="absolute cursor-pointer right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
               >
-                <ChevronRight className="size-4" />
-              </button>
+                <ChevronRight className="size-4 text-foreground" />
+              </Button>
             )}
             <div 
               ref={scrollContainerRef}

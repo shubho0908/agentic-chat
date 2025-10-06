@@ -1,25 +1,26 @@
 import { createUploadthing, type FileRouter, UTFiles } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { z } from "zod";
+import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
 
 const f = createUploadthing();
 
 export const ourFileRouter = {
   ragDocumentUploader: f({
-    image: { maxFileSize: "8MB", maxFileCount: 5 },
-    pdf: { maxFileSize: "16MB", maxFileCount: 5 },
-    text: { maxFileSize: "4MB", maxFileCount: 5 },
+    image: { maxFileSize: "8MB", maxFileCount: MAX_FILE_ATTACHMENTS },
+    pdf: { maxFileSize: "16MB", maxFileCount: MAX_FILE_ATTACHMENTS },
+    text: { maxFileSize: "4MB", maxFileCount: MAX_FILE_ATTACHMENTS },
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
       maxFileSize: "16MB",
-      maxFileCount: 5,
+      maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
       maxFileSize: "16MB",
-      maxFileCount: 5,
+      maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "application/vnd.ms-excel": {
       maxFileSize: "16MB",
-      maxFileCount: 5,
+      maxFileCount: MAX_FILE_ATTACHMENTS,
     },
   })
     .input(z.object({ userHash: z.string().min(1) }))
