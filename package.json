@@ -6,7 +6,10 @@
     "dev": "NODE_OPTIONS='--use-openssl-ca' next dev --turbopack",
     "build": "NODE_OPTIONS='--use-openssl-ca' next build --turbopack",
     "start": "NODE_OPTIONS='--use-openssl-ca' next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.42",
