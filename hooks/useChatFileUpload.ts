@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useUploadThing } from "@/utils/uploadthing";
-import { getApiKeyHash } from "@/lib/storage";
+import { getApiKeyHash } from "./useApiKey";
 import { toast } from "sonner";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
 

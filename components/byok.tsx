@@ -14,13 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { OPENAI_MODELS, DEFAULT_MODEL } from "@/constants/openai-models";
-import {
-  saveApiKey,
-  getApiKey,
-  saveModel,
-  getModel,
-  clearAllSettings,
-} from "@/lib/storage";
+import { useApiKey, useApiKeyMutations } from "@/hooks/useApiKey";
+import { saveModel, getModel, removeModel } from "@/lib/storage";
 import { toast } from "sonner";
 import { ApiKeyInput } from "./apiKeyInput";
 import { ModelSelector } from "./modelSelector";
@@ -36,32 +31,37 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
-  const [isConfigured, setIsConfigured] = useState(false);
+
+  const { data: apiKeyData, isLoading } = useApiKey();
+  const { saveApiKey: saveApiKeyMutation, deleteApiKey: deleteApiKeyMutation } = useApiKeyMutations();
+
+  const isConfigured = apiKeyData?.exists ?? false;
 
   useEffect(() => {
-    const storedApiKey = getApiKey();
-    const storedModel = getModel();
+    if (!isLoading) {
+      onConfigured?.(isConfigured);
 
-    if (storedApiKey) {
-      setApiKey(storedApiKey);
-      setIsConfigured(true);
-      onConfigured?.(true);
-    } else {
-      onConfigured?.(false);
-      if (autoOpen) {
+      if (isConfigured && apiKeyData?.apiKey) {
+        setApiKey(apiKeyData.apiKey);
+      }
+
+      if (!isConfigured && autoOpen) {
         const timer = setTimeout(() => {
           setOpen(true);
         }, 200);
         return () => clearTimeout(timer);
       }
     }
+  }, [isConfigured, isLoading, autoOpen, onConfigured, apiKeyData]);
 
+  useEffect(() => {
+    const storedModel = getModel();
     if (storedModel) {
       setSelectedModel(storedModel);
     }
-  }, [autoOpen, onConfigured]);
+  }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!apiKey.trim()) {
       toast.error("Please enter your OpenAI API key");
       return;
@@ -74,28 +74,37 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
       return;
     }
 
-    const apiKeySaved = saveApiKey(apiKey);
-    const modelSaved = saveModel(selectedModel);
+    try {
+      await saveApiKeyMutation.mutateAsync(apiKey);
+      const modelSaved = saveModel(selectedModel);
 
-    if (apiKeySaved && modelSaved) {
-      setIsConfigured(true);
-      onConfigured?.(true);
-      toast.success("Settings saved successfully", {
-        description: `Model: ${OPENAI_MODELS.find(m => m.id === selectedModel)?.name}`,
+      if (modelSaved) {
+        toast.success("Settings saved successfully", {
+          description: `Model: ${OPENAI_MODELS.find(m => m.id === selectedModel)?.name}`,
+        });
+        setOpen(false);
+      } else {
+        toast.error("Failed to save model preference");
+      }
+    } catch (error) {
+      toast.error("Failed to save API key", {
+        description: error instanceof Error ? error.message : "Please try again",
       });
-      setOpen(false);
-    } else {
-      toast.error("Failed to save settings. localStorage might be disabled.");
     }
   };
 
-  const handleClear = () => {
-    clearAllSettings();
-    setApiKey("");
-    setSelectedModel(DEFAULT_MODEL);
-    setIsConfigured(false);
-    onConfigured?.(false);
-    toast.success("Settings cleared");
+  const handleClear = async () => {
+    try {
+      await deleteApiKeyMutation.mutateAsync();
+      removeModel();
+      setApiKey("");
+      setSelectedModel(DEFAULT_MODEL);
+      toast.success("Settings cleared");
+    } catch (error) {
+      toast.error("Failed to clear settings", {
+        description: error instanceof Error ? error.message : "Please try again",
+      });
+    }
   };
 
   return (
@@ -149,10 +158,14 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
           <Button
             className="rounded-xl text-sm"
             onClick={handleSave}
-            disabled={!apiKey.trim() || !selectedModel || !isValidApiKey(apiKey)}
+            disabled={!apiKey.trim() || !selectedModel || !isValidApiKey(apiKey) || saveApiKeyMutation.isPending}
           >
-            <span className="hidden xs:inline">Save Configuration</span>
-            <span className="xs:hidden">Save</span>
+            <span className="hidden xs:inline">
+              {saveApiKeyMutation.isPending ? "Saving..." : "Save Configuration"}
+            </span>
+            <span className="xs:hidden">
+              {saveApiKeyMutation.isPending ? "..." : "Save"}
+            </span>
           </Button>
         </DialogFooter>
       </DialogContent>

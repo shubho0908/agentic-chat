@@ -32,8 +32,8 @@ export function useSemanticCache(query: string, userHash: string | null, enabled
       return response.json();
     },
     enabled: enabled && !!query && !!userHash,
-    staleTime: 5 * 60 * 1000, // 5 minutes - complements Qdrant cache
-    gcTime: 10 * 60 * 1000, // 10 minutes garbage collection
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
@@ -55,12 +55,10 @@ export function useSaveToCache() {
       return res.json();
     },
     onSuccess: (_, variables) => {
-      // Invalidate the cache query to update the local cache state
       queryClient.invalidateQueries({
         queryKey: ["agentic-chat-cache", variables.query, variables.userHash],
       });
     },
-    // Silent fail - don't throw if cache save fails
     onError: (error) => {
       console.error("Cache save error:", error);
     },

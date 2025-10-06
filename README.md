@@ -8,8 +8,8 @@ A scalable conversational AI system that implements dynamic query classification
 
 ## Architecture
 
-**BYOK (Bring Your Own Key) - Security First**  
-Industry-leading security model where API keys never leave the user's browser. Client-side OpenAI SDK integration ensures direct browser-to-OpenAI communication with zero server exposure.
+**BYOK (Bring Your Own Key) - Enterprise-Grade Security**  
+Production-ready security architecture with AES-256-GCM encrypted API key storage in PostgreSQL. Server-side proxy handles all OpenAI communications, eliminating client-side key exposure and enabling rate limiting, usage tracking, and cost management.
 
 **Semantic Caching Layer**  
 Implements semantic similarity-based response caching for text conversations. Supports BYOK (Bring Your Own Key) model providers including OpenAI and Gemini APIs for inference flexibility.

@@ -15,7 +15,7 @@ import { signIn } from "@/lib/auth-client";
 import { toast } from "sonner";
 
 interface AuthModalProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -41,7 +41,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent className="sm:max-w-[440px] border border-border/40">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-2xl font-semibold text-center">
@@ -57,7 +57,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
           <Button
             onClick={handleGoogleSignIn}
             disabled={isLoading}
-            className="w-full rounded-xl h-12 text-base font-medium gap-3 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-sm"
+            className="w-full rounded-xl h-12 text-base font-medium gap-3 bg-white hover:bg-gray-200 text-gray-900 hover:text-gray-900 border border-gray-300 shadow-sm"
             variant="outline"
           >
             {isLoading ? (

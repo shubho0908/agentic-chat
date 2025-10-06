@@ -3,7 +3,6 @@
 import { type RefObject, useState } from "react";
 import { Plus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/themeToggle";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +16,7 @@ import {
 } from "@/components/ui/alertDialog";
 import { BYOK } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
+import { UserMenu } from "@/components/userMenu";
 import { useSession } from "@/lib/auth-client";
 
 interface ChatHeaderProps {
@@ -47,11 +47,14 @@ export function ChatHeader({
       {!isPending && (
         <>
           {session ? (
-            <BYOK 
-              autoOpen={autoOpenByok}
-              onConfigured={onConfigured}
-              triggerRef={byokTriggerRef}
-            />
+            <>
+              <BYOK 
+                autoOpen={autoOpenByok}
+                onConfigured={onConfigured}
+                triggerRef={byokTriggerRef}
+              />
+              <UserMenu />
+            </>
           ) : (
             <AuthModal>
               <Button
@@ -94,7 +97,6 @@ export function ChatHeader({
           </AlertDialogContent>
         </AlertDialog>
       )}
-      <ThemeToggle />
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { FormEvent } from "react";
 import { Sparkles } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { ThemeToggle } from "@/components/themeToggle";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
 import { FilePreview } from "./filePreview";
@@ -63,10 +62,6 @@ export function ChatInput({
   if (centered) {
     return (
       <>
-        <div className="fixed top-4 right-4 z-50 animate-in fade-in duration-500">
-          <ThemeToggle />
-        </div>
-
         <div className="flex min-h-screen flex-col items-center justify-center p-6">
           <div className="w-full max-w-2xl space-y-8">
             <div className="text-center space-y-4">
