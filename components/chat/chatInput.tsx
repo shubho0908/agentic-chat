@@ -1,9 +1,13 @@
-import { useState, useRef, KeyboardEvent, FormEvent } from "react";
-import { Send, StopCircle, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FormEvent } from "react";
+import { Sparkles } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/themeToggle";
-import { cn } from "@/lib/utils";
+import { ActionButtons } from "./actionButtons";
+import { FileUploadButton } from "./fileUploadButton";
+import { FilePreview } from "./filePreview";
+import { useChatFileUpload } from "@/hooks/useChatFileUpload";
+import { useChatTextarea } from "@/hooks/useChatTextarea";
+import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -22,46 +26,38 @@ export function ChatInput({
   disabled = false,
   centered = false,
 }: ChatInputProps) {
-  const [input, setInput] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const {
+    selectedFiles,
+    isUploading,
+    uploadFiles,
+    handleFilesSelected,
+    handleRemoveFile,
+  } = useChatFileUpload();
+
+  const {
+    input,
+    setInput,
+    textareaRef,
+    handleKeyDown,
+    handleInput,
+    clearInput,
+  } = useChatTextarea(sendMessage);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     sendMessage();
   }
 
-  function sendMessage() {
-    if (!input.trim() || isLoading || disabled) return;
+  async function sendMessage() {
+    if (!input.trim() || isLoading || disabled || isUploading) return;
+
+    if (selectedFiles.length > 0) {
+      const success = await uploadFiles();
+      if (!success) return;
+    }
 
     onSend(input);
-    setInput("");
-    resetTextareaHeight();
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  function handleInput() {
-    adjustTextareaHeight();
-  }
-
-  function adjustTextareaHeight() {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-  }
-
-  function resetTextareaHeight() {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "auto";
+    clearInput();
   }
 
   if (centered) {
@@ -84,47 +80,37 @@ export function ChatInput({
             </div>
 
             <form onSubmit={handleSubmit} className="relative">
-            <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:bg-muted focus-within:shadow-xl">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onInput={handleInput}
-                placeholder={placeholder}
-                disabled={disabled || isLoading}
-                rows={1}
-                className={cn(
-                  "min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-16 text-base focus-visible:ring-0 focus-visible:ring-offset-0",
-                  "placeholder:text-muted-foreground/50"
-                )}
-              />
+              <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:shadow-xl overflow-hidden">
+                <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onInput={handleInput}
+                  placeholder={placeholder}
+                  disabled={disabled || isLoading || isUploading}
+                  rows={1}
+                  className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-16 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+                />
 
-              <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                {isLoading && onStop ? (
-                  <Button
-                    type="button"
-                    onClick={onStop}
-                    size="icon"
-                    variant="ghost"
-                    className="size-11 rounded-2xl hover:bg-destructive/10"
-                  >
-                    <StopCircle className="size-5 text-destructive" />
-                    <span className="sr-only">Stop generating</span>
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    disabled={!input.trim() || isLoading || disabled}
-                    size="icon"
-                    className="size-11 rounded-full"
-                  >
-                    <Send className="size-5" />
-                    <span className="sr-only">Send message</span>
-                  </Button>
-                )}
+                <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <FileUploadButton
+                    disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                    onFilesSelected={handleFilesSelected}
+                    currentFileCount={selectedFiles.length}
+                  />
+                  <ActionButtons
+                    isLoading={isLoading}
+                    isUploading={isUploading}
+                    disabled={disabled}
+                    hasInput={!!input.trim()}
+                    onStop={onStop}
+                    size="large"
+                  />
+                </div>
               </div>
-            </div>
+            </form>
 
             <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
@@ -132,9 +118,8 @@ export function ChatInput({
                 Press <kbd className="rounded-md bg-muted px-2 py-1 text-xs font-semibold">Enter</kbd> to send
               </span>
             </div>
-          </form>
+          </div>
         </div>
-      </div>
       </>
     );
   }
@@ -143,7 +128,8 @@ export function ChatInput({
     <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-3xl p-4">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md">
+          <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md overflow-hidden">
+            <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
             <Textarea
               ref={textareaRef}
               value={input}
@@ -151,37 +137,24 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               onInput={handleInput}
               placeholder={placeholder}
-              disabled={disabled || isLoading}
+              disabled={disabled || isLoading || isUploading}
               rows={1}
-              className={cn(
-                "min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0",
-                "placeholder:text-muted-foreground/60"
-              )}
+              className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
             />
 
-            <div className="absolute bottom-2 right-2 flex items-center gap-2">
-              {isLoading && onStop ? (
-                <Button
-                  type="button"
-                  onClick={onStop}
-                  size="icon"
-                  variant="ghost"
-                  className="size-10 rounded-xl"
-                >
-                  <StopCircle className="size-5 text-destructive" />
-                  <span className="sr-only">Stop generating</span>
-                </Button>
-              ) : (
-                <Button
-                  type="submit"
-                  disabled={!input.trim() || isLoading || disabled}
-                  size="icon"
-                  className="size-10 rounded-xl"
-                >
-                  <Send className="size-4" />
-                  <span className="sr-only">Send message</span>
-                </Button>
-              )}
+            <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              <FileUploadButton
+                disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                onFilesSelected={handleFilesSelected}
+                currentFileCount={selectedFiles.length}
+              />
+              <ActionButtons
+                isLoading={isLoading}
+                isUploading={isUploading}
+                disabled={disabled}
+                hasInput={!!input.trim()}
+                onStop={onStop}
+              />
             </div>
           </div>
         </form>
