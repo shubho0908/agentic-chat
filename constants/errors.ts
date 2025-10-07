@@ -40,6 +40,12 @@ export const API_ERROR_MESSAGES = {
   FAILED_DELETE_API_KEY: "Failed to delete API key",
   CACHE_CHECK_FAILED: "Cache check failed",
   CACHE_SAVE_FAILED: "Cache save failed",
+  MEMORY_FETCH_FAILED: "Failed to fetch memories",
+  MEMORY_ADD_FAILED: "Failed to add memory",
+  MEMORY_DELETE_FAILED: "Failed to delete memory",
+  MEMORY_UPDATE_FAILED: "Failed to update memory",
+  MEMORY_SEARCH_FAILED: "Failed to search memories",
+  MEMORY_EXTRACT_FAILED: "Failed to extract memories",
   INTERNAL_SERVER_ERROR: "Internal server error",
   NO_RESPONSE_STREAM: "No response stream",
   OPENAI_RATE_LIMIT: "Rate limit exceeded. Please try again later",
@@ -89,6 +95,13 @@ export const TOAST_ERROR_MESSAGES = {
     FAILED_CHECK: "Cache check failed",
     FAILED_SAVE: "Failed to save to cache",
   },
+  MEMORY: {
+    FAILED_FETCH: "Failed to fetch memories",
+    FAILED_ADD: "Failed to add memory",
+    FAILED_DELETE: "Failed to delete memory",
+    FAILED_SEARCH: "Failed to search memories",
+    FAILED_EXTRACT: "Failed to extract memories",
+  },
 } as const;
 
 export const TOAST_SUCCESS_MESSAGES = {
@@ -122,6 +135,8 @@ export const HOOK_ERROR_MESSAGES = {
   FAILED_FETCH_CONVERSATION: "Failed to fetch conversation",
   FAILED_CACHE_CHECK: "Cache check failed",
   FAILED_SAVE_CACHE: "Failed to save to cache",
+  FAILED_MEMORY_FETCH: "Failed to fetch memories",
+  FAILED_MEMORY_SEARCH: "Failed to search memories",
   UNKNOWN_ERROR: "Unknown error",
   UNKNOWN_ERROR_OCCURRED: "Unknown error occurred",
 } as const;
@@ -133,6 +148,7 @@ export const HTTP_STATUS = {
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  GONE: 410,
   INTERNAL_SERVER_ERROR: 500,
 } as const;
 

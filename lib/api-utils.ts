@@ -44,3 +44,11 @@ export function paginateResults<T extends { id: string }>(items: T[], limit: num
   
   return { items: paginatedItems, nextCursor, hasMore };
 }
+
+export function jsonResponse(data: unknown, status: number = HTTP_STATUS.OK): NextResponse {
+  return NextResponse.json(data, { status });
+}
+
+export function errorResponse(error: string, message?: string, status: number = HTTP_STATUS.INTERNAL_SERVER_ERROR): NextResponse {
+  return NextResponse.json({ error, ...(message && { message }) }, { status });
+}

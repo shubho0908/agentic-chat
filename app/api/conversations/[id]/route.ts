@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, paginateResults } from '@/lib/api-utils';
+import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
@@ -17,10 +17,7 @@ export async function GET(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -36,13 +33,12 @@ export async function GET(
       ...(cursor && { cursor: { id: cursor }, skip: 1 })
     });
 
-    // Transform role to lowercase for frontend compatibility
     const transformedMessages = messages.map(msg => ({
       ...msg,
       role: msg.role.toLowerCase()
     }));
 
-    return NextResponse.json({
+    return jsonResponse({
       conversation: {
         id: conversation.id,
         title: conversation.title,
@@ -53,10 +49,10 @@ export async function GET(
       messages: paginateResults(transformedMessages, limit)
     });
   } catch (error) {
-    console.error('Error fetching conversation:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATION },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATION,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }
@@ -72,46 +68,29 @@ export async function PATCH(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const body = await request.json();
     const { title, isPublic } = body;
 
-    // At least one field must be provided
     if (title === undefined && isPublic === undefined) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    // Build update data
     const updateData: { title?: string; isPublic?: boolean } = {};
     if (title !== undefined) {
       if (typeof title !== 'string' || !title.trim()) {
-        return NextResponse.json(
-          { error: API_ERROR_MESSAGES.TITLE_REQUIRED },
-          { status: HTTP_STATUS.BAD_REQUEST }
-        );
+        return errorResponse(API_ERROR_MESSAGES.TITLE_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
       }
       const trimmedTitle = title.trim();
       if (trimmedTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
-        return NextResponse.json(
-          { error: API_ERROR_MESSAGES.TITLE_TOO_LONG },
-          { status: HTTP_STATUS.BAD_REQUEST }
-        );
+        return errorResponse(API_ERROR_MESSAGES.TITLE_TOO_LONG, undefined, HTTP_STATUS.BAD_REQUEST);
       }
       updateData.title = trimmedTitle;
     }
     if (isPublic !== undefined) {
       if (typeof isPublic !== 'boolean') {
-        return NextResponse.json(
-          { error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY },
-          { status: HTTP_STATUS.BAD_REQUEST }
-        );
+        return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
       }
       updateData.isPublic = isPublic;
     }
@@ -131,18 +110,16 @@ export async function PATCH(
       }
     });
 
-    return NextResponse.json(updatedConversation);
+    return jsonResponse(updatedConversation);
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND },
-        { status: HTTP_STATUS.NOT_FOUND }
-      );
+      return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
-    console.error('Error updating conversation:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_UPDATE_CONVERSATION },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_UPDATE_CONVERSATION,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }
@@ -158,10 +135,7 @@ export async function DELETE(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const conversation = await prisma.conversation.deleteMany({
@@ -172,18 +146,15 @@ export async function DELETE(
     });
 
     if (conversation.count === 0) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND },
-        { status: HTTP_STATUS.NOT_FOUND }
-      );
+      return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
 
-    return NextResponse.json({ success: true });
+    return jsonResponse({ success: true });
   } catch (error) {
-    console.error('Error deleting conversation:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_DELETE_CONVERSATION },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_DELETE_CONVERSATION,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

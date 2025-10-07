@@ -1,12 +1,25 @@
+'use server';
+
 import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "@/constants/qdrant";
 import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const CACHE_COLLECTION_NAME = process.env.CACHE_COLLECTION_NAME as string;
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
+
+let client: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!client) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not set in environment variables');
+    }
+    client = new OpenAI({ apiKey });
+  }
+  return client;
+}
 
 export async function ensureCollection(embeddingDimension: number) {
-  const CACHE_COLLECTION_NAME = process.env.CACHE_COLLECTION_NAME
   try {
     const collections = await qdrantClient.getCollections();
     const exists = collections.collections.some(
@@ -14,16 +27,12 @@ export async function ensureCollection(embeddingDimension: number) {
     );
 
     if (!exists) {
-      console.log(`Creating collection "${CACHE_COLLECTION_NAME}" with dimension ${embeddingDimension}`);
-      await qdrantClient.createCollection(CACHE_COLLECTION_NAME as string, {
+      await qdrantClient.createCollection(CACHE_COLLECTION_NAME, {
         vectors: {
           size: embeddingDimension,
           distance: "Cosine",
         },
       });
-      console.log("✅ Collection created successfully");
-    } else {
-      console.log("✅ Collection already exists");
     }
   } catch (error) {
     console.error("Error ensuring collection:", error);
@@ -33,8 +42,8 @@ export async function ensureCollection(embeddingDimension: number) {
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const embeddingResponse = await client.embeddings.create({
-      model: process.env.EMBEDDING_MODEL as string,
+    const embeddingResponse = await getOpenAIClient().embeddings.create({
+      model: EMBEDDING_MODEL,
       input: text,
     });
     return embeddingResponse.data[0].embedding;
@@ -46,7 +55,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 export async function searchSemanticCache(queryEmbedding: number[], userId: string): Promise<string | null> {
   try {
-    const searchResult = await qdrantClient.search(process.env.CACHE_COLLECTION_NAME as string, {
+    const searchResult = await qdrantClient.search(CACHE_COLLECTION_NAME, {
       vector: queryEmbedding,
       limit: 1,
       with_payload: true,
@@ -71,11 +80,9 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
       const cacheAge = (Date.now() - new Date(timestamp).getTime()) / 1000;
       
       if (cacheAge > CACHE_TTL_SECONDS) {
-        console.log(`⏰ Cache expired (age: ${Math.floor(cacheAge)}s, TTL: ${CACHE_TTL_SECONDS}s) for user: ${userId}`);
         return null;
       }
       
-      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}, age: ${Math.floor(cacheAge)}s) for user: ${userId}`);
       return searchResult[0].payload?.answer as string;
     }
 
@@ -88,7 +95,7 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
 
 export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userId: string): Promise<void> {
   try {
-    await qdrantClient.upsert(process.env.CACHE_COLLECTION_NAME as string, {
+    await qdrantClient.upsert(CACHE_COLLECTION_NAME, {
       wait: true,
       points: [
         {
@@ -103,8 +110,6 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
         },
       ],
     });
-
-    console.log(`💾 Added to semantic cache for user: ${userId}`);
   } catch (error) {
     console.error("Error adding to semantic cache:", error);
   }

@@ -24,7 +24,7 @@ interface UseChatOptions {
 interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, session?: { user: { id: string } }) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
 }
@@ -55,7 +55,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, session?: { user: { id: string } }) => {
       if (!content.trim() || isLoading) return;
 
       const model = getModel();
@@ -94,12 +94,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         let currentConversationId = conversationId;
         const isNewConversation = !currentConversationId;
 
-        // Save user message to existing conversation
         if (currentConversationId) {
           await saveUserMessage(currentConversationId, content.trim());
         }
 
-        // Check cache with conversation context
         const cacheQuery = buildCacheQuery(messages, content.trim());
         const cacheData = await checkCache(cacheQuery, abortControllerRef.current.signal);
         
@@ -113,6 +111,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 : msg
             )
           );
+
+          // Note: Cached responses don't have inline memory extraction
+          // We could add a separate extraction step here if needed
 
           await handleConversationSaving(
             isNewConversation,
@@ -135,10 +136,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           return;
         }
 
-        // Stream completion from API
+        // Stream completion from API (memory context is now added server-side)
         const messagesForAPI = buildMessagesForAPI(messages, content.trim(), DEFAULT_ASSISTANT_PROMPT);
 
-        assistantContent = await streamChatCompletion(
+        const responseContent = await streamChatCompletion(
           messagesForAPI,
           model,
           abortControllerRef.current.signal,
@@ -150,10 +151,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                   : msg
               )
             );
-          }
+          },
+          currentConversationId
         );
 
-        // Save to cache and conversation
+        assistantContent = responseContent;
+
         if (assistantContent && !abortControllerRef.current?.signal.aborted) {
           saveToCache.mutate({
             query: cacheQuery,
@@ -176,6 +179,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               router.replace(`/c/${id}`);
             }
           );
+
+          // Store conversation exchange as memory (fire and forget)
+          if (session?.user?.id) {
+            fetch('/api/memory/store', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userMessage: content.trim(),
+                assistantMessage: assistantContent,
+                conversationId: currentConversationId,
+              }),
+            }).catch(err => console.error('[Memory] Storage failed:', err));
+          }
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {

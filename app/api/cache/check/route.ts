@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { generateEmbedding, searchSemanticCache, ensureCollection } from '@/lib/qdrant';
-import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
+import { generateEmbedding, searchSemanticCache, ensureCollection } from '@/lib/qdrant';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 const CacheCheckSchema = z.object({
@@ -10,69 +10,35 @@ const CacheCheckSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    
-    if (!session?.user) {
-      return new Response(
-        JSON.stringify({ error: API_ERROR_MESSAGES.UNAUTHORIZED }),
-        { status: HTTP_STATUS.UNAUTHORIZED, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    const { user, error } = await getAuthenticatedUser(await headers());
+    if (error) return error;
 
     const requestBody = await req.json();
     const parsedBody = CacheCheckSchema.safeParse(requestBody);
 
     if (!parsedBody.success) {
-      return new Response(
-        JSON.stringify({
-          error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY,
-          details: parsedBody.error.issues
-        }),
-        {
-          status: HTTP_STATUS.BAD_REQUEST,
-          headers: { 'Content-Type': 'application/json' }
-        }
+      return jsonResponse(
+        { error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY, details: parsedBody.error.issues },
+        HTTP_STATUS.BAD_REQUEST
       );
     }
 
     const { query } = parsedBody.data;
-
     await ensureCollection(3072);
 
     const queryEmbedding = await generateEmbedding(query);
-    const cachedResponse = await searchSemanticCache(queryEmbedding, session.user.id);
+    const cachedResponse = await searchSemanticCache(queryEmbedding, user.id);
 
     if (cachedResponse) {
-      return new Response(
-        JSON.stringify({
-          cached: true,
-          response: cachedResponse
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      return jsonResponse({ cached: true, response: cachedResponse });
     }
 
-    return new Response(
-      JSON.stringify({
-        cached: false
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    return jsonResponse({ cached: false });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : API_ERROR_MESSAGES.INTERNAL_SERVER_ERROR;
-    
-    return new Response(
-      JSON.stringify({
-        error: API_ERROR_MESSAGES.CACHE_CHECK_FAILED,
-        message: errorMessage
-      }),
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR, headers: { 'Content-Type': 'application/json' } }
+    return errorResponse(
+      API_ERROR_MESSAGES.CACHE_CHECK_FAILED,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

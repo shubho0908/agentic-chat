@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, paginateResults } from '@/lib/api-utils';
+import { getAuthenticatedUser, paginateResults, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { VALIDATION_LIMITS } from '@/constants/validation';
 
@@ -37,12 +37,12 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    return NextResponse.json(paginateResults(conversations, limit));
+    return jsonResponse(paginateResults(conversations, limit));
   } catch (error) {
-    console.error('Error fetching conversations:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATIONS },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATIONS,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }
@@ -57,10 +57,7 @@ export async function POST(request: NextRequest) {
 
     const conversationTitle = title || 'New Chat';
     if (typeof conversationTitle === 'string' && conversationTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.TITLE_TOO_LONG },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.TITLE_TOO_LONG, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const conversation = await prisma.conversation.create({
@@ -70,12 +67,12 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json(conversation, { status: HTTP_STATUS.CREATED });
+    return jsonResponse(conversation, HTTP_STATUS.CREATED);
   } catch (error) {
-    console.error('Error creating conversation:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_CREATE_CONVERSATION },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_CREATE_CONVERSATION,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

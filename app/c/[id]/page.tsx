@@ -69,7 +69,7 @@ export default function ChatPage({
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content);
+    await sendMessage(content, session);
   };
 
   if (conversationNotFound) {

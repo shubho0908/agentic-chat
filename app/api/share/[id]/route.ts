@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
+import { errorResponse, jsonResponse } from '@/lib/api-utils';
 
 export async function GET(
   request: NextRequest,
@@ -11,10 +12,7 @@ export async function GET(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const conversation = await prisma.conversation.findUnique({
@@ -46,20 +44,13 @@ export async function GET(
     });
 
     if (!conversation) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND },
-        { status: HTTP_STATUS.NOT_FOUND }
-      );
+      return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
 
     if (!conversation.isPublic) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.UNAUTHORIZED },
-        { status: HTTP_STATUS.FORBIDDEN }
-      );
+      return errorResponse(API_ERROR_MESSAGES.UNAUTHORIZED, undefined, HTTP_STATUS.FORBIDDEN);
     }
 
-    // Transform role to lowercase for frontend compatibility
     const transformedConversation = {
       ...conversation,
       messages: conversation.messages.map(msg => ({
@@ -68,12 +59,12 @@ export async function GET(
       }))
     };
 
-    return NextResponse.json(transformedConversation);
+    return jsonResponse(transformedConversation);
   } catch (error) {
-    console.error('Error fetching shared conversation:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATION },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATION,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

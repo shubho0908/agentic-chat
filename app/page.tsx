@@ -41,7 +41,7 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content);
+    await sendMessage(content, session);
   };
 
   if (!hasMessages) {

@@ -140,7 +140,8 @@ export async function streamChatCompletion(
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
   model: string,
   signal: AbortSignal,
-  onChunk: (fullContent: string) => void
+  onChunk: (fullContent: string) => void,
+  conversationId?: string | null
 ): Promise<string> {
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -149,6 +150,7 @@ export async function streamChatCompletion(
       model,
       messages,
       stream: true,
+      conversationId: conversationId || undefined,
     }),
     signal,
   });
@@ -197,7 +199,6 @@ export async function streamChatCompletion(
         try {
           const parsed = JSON.parse(data);
           
-          // Check for error in stream
           if (parsed.error) {
             throw new Error(parsed.error);
           }
@@ -207,7 +208,6 @@ export async function streamChatCompletion(
             onChunk(fullContent);
           }
         } catch (err) {
-          // If it's an Error we threw, re-throw it
           if (err instanceof Error && err.message !== 'Unexpected token') {
             throw err;
           }
@@ -224,7 +224,6 @@ export async function streamChatCompletion(
               try {
                 const parsed = JSON.parse(data);
                 
-                // Check for error in stream
                 if (parsed.error) {
                   throw new Error(parsed.error);
                 }
@@ -234,7 +233,6 @@ export async function streamChatCompletion(
                   onChunk(fullContent);
                 }
               } catch (err) {
-                // If it's an Error we threw, re-throw it
                 if (err instanceof Error && err.message !== 'Unexpected token') {
                   throw err;
                 }
@@ -247,7 +245,6 @@ export async function streamChatCompletion(
       }
     }
   } catch (error) {
-    // Clean up the reader
     reader.cancel();
     throw error;
   }

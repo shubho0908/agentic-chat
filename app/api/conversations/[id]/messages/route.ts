@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership } from '@/lib/api-utils';
+import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateMessageData } from '@/lib/validation';
 
@@ -16,20 +16,14 @@ export async function POST(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const body = await request.json();
     const { role, content } = body;
 
     const validation = validateMessageData(role, content);
     if (!validation.valid) {
-      return NextResponse.json(
-        { error: validation.error },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return errorResponse(validation.error || 'Invalid message data', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
@@ -49,12 +43,12 @@ export async function POST(
       })
     ]);
 
-    return NextResponse.json(message, { status: HTTP_STATUS.CREATED });
+    return jsonResponse(message, HTTP_STATUS.CREATED);
   } catch (error) {
-    console.error('Error creating message:', error);
-    return NextResponse.json(
-      { error: API_ERROR_MESSAGES.FAILED_CREATE_MESSAGE },
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    return errorResponse(
+      API_ERROR_MESSAGES.FAILED_CREATE_MESSAGE,
+      error instanceof Error ? error.message : undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }
