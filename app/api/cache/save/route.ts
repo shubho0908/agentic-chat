@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { generateEmbedding, addToSemanticCache, ensureCollection } from '@/lib/qdrant';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 const CacheSaveSchema = z.object({
   query: z.string().min(1, 'Query is required'),
@@ -14,8 +15,8 @@ export async function POST(req: Request) {
     
     if (!session?.user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: API_ERROR_MESSAGES.UNAUTHORIZED }),
+        { status: HTTP_STATUS.UNAUTHORIZED, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -25,11 +26,11 @@ export async function POST(req: Request) {
     if (!parsedBody.success) {
       return new Response(
         JSON.stringify({
-          error: 'Invalid request body',
+          error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY,
           details: parsedBody.error.issues
         }),
         {
-          status: 400,
+          status: HTTP_STATUS.BAD_REQUEST,
           headers: { 'Content-Type': 'application/json' }
         }
       );
@@ -53,14 +54,14 @@ export async function POST(req: Request) {
       }
     );
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : API_ERROR_MESSAGES.INTERNAL_SERVER_ERROR;
     
     return new Response(
       JSON.stringify({
-        error: 'Cache save failed',
+        error: API_ERROR_MESSAGES.CACHE_SAVE_FAILED,
         message: errorMessage
       }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }

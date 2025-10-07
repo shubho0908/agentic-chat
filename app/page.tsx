@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, Suspense } from "react";
+import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { ChatContainer } from "@/components/chat/chatContainer";
 import { ChatInput } from "@/components/chat/chatInput";
@@ -9,8 +10,9 @@ import { EmptyState } from "@/components/emptyState";
 import { AuthModal } from "@/components/authModal";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
-export default function Home() {
+function HomeContent() {
   const { messages, isLoading, sendMessage, stopGeneration, clearChat } = useChat();
   const [isConfigured, setIsConfigured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -26,15 +28,15 @@ export default function Home() {
 
     if (!session) {
       setShowAuthModal(true);
-      toast.error("Authentication Required", {
-        description: "Please login to start chatting",
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
       });
       return;
     }
 
     if (!isConfigured) {
-      toast.error("API Key Required", {
-        description: "Please configure your OpenAI API key first",
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.API_KEY.REQUIRED_DESCRIPTION,
       });
       byokTriggerRef.current?.click();
       return;
@@ -66,10 +68,13 @@ export default function Home() {
       <ChatHeader 
         onConfigured={setIsConfigured}
         onNewChat={clearChat}
-        showNewChat={true}
         byokTriggerRef={byokTriggerRef}
       />
-      <ChatContainer messages={messages} isLoading={isLoading} />
+      <ChatContainer 
+        messages={messages} 
+        isLoading={isLoading}
+        userName={session?.user?.name}
+      />
       <ChatInput
         onSend={handleSendMessage}
         isLoading={isLoading}
@@ -77,5 +82,20 @@ export default function Home() {
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader className="size-5 animate-spin" />
+          <span>Loading...</span>
+        </div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }

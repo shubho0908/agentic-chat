@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/themeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/appSidebar";
+import { AuthSidebarTrigger } from "@/components/authSidebarTrigger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +41,15 @@ export default function RootLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
-            {children}
+            <SidebarProvider>
+              <Suspense fallback={null}>
+                <AppSidebar />
+                <AuthSidebarTrigger />
+              </Suspense>
+              <main className="w-full">
+                {children}
+              </main>
+            </SidebarProvider>
             <Toaster position="bottom-right" richColors />
           </ThemeProvider>
         </QueryProvider>

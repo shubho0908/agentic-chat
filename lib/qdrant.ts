@@ -1,4 +1,4 @@
-import { qdrantClient, SIMILARITY_THRESHOLD } from "@/constants/qdrant";
+import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "@/constants/qdrant";
 import OpenAI from "openai";
 
 const client = new OpenAI({
@@ -67,7 +67,15 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
       searchResult[0].score !== undefined &&
       searchResult[0].score >= SIMILARITY_THRESHOLD
     ) {
-      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}) for user: ${userId}`);
+      const timestamp = searchResult[0].payload?.timestamp as string;
+      const cacheAge = (Date.now() - new Date(timestamp).getTime()) / 1000;
+      
+      if (cacheAge > CACHE_TTL_SECONDS) {
+        console.log(`⏰ Cache expired (age: ${Math.floor(cacheAge)}s, TTL: ${CACHE_TTL_SECONDS}s) for user: ${userId}`);
+        return null;
+      }
+      
+      console.log(`✅ Cache hit (similarity: ${searchResult[0].score.toFixed(3)}, age: ${Math.floor(cacheAge)}s) for user: ${userId}`);
       return searchResult[0].payload?.answer as string;
     }
 

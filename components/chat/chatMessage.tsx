@@ -1,5 +1,4 @@
 import { memo } from "react";
-import { User } from "lucide-react";
 import type { Message } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
@@ -8,6 +7,7 @@ import { OPENAI_MODELS } from "@/constants/openai-models";
 
 interface ChatMessageProps {
   message: Message;
+  userName?: string | null;
 }
 
 function formatTimestamp(timestamp?: number): string {
@@ -17,7 +17,7 @@ function formatTimestamp(timestamp?: number): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function ChatMessageComponent({ message }: ChatMessageProps) {
+function ChatMessageComponent({ message, userName }: ChatMessageProps) {
   const isUser = message.role === "user";
   
   if (message.role === "system") return null;
@@ -25,6 +25,8 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
   const modelName = message.model
     ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
     : "AI Assistant";
+
+  const userInitial = userName?.charAt(0).toUpperCase() || "U";
 
   return (
     <div
@@ -40,12 +42,12 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
               className={cn(
                 "flex size-8 items-center justify-center rounded-full transition-all",
                 isUser
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 text-sm font-semibold"
                   : "bg-secondary text-secondary-foreground"
               )}
             >
               {isUser ? (
-                <User className="size-4" />
+                userInitial
               ) : (
                 <OpenAIIcon className="size-4" />
               )}
@@ -55,7 +57,7 @@ function ChatMessageComponent({ message }: ChatMessageProps) {
           <div className="flex-1 space-y-2 overflow-hidden">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold">
-                {isUser ? "You" : modelName}
+                {isUser ? (userName || "User") : modelName}
               </span>
               {message.timestamp && (
                 <span className="text-xs text-muted-foreground">

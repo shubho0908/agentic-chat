@@ -12,7 +12,7 @@ A scalable conversational AI system that implements dynamic query classification
 Production-ready security architecture with AES-256-GCM encrypted API key storage in PostgreSQL. Server-side proxy handles all OpenAI communications, eliminating client-side key exposure and enabling rate limiting, usage tracking, and cost management.
 
 **Semantic Caching Layer**  
-Implements semantic similarity-based response caching for text conversations. Supports BYOK (Bring Your Own Key) model providers including OpenAI and Gemini APIs for inference flexibility.
+Implements semantic similarity-based response caching for text conversations. Supports BYOK (Bring Your Own Key) with OpenAI API for flexible model selection and inference.
 
 **Query Classification & Routing**  
 Decision node analyzes incoming queries and routes to appropriate handlers based on intent classification. Supports dynamic switching between agent invocation and direct response paths.

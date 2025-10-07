@@ -1,38 +1,32 @@
 import { useState } from "react";
-import { useUploadThing } from "@/utils/uploadthing";
+import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
+import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 
 export function useChatFileUpload() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-
-  const { startUpload } = useUploadThing("ragDocumentUploader", {
-    onClientUploadComplete: (res) => {
-      toast.success("Files uploaded", {
-        description: `${res.length} file(s) uploaded successfully`,
-      });
-      setIsUploading(false);
-      setSelectedFiles([]);
-    },
-    onUploadError: (error: Error) => {
-      toast.error("Upload failed", {
-        description: error.message,
-      });
-      setIsUploading(false);
-    },
-  });
 
   async function uploadFiles() {
     if (selectedFiles.length === 0) return true;
 
     setIsUploading(true);
     try {
-      await startUpload(selectedFiles, {});
+      const res = await uploadThingFiles("ragDocumentUploader", {
+        files: selectedFiles,
+        input: {},
+      });
+      
+      toast.success(TOAST_SUCCESS_MESSAGES.FILES_UPLOADED, {
+        description: `${res.length} file(s) uploaded successfully`,
+      });
+      setIsUploading(false);
+      setSelectedFiles([]);
       return true;
     } catch (error) {
-      toast.error("Upload failed", {
-        description: error instanceof Error ? error.message : "Unknown error",
+      toast.error(TOAST_ERROR_MESSAGES.UPLOAD.FAILED, {
+        description: error instanceof Error ? error.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR,
       });
       setIsUploading(false);
       return false;
@@ -44,7 +38,7 @@ export function useChatFileUpload() {
       const newFiles = [...prev, ...files];
       
       if (newFiles.length > MAX_FILE_ATTACHMENTS) {
-        toast.error("Too many files", {
+        toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
           description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files total`,
         });
         return prev.slice(0, MAX_FILE_ATTACHMENTS);

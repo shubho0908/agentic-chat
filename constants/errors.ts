@@ -1,0 +1,139 @@
+export const ERROR_CODES = {
+  UNAUTHORIZED: "UNAUTHORIZED",
+  CONVERSATION_NOT_FOUND: "CONVERSATION_NOT_FOUND",
+  API_KEY_NOT_CONFIGURED: "API_KEY_NOT_CONFIGURED",
+  INVALID_API_KEY: "INVALID_API_KEY",
+  INVALID_REQUEST: "INVALID_REQUEST",
+  MISSING_FIELDS: "MISSING_FIELDS",
+  NOT_FOUND: "NOT_FOUND",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+  ENCRYPTION_ERROR: "ENCRYPTION_ERROR",
+  UPLOAD_ERROR: "UPLOAD_ERROR",
+  CACHE_ERROR: "CACHE_ERROR",
+} as const;
+
+export const API_ERROR_MESSAGES = {
+  [ERROR_CODES.UNAUTHORIZED]: "Unauthorized",
+  [ERROR_CODES.CONVERSATION_NOT_FOUND]: "Conversation not found",
+  [ERROR_CODES.API_KEY_NOT_CONFIGURED]: "API key not configured",
+  [ERROR_CODES.INVALID_API_KEY]: "Invalid API key",
+  INVALID_API_KEY_FORMAT: "Invalid OpenAI API key format",
+  INVALID_CONVERSATION_ID: "Invalid conversation ID format",
+  MISSING_MODEL_MESSAGES: "Missing required fields: model, messages",
+  MISSING_ROLE_CONTENT: "Role and content are required",
+  INVALID_ROLE: "Invalid role. Must be USER, ASSISTANT, or SYSTEM",
+  TITLE_REQUIRED: "Title is required",
+  TITLE_TOO_LONG: "Title is too long",
+  CONTENT_TOO_LONG: "Content is too long",
+  MESSAGE_TOO_LONG: "Message is too long",
+  TOO_MANY_MESSAGES: "Too many messages",
+  INVALID_REQUEST_BODY: "Invalid request body",
+  PAYLOAD_TOO_LARGE: "Request payload is too large",
+  FAILED_FETCH_CONVERSATIONS: "Failed to fetch conversations",
+  FAILED_CREATE_CONVERSATION: "Failed to create conversation",
+  FAILED_DELETE_CONVERSATION: "Failed to delete conversation",
+  FAILED_FETCH_CONVERSATION: "Failed to fetch conversation",
+  FAILED_UPDATE_CONVERSATION: "Failed to update conversation",
+  FAILED_CREATE_MESSAGE: "Failed to create message",
+  FAILED_SAVE_API_KEY: "Failed to save API key",
+  FAILED_RETRIEVE_API_KEY: "Failed to retrieve API key status",
+  FAILED_DELETE_API_KEY: "Failed to delete API key",
+  CACHE_CHECK_FAILED: "Cache check failed",
+  CACHE_SAVE_FAILED: "Cache save failed",
+  INTERNAL_SERVER_ERROR: "Internal server error",
+  NO_RESPONSE_STREAM: "No response stream",
+  OPENAI_RATE_LIMIT: "Rate limit exceeded. Please try again later",
+  OPENAI_INSUFFICIENT_QUOTA: "Insufficient quota. Please check your OpenAI account billing",
+  OPENAI_INVALID_API_KEY: "Invalid OpenAI API key. Please update your API key",
+  OPENAI_MODEL_NOT_FOUND: "Model not found or not accessible with your API key",
+  OPENAI_CONTEXT_LENGTH_EXCEEDED: "Message context is too long for this model",
+} as const;
+
+export const TOAST_ERROR_MESSAGES = {
+  AUTH: {
+    REQUIRED: "Authentication Required",
+    REQUIRED_DESCRIPTION: "Please login to start chatting",
+    FAILED_SIGN_IN: "Failed to sign in",
+    FAILED_SIGN_IN_DESCRIPTION: "Please try again later",
+    FAILED_LOGOUT: "Failed to logout",
+    FAILED_LOGOUT_DESCRIPTION: "Please try again",
+  },
+  API_KEY: {
+    REQUIRED: "API Key Required",
+    REQUIRED_DESCRIPTION: "Please configure your OpenAI API key first",
+    INVALID_FORMAT: "Invalid API key format",
+    INVALID_FORMAT_DESCRIPTION: "Valid formats: sk-..., sk-proj-..., or sk-svcacct-...",
+    ENTER_KEY: "Please enter your OpenAI API key",
+    FAILED_SAVE: "Failed to save API key",
+    FAILED_CLEAR: "Failed to clear settings",
+  },
+  MODEL: {
+    NOT_SELECTED: "Model not selected",
+    FAILED_SAVE: "Failed to save model preference",
+  },
+  CHAT: {
+    FAILED_SEND: "Failed to send message",
+  },
+  UPLOAD: {
+    FAILED: "Upload failed",
+    TOO_MANY_FILES: "Too many files",
+    MAX_REACHED: "Maximum files reached",
+  },
+  CONVERSATION: {
+    FAILED_CREATE: "Failed to create conversation",
+    FAILED_DELETE: "Failed to delete conversation",
+    FAILED_RENAME: "Failed to rename conversation",
+    FAILED_SHARE: "Failed to update sharing settings",
+  },
+  CACHE: {
+    FAILED_CHECK: "Cache check failed",
+    FAILED_SAVE: "Failed to save to cache",
+  },
+} as const;
+
+export const TOAST_SUCCESS_MESSAGES = {
+  SETTINGS_SAVED: "Settings saved successfully",
+  SETTINGS_CLEARED: "Settings cleared",
+  CHAT_CLEARED: "Chat cleared",
+  FILES_UPLOADED: "Files uploaded",
+  CONVERSATION_CREATED: "New conversation created",
+  CONVERSATION_DELETED: "Conversation deleted",
+  CONVERSATION_RENAMED: "Conversation renamed",
+  CONVERSATION_SHARED: "Conversation is now public",
+  CONVERSATION_UNSHARED: "Conversation is now private",
+  LOGGED_OUT: "Logged out successfully",
+  GENERATION_STOPPED: "Generation stopped",
+} as const;
+
+export const ENCRYPTION_ERRORS = {
+  KEY_NOT_SET: "ENCRYPTION_KEY environment variable is not set",
+  FAILED_ENCRYPT: "Failed to encrypt API key",
+  INVALID_FORMAT: "Invalid encrypted data format",
+  FAILED_DECRYPT: "Failed to decrypt API key",
+} as const;
+
+export const HOOK_ERROR_MESSAGES = {
+  FAILED_FETCH_API_KEY: "Failed to fetch API key status",
+  FAILED_DELETE_API_KEY: "Failed to delete API key",
+  FAILED_FETCH_CONVERSATIONS: "Failed to fetch conversations",
+  FAILED_CREATE_CONVERSATION: "Failed to create conversation",
+  FAILED_DELETE_CONVERSATION: "Failed to delete conversation",
+  FAILED_UPDATE_CONVERSATION: "Failed to update conversation",
+  FAILED_FETCH_CONVERSATION: "Failed to fetch conversation",
+  FAILED_CACHE_CHECK: "Cache check failed",
+  FAILED_SAVE_CACHE: "Failed to save to cache",
+  UNKNOWN_ERROR: "Unknown error",
+  UNKNOWN_ERROR_OCCURRED: "Unknown error occurred",
+} as const;
+
+export const HTTP_STATUS = {
+  OK: 200,
+  CREATED: 201,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500,
+} as const;
+
+export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];

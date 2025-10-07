@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 
 interface CacheCheckResponse {
   cached: boolean;
@@ -21,7 +22,7 @@ export function useSemanticCache(query: string, enabled: boolean = true) {
       });
 
       if (!response.ok) {
-        throw new Error("Cache check failed");
+        throw new Error(HOOK_ERROR_MESSAGES.FAILED_CACHE_CHECK);
       }
 
       return response.json();
@@ -44,7 +45,7 @@ export function useSaveToCache() {
       });
 
       if (!res.ok) {
-        throw new Error("Failed to save to cache");
+        throw new Error(HOOK_ERROR_MESSAGES.FAILED_SAVE_CACHE);
       }
 
       return res.json();

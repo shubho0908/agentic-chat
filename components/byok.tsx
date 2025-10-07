@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { ApiKeyInput } from "./apiKeyInput";
 import { ModelSelector } from "./modelSelector";
 import { isValidApiKey } from "../utils/byokUtils";
+import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
 
 interface BYOKProps {
   autoOpen?: boolean;
@@ -32,11 +33,15 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
+  const [initialModel, setInitialModel] = useState(DEFAULT_MODEL);
 
   const { data: apiKeyData, isLoading } = useApiKey();
   const { saveApiKey: saveApiKeyMutation, deleteApiKey: deleteApiKeyMutation } = useApiKeyMutations();
 
   const isConfigured = apiKeyData?.exists ?? false;
+  const hasApiKeyChange = apiKey.trim().length > 0;
+  const hasModelChange = selectedModel !== initialModel;
+  const hasAnyChange = hasApiKeyChange || hasModelChange;
 
   useEffect(() => {
     if (!isLoading) {
@@ -55,18 +60,31 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
     const storedModel = getModel();
     if (storedModel) {
       setSelectedModel(storedModel);
+      setInitialModel(storedModel);
     }
   }, []);
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      setApiKey("");
+      const storedModel = getModel();
+      if (storedModel) {
+        setSelectedModel(storedModel);
+        setInitialModel(storedModel);
+      }
+    }
+    setOpen(newOpen);
+  };
+
   const handleSave = async () => {
     if (!isConfigured && !apiKey.trim()) {
-      toast.error("Please enter your OpenAI API key");
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.ENTER_KEY);
       return;
     }
 
     if (apiKey.trim() && !isValidApiKey(apiKey)) {
-      toast.error("Invalid API key format", {
-        description: "Valid formats: sk-..., sk-proj-..., or sk-svcacct-..."
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.INVALID_FORMAT, {
+        description: TOAST_ERROR_MESSAGES.API_KEY.INVALID_FORMAT_DESCRIPTION
       });
       return;
     }
@@ -80,15 +98,16 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
 
       if (modelSaved) {
         setApiKey("");
-        toast.success("Settings saved successfully", {
+        setInitialModel(selectedModel);
+        toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_SAVED, {
           description: `Model: ${OPENAI_MODELS.find(m => m.id === selectedModel)?.name}`,
         });
         setOpen(false);
       } else {
-        toast.error("Failed to save model preference");
+        toast.error(TOAST_ERROR_MESSAGES.MODEL.FAILED_SAVE);
       }
     } catch (error) {
-      toast.error("Failed to save API key", {
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_SAVE, {
         description: error instanceof Error ? error.message : "Please try again",
       });
     }
@@ -100,16 +119,16 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
       removeModel();
       setApiKey("");
       setSelectedModel(DEFAULT_MODEL);
-      toast.success("Settings cleared");
+      toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_CLEARED);
     } catch (error) {
-      toast.error("Failed to clear settings", {
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_CLEAR, {
         description: error instanceof Error ? error.message : "Please try again",
       });
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button
           ref={triggerRef}
@@ -189,6 +208,7 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
             onClick={handleSave}
             disabled={
               (!isConfigured && !apiKey.trim()) || 
+              (isConfigured && !hasAnyChange) ||
               !selectedModel || 
               (apiKey.trim() && !isValidApiKey(apiKey)) || 
               saveApiKeyMutation.isPending

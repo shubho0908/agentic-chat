@@ -1,0 +1,81 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { headers } from 'next/headers';
+import { getAuthenticatedUser, paginateResults } from '@/lib/api-utils';
+import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { VALIDATION_LIMITS } from '@/constants/validation';
+
+export async function GET(request: NextRequest) {
+  try {
+    const { user, error } = await getAuthenticatedUser(await headers());
+    if (error) return error;
+
+    const searchParams = request.nextUrl.searchParams;
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const cursor = searchParams.get('cursor');
+
+    const conversations = await prisma.conversation.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+      select: {
+        id: true,
+        title: true,
+        isPublic: true,
+        createdAt: true,
+        updatedAt: true,
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: { 
+            content: true, 
+            role: true,
+            createdAt: true
+          }
+        }
+      }
+    });
+
+    return NextResponse.json(paginateResults(conversations, limit));
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    return NextResponse.json(
+      { error: API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATIONS },
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { user, error } = await getAuthenticatedUser(await headers());
+    if (error) return error;
+
+    const body = await request.json();
+    const { title } = body;
+
+    const conversationTitle = title || 'New Chat';
+    if (typeof conversationTitle === 'string' && conversationTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.TITLE_TOO_LONG },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        userId: user.id,
+        title: conversationTitle
+      }
+    });
+
+    return NextResponse.json(conversation, { status: HTTP_STATUS.CREATED });
+  } catch (error) {
+    console.error('Error creating conversation:', error);
+    return NextResponse.json(
+      { error: API_ERROR_MESSAGES.FAILED_CREATE_CONVERSATION },
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
+    );
+  }
+}

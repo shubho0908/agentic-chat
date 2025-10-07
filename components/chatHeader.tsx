@@ -1,78 +1,44 @@
 "use client";
 
-import { type RefObject, useState } from "react";
-import { Plus, LogIn } from "lucide-react";
+import { type RefObject } from "react";
+import { LogIn, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alertDialog";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { BYOK } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
+import { ShareDialog } from "@/components/shareDialog";
 import { useSession } from "@/lib/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatHeaderProps {
   onConfigured: (configured: boolean) => void;
   onNewChat: () => void;
-  showNewChat?: boolean;
   byokTriggerRef?: RefObject<HTMLButtonElement | null>;
   autoOpenByok?: boolean;
+  conversationId?: string;
+  isPublic?: boolean;
+  onToggleSharing?: (id: string, isPublic: boolean) => void;
+  isToggling?: boolean;
 }
 
 export function ChatHeader({
   onConfigured,
-  onNewChat,
-  showNewChat = false,
   byokTriggerRef,
-  autoOpenByok = false
+  autoOpenByok = false,
+  conversationId,
+  isPublic = false,
+  onToggleSharing,
+  isToggling = false
 }: ChatHeaderProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
   const { data: session, isPending } = useSession();
 
-  function handleNewChat() {
-    onNewChat();
-    setDialogOpen(false);
-  }
-
   return (
-    <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-      {showNewChat && (
-        <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <AlertDialogTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 rounded-xl bg-background/80 backdrop-blur-sm shadow-sm hover:shadow-md transition-all"
-            >
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">New Chat</span>
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="border border-border/40">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Start a new chat?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will clear your current conversation. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleNewChat}>
-                Continue
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-black/30 backdrop-blur-md backdrop-saturate-150 p-4 shadow-xl border-b border-white/20 md:left-auto md:top-4 md:right-4 md:bg-transparent md:backdrop-blur-none md:backdrop-saturate-100 md:p-0 md:shadow-none md:border-0">
+      {session && (
+        <SidebarTrigger className="md:hidden" />
       )}
+      <div className="flex items-center gap-2 md:ml-0 ml-auto">
       {isPending ? (
         <>
           <Skeleton className="h-9 w-24 rounded-xl" />
@@ -82,6 +48,23 @@ export function ChatHeader({
         <>
           {session ? (
             <>
+              {conversationId && onToggleSharing && (
+                <ShareDialog
+                  conversationId={conversationId}
+                  isPublic={isPublic}
+                  onToggleSharing={onToggleSharing}
+                  isToggling={isToggling}
+                  trigger={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="md:hidden"
+                    >
+                      <Share2 className="size-4" />
+                    </Button>
+                  }
+                />
+              )}
               <BYOK
                 autoOpen={autoOpenByok}
                 onConfigured={onConfigured}
@@ -103,6 +86,7 @@ export function ChatHeader({
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { signIn } from "@/lib/auth-client";
 import { toast } from "sonner";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
 interface AuthModalProps {
   children?: React.ReactNode;
@@ -32,8 +33,8 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
       });
     } catch (error) {
       console.error("Sign in error:", error);
-      toast.error("Failed to sign in", {
-        description: "Please try again later",
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
+        description: TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN_DESCRIPTION,
       });
       setIsLoading(false);
     }
@@ -45,7 +46,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
       <DialogContent className="sm:max-w-[440px] border border-border/40">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-2xl font-semibold text-center">
-            Welcome to Agentic Chat
+            Welcome to Agentic chat
           </DialogTitle>
           <DialogDescription className="text-center text-base">
             Sign in to access intelligent AI conversations with semantic caching
@@ -61,7 +62,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
             variant="outline"
           >
             {isLoading ? (
-              <Loader2 className="size-5 animate-spin" />
+              <Loader className="size-5 animate-spin" />
             ) : (
               <svg className="size-5" viewBox="0 0 24 24">
                 <path
@@ -91,7 +92,6 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
 
           <p className="text-xs text-center text-muted-foreground px-4">
             By signing in, you agree to our Terms of Service and Privacy Policy.
-            Your API keys are stored securely in your browser.
           </p>
         </div>
       </DialogContent>
