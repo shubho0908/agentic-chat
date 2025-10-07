@@ -1,12 +1,13 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChatContainer } from "@/components/chat/chatContainer";
 import { type Message } from "@/lib/schemas/chat";
+import { useLayout } from "@/components/providers/layoutProvider";
 
 interface SharedConversation {
   id: string;
@@ -47,6 +48,12 @@ export default function SharedConversationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const { setShowSidebar } = useLayout();
+  
+  useEffect(() => {
+    setShowSidebar(false);
+    return () => setShowSidebar(true);
+  }, [setShowSidebar]);
   
   const { data, isLoading, error } = useQuery({
     queryKey: ["shared-conversation", id],

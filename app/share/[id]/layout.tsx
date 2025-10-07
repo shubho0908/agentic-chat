@@ -2,16 +2,25 @@ import { Metadata } from "next";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
-async function getConversation(id: string) {
+async function getSharedConversation(id: string) {
   try {
     const conversation = await prisma.conversation.findUnique({
-      where: { id },
+      where: { 
+        id,
+        isPublic: true,
+      },
       select: {
         id: true,
         title: true,
         isPublic: true,
         createdAt: true,
         updatedAt: true,
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
         messages: {
           orderBy: { createdAt: 'asc' },
           take: 10,
@@ -25,7 +34,7 @@ async function getConversation(id: string) {
       },
     });
 
-    if (!conversation) {
+    if (!conversation || !conversation.isPublic) {
       return null;
     }
 
@@ -36,6 +45,7 @@ async function getConversation(id: string) {
         isPublic: conversation.isPublic,
         createdAt: conversation.createdAt.toISOString(),
         updatedAt: conversation.updatedAt.toISOString(),
+        user: conversation.user,
       },
       messages: {
         items: conversation.messages.map(msg => ({
@@ -47,7 +57,7 @@ async function getConversation(id: string) {
       },
     };
   } catch (error) {
-    console.error('Error fetching conversation for metadata:', error);
+    console.error('Error fetching shared conversation for metadata:', error);
     return null;
   }
 }
@@ -58,20 +68,21 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const conversation = await getConversation(id);
+  const conversation = await getSharedConversation(id);
 
   if (!conversation) {
     return {
-      title: "Chat Not Found - Agentic Chat",
-      description: "The requested conversation could not be found.",
+      title: "Shared Conversation Not Found - Agentic Chat",
+      description: "The requested shared conversation could not be found or is no longer public.",
     };
   }
 
-  const title = conversation.conversation.title || "New Conversation";
+  const title = conversation.conversation.title || "Shared Conversation";
+  const userName = conversation.conversation.user.name || conversation.conversation.user.email.split('@')[0];
   const firstUserMessage = conversation.messages.items.find(m => m.role === 'user');
   const description = firstUserMessage 
     ? firstUserMessage.content.substring(0, 155) + (firstUserMessage.content.length > 155 ? '...' : '')
-    : "Chat with AI assistant powered by OpenAI with semantic caching";
+    : `A conversation shared by ${userName} on Agentic Chat`;
 
   const headersList = await headers();
   const protocol = headersList.get('x-forwarded-proto') || 'http';
@@ -80,12 +91,12 @@ export async function generateMetadata({
   const ogImageUrl = `${baseUrl}/api/og?title=${encodeURIComponent(title)}`;
 
   return {
-    title: `${title} - Agentic Chat`,
+    title: `${title} - Shared on Agentic Chat`,
     description,
     openGraph: {
-      title: `${title} - Agentic Chat`,
+      title: `${title} - Shared on Agentic Chat`,
       description,
-      url: `${baseUrl}/c/${id}`,
+      url: `${baseUrl}/share/${id}`,
       siteName: "Agentic Chat",
       images: [
         {
@@ -100,14 +111,14 @@ export async function generateMetadata({
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} - Agentic Chat`,
+      title: `${title} - Shared on Agentic Chat`,
       description,
       images: [ogImageUrl],
     },
   };
 }
 
-export default function ChatLayout({
+export default function SharedChatLayout({
   children,
 }: {
   children: React.ReactNode;

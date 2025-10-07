@@ -5,9 +5,9 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/themeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/appSidebar";
-import { AuthSidebarTrigger } from "@/components/authSidebarTrigger";
+import { ConditionalSidebar } from "@/components/conditionalSidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -64,15 +64,16 @@ export default function RootLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
-            <SidebarProvider>
-              <Suspense fallback={null}>
-                <AppSidebar />
-                <AuthSidebarTrigger />
-              </Suspense>
-              <main className="w-full">
-                {children}
-              </main>
-            </SidebarProvider>
+            <LayoutProvider>
+              <SidebarProvider>
+                <Suspense fallback={null}>
+                  <ConditionalSidebar />
+                </Suspense>
+                <main className="w-full">
+                  {children}
+                </main>
+              </SidebarProvider>
+            </LayoutProvider>
             <Toaster position="bottom-right" richColors />
           </ThemeProvider>
         </QueryProvider>

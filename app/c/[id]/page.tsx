@@ -11,7 +11,7 @@ import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { ERROR_CODES, TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { useRef, useState } from "react";
 
 export default function ChatPage({
@@ -43,8 +43,7 @@ export default function ChatPage({
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
   const { data: session, isPending } = useSession();
 
-  const conversationNotFound = conversationError?.message === ERROR_CODES.CONVERSATION_NOT_FOUND || 
-    conversationError?.message === ERROR_CODES.UNAUTHORIZED;
+  const conversationNotFound = !!conversationError;
 
   const handleToggleSharing = (id: string, isPublic: boolean) => {
     toggleSharing({ id, isPublic });
