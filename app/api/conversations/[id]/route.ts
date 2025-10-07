@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, paginateResults } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { isValidConversationId } from '@/lib/validation';
+import { VALIDATION_LIMITS } from '@/constants/validation';
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +15,13 @@ export async function GET(
     if (error) return error;
 
     const { id: conversationId } = await params;
+
+    if (!isValidConversationId(conversationId)) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '50');
     const cursor = searchParams.get('cursor');
@@ -61,6 +70,13 @@ export async function PATCH(
     if (error) return error;
 
     const { id: conversationId } = await params;
+
+    if (!isValidConversationId(conversationId)) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
     const body = await request.json();
     const { title, isPublic } = body;
 
@@ -81,7 +97,14 @@ export async function PATCH(
           { status: HTTP_STATUS.BAD_REQUEST }
         );
       }
-      updateData.title = title.trim();
+      const trimmedTitle = title.trim();
+      if (trimmedTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
+        return NextResponse.json(
+          { error: API_ERROR_MESSAGES.TITLE_TOO_LONG },
+          { status: HTTP_STATUS.BAD_REQUEST }
+        );
+      }
+      updateData.title = trimmedTitle;
     }
     if (isPublic !== undefined) {
       if (typeof isPublic !== 'boolean') {
@@ -133,6 +156,13 @@ export async function DELETE(
     if (error) return error;
 
     const { id: conversationId } = await params;
+
+    if (!isValidConversationId(conversationId)) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
 
     const conversation = await prisma.conversation.deleteMany({
       where: {

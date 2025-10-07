@@ -84,7 +84,7 @@ export function AppSidebar() {
                   <MessageSquare className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Agentic Chat</span>
+                  <span className="font-semibold">Agentic chat</span>
                   <span className="text-xs">Chat History</span>
                 </div>
               </Link>
@@ -132,9 +132,7 @@ export function AppSidebar() {
                         <Link href={`/c/${conversation.id}`} className={`py-3 px-3 ${isDeleting ? "cursor-not-allowed" : "cursor-pointer"}`}>
                           {isDeleting ? (
                             <Loader className="size-4 shrink-0 animate-spin" />
-                          ) : (
-                            <MessageSquare className="size-4 shrink-0" />
-                          )}
+                          ) : null}
                           <div className="flex flex-col gap-1 min-w-0">
                             <span className="truncate font-medium">{conversation.title}</span>
                             <span className="text-xs text-muted-foreground">

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { VALIDATION_LIMITS } from '@/constants/validation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +22,13 @@ export async function POST(request: NextRequest) {
     if (!apiKey || typeof apiKey !== 'string') {
       return NextResponse.json(
         { error: API_ERROR_MESSAGES.INVALID_API_KEY },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
+
+    if (apiKey.length > VALIDATION_LIMITS.API_KEY_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.PAYLOAD_TOO_LARGE },
         { status: HTTP_STATUS.BAD_REQUEST }
       );
     }

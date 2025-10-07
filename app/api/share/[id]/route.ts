@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { isValidConversationId } from '@/lib/validation';
 
 export async function GET(
   request: NextRequest,
@@ -8,6 +9,13 @@ export async function GET(
 ) {
   try {
     const { id: conversationId } = await params;
+
+    if (!isValidConversationId(conversationId)) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
 
     const conversation = await prisma.conversation.findUnique({
       where: { 

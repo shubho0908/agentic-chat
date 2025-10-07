@@ -154,42 +154,102 @@ export async function streamChatCompletion(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to send message');
+    let errorMessage = 'Failed to send message';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorMessage;
+    } catch {
+      // If we can't parse the error response, use status text
+      errorMessage = response.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
   }
 
   const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder('utf-8', { fatal: false });
 
   if (!reader) {
     throw new Error("No response stream available");
   }
 
   let fullContent = "";
+  let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    
-    if (done) break;
-
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
-
-    for (const line of lines) {
-      const data = line.replace(/^data: /, '').trim();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
       
-      if (data === '[DONE]') continue;
+      const chunk = decoder.decode(value, { stream: !done });
+      buffer += chunk;
 
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.content) {
-          fullContent += parsed.content;
-          onChunk(fullContent);
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        if (!trimmedLine || !trimmedLine.startsWith('data:')) continue;
+
+        const data = trimmedLine.slice(5).trim();
+        
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          
+          // Check for error in stream
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+          
+          if (parsed.content) {
+            fullContent += parsed.content;
+            onChunk(fullContent);
+          }
+        } catch (err) {
+          // If it's an Error we threw, re-throw it
+          if (err instanceof Error && err.message !== 'Unexpected token') {
+            throw err;
+          }
+          console.warn('Failed to parse SSE data:', data, err);
         }
-      } catch {
-        // Ignore parsing errors
+      }
+
+      if (done) {
+        if (buffer.trim()) {
+          const trimmedLine = buffer.trim();
+          if (trimmedLine.startsWith('data:')) {
+            const data = trimmedLine.slice(5).trim();
+            if (data !== '[DONE]') {
+              try {
+                const parsed = JSON.parse(data);
+                
+                // Check for error in stream
+                if (parsed.error) {
+                  throw new Error(parsed.error);
+                }
+                
+                if (parsed.content) {
+                  fullContent += parsed.content;
+                  onChunk(fullContent);
+                }
+              } catch (err) {
+                // If it's an Error we threw, re-throw it
+                if (err instanceof Error && err.message !== 'Unexpected token') {
+                  throw err;
+                }
+                console.warn('Failed to parse final SSE data:', data, err);
+              }
+            }
+          }
+        }
+        break;
       }
     }
+  } catch (error) {
+    // Clean up the reader
+    reader.cancel();
+    throw error;
   }
 
   return fullContent;

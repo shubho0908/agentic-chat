@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { isValidConversationId, validateMessageData } from '@/lib/validation';
 
 export async function POST(
   request: NextRequest,
@@ -13,19 +14,20 @@ export async function POST(
     if (error) return error;
 
     const { id: conversationId } = await params;
-    const body = await request.json();
-    const { role, content } = body;
 
-    if (!role || !content) {
+    if (!isValidConversationId(conversationId)) {
       return NextResponse.json(
-        { error: API_ERROR_MESSAGES.MISSING_ROLE_CONTENT },
+        { error: API_ERROR_MESSAGES.INVALID_CONVERSATION_ID },
         { status: HTTP_STATUS.BAD_REQUEST }
       );
     }
+    const body = await request.json();
+    const { role, content } = body;
 
-    if (!['USER', 'ASSISTANT', 'SYSTEM'].includes(role)) {
+    const validation = validateMessageData(role, content);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: API_ERROR_MESSAGES.INVALID_ROLE },
+        { error: validation.error },
         { status: HTTP_STATUS.BAD_REQUEST }
       );
     }

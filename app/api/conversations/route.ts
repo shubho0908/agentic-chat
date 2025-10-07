@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, paginateResults } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { VALIDATION_LIMITS } from '@/constants/validation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,10 +55,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { title } = body;
 
+    const conversationTitle = title || 'New Chat';
+    if (typeof conversationTitle === 'string' && conversationTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: API_ERROR_MESSAGES.TITLE_TOO_LONG },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
+
     const conversation = await prisma.conversation.create({
       data: {
         userId: user.id,
-        title: title || 'New Chat'
+        title: conversationTitle
       }
     });
 

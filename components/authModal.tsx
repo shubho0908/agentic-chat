@@ -46,7 +46,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
       <DialogContent className="sm:max-w-[440px] border border-border/40">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-2xl font-semibold text-center">
-            Welcome to Agentic Chat
+            Welcome to Agentic chat
           </DialogTitle>
           <DialogDescription className="text-center text-base">
             Sign in to access intelligent AI conversations with semantic caching
@@ -92,7 +92,6 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
 
           <p className="text-xs text-center text-muted-foreground px-4">
             By signing in, you agree to our Terms of Service and Privacy Policy.
-            Your API keys are stored securely in your browser.
           </p>
         </div>
       </DialogContent>

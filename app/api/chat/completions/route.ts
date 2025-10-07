@@ -5,6 +5,8 @@ import { decryptApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
 import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { validateChatMessages } from '@/lib/validation';
+import { parseOpenAIError } from '@/lib/openai-errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,9 +36,17 @@ export async function POST(request: NextRequest) {
 
     const { model, messages, stream = true } = body;
 
-    if (!model || !messages) {
+    if (!model || typeof model !== 'string') {
       return new Response(
-        JSON.stringify({ error: API_ERROR_MESSAGES.MISSING_MODEL_MESSAGES }),
+        JSON.stringify({ error: 'Model is required and must be a string' }),
+        { status: HTTP_STATUS.BAD_REQUEST, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const validation = validateChatMessages(messages);
+    if (!validation.valid) {
+      return new Response(
+        JSON.stringify({ error: validation.error }),
         { status: HTTP_STATUS.BAD_REQUEST, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -64,7 +74,15 @@ export async function POST(request: NextRequest) {
             controller.close();
           } catch (error) {
             console.error('Streaming error:', error);
-            controller.error(error);
+            const { message } = parseOpenAIError(error);
+            
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: message })}\n\n`));
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            } catch (e) {
+              console.error('Failed to send error through stream:', e);
+            }
+            controller.close();
           }
         },
       });
@@ -90,10 +108,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Chat completion error:', error);
-    const errorMessage = error instanceof Error ? error.message : API_ERROR_MESSAGES.INTERNAL_SERVER_ERROR;
+    const { message, statusCode } = parseOpenAIError(error);
+
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: message }),
+      { status: statusCode, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }

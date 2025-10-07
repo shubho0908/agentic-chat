@@ -1,0 +1,15 @@
+export const VALIDATION_LIMITS = {
+  MESSAGE_CONTENT_MAX_LENGTH: 100 * 1024,
+  CONVERSATION_TITLE_MAX_LENGTH: 255,
+  CHAT_MESSAGES_MAX_COUNT: 100,
+  CHAT_MESSAGE_MAX_LENGTH: 50 * 1024,
+  API_KEY_MAX_LENGTH: 200,
+} as const;
+
+export const VALIDATION_ERROR_MESSAGES = {
+  MESSAGE_CONTENT_TOO_LONG: `Message content exceeds maximum length of ${VALIDATION_LIMITS.MESSAGE_CONTENT_MAX_LENGTH} characters`,
+  CONVERSATION_TITLE_TOO_LONG: `Title exceeds maximum length of ${VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH} characters`,
+  TOO_MANY_CHAT_MESSAGES: `Too many messages. Maximum ${VALIDATION_LIMITS.CHAT_MESSAGES_MAX_COUNT} messages allowed`,
+  CHAT_MESSAGE_TOO_LONG: `Individual message exceeds maximum length of ${VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH} characters`,
+  API_KEY_TOO_LONG: `API key exceeds maximum length of ${VALIDATION_LIMITS.API_KEY_MAX_LENGTH} characters`,
+} as const;
