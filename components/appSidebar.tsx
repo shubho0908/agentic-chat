@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/tooltip";
 import { RenameDialog } from "@/components/renameDialog";
 import { ShareDialog } from "@/components/shareDialog";
+import { DeleteDialog } from "@/components/deleteDialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useSession } from "@/lib/auth-client";
 import { formatDistanceToNow } from "date-fns";
@@ -186,14 +187,22 @@ export function AppSidebar() {
                             }
                           />
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleDeleteConversation(conversation.id)}
-                            className="text-destructive cursor-pointer"
-                            disabled={isDeleting}
-                          >
-                            <Trash2 className="mr-2 size-4" />
-                            Delete
-                          </DropdownMenuItem>
+                          <DeleteDialog
+                            conversationId={conversation.id}
+                            conversationTitle={conversation.title}
+                            onDelete={handleDeleteConversation}
+                            isDeleting={isDeleting}
+                            trigger={
+                              <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                className="text-destructive cursor-pointer"
+                                disabled={isDeleting}
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            }
+                          />
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </SidebarMenuItem>
