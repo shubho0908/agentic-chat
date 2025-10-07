@@ -16,6 +16,7 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const checkScroll = () => {
@@ -85,6 +86,10 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
+  const handleImageError = (index: number) => {
+    setImageErrors(prev => ({ ...prev, [index]: true }));
+  };
+
   return (
     <AnimatePresence>
       {files.length > 0 && (
@@ -130,7 +135,7 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
                     transition={{ duration: 0.15 }}
                     className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
                   >
-                    {preview ? (
+                    {preview && !imageErrors[index] ? (
                       <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
                         <Image
                           src={preview}
@@ -138,6 +143,7 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
                           fill
                           className="object-cover"
                           unoptimized
+                          onError={() => handleImageError(index)}
                         />
                       </div>
                     ) : (

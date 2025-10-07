@@ -5,3 +5,4 @@ export const qdrantClient = new QdrantClient({
   checkCompatibility: false
 });
 export const SIMILARITY_THRESHOLD = 0.70;
+export const CACHE_TTL_SECONDS = Number(process.env.CACHE_TTL_SECONDS) || 3600;
