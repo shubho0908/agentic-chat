@@ -4,9 +4,9 @@ import { useRef } from "react";
 import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useUploadThing } from "@/utils/uploadthing";
 import { toast } from "sonner";
 import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
 interface FileUploadButtonProps {
   onFilesSelected: (files: File[]) => void;
@@ -14,9 +14,10 @@ interface FileUploadButtonProps {
   currentFileCount?: number;
 }
 
+const ACCEPTED_FILE_TYPES = "image/*,.pdf,.txt,.docx,.xlsx,.xls";
+
 export function FileUploadButton({ onFilesSelected, disabled, currentFileCount = 0 }: FileUploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { routeConfig } = useUploadThing("ragDocumentUploader");
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -24,14 +25,14 @@ export function FileUploadButton({ onFilesSelected, disabled, currentFileCount =
       const remainingSlots = MAX_FILE_ATTACHMENTS - currentFileCount;
       
       if (remainingSlots <= 0) {
-        toast.error("Maximum files reached", {
+        toast.error(TOAST_ERROR_MESSAGES.UPLOAD.MAX_REACHED, {
           description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files total`,
         });
         return;
       }
       
       if (files.length > remainingSlots) {
-        toast.error("Too many files", {
+        toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
           description: `You can only add ${remainingSlots} more file(s)`,
         });
         return;
@@ -52,14 +53,7 @@ export function FileUploadButton({ onFilesSelected, disabled, currentFileCount =
         multiple
         onChange={handleFileSelect}
         className="hidden"
-        accept={routeConfig ? Object.keys(routeConfig).map(type => {
-          if (type === "image") return "image/*";
-          if (type === "pdf") return ".pdf";
-          if (type === "text") return ".txt";
-          if (type.includes("wordprocessingml")) return ".docx";
-          if (type.includes("spreadsheetml")) return ".xlsx,.xls";
-          return "";
-        }).filter(Boolean).join(",") : undefined}
+        accept={ACCEPTED_FILE_TYPES}
         disabled={disabled}
       />
 

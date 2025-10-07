@@ -62,7 +62,7 @@ export function ChatInput({
   if (centered) {
     return (
       <>
-        <div className="flex min-h-screen flex-col items-center justify-center p-6">
+        <div className="flex min-h-screen flex-col items-center justify-center p-6 pt-24 md:pt-6">
           <div className="w-full max-w-2xl space-y-8">
             <div className="text-center space-y-4">
               <h1 className="text-5xl font-bold tracking-tight text-foreground">

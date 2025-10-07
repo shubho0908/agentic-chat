@@ -12,6 +12,7 @@ import { signOut, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
 
 export function UserMenu() {
   const { data: session } = useSession();
@@ -25,11 +26,11 @@ export function UserMenu() {
   const handleLogout = async () => {
     try {
       await signOut();
-      toast.success("Logged out successfully");
+      toast.success(TOAST_SUCCESS_MESSAGES.LOGGED_OUT);
     } catch (error) {
       console.error("Logout error:", error);
-      toast.error("Failed to logout", {
-        description: "Please try again",
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_LOGOUT, {
+        description: TOAST_ERROR_MESSAGES.AUTH.FAILED_LOGOUT_DESCRIPTION,
       });
     }
   };

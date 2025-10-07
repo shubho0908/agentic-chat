@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
+import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,8 +11,8 @@ export async function POST(request: NextRequest) {
     
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: API_ERROR_MESSAGES.UNAUTHORIZED },
+        { status: HTTP_STATUS.UNAUTHORIZED }
       );
     }
 
@@ -19,16 +20,16 @@ export async function POST(request: NextRequest) {
 
     if (!apiKey || typeof apiKey !== 'string') {
       return NextResponse.json(
-        { error: 'Invalid API key' },
-        { status: 400 }
+        { error: API_ERROR_MESSAGES.INVALID_API_KEY },
+        { status: HTTP_STATUS.BAD_REQUEST }
       );
     }
 
     const openaiKeyRegex = /^sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}$/;
     if (!openaiKeyRegex.test(apiKey.trim())) {
       return NextResponse.json(
-        { error: 'Invalid OpenAI API key format' },
-        { status: 400 }
+        { error: API_ERROR_MESSAGES.INVALID_API_KEY_FORMAT },
+        { status: HTTP_STATUS.BAD_REQUEST }
       );
     }
 
@@ -45,8 +46,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json(
-      { error: 'Failed to save API key' },
-      { status: 500 }
+      { error: API_ERROR_MESSAGES.FAILED_SAVE_API_KEY },
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     );
   }
 }
@@ -57,8 +58,8 @@ export async function GET() {
     
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: API_ERROR_MESSAGES.UNAUTHORIZED },
+        { status: HTTP_STATUS.UNAUTHORIZED }
       );
     }
 
@@ -91,8 +92,8 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json(
-      { error: 'Failed to retrieve API key status' },
-      { status: 500 }
+      { error: API_ERROR_MESSAGES.FAILED_RETRIEVE_API_KEY },
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     );
   }
 }
@@ -103,8 +104,8 @@ export async function DELETE() {
     
     if (!session?.user) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: API_ERROR_MESSAGES.UNAUTHORIZED },
+        { status: HTTP_STATUS.UNAUTHORIZED }
       );
     }
 
@@ -119,8 +120,8 @@ export async function DELETE() {
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json(
-      { error: 'Failed to delete API key' },
-      { status: 500 }
+      { error: API_ERROR_MESSAGES.FAILED_DELETE_API_KEY },
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     );
   }
 }

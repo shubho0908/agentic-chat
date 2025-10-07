@@ -1,5 +1,11 @@
-import { Send, StopCircle, Loader2 } from "lucide-react";
+import { Send, StopCircle, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface ActionButtonsProps {
@@ -23,19 +29,28 @@ export function ActionButtons({
 
   if (isLoading && onStop) {
     return (
-      <Button
-        type="button"
-        onClick={onStop}
-        size="icon"
-        variant="ghost"
-        className={cn(
-          "size-10 rounded-xl",
-          isLarge && "size-11 rounded-2xl hover:bg-destructive/10"
-        )}
-      >
-        <StopCircle className="size-5 text-destructive" />
-        <span className="sr-only">Stop generating</span>
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              onClick={onStop}
+              size="icon"
+              variant="ghost"
+              className={cn(
+                "size-10 rounded-xl",
+                isLarge && "size-11 rounded-2xl hover:bg-destructive/10"
+              )}
+            >
+              <StopCircle className="size-5 text-destructive" />
+              <span className="sr-only">Stop generating</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Stop generating</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
@@ -50,7 +65,7 @@ export function ActionButtons({
       )}
     >
       {isUploading ? (
-        <Loader2 className={cn("size-4 animate-spin", isLarge && "size-5")} />
+        <Loader className={cn("size-4 animate-spin", isLarge && "size-5")} />
       ) : (
         <Send className={cn("size-4", isLarge && "size-5")} />
       )}

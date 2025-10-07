@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { decryptApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
 import OpenAI from 'openai';
+import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +12,8 @@ export async function POST(request: NextRequest) {
     
     if (!session?.user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: API_ERROR_MESSAGES.UNAUTHORIZED }),
+        { status: HTTP_STATUS.UNAUTHORIZED, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -23,8 +24,8 @@ export async function POST(request: NextRequest) {
 
     if (!user?.encryptedApiKey) {
       return new Response(
-        JSON.stringify({ error: 'API key not configured' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: API_ERROR_MESSAGES.API_KEY_NOT_CONFIGURED }),
+        { status: HTTP_STATUS.BAD_REQUEST, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -35,8 +36,8 @@ export async function POST(request: NextRequest) {
 
     if (!model || !messages) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: model, messages' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: API_ERROR_MESSAGES.MISSING_MODEL_MESSAGES }),
+        { status: HTTP_STATUS.BAD_REQUEST, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -89,10 +90,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Chat completion error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    const errorMessage = error instanceof Error ? error.message : API_ERROR_MESSAGES.INTERNAL_SERVER_ERROR;
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: HTTP_STATUS.INTERNAL_SERVER_ERROR, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }

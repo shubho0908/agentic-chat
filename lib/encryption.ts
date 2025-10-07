@@ -1,4 +1,5 @@
 import { randomBytes, createCipheriv, createDecipheriv, createHash } from 'crypto';
+import { ENCRYPTION_ERRORS } from '@/constants/errors';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
@@ -7,15 +8,13 @@ const KEY_LENGTH = 32;
 function getEncryptionKey(): Buffer {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) {
-    throw new Error('ENCRYPTION_KEY environment variable is not set');
+    throw new Error(ENCRYPTION_ERRORS.KEY_NOT_SET);
   }
   
-  // Convert hex string to buffer or use direct key
   if (key.length === KEY_LENGTH * 2) {
     return Buffer.from(key, 'hex');
   }
   
-  // If key is not hex, hash it to get proper length
   return createHash('sha256').update(key).digest();
 }
 
@@ -30,10 +29,9 @@ export function encryptApiKey(plaintext: string): string {
     
     const authTag = cipher.getAuthTag();
     
-    // Format: iv:authTag:encrypted
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
   } catch {
-    throw new Error('Failed to encrypt API key');
+    throw new Error(ENCRYPTION_ERRORS.FAILED_ENCRYPT);
   }
 }
 
@@ -43,7 +41,7 @@ export function decryptApiKey(encrypted: string): string {
     const parts = encrypted.split(':');
     
     if (parts.length !== 3) {
-      throw new Error('Invalid encrypted data format');
+      throw new Error(ENCRYPTION_ERRORS.INVALID_FORMAT);
     }
     
     const [ivHex, authTagHex, encryptedData] = parts;
@@ -58,7 +56,7 @@ export function decryptApiKey(encrypted: string): string {
     
     return decrypted;
   } catch {
-    throw new Error('Failed to decrypt API key');
+    throw new Error(ENCRYPTION_ERRORS.FAILED_DECRYPT);
   }
 }
 

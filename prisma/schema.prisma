@@ -10,17 +10,18 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(cuid())
+  id              String         @id @default(cuid())
   name            String?
-  email           String    @unique
-  emailVerified   Boolean   @default(false)
+  email           String         @unique
+  emailVerified   Boolean        @default(false)
   image           String?
   encryptedApiKey String?
   apiKeyUpdatedAt DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   accounts        Account[]
   sessions        Session[]
+  conversations   Conversation[]
 
   @@map("user")
 }
@@ -67,4 +68,41 @@ model Verification {
   updatedAt  DateTime @default(now()) @updatedAt
 
   @@map("verification")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+
+  @@map("message_role")
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String?   @db.VarChar(255)
+  isPublic  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([isPublic])
+  @@map("conversation")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("message")
 }

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 
 interface ApiKeyResponse {
   exists: boolean;
@@ -18,7 +19,7 @@ export function useApiKey() {
         if (response.status === 401) {
           return { exists: false, maskedKey: null, updatedAt: null };
         }
-        throw new Error("Failed to fetch API key status");
+        throw new Error(HOOK_ERROR_MESSAGES.FAILED_FETCH_API_KEY);
       }
 
       return response.json();
@@ -59,7 +60,7 @@ export function useApiKeyMutations() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to delete API key");
+        throw new Error(HOOK_ERROR_MESSAGES.FAILED_DELETE_API_KEY);
       }
 
       return response.json();
