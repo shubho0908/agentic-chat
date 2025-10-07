@@ -13,7 +13,7 @@ export function isValidConversationId(id: string): boolean {
   return isValidCuid(id);
 }
 
-export interface ValidationResult {
+interface ValidationResult {
   valid: boolean;
   error?: string;
 }

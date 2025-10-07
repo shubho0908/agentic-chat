@@ -94,7 +94,8 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <Separator/>
-      <SidebarContent>
+      <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden">
+        <SidebarContent className="flex-1 scrollbar-hide">
         <SidebarGroup>
           <SidebarGroupLabel>Conversations</SidebarGroupLabel>
           <TooltipProvider>
@@ -212,7 +213,9 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-      </SidebarContent>
+        </SidebarContent>
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-sidebar to-transparent" />
+      </div>
     </Sidebar>
   );
 }

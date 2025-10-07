@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { OpenAIIcon } from "@/components/icons/openai-icon";
 import { OPENAI_MODELS } from "@/constants/openai-models";
+import { Response } from "../ai-elements/response";
 
 interface ChatMessageProps {
   message: Message;
@@ -68,9 +69,7 @@ function ChatMessageComponent({ message, userName }: ChatMessageProps) {
 
             <div className="prose prose-sm dark:prose-invert max-w-none">
               {message.content ? (
-                <p className="m-0 whitespace-pre-wrap break-words leading-relaxed">
-                  {message.content}
-                </p>
+                <Response>{message.content}</Response>
               ) : (
                 <AIThinkingAnimation model={message.model} />
               )}
