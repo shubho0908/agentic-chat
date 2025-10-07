@@ -20,8 +20,31 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agentic chat - Intelligent Conversations",
-  description: "Chat with AI assistant powered by OpenAI with semantic caching",
+  title: "Agentic Chat - Intelligent Conversations",
+  description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL as string),
+  openGraph: {
+    title: "Agentic Chat - Intelligent Conversations",
+    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
+    url: '/',
+    siteName: "Agentic Chat",
+    images: [
+      {
+        url: '/api/og/home',
+        width: 1200,
+        height: 630,
+        alt: "Agentic Chat - Intelligent Conversations",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Agentic Chat - Intelligent Conversations",
+    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
+    images: ['/api/og/home'],
+  },
 };
 
 export default function RootLayout({
