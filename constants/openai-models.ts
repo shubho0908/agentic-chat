@@ -5,6 +5,8 @@ export interface OpenAIModel {
   contextWindow: number;
   category: "reasoning" | "chat" | "legacy";
   capabilities: ("text" | "vision" | "audio" | "video")[];
+  hasReasoning?: boolean;
+  recommended?: boolean;
 }
 
 export const OPENAI_MODELS: OpenAIModel[] = [
@@ -13,32 +15,36 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     id: "gpt-5",
     name: "GPT-5",
     description: "Best model for coding and agentic tasks",
-    contextWindow: 128000,
-    category: "chat",
+    contextWindow: 400000,
+    category: "reasoning",
     capabilities: ["text", "vision"],
+    hasReasoning: true,
   },
   {
     id: "gpt-5-mini",
     name: "GPT-5 Mini",
     description: "Faster, cost-efficient version of GPT-5",
-    contextWindow: 128000,
-    category: "chat",
+    contextWindow: 400000,
+    category: "reasoning",
     capabilities: ["text", "vision"],
+    hasReasoning: true,
   },
   {
     id: "gpt-5-nano-2025-08-07",
     name: "GPT-5 Nano",
     description: "Fastest, most cost-efficient version of GPT-5",
-    contextWindow: 128000,
+    contextWindow: 400000,
     category: "chat",
     capabilities: ["text", "vision"],
+    hasReasoning: true,
+    recommended: true,
   },
   // GPT-4.1 Series
   {
     id: "gpt-4.1",
     name: "GPT-4.1",
     description: "Smartest non-reasoning model",
-    contextWindow: 128000,
+    contextWindow: 1047576,
     category: "chat",
     capabilities: ["text", "vision"],
   },
@@ -46,7 +52,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     id: "gpt-4.1-mini",
     name: "GPT-4.1 Mini",
     description: "Smaller, faster version of GPT-4.1",
-    contextWindow: 128000,
+    contextWindow: 1047576,
     category: "chat",
     capabilities: ["text", "vision"],
   },
@@ -54,7 +60,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     id: "gpt-4.1-nano",
     name: "GPT-4.1 Nano",
     description: "Fastest, most cost-efficient GPT-4.1",
-    contextWindow: 128000,
+    contextWindow: 1047576,
     category: "chat",
     capabilities: ["text", "vision"],
   },

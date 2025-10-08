@@ -1,69 +1,58 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { OPENAI_MODELS, type OpenAIModel } from "@/constants/openai-models";
-import { getCategoryGroupLabel, ModelIcon, CategoryBadge } from "../utils/byokUtils";
+import { OPENAI_MODELS } from "@/constants/openai-models";
+import { ModelIcon } from "../utils/byokUtils";
 
 interface ModelSelectorProps {
   selectedModel: string;
   onModelSelect: (modelId: string) => void;
 }
 
-export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
-  const [comboboxOpen, setComboboxOpen] = useState(false);
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1000000) {
+    const millions = tokens / 1000000;
+    return `${millions % 1 === 0 ? millions : millions.toFixed(1)}M`;
+  } else if (tokens >= 1000) {
+    const thousands = tokens / 1000;
+    return `${thousands % 1 === 0 ? thousands : thousands.toFixed(1)}K`;
+  }
+  return tokens.toString();
+}
 
+export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
   const selectedModelData = OPENAI_MODELS.find(
     (model) => model.id === selectedModel
   );
 
-  const groupedModels = useMemo(() => {
-    const groups: Record<OpenAIModel["category"], OpenAIModel[]> = {
-      reasoning: [],
-      chat: [],
-      legacy: [],
-    };
-
-    OPENAI_MODELS.forEach((model) => {
-      groups[model.category].push(model);
-    });
-
-    return groups;
-  }, []);
-
   return (
     <div className="grid gap-2">
       <Label>Model</Label>
-      <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
-        <PopoverTrigger asChild>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            role="combobox"
-            aria-expanded={comboboxOpen}
-            className="w-full justify-between h-auto min-h-[52px] px-3 sm:px-4 py-2.5 hover:bg-accent focus-visible:outline-none focus-visible:ring-0"
+            className="w-full justify-between h-auto min-h-[52px] px-3 sm:px-4 py-2.5 hover:bg-accent"
           >
             {selectedModelData ? (
               <div className="flex flex-col items-start gap-1 flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-center gap-2">
                   <ModelIcon />
                   <span className="font-semibold text-xs sm:text-sm truncate">{selectedModelData.name}</span>
-                  <CategoryBadge category={selectedModelData.category} />
+                  {selectedModelData.recommended && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0">
+                      RECOMMENDED
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-muted-foreground line-clamp-1 text-left">
                   {selectedModelData.description}
@@ -72,61 +61,44 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
             ) : (
               <span className="text-muted-foreground text-xs sm:text-sm">Select model...</span>
             )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] p-0 focus-visible:outline-none" align="start">
-          <Command className="rounded-lg">
-            <CommandInput placeholder="Search models..." className="h-10 border-0 focus-visible:outline-none focus-visible:ring-0 focus:outline-none focus:ring-0 text-sm" />
-            <CommandList className="max-h-[300px] overflow-y-auto">
-              <CommandEmpty className="text-sm py-6 text-center">No model found.</CommandEmpty>
-              {(["reasoning", "chat", "legacy"] as const).map((category) => (
-                groupedModels[category].length > 0 && (
-                  <CommandGroup key={category} heading={getCategoryGroupLabel(category)} className="px-3 py-2">
-                    {groupedModels[category].map((model) => (
-                      <CommandItem
-                        key={model.id}
-                        value={model.id}
-                        keywords={[model.name, model.description, model.category, getCategoryGroupLabel(model.category)]}
-                        onSelect={(currentValue) => {
-                          onModelSelect(currentValue);
-                          setComboboxOpen(false);
-                        }}
-                        className={cn(
-                          "flex items-start gap-3 px-3 py-3 cursor-pointer rounded-md aria-selected:bg-accent/50",
-                          selectedModel === model.id && "bg-primary/10 border-l-2 border-primary"
-                        )}
-                      >
-                        <Check
-                          className={cn(
-                            "h-4 w-4 shrink-0 mt-0.5 text-primary",
-                            selectedModel === model.id
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
-                        <div className="flex flex-col gap-1 flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <ModelIcon />
-                            <span className={cn(
-                              "font-semibold text-sm",
-                              selectedModel === model.id && "text-primary"
-                            )}>{model.name}</span>
-                            <CategoryBadge category={model.category} />
-                          </div>
-                          <span className="text-xs text-muted-foreground leading-relaxed">
-                            {model.description} • {model.contextWindow.toLocaleString()} tokens
-                          </span>
-                        </div>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                )
-              ))}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] max-h-[400px] overflow-y-auto" align="start">
+          {OPENAI_MODELS.map((model) => (
+            <DropdownMenuItem
+              key={model.id}
+              onClick={() => onModelSelect(model.id)}
+              className={cn(
+                "flex items-start gap-3 px-3 py-3 cursor-pointer relative overflow-hidden",
+                selectedModel === model.id && "bg-accent",
+                model.recommended && "bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-purple-500/20"
+              )}
+            >
+              <Check
+                className={cn(
+                  "h-4 w-4 shrink-0 mt-0.5",
+                  selectedModel === model.id ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <ModelIcon />
+                  <span className="font-semibold text-sm">{model.name}</span>
+                  {model.recommended && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0">
+                      RECOMMENDED
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground leading-relaxed">
+                  {model.description} • {formatTokenCount(model.contextWindow)} tokens
+                </span>
+              </div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

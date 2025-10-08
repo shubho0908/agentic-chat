@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { OPENAI_MODELS, DEFAULT_MODEL } from "@/constants/openai-models";
 import { useApiKey, useApiKeyMutations } from "@/hooks/useApiKey";
@@ -126,6 +127,10 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
       });
     }
   };
+
+  if (isLoading) {
+    return <Skeleton className="h-9 w-10 md:w-24 rounded-xl" />;
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

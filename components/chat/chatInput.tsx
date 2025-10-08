@@ -63,13 +63,13 @@ export function ChatInput({
     return (
       <>
         <div className="flex min-h-screen flex-col items-center justify-center p-6 pt-24 md:pt-6">
-          <div className="w-full max-w-2xl space-y-8">
-            <div className="text-center space-y-4">
-              <h1 className="text-5xl font-bold tracking-tight text-foreground">
+          <div className="w-full max-w-2xl space-y-6 md:space-y-8">
+            <div className="text-center space-y-2 md:space-y-4">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground">
                 Agentic chat
               </h1>
 
-              <p className="text-lg text-muted-foreground">
+              <p className="text-base md:text-lg text-muted-foreground">
                 Your intelligent assistant powered by advanced AI
               </p>
             </div>
