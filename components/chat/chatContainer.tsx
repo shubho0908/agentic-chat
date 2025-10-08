@@ -22,7 +22,7 @@ export function ChatContainer({ messages, isLoading, userName }: ChatContainerPr
 
   return (
     <ScrollArea className="flex-1">
-      <div className="flex flex-col pt-20 md:pt-0">
+      <div className="flex flex-col">
         {messages.map((message, index) => (
           <div
             key={message.id || `${message.role}-${index}`}
