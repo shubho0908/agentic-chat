@@ -20,16 +20,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Setup environment
+        run: |
+          cp .env.example .env
+          sed -i 's|ENCRYPTION_KEY=.*|ENCRYPTION_KEY='$(openssl rand -hex 32)'|' .env
+          sed -i 's|BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET='$(openssl rand -base64 32)'|' .env
+          sed -i 's|DATABASE_URL=.*|DATABASE_URL=postgresql://user:password@localhost:5432/testdb|' .env
+          sed -i 's|DIRECT_DATABASE_URL=.*|DIRECT_DATABASE_URL=postgresql://user:password@localhost:5432/testdb|' .env
       - name: Install dependencies
         run: npm install
       - name: Run lint
-        env:
-          CI: true
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          QDRANT_URL: ${{ secrets.QDRANT_URL }}
-          QDRANT_API: ${{ secrets.QDRANT_API }}
-          EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
-          CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
         run: npm run lint
 
   build:
@@ -47,14 +47,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Setup environment
+        run: |
+          cp .env.example .env
+          sed -i 's|ENCRYPTION_KEY=.*|ENCRYPTION_KEY='$(openssl rand -hex 32)'|' .env
+          sed -i 's|BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET='$(openssl rand -base64 32)'|' .env
+          sed -i 's|DATABASE_URL=.*|DATABASE_URL=postgresql://user:password@localhost:5432/testdb|' .env
+          sed -i 's|DIRECT_DATABASE_URL=.*|DIRECT_DATABASE_URL=postgresql://user:password@localhost:5432/testdb|' .env
       - name: Install dependencies
         run: npm install
       - name: Build
-        env:
-          CI: true
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          QDRANT_URL: ${{ secrets.QDRANT_URL }}
-          QDRANT_API: ${{ secrets.QDRANT_API }}
-          EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
-          CACHE_COLLECTION_NAME: ${{ secrets.CACHE_COLLECTION_NAME }}
         run: npm run build
