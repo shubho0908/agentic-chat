@@ -32,7 +32,7 @@ function ChatMessageComponent({ message, userName }: ChatMessageProps) {
   return (
     <div
       className={cn(
-        "group relative px-4 py-8 transition-colors",
+        "group relative px-4 py-8 transition-colors w-screen md:w-full",
         !isUser && "bg-muted/30"
       )}
     >
