@@ -108,7 +108,6 @@ export const TOAST_SUCCESS_MESSAGES = {
   SETTINGS_SAVED: "Settings saved successfully",
   SETTINGS_CLEARED: "Settings cleared",
   CHAT_CLEARED: "Chat cleared",
-  FILES_UPLOADED: "Files uploaded",
   CONVERSATION_CREATED: "New conversation created",
   CONVERSATION_DELETED: "Conversation deleted",
   CONVERSATION_RENAMED: "Conversation renamed",

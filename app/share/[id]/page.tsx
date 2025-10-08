@@ -6,7 +6,7 @@ import { Loader, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChatContainer } from "@/components/chat/chatContainer";
-import { type Message } from "@/lib/schemas/chat";
+import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useLayout } from "@/components/providers/layoutProvider";
 
 interface SharedConversation {
@@ -23,6 +23,7 @@ interface SharedConversation {
     role: "user" | "assistant";
     content: string;
     createdAt: string;
+    attachments?: Attachment[];
   }>;
 }
 
@@ -131,6 +132,7 @@ export default function SharedConversationPage({
     role: msg.role,
     content: msg.content,
     timestamp: new Date(msg.createdAt).getTime(),
+    attachments: msg.attachments || [],
   }));
 
   return (

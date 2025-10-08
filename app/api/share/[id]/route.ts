@@ -38,6 +38,15 @@ export async function GET(
             role: true,
             content: true,
             createdAt: true,
+            attachments: {
+              select: {
+                id: true,
+                fileUrl: true,
+                fileName: true,
+                fileType: true,
+                fileSize: true,
+              }
+            }
           }
         }
       }
@@ -55,7 +64,8 @@ export async function GET(
       ...conversation,
       messages: conversation.messages.map(msg => ({
         ...msg,
-        role: msg.role.toLowerCase()
+        role: msg.role.toLowerCase(),
+        attachments: msg.attachments || [],
       }))
     };
 

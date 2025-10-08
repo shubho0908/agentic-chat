@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { type Message } from "@/lib/schemas/chat";
+import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { useSaveToCache } from "./useSemanticCache";
@@ -14,7 +14,9 @@ import {
   buildMessagesForAPI,
   handleConversationSaving,
   buildCacheQuery,
+  shouldUseSemanticCache,
 } from "./chat/helpers";
+import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 
 interface UseChatOptions {
   initialMessages?: Message[];
@@ -24,7 +26,7 @@ interface UseChatOptions {
 interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
-  sendMessage: (content: string, session?: { user: { id: string } }) => Promise<void>;
+  sendMessage: (content: string, session?: { user: { id: string } }, attachments?: Attachment[]) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
 }
@@ -55,7 +57,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async (content: string, session?: { user: { id: string } }) => {
+    async (content: string, session?: { user: { id: string } }, attachments?: Attachment[]) => {
       if (!content.trim() || isLoading) return;
 
       const model = getModel();
@@ -65,11 +67,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         return;
       }
 
+      const messageContent = buildMultimodalContent(content.trim(), attachments);
+
       const userMessage: Message = {
         role: "user",
-        content: content.trim(),
+        content: messageContent,
         id: `user-${Date.now()}`,
         timestamp: Date.now(),
+        attachments,
       };
 
       const assistantMessageId = `assistant-${Date.now()}`;
@@ -95,13 +100,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         const isNewConversation = !currentConversationId;
 
         if (currentConversationId) {
-          await saveUserMessage(currentConversationId, content.trim());
+          await saveUserMessage(currentConversationId, messageContent, attachments);
         }
 
-        const cacheQuery = buildCacheQuery(messages, content.trim());
-        const cacheData = await checkCache(cacheQuery, abortControllerRef.current.signal);
+        const useCaching = shouldUseSemanticCache(attachments);
+        let cacheQuery = '';
+        let cacheData: { cached: boolean; response?: string } = { cached: false };
+
+        if (useCaching && abortControllerRef.current) {
+          cacheQuery = buildCacheQuery(messages, messageContent);
+          cacheData = await checkCache(cacheQuery, abortControllerRef.current.signal);
+        }
         
-        if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
+        if (useCaching && cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
           const cachedResponse = cacheData.response;
           assistantContent = cachedResponse;
           setMessages((prev) =>
@@ -112,13 +123,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             )
           );
 
-          // Note: Cached responses don't have inline memory extraction
-          // We could add a separate extraction step here if needed
-
           await handleConversationSaving(
             isNewConversation,
             currentConversationId,
-            content.trim(),
+            messageContent,
             cachedResponse,
             userMessage.id!,
             assistantMessageId,
@@ -129,15 +137,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               setConversationId(id);
               prevConversationIdRef.current = id;
               router.replace(`/c/${id}`);
-            }
+            },
+            attachments
           );
 
           setIsLoading(false);
           return;
         }
 
-        // Stream completion from API (memory context is now added server-side)
-        const messagesForAPI = buildMessagesForAPI(messages, content.trim(), DEFAULT_ASSISTANT_PROMPT);
+        const messagesForAPI = buildMessagesForAPI(messages, messageContent, DEFAULT_ASSISTANT_PROMPT);
 
         const responseContent = await streamChatCompletion(
           messagesForAPI,
@@ -158,15 +166,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         assistantContent = responseContent;
 
         if (assistantContent && !abortControllerRef.current?.signal.aborted) {
-          saveToCache.mutate({
-            query: cacheQuery,
-            response: assistantContent,
-          });
+          if (useCaching && cacheQuery) {
+            saveToCache.mutate({
+              query: cacheQuery,
+              response: assistantContent,
+            });
+          }
 
           await handleConversationSaving(
             isNewConversation,
             currentConversationId,
-            content.trim(),
+            messageContent,
             assistantContent,
             userMessage.id!,
             assistantMessageId,
@@ -177,16 +187,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               setConversationId(id);
               prevConversationIdRef.current = id;
               router.replace(`/c/${id}`);
-            }
+            },
+            attachments
           );
 
-          // Store conversation exchange as memory (fire and forget)
           if (session?.user?.id) {
+            const textContent = extractTextFromContent(messageContent);
+            
             fetch('/api/memory/store', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                userMessage: content.trim(),
+                userMessage: textContent,
                 assistantMessage: assistantContent,
                 conversationId: currentConversationId,
               }),
@@ -222,8 +234,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [router]);
 
   const stopGeneration = useCallback(() => {
-    abortControllerRef.current?.abort();
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setIsLoading(false);
+  }, []);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, []);
 
   return {

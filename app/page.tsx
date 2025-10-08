@@ -11,6 +11,7 @@ import { AuthModal } from "@/components/authModal";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import type { Attachment } from "@/lib/schemas/chat";
 
 function HomeContent() {
   const { messages, isLoading, sendMessage, stopGeneration, clearChat } = useChat();
@@ -21,7 +22,7 @@ function HomeContent() {
 
   const hasMessages = messages.length > 0;
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
     if (isPending) {
       return;
     }
@@ -41,7 +42,7 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content, session);
+    await sendMessage(content, session, attachments);
   };
 
   if (!hasMessages) {

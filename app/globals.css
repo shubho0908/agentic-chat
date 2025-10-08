@@ -161,4 +161,42 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Prevent default browser drag styles */
+  * {
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+  }
+
+  textarea,
+  input,
+  [contenteditable] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
+
+  /* Remove all drag-over styling */
+  *::-webkit-drag-over,
+  textarea::-webkit-drag-over,
+  input::-webkit-drag-over {
+    outline: none !important;
+    border: none !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Prevent focus ring during drag */
+  *:focus:has(~ *[data-dragging]) {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide native drag image/ghost */
+  *[draggable="true"] {
+    -webkit-user-drag: element;
+  }
 }

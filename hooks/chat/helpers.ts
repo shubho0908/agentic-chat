@@ -1,24 +1,26 @@
-import { type Message } from "@/lib/schemas/chat";
+import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
+import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
 
-export function generateTitle(content: string): string {
-  const maxLength = 50;
-  const cleaned = content.trim().replace(/\n/g, ' ');
-  if (cleaned.length <= maxLength) return cleaned;
-  return cleaned.substring(0, maxLength).trim() + '...';
+export function generateTitle(content: string | MessageContentPart[]): string {
+  return generateTitleUtil(content);
 }
 
 export async function saveUserMessage(
   conversationId: string,
-  content: string
+  content: string | MessageContentPart[],
+  attachments?: Attachment[]
 ): Promise<void> {
   try {
+    const contentToSave = extractTextFromContent(content);
+    
     await fetch(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         role: "USER",
-        content,
+        content: contentToSave,
+        attachments: attachments || [],
       }),
     });
   } catch (err) {
@@ -26,7 +28,7 @@ export async function saveUserMessage(
   }
 }
 
-export async function saveAssistantMessage(
+async function saveAssistantMessage(
   conversationId: string,
   content: string
 ): Promise<void> {
@@ -44,9 +46,10 @@ export async function saveAssistantMessage(
   }
 }
 
-export async function createNewConversation(
-  userContent: string,
-  assistantContent: string
+async function createNewConversation(
+  userContent: string | MessageContentPart[],
+  assistantContent: string,
+  attachments?: Attachment[]
 ): Promise<string | null> {
   try {
     const title = generateTitle(userContent);
@@ -61,7 +64,7 @@ export async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    await saveUserMessage(conversationId, userContent);
+    await saveUserMessage(conversationId, userContent, attachments);
     await saveAssistantMessage(conversationId, assistantContent);
 
     return conversationId;
@@ -71,16 +74,19 @@ export async function createNewConversation(
   }
 }
 
-export function updateQueryCache(
+function updateQueryCache(
   queryClient: QueryClient,
   conversationId: string,
-  userContent: string,
+  userContent: string | MessageContentPart[],
   assistantContent: string,
   userMessageId: string,
   assistantMessageId: string,
-  userTimestamp: number
+  userTimestamp: number,
+  attachments?: Attachment[]
 ): void {
   const title = generateTitle(userContent);
+  const textContent = extractTextFromContent(userContent);
+  
   queryClient.setQueryData(["conversation", conversationId], {
     conversation: {
       id: conversationId,
@@ -93,8 +99,9 @@ export function updateQueryCache(
         {
           id: userMessageId,
           role: "user" as const,
-          content: userContent,
+          content: textContent,
           createdAt: new Date(userTimestamp).toISOString(),
+          attachments: attachments || [],
         },
         {
           id: assistantMessageId,
@@ -108,10 +115,18 @@ export function updateQueryCache(
   queryClient.invalidateQueries({ queryKey: ["conversations"] });
 }
 
-export function buildCacheQuery(messages: Message[], newContent: string): string {
-  const recentMessages = messages.slice(-4);
-  const contextParts = recentMessages.map(m => `${m.role}: ${m.content}`);
-  contextParts.push(`user: ${newContent}`);
+export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
+  return !attachments || attachments.length === 0;
+}
+
+export function buildCacheQuery(messages: Message[], newContent: string | MessageContentPart[]): string {
+  const textOnlyMessages = messages
+    .filter(m => !m.attachments || m.attachments.length === 0)
+    .slice(-4);
+  
+  const contextParts = textOnlyMessages.map(m => `${m.role.toLowerCase()}: ${extractTextFromContent(m.content)}`);
+  const newText = extractTextFromContent(newContent);
+  contextParts.push(`user: ${newText}`);
   return contextParts.join('\n');
 }
 
@@ -137,7 +152,7 @@ export async function checkCache(
 }
 
 export async function streamChatCompletion(
-  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>,
   model: string,
   signal: AbortSignal,
   onChunk: (fullContent: string) => void,
@@ -254,9 +269,9 @@ export async function streamChatCompletion(
 
 export function buildMessagesForAPI(
   messages: Message[],
-  newContent: string,
+  newContent: string | MessageContentPart[],
   systemPrompt: string
-): Array<{ role: "user" | "assistant" | "system"; content: string }> {
+): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
   return [
     {
       role: "system" as const,
@@ -276,16 +291,17 @@ export function buildMessagesForAPI(
 export async function handleConversationSaving(
   isNewConversation: boolean,
   currentConversationId: string | null,
-  userContent: string,
+  userContent: string | MessageContentPart[],
   assistantContent: string,
   userMessageId: string,
   assistantMessageId: string,
   userTimestamp: number,
   queryClient: QueryClient,
-  onConversationCreated?: (id: string) => void
+  onConversationCreated?: (id: string) => void,
+  attachments?: Attachment[]
 ): Promise<void> {
   if (isNewConversation) {
-    const newConversationId = await createNewConversation(userContent, assistantContent);
+    const newConversationId = await createNewConversation(userContent, assistantContent, attachments);
 
     if (newConversationId && onConversationCreated) {
       updateQueryCache(
@@ -295,7 +311,8 @@ export async function handleConversationSaving(
         assistantContent,
         userMessageId,
         assistantMessageId,
-        userTimestamp
+        userTimestamp,
+        attachments
       );
       onConversationCreated(newConversationId);
     }
