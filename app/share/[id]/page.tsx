@@ -136,22 +136,25 @@ export default function SharedConversationPage({
   return (
     <div className="flex h-screen flex-col">
       <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" asChild>
+        <div className="container flex h-12 sm:h-14 items-center justify-between px-3 sm:px-4 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Button variant="ghost" size="sm" className="shrink-0" asChild>
               <Link href="/">
                 <ArrowLeft className="size-4" />
               </Link>
             </Button>
-            <div>
-              <h1 className="text-sm font-semibold truncate max-w-[300px] sm:max-w-md">
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[300px] md:max-w-md">
                 {data.title}
               </h1>
-              <p className="text-xs text-muted-foreground">Shared conversation</p>
+              <p className="text-xs text-muted-foreground hidden xs:block">Shared conversation</p>
             </div>
           </div>
-          <Button asChild variant="default" size="sm">
-            <Link href="/">Start Your Own Chat</Link>
+          <Button asChild variant="default" size="sm" className="shrink-0 text-xs sm:text-sm">
+            <Link href="/">
+              <span className="hidden sm:inline">Start Your Own Chat</span>
+              <span className="sm:hidden">Start Chat</span>
+            </Link>
           </Button>
         </div>
       </div>
