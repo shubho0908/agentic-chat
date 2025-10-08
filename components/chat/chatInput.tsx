@@ -5,8 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
 import { FilePreview } from "./filePreview";
+import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
+import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 
@@ -47,6 +49,13 @@ export function ChatInput({
     handleInput,
     clearInput,
   } = useChatTextarea(sendMessage);
+
+  const { dragState, dropZoneRef, handlers } = useDragAndDrop({
+    onFilesDropped: handleFilesSelected,
+    disabled: disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS,
+    maxFiles: MAX_FILE_ATTACHMENTS,
+    currentFileCount: selectedFiles.length,
+  });
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -102,37 +111,44 @@ export function ChatInput({
             </div>
 
             <form onSubmit={handleSubmit} className="relative">
-              <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:shadow-xl overflow-hidden">
-                <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
-                <Textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onInput={handleInput}
-                  onPaste={handlePaste}
-                  placeholder={placeholder}
-                  disabled={disabled || isLoading || isUploading}
-                  rows={1}
-                  className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-16 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
-                />
+              <DropZone
+                dragState={dragState}
+                disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                dropZoneRef={dropZoneRef}
+                handlers={handlers}
+              >
+                <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:shadow-xl overflow-hidden">
+                  <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onInput={handleInput}
+                    onPaste={handlePaste}
+                    placeholder={placeholder}
+                    disabled={disabled || isLoading || isUploading}
+                    rows={1}
+                    className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-16 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+                  />
 
-                <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                  <FileUploadButton
-                    disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
-                    onFilesSelected={handleFilesSelected}
-                    currentFileCount={selectedFiles.length}
-                  />
-                  <ActionButtons
-                    isLoading={isLoading}
-                    isUploading={isUploading}
-                    disabled={disabled}
-                    hasInput={!!input.trim()}
-                    onStop={onStop}
-                    size="large"
-                  />
+                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                    <FileUploadButton
+                      disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                      onFilesSelected={handleFilesSelected}
+                      currentFileCount={selectedFiles.length}
+                    />
+                    <ActionButtons
+                      isLoading={isLoading}
+                      isUploading={isUploading}
+                      disabled={disabled}
+                      hasInput={!!input.trim()}
+                      onStop={onStop}
+                      size="large"
+                    />
+                  </div>
                 </div>
-              </div>
+              </DropZone>
             </form>
 
             <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
@@ -151,36 +167,43 @@ export function ChatInput({
     <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-3xl p-4">
         <form onSubmit={handleSubmit} className="relative">
-          <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md overflow-hidden">
-            <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onInput={handleInput}
-              onPaste={handlePaste}
-              placeholder={placeholder}
-              disabled={disabled || isLoading || isUploading}
-              rows={1}
-              className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
-            />
+          <DropZone
+            dragState={dragState}
+            disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+            dropZoneRef={dropZoneRef}
+            handlers={handlers}
+          >
+            <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md overflow-hidden">
+              <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onInput={handleInput}
+                onPaste={handlePaste}
+                placeholder={placeholder}
+                disabled={disabled || isLoading || isUploading}
+                rows={1}
+                className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+              />
 
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              <FileUploadButton
-                disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
-                onFilesSelected={handleFilesSelected}
-                currentFileCount={selectedFiles.length}
-              />
-              <ActionButtons
-                isLoading={isLoading}
-                isUploading={isUploading}
-                disabled={disabled}
-                hasInput={!!input.trim()}
-                onStop={onStop}
-              />
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                <FileUploadButton
+                  disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                  onFilesSelected={handleFilesSelected}
+                  currentFileCount={selectedFiles.length}
+                />
+                <ActionButtons
+                  isLoading={isLoading}
+                  isUploading={isUploading}
+                  disabled={disabled}
+                  hasInput={!!input.trim()}
+                  onStop={onStop}
+                />
+              </div>
             </div>
-          </div>
+          </DropZone>
         </form>
 
         <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
