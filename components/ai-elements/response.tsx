@@ -36,25 +36,24 @@ function fixMathDelimiters(text: string): string {
   return processed;
 }
 
-export const Response = memo(
-  ({ className, children, ...props }: ResponseProps) => {
-    const processedChildren = typeof children === 'string' 
-      ? fixMathDelimiters(children)
-      : children;
-    
-    return (
-      <Streamdown
-        className={cn(
-          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-          className
-        )}
-        {...props}
-      >
-        {processedChildren}
-      </Streamdown>
-    );
-  },
-  (prevProps, nextProps) => prevProps.children === nextProps.children
-);
+const ResponseComponent = ({ className, children, ...props }: ResponseProps) => {
+  const processedChildren = typeof children === 'string' 
+    ? fixMathDelimiters(children)
+    : children;
+  
+  return (
+    <Streamdown
+      className={cn(
+        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        className
+      )}
+      {...props}
+    >
+      {processedChildren}
+    </Streamdown>
+  );
+};
 
-Response.displayName = "Response";
+ResponseComponent.displayName = "Response";
+
+export const Response = memo(ResponseComponent);
