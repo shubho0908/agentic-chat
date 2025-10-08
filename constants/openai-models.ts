@@ -4,6 +4,7 @@ export interface OpenAIModel {
   description: string;
   contextWindow: number;
   category: "reasoning" | "chat" | "legacy";
+  capabilities: ("text" | "vision" | "audio" | "video")[];
 }
 
 export const OPENAI_MODELS: OpenAIModel[] = [
@@ -14,6 +15,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Best model for coding and agentic tasks",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   {
     id: "gpt-5-mini",
@@ -21,6 +23,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Faster, cost-efficient version of GPT-5",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   {
     id: "gpt-5-nano-2025-08-07",
@@ -28,6 +31,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Fastest, most cost-efficient version of GPT-5",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   // GPT-4.1 Series
   {
@@ -36,6 +40,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Smartest non-reasoning model",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   {
     id: "gpt-4.1-mini",
@@ -43,6 +48,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Smaller, faster version of GPT-4.1",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   {
     id: "gpt-4.1-nano",
@@ -50,64 +56,9 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Fastest, most cost-efficient GPT-4.1",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
-  // o-series Reasoning Models
-  {
-    id: "o3-pro",
-    name: "o3 Pro",
-    description: "o3 with more compute for better responses",
-    contextWindow: 200000,
-    category: "reasoning",
-  },
-  {
-    id: "o3",
-    name: "o3",
-    description: "Reasoning model for complex tasks",
-    contextWindow: 200000,
-    category: "reasoning",
-  },
-  {
-    id: "o4-mini",
-    name: "o4 Mini",
-    description: "Fast, cost-efficient reasoning model",
-    contextWindow: 128000,
-    category: "reasoning",
-  },
-  {
-    id: "o3-mini",
-    name: "o3 Mini",
-    description: "Small alternative to o3",
-    contextWindow: 200000,
-    category: "reasoning",
-  },
-  {
-    id: "o1-pro",
-    name: "o1 Pro",
-    description: "o1 with more compute for better responses",
-    contextWindow: 200000,
-    category: "reasoning",
-  },
-  {
-    id: "o1",
-    name: "o1",
-    description: "Previous full o-series reasoning model",
-    contextWindow: 200000,
-    category: "reasoning",
-  },
-  {
-    id: "o1-mini",
-    name: "o1 Mini",
-    description: "Small alternative to o1",
-    contextWindow: 128000,
-    category: "reasoning",
-  },
-  {
-    id: "o1-preview",
-    name: "o1 Preview",
-    description: "Preview of first o-series reasoning model",
-    contextWindow: 128000,
-    category: "reasoning",
-  },
+ 
   // GPT-4o Series
   {
     id: "gpt-4o",
@@ -115,6 +66,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Fast, intelligent, flexible GPT model",
     contextWindow: 128000,
     category: "chat",
+    capabilities: ["text", "vision"],
   },
   {
     id: "gpt-4o-mini",
@@ -122,29 +74,8 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     description: "Fast, affordable small model",
     contextWindow: 128000,
     category: "chat",
-  },
-  // Legacy Models
-  {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
-    description: "Older high-intelligence GPT model",
-    contextWindow: 128000,
-    category: "legacy",
-  },
-  {
-    id: "gpt-4",
-    name: "GPT-4",
-    description: "Original GPT-4 model",
-    contextWindow: 8192,
-    category: "legacy",
-  },
-  {
-    id: "gpt-3.5-turbo",
-    name: "GPT-3.5 Turbo",
-    description: "Legacy model for cheaper tasks",
-    contextWindow: 16385,
-    category: "legacy",
+    capabilities: ["text", "vision"],
   },
 ];
 
-export const DEFAULT_MODEL = "gpt-5-nano-2025-08-07";
+export const DEFAULT_MODEL = OPENAI_MODELS[2].id;
