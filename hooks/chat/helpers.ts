@@ -1,7 +1,6 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
-import { isTextContentPart } from "@/lib/type-guards";
 
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
@@ -125,7 +124,7 @@ export function buildCacheQuery(messages: Message[], newContent: string | Messag
     .filter(m => !m.attachments || m.attachments.length === 0)
     .slice(-4);
   
-  const contextParts = textOnlyMessages.map(m => `${m.role}: ${extractTextFromContent(m.content)}`);
+  const contextParts = textOnlyMessages.map(m => `${m.role.toLowerCase()}: ${extractTextFromContent(m.content)}`);
   const newText = extractTextFromContent(newContent);
   contextParts.push(`user: ${newText}`);
   return contextParts.join('\n');

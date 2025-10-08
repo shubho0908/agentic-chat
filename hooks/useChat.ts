@@ -107,7 +107,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         let cacheQuery = '';
         let cacheData: { cached: boolean; response?: string } = { cached: false };
 
-        if (useCaching) {
+        if (useCaching && abortControllerRef.current) {
           cacheQuery = buildCacheQuery(messages, messageContent);
           cacheData = await checkCache(cacheQuery, abortControllerRef.current.signal);
         }

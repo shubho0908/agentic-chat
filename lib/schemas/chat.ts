@@ -4,10 +4,10 @@ export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
 const attachmentSchema = z.object({
   id: z.string().optional(),
-  fileUrl: z.string(),
+  fileUrl: z.url(),
   fileName: z.string(),
   fileType: z.string(),
-  fileSize: z.number(),
+  fileSize: z.number().int(),
 });
 
 export const attachmentInputSchema = z.object({

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
-import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY, SUPPORTED_DOCUMENT_EXTENSIONS_DISPLAY } from "@/constants/upload";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { filterFiles, getFileNames } from "@/lib/file-validation";
 import { uploadResponsesToAttachments } from "@/lib/attachment-utils";
@@ -23,10 +23,11 @@ export function useChatFileUpload() {
       });
       
       const newAttachments = uploadResponsesToAttachments(res);
-      setUploadedAttachments(prev => [...prev, ...newAttachments]);
+      const updatedAttachments = [...uploadedAttachments, ...newAttachments];
+      setUploadedAttachments(updatedAttachments);
       setIsUploading(false);
       setSelectedFiles([]);
-      return [...uploadedAttachments, ...newAttachments];
+      return updatedAttachments;
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.UPLOAD.FAILED, {
         description: error instanceof Error ? error.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR,
@@ -69,7 +70,7 @@ export function useChatFileUpload() {
         toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
           description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files total`,
         });
-        return prev.slice(0, MAX_FILE_ATTACHMENTS);
+        return newFiles.slice(0, MAX_FILE_ATTACHMENTS);
       }
       
       return newFiles;

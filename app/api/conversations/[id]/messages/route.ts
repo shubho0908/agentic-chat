@@ -20,6 +20,11 @@ export async function POST(
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const body = await request.json();
+    
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+    
     const { role, content, attachments } = body;
 
     const validation = validateMessageData(role, content);

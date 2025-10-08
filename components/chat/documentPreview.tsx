@@ -19,8 +19,8 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   const [isLoading, setIsLoading] = useState(false);
 
   const isPDF = fileType === "application/pdf" || fileName.endsWith(".pdf");
-  const isTextFile = fileType.startsWith("text/") || fileName.endsWith(".txt");
   const isCSV = fileType === "text/csv" || fileName.endsWith(".csv");
+  const isTextFile = (fileType.startsWith("text/") || fileName.endsWith(".txt")) && !isCSV;
   const isOfficeDoc = fileType.includes("wordprocessingml") || 
                       fileType.includes("spreadsheetml") || 
                       fileName.match(/\.(docx?|xlsx?|pptx?)$/);
@@ -131,7 +131,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
               className="w-full h-full border-0"
               title={fileName}
             />
-          ) : isTextFile && textContent !== null ? (
+          ) : isTextFile ? (
             <ScrollArea className="h-full">
               <div className="p-6">
                 <pre className="text-sm font-mono whitespace-pre-wrap break-words">
