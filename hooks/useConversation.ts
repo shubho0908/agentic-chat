@@ -2,12 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ERROR_CODES } from "@/constants/errors";
+import type { Attachment } from "@/lib/schemas/chat";
 
 interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  attachments?: Attachment[];
 }
 
 interface ConversationDetails {

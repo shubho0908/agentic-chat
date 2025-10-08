@@ -60,10 +60,6 @@ export function decryptApiKey(encrypted: string): string {
   }
 }
 
-export function hashApiKey(apiKey: string): string {
-  return createHash('sha256').update(apiKey).digest('hex');
-}
-
 export function maskApiKey(apiKey: string): string {
   if (!apiKey || apiKey.length < 8) {
     return '••••••••';

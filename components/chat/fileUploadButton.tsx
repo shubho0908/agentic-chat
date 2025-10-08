@@ -5,7 +5,7 @@ import { Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
 interface FileUploadButtonProps {
@@ -14,7 +14,11 @@ interface FileUploadButtonProps {
   currentFileCount?: number;
 }
 
-const ACCEPTED_FILE_TYPES = "image/*,.pdf,.txt,.docx,.xlsx,.xls";
+const ACCEPTED_FILE_TYPES = [
+  'image/*',
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+].join(',');
 
 export function FileUploadButton({ onFilesSelected, disabled, currentFileCount = 0 }: FileUploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);

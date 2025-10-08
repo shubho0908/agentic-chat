@@ -30,12 +30,16 @@ export async function GET(
       where: { conversationId },
       orderBy: { createdAt: 'asc' },
       take: limit + 1,
-      ...(cursor && { cursor: { id: cursor }, skip: 1 })
+      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+      include: {
+        attachments: true,
+      }
     });
 
     const transformedMessages = messages.map(msg => ({
       ...msg,
-      role: msg.role.toLowerCase()
+      role: msg.role.toLowerCase(),
+      attachments: msg.attachments || [],
     }));
 
     return jsonResponse({

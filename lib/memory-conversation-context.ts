@@ -137,6 +137,21 @@ export async function searchMemories(
   }
 }
 
+function extractTextContent(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  if (Array.isArray(content)) {
+    return content
+      .filter(part => part.type === 'text' && part.text)
+      .map(part => part.text)
+      .join(' ');
+  }
+  
+  return '';
+}
+
 /**
  * Get relevant memories for context injection
  * 
@@ -144,17 +159,21 @@ export async function searchMemories(
  * Only filter: Exclude current conversation (already in context)
  */
 export async function getMemoryContext(
-  currentQuery: string,
+  currentQuery: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
-  recentMessages: Array<{ role: string; content: string }> = [],
+  recentMessages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [],
   currentConversationId?: string
 ): Promise<string> {
   try {
+    const queryText = extractTextContent(currentQuery);
     const contextParts = [
-      ...recentMessages.slice(-3).map(m => m.content),
-      currentQuery
-    ];
+      ...recentMessages.slice(-3).map(m => extractTextContent(m.content)),
+      queryText
+    ].filter(Boolean);
+    
     const searchQuery = contextParts.join(' ');
+    
+    if (!searchQuery.trim()) return '';
 
     const memories = await searchMemories(searchQuery, userId, 5);
 

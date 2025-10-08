@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateMessageData } from '@/lib/validation';
+import { isValidConversationId, validateMessageData, validateAttachments } from '@/lib/validation';
+import type { AttachmentInput } from '@/lib/schemas/chat';
 
 export async function POST(
   request: NextRequest,
@@ -19,11 +20,18 @@ export async function POST(
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const body = await request.json();
-    const { role, content } = body;
+    const { role, content, attachments } = body;
 
     const validation = validateMessageData(role, content);
     if (!validation.valid) {
       return errorResponse(validation.error || 'Invalid message data', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (attachments !== undefined && attachments !== null) {
+      const attachmentValidation = validateAttachments(attachments);
+      if (!attachmentValidation.valid) {
+        return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
+      }
     }
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
@@ -34,7 +42,18 @@ export async function POST(
         data: {
           conversationId,
           role,
-          content
+          content,
+          attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
+            create: (attachments as AttachmentInput[]).map(att => ({
+              fileUrl: att.fileUrl,
+              fileName: att.fileName,
+              fileType: att.fileType,
+              fileSize: att.fileSize,
+            }))
+          } : undefined,
+        },
+        include: {
+          attachments: true,
         }
       }),
       prisma.conversation.update({

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo } from "react";
+import { use, useMemo, useRef, useState } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useConversation } from "@/hooks/useConversation";
@@ -12,7 +12,7 @@ import { ConversationNotFound } from "@/components/conversationNotFound";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
-import { useRef, useState } from "react";
+import type { Attachment } from "@/lib/schemas/chat";
 
 export default function ChatPage({
   params,
@@ -29,6 +29,7 @@ export default function ChatPage({
       role: msg.role,
       content: msg.content,
       timestamp: new Date(msg.createdAt).getTime(),
+      attachments: msg.attachments || [],
     })) || [];
   }, [conversationData?.messages.items]);
 
@@ -49,7 +50,7 @@ export default function ChatPage({
     toggleSharing({ id, isPublic });
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
     if (isPending) {
       return;
     }
@@ -68,7 +69,7 @@ export default function ChatPage({
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content, session);
+    await sendMessage(content, session, attachments);
   };
 
   if (conversationNotFound) {

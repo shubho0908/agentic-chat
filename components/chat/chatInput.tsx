@@ -1,15 +1,19 @@
-import { FormEvent } from "react";
+import { FormEvent, ClipboardEvent } from "react";
 import { Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
 import { FilePreview } from "./filePreview";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
-import { MAX_FILE_ATTACHMENTS } from "@/constants/upload";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { extractImagesFromClipboard } from "@/lib/file-validation";
+
+import type { Attachment } from "@/lib/schemas/chat";
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments?: Attachment[]) => void;
   isLoading: boolean;
   onStop?: () => void;
   placeholder?: string;
@@ -27,10 +31,12 @@ export function ChatInput({
 }: ChatInputProps) {
   const {
     selectedFiles,
+    uploadedAttachments,
     isUploading,
     uploadFiles,
     handleFilesSelected,
     handleRemoveFile,
+    clearAttachments,
   } = useChatFileUpload();
 
   const {
@@ -50,13 +56,34 @@ export function ChatInput({
   async function sendMessage() {
     if (!input.trim() || isLoading || disabled || isUploading) return;
 
+    let attachmentsToSend = uploadedAttachments;
+
     if (selectedFiles.length > 0) {
-      const success = await uploadFiles();
-      if (!success) return;
+      attachmentsToSend = await uploadFiles();
+      if (attachmentsToSend.length === 0 && selectedFiles.length > 0) return;
     }
 
-    onSend(input);
+    onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined);
     clearInput();
+    clearAttachments();
+  }
+
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const { files, hasUnsupportedFormats } = extractImagesFromClipboard(items);
+    
+    if (hasUnsupportedFormats) {
+      toast.error('Unsupported image format', {
+        description: `Supported formats: ${SUPPORTED_IMAGE_EXTENSIONS_DISPLAY}`,
+        duration: 5000,
+      });
+    }
+    
+    if (files.length > 0) {
+      handleFilesSelected(files);
+    }
   }
 
   if (centered) {
@@ -83,6 +110,7 @@ export function ChatInput({
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onInput={handleInput}
+                  onPaste={handlePaste}
                   placeholder={placeholder}
                   disabled={disabled || isLoading || isUploading}
                   rows={1}
@@ -131,6 +159,7 @@ export function ChatInput({
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               onInput={handleInput}
+              onPaste={handlePaste}
               placeholder={placeholder}
               disabled={disabled || isLoading || isUploading}
               rows={1}
