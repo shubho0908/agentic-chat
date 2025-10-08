@@ -30,13 +30,30 @@ const messageContentPartSchema = z.union([
   }),
 ]);
 
-const messageSchema = z.object({
+const messageHistoryEntrySchema = z.object({
+  content: z.union([z.string(), z.array(messageContentPartSchema)]),
+  attachments: z.array(attachmentSchema).optional(),
+  editedAt: z.number(),
+});
+
+const baseMessageSchema = z.object({
   role: messageRoleSchema,
   content: z.union([z.string(), z.array(messageContentPartSchema)]),
   id: z.string().optional(),
   timestamp: z.number().optional(),
   model: z.string().optional(),
   attachments: z.array(attachmentSchema).optional(),
+  editHistory: z.array(messageHistoryEntrySchema).optional(),
+  parentMessageId: z.string().nullable().optional(),
+  siblingIndex: z.number().optional(),
+});
+
+type MessageType = z.infer<typeof baseMessageSchema> & {
+  versions?: MessageType[];
+};
+
+const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
+  versions: z.array(z.lazy(() => messageSchema)).optional(),
 });
 
 export const chatRequestSchema = z.object({
@@ -53,6 +70,7 @@ export type MessageRole = z.infer<typeof messageRoleSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
 export type AttachmentInput = z.infer<typeof attachmentInputSchema>;
 export type MessageContentPart = z.infer<typeof messageContentPartSchema>;
+export type MessageHistoryEntry = z.infer<typeof messageHistoryEntrySchema>;
 export type Message = z.infer<typeof messageSchema>;
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type ChatError = z.infer<typeof chatErrorSchema>;

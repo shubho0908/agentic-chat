@@ -2,6 +2,17 @@ import { type Message, type Attachment, type MessageContentPart } from "@/lib/sc
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
 
+interface UpdateMessageResponse {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  conversationId: string;
+  parentMessageId: string | null;
+  siblingIndex: number;
+  attachments: Attachment[];
+}
+
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
 }
@@ -10,11 +21,11 @@ export async function saveUserMessage(
   conversationId: string,
   content: string | MessageContentPart[],
   attachments?: Attachment[]
-): Promise<void> {
+): Promise<string | null> {
   try {
     const contentToSave = extractTextFromContent(content);
-    
-    await fetch(`/api/conversations/${conversationId}/messages`, {
+
+    const response = await fetch(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -23,17 +34,54 @@ export async function saveUserMessage(
         attachments: attachments || [],
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save message: ${response.statusText}`);
+    }
+
+    const savedMessage = await response.json();
+    return savedMessage.id;
   } catch (err) {
     console.error("Failed to save user message:", err);
+    return null;
+  }
+}
+
+export async function updateUserMessage(
+  conversationId: string,
+  messageId: string,
+  content: string | MessageContentPart[],
+  attachments?: Attachment[]
+): Promise<UpdateMessageResponse> {
+  try {
+    const contentToSave = extractTextFromContent(content);
+
+    const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: contentToSave,
+        attachments: attachments || [],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update message: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error("Failed to update user message:", err);
+    throw err;
   }
 }
 
 async function saveAssistantMessage(
   conversationId: string,
   content: string
-): Promise<void> {
+): Promise<string | null> {
   try {
-    await fetch(`/api/conversations/${conversationId}/messages`, {
+    const response = await fetch(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -41,8 +89,16 @@ async function saveAssistantMessage(
         content,
       }),
     });
+
+    if (!response.ok) {
+      throw new Error(`Failed to save message: ${response.statusText}`);
+    }
+
+    const savedMessage = await response.json();
+    return savedMessage.id;
   } catch (err) {
     console.error("Failed to save assistant message:", err);
+    return null;
   }
 }
 
@@ -50,7 +106,7 @@ async function createNewConversation(
   userContent: string | MessageContentPart[],
   assistantContent: string,
   attachments?: Attachment[]
-): Promise<string | null> {
+): Promise<{ conversationId: string; userMessageId: string; assistantMessageId: string } | null> {
   try {
     const title = generateTitle(userContent);
     const createResponse = await fetch("/api/conversations", {
@@ -64,10 +120,14 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    await saveUserMessage(conversationId, userContent, attachments);
-    await saveAssistantMessage(conversationId, assistantContent);
+    const userMessageId = await saveUserMessage(conversationId, userContent, attachments);
+    const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent);
 
-    return conversationId;
+    if (!userMessageId || !assistantMessageId) {
+      return null;
+    }
+
+    return { conversationId, userMessageId, assistantMessageId };
   } catch (err) {
     console.error("Failed to create conversation:", err);
     return null;
@@ -86,7 +146,7 @@ function updateQueryCache(
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
-  
+
   queryClient.setQueryData(["conversation", conversationId], {
     conversation: {
       id: conversationId,
@@ -123,7 +183,7 @@ export function buildCacheQuery(messages: Message[], newContent: string | Messag
   const textOnlyMessages = messages
     .filter(m => !m.attachments || m.attachments.length === 0)
     .slice(-4);
-  
+
   const contextParts = textOnlyMessages.map(m => `${m.role.toLowerCase()}: ${extractTextFromContent(m.content)}`);
   const newText = extractTextFromContent(newContent);
   contextParts.push(`user: ${newText}`);
@@ -176,7 +236,6 @@ export async function streamChatCompletion(
       const errorData = await response.json();
       errorMessage = errorData.error || errorMessage;
     } catch {
-      // If we can't parse the error response, use status text
       errorMessage = response.statusText || errorMessage;
     }
     throw new Error(errorMessage);
@@ -195,7 +254,7 @@ export async function streamChatCompletion(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      
+
       const chunk = decoder.decode(value, { stream: !done });
       buffer += chunk;
 
@@ -204,20 +263,20 @@ export async function streamChatCompletion(
 
       for (const line of lines) {
         const trimmedLine = line.trim();
-        
+
         if (!trimmedLine || !trimmedLine.startsWith('data:')) continue;
 
         const data = trimmedLine.slice(5).trim();
-        
+
         if (data === '[DONE]') continue;
 
         try {
           const parsed = JSON.parse(data);
-          
+
           if (parsed.error) {
             throw new Error(parsed.error);
           }
-          
+
           if (parsed.content) {
             fullContent += parsed.content;
             onChunk(fullContent);
@@ -238,11 +297,11 @@ export async function streamChatCompletion(
             if (data !== '[DONE]') {
               try {
                 const parsed = JSON.parse(data);
-                
+
                 if (parsed.error) {
                   throw new Error(parsed.error);
                 }
-                
+
                 if (parsed.content) {
                   fullContent += parsed.content;
                   onChunk(fullContent);
@@ -297,24 +356,24 @@ export async function handleConversationSaving(
   assistantMessageId: string,
   userTimestamp: number,
   queryClient: QueryClient,
-  onConversationCreated?: (id: string) => void,
+  onConversationCreated?: (data: { conversationId: string; userMessageId: string; assistantMessageId: string }) => void,
   attachments?: Attachment[]
 ): Promise<void> {
   if (isNewConversation) {
-    const newConversationId = await createNewConversation(userContent, assistantContent, attachments);
+    const result = await createNewConversation(userContent, assistantContent, attachments);
 
-    if (newConversationId && onConversationCreated) {
+    if (result && onConversationCreated) {
       updateQueryCache(
         queryClient,
-        newConversationId,
+        result.conversationId,
         userContent,
         assistantContent,
-        userMessageId,
-        assistantMessageId,
+        result.userMessageId,
+        result.assistantMessageId,
         userTimestamp,
         attachments
       );
-      onConversationCreated(newConversationId);
+      onConversationCreated(result);
     }
   } else if (currentConversationId) {
     await saveAssistantMessage(currentConversationId, assistantContent);

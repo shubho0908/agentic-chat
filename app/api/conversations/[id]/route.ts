@@ -6,6 +6,25 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
 
+interface MessageWithAttachments {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: Date;
+  conversationId: string;
+  parentMessageId: string | null;
+  siblingIndex: number;
+  attachments: Array<{
+    id: string;
+    fileUrl: string;
+    fileName: string;
+    fileType: string;
+    fileSize: number;
+  }>;
+  versions?: MessageWithAttachments[];
+}
+
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,21 +45,57 @@ export async function GET(
     const { conversation, error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
-    const messages = await prisma.message.findMany({
-      where: { conversationId },
+    const originalMessages = await prisma.message.findMany({
+      where: {
+        conversationId,
+        parentMessageId: null
+      },
       orderBy: { createdAt: 'asc' },
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       include: {
-        attachments: true,
+        attachments: true
       }
     });
 
-    const transformedMessages = messages.map(msg => ({
+    const messageIds = originalMessages.slice(0, Math.min(originalMessages.length, limit)).map(m => m.id);
+
+    const versions = messageIds.length > 0 ? await prisma.message.findMany({
+      where: {
+        parentMessageId: { in: messageIds }
+      },
+      include: {
+        attachments: true
+      },
+      orderBy: { siblingIndex: 'asc' }
+    }) : [];
+
+    const versionsByParent = new Map<string, typeof versions>();
+    for (const version of versions) {
+      if (!version.parentMessageId) continue;
+      const existing = versionsByParent.get(version.parentMessageId) || [];
+      existing.push(version);
+      versionsByParent.set(version.parentMessageId, existing);
+    }
+
+    const paginatedTree = originalMessages.slice(0, limit).map(msg => ({
       ...msg,
-      role: msg.role.toLowerCase(),
-      attachments: msg.attachments || [],
+      versions: versionsByParent.get(msg.id) || []
     }));
+
+    const transformedMessages = paginatedTree.map(msg => {
+      const msgWithAttachments = msg as MessageWithAttachments;
+      return {
+        ...msgWithAttachments,
+        role: msgWithAttachments.role.toLowerCase(),
+        attachments: msgWithAttachments.attachments || [],
+        versions: msgWithAttachments.versions?.map(v => ({
+          ...v,
+          role: v.role.toLowerCase(),
+          attachments: v.attachments || []
+        })) || []
+      };
+    });
 
     return jsonResponse({
       conversation: {
