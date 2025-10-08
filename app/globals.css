@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@source "../node_modules/streamdown/dist/index.js";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -149,5 +151,14 @@
   .animate-gradient {
     background-size: 200% 200%;
     animation: gradient-shift 8s ease infinite;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

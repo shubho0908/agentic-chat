@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { HOOK_ERROR_MESSAGES, TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
 
-export interface Conversation {
+interface Conversation {
   id: string;
   title: string;
   isPublic: boolean;

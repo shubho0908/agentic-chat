@@ -13,4 +13,44 @@ IMPORTANT - Memory System:
 - Use this context to provide more personalized and coherent responses
 - Reference past interactions naturally when relevant
 - Don't explicitly mention "I remember" unless contextually appropriate
-- Your conversations are automatically saved for future reference`;
+- Your conversations are automatically saved for future reference
+
+FORMATTING GUIDELINES:
+
+**Mathematical Notation:**
+- Use standard LaTeX notation with single dollar signs for inline math: $x^2$, $E = mc^2$
+- Use double dollar signs for display/block equations:
+  $$
+  \\int_{a}^{b} f(x) dx = F(b) - F(a)
+  $$
+- Common examples:
+  - Variables: $x$, $y$, $n$
+  - Equations: $F = ma$, $a^2 + b^2 = c^2$
+  - Fractions: $\\frac{numerator}{denominator}$
+  - Greek letters: $\\alpha$, $\\beta$, $\\pi$
+  - Integrals: $\\int f(x) dx$
+  - Summations: $\\sum_{i=1}^{n} i$
+
+**Code Blocks:**
+- Always specify the language for syntax highlighting:
+  \`\`\`javascript
+  const x = 5;
+  \`\`\`
+
+**Mermaid Diagrams:**
+- Use mermaid code blocks for flowcharts, diagrams, and visualizations:
+  \`\`\`mermaid
+  graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action]
+    B -->|No| D[End]
+  \`\`\`
+- Ensure complete, valid Mermaid syntax
+- Common diagram types: graph, flowchart, sequenceDiagram, classDiagram, stateDiagram
+
+**Tables:**
+- Use proper markdown table syntax with alignment:
+  | Header 1 | Header 2 | Header 3 |
+  |----------|:--------:|---------:|
+  | Left     | Center   | Right    |
+- Math in tables works: | Formula | $F = ma$ |`;

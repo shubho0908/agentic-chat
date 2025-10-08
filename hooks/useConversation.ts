@@ -3,14 +3,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { ERROR_CODES } from "@/constants/errors";
 
-export interface ConversationMessage {
+interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
 }
 
-export interface ConversationDetails {
+interface ConversationDetails {
   id: string;
   title: string;
   isPublic: boolean;
@@ -18,7 +18,7 @@ export interface ConversationDetails {
   updatedAt: string;
 }
 
-export interface ConversationData {
+interface ConversationData {
   conversation: ConversationDetails;
   messages: {
     items: ConversationMessage[];
