@@ -150,15 +150,13 @@ function ChatMessageComponent({ message, userName }: ChatMessageProps) {
               onClose={() => setLightboxImage(null)}
             />
 
-            {previewDocument && (
-              <DocumentPreview
-                fileUrl={previewDocument.url}
-                fileName={previewDocument.name}
-                fileType={previewDocument.type}
-                open={!!previewDocument}
-                onClose={() => setPreviewDocument(null)}
-              />
-            )}
+            <DocumentPreview
+              fileUrl={previewDocument?.url || ""}
+              fileName={previewDocument?.name || ""}
+              fileType={previewDocument?.type || ""}
+              open={!!previewDocument}
+              onClose={() => setPreviewDocument(null)}
+            />
 
             <div className="prose prose-sm dark:prose-invert max-w-none">
               {textContent ? (
