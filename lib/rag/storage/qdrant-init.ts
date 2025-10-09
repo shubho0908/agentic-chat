@@ -1,7 +1,7 @@
 'use server';
 
-import { qdrantClient } from '@/constants/qdrant';
-import { RAG_CONFIG } from './config';
+import { qdrantClient } from './qdrant-client';
+import { RAG_CONFIG } from '../config';
 
 let collectionInitialized = false;
 let initializationPromise: Promise<void> | null = null;

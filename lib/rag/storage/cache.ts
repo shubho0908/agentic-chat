@@ -1,6 +1,6 @@
 'use server';
 
-import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "@/constants/qdrant";
+import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./qdrant-client";
 import OpenAI from "openai";
 
 const CACHE_COLLECTION_NAME = process.env.CACHE_COLLECTION_NAME as string;

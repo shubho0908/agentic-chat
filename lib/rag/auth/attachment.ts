@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { RAGError, RAGErrorCode } from './errors';
+import { RAGError, RAGErrorCode } from '../common/errors';
 import type { Attachment, Message, Conversation } from '@/lib/generated/prisma';
 
 export interface AuthorizedAttachment extends Attachment {

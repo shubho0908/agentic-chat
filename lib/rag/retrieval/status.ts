@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { RAG_CONFIG } from './config';
+import { RAG_CONFIG } from '../config';
 import type { AttachmentStatus } from './status-helpers';
 import { partitionByStatus, extractIds } from './status-helpers';
 

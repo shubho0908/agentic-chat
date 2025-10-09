@@ -8,7 +8,7 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { getMemoryContext } from '@/lib/memory-conversation-context';
-import { getRAGContext } from '@/lib/rag/rag-context';
+import { getRAGContext } from '@/lib/rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
 
 export async function POST(request: NextRequest) {

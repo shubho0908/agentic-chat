@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
-import { generateEmbedding, addToSemanticCache, ensureCollection } from '@/lib/qdrant';
+import { generateEmbedding, addToSemanticCache, ensureCollection } from '@/lib/rag/storage/cache';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 const CacheSaveSchema = z.object({

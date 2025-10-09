@@ -1,11 +1,11 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { loadDocument, isSupportedForRAG } from './document-loader';
-import { chunkDocuments, getOptimalChunkSize } from './document-chunker';
-import { deleteDocumentChunks } from './qdrant-documents';
-import { getAuthorizedAttachment } from './attachment-auth';
-import { RAGError, logRAGError } from './errors';
+import { loadDocument, isSupportedForRAG } from './loader';
+import { chunkDocuments, getOptimalChunkSize } from './chunker';
+import { deleteDocumentChunks } from './store';
+import { getAuthorizedAttachment } from '../auth/attachment';
+import { RAGError, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@/lib/generated/prisma';
 
 export interface ProcessDocumentResult {
@@ -99,7 +99,7 @@ export async function processDocument(
       metadata: chunk.metadata,
     }));
 
-    const { addDocumentsToQdrant } = await import('./qdrant-documents');
+    const { addDocumentsToQdrant } = await import('./store');
     await addDocumentsToQdrant(
       langchainDocs,
       attachmentId,

@@ -1,6 +1,6 @@
 'use server';
 
-import { qdrantClient } from '@/constants/qdrant';
+import { qdrantClient } from '@/lib/rag/storage/qdrant-client';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 

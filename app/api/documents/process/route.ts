@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
-import { processDocument } from '@/lib/rag/document-processor';
+import { processDocument } from '@/lib/rag/indexing/processor';
 
 const ProcessDocumentSchema = z.object({
   attachmentId: z.string().min(1, 'Attachment ID is required'),

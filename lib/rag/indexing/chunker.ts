@@ -1,7 +1,7 @@
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import type { Document } from '@langchain/core/documents';
 import { encoding_for_model, TiktokenModel, type Tiktoken } from 'tiktoken';
-import { RAG_CONFIG } from './config';
+import { RAG_CONFIG } from '../config';
 
 export interface ChunkConfig {
   chunkSize?: number;

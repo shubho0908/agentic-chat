@@ -1,7 +1,7 @@
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import type { Document } from '@langchain/core/documents';
-import { RAG_CONFIG } from './config';
+import { RAG_CONFIG } from '../config';
 
 export interface DocumentLoadResult {
   success: boolean;

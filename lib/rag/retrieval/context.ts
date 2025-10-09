@@ -1,13 +1,13 @@
 'use server';
 
-import { searchDocumentChunks } from './qdrant-documents';
+import { searchDocumentChunks } from './search';
 import { prisma } from '@/lib/prisma';
-import { RAG_CONFIG } from './config';
+import { RAG_CONFIG } from '../config';
 import {
   waitForDocumentProcessing,
   getCompletedAttachmentIds,
   getAttachmentStatuses,
-} from './status-utils';
+} from './status';
 import {
   partitionByStatus,
   extractIds,
