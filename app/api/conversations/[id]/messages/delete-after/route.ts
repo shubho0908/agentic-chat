@@ -19,17 +19,23 @@ export async function POST(
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Invalid JSON body', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
     
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     
-    const { messageId } = body;
+    let { messageId } = body;
 
-    if (!messageId || typeof messageId !== 'string') {
+    if (!messageId || typeof messageId !== 'string' || messageId.trim().length === 0) {
       return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
     }
+    messageId = messageId.trim();
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;

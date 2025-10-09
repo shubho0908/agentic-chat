@@ -6,7 +6,7 @@ interface MessageHeaderProps {
 }
 
 function formatTimestamp(timestamp?: number): string {
-  if (!timestamp) return "";
+  if (timestamp == null) return "";
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -20,9 +20,9 @@ export function MessageHeader({
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-semibold">
-        {isUser ? (userName || "User") : modelName}
+        {isUser ? (userName ?? "User") : modelName}
       </span>
-      {timestamp && (
+      {timestamp != null && (
         <span className="text-xs text-muted-foreground">
           {formatTimestamp(timestamp)}
         </span>

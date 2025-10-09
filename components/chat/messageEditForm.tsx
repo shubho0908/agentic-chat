@@ -36,6 +36,7 @@ export function MessageEditForm({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 size="sm"
                 onClick={onSubmit}
                 disabled={!editText.trim()}
@@ -53,6 +54,7 @@ export function MessageEditForm({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 size="sm"
                 variant="ghost"
                 onClick={onCancel}

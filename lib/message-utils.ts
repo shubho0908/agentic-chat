@@ -36,10 +36,13 @@ export function flattenMessageTree(messages: MessageWithVersions[]): MessageWith
         siblingIndex: idx,
       }));
       
-      result.push({
+      const latestWithIndex = {
         ...latestVersion,
+        siblingIndex: allVersions.length - 1,
         versions: allVersions,
-      });
+      };
+      
+      result.push(latestWithIndex);
     } else {
       result.push(msg);
     }

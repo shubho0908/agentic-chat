@@ -28,10 +28,11 @@ export function VersionNavigator({
         onClick={onPrevious}
         disabled={historyIndex >= historyLength - 1}
         className="h-7 px-2"
+        aria-label="Previous version"
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft className="size-4" aria-hidden="true" />
       </Button>
-      <span className="text-xs text-muted-foreground font-medium px-2 py-1 bg-muted/50 rounded-md">
+      <span className="text-xs text-muted-foreground font-medium px-2 py-1 bg-muted/50 rounded-md" aria-live="polite">
         {currentVersion}/{totalVersions}
       </span>
       <Button
@@ -40,8 +41,9 @@ export function VersionNavigator({
         onClick={onNext}
         disabled={historyIndex === -1}
         className="h-7 px-2"
+        aria-label="Next version"
       >
-        <ChevronRight className="size-4" />
+        <ChevronRight className="size-4" aria-hidden="true" />
       </Button>
     </div>
   );

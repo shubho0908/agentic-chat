@@ -36,7 +36,22 @@ export function MessageActions({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(textContent);
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textContent);
+      } else if (typeof document !== "undefined") {
+        // Fallback for environments without navigator.clipboard
+        const textarea = document.createElement("textarea");
+        textarea.value = textContent;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } else {
+        throw new Error("Clipboard not available");
+      }
       setCopied(true);
       toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 2000);

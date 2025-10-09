@@ -69,7 +69,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {
       if (versions.length > 0) {
-        setVersionIndex(versions.length - 2);
+        setVersionIndex(versions.length - 1);
       }
     } else if (versionIndex > 0) {
       setVersionIndex(versionIndex - 1);
@@ -79,14 +79,14 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const handleNextVersion = useCallback(() => {
     if (versionIndex === -1) return;
     
-    if (versionIndex === versions.length - 2) {
+    if (versionIndex === versions.length - 1) {
       setVersionIndex(-1);
     } else {
       setVersionIndex(versionIndex + 1);
     }
   }, [versionIndex, versions.length]);
   
-  const isThinking = !textContent && !message.content;
+  const isThinking = !textContent && !displayedMessage.content;
   
   if (message.role === "system") return null;
 

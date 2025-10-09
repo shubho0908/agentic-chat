@@ -77,15 +77,6 @@ export async function handleSendMessage(
     let savedUserMessageId: string | null = null;
     if (currentConversationId) {
       savedUserMessageId = await saveUserMessage(currentConversationId, messageContent, attachments);
-      if (savedUserMessageId) {
-        onMessagesUpdate((prev) =>
-          prev.map((msg) =>
-            msg.id === userMessage.id
-              ? { ...msg, id: savedUserMessageId! }
-              : msg
-          )
-        );
-      }
     }
 
     const { cacheQuery, cacheData } = await performCacheCheck({

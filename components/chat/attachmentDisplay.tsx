@@ -78,7 +78,9 @@ export function AttachmentDisplay({ attachments, messageId }: AttachmentDisplayP
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{attachment.fileName}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {(attachment.fileSize / 1024).toFixed(1)} KB
+                  {typeof attachment.fileSize === "number" && Number.isFinite(attachment.fileSize)
+                    ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
+                    : "—"}
                 </p>
               </div>
             </div>
