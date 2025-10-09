@@ -34,6 +34,11 @@ export async function ensureCollection(embeddingDimension: number) {
           distance: "Cosine",
         },
       });
+      
+      await qdrantClient.createPayloadIndex(CACHE_COLLECTION_NAME, {
+        field_name: 'userId',
+        field_schema: 'keyword',
+      });
     }
   } catch (error) {
     throw new RAGError(
