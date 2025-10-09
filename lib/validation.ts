@@ -200,11 +200,31 @@ export function validateAttachments(attachments: unknown): ValidationResult {
     return { valid: false, error: `Too many attachments. Maximum ${VALIDATION_LIMITS.ATTACHMENT_MAX_COUNT} allowed` };
   }
 
+  let imageCount = 0;
+  let documentCount = 0;
+
   for (let i = 0; i < attachments.length; i++) {
     const result = validateAttachment(attachments[i]);
     if (!result.valid) {
       return { valid: false, error: `Attachment ${i + 1}: ${result.error}` };
     }
+
+    const att = attachments[i] as Record<string, unknown>;
+    const fileType = att.fileType as string;
+    
+    if (fileType.startsWith('image/')) {
+      imageCount++;
+    } else {
+      documentCount++;
+    }
+  }
+
+  if (imageCount > VALIDATION_LIMITS.ATTACHMENT_MAX_IMAGE_COUNT) {
+    return { valid: false, error: `Too many images. Maximum ${VALIDATION_LIMITS.ATTACHMENT_MAX_IMAGE_COUNT} allowed` };
+  }
+
+  if (documentCount > VALIDATION_LIMITS.ATTACHMENT_MAX_DOCUMENT_COUNT) {
+    return { valid: false, error: `Too many documents. Maximum ${VALIDATION_LIMITS.ATTACHMENT_MAX_DOCUMENT_COUNT} document allowed` };
   }
 
   return { valid: true };

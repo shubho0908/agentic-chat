@@ -1,4 +1,4 @@
-import { type Message, type MessageContentPart } from "@/lib/schemas/chat";
+import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
 import { type VersionData } from "./types";
 
 export function createNewVersion(
@@ -6,7 +6,8 @@ export function createNewVersion(
   role: "user" | "assistant",
   content: string | MessageContentPart[],
   messageId: string,
-  model?: string
+  model?: string,
+  attachments?: Attachment[]
 ): Message {
   const cleanedVersions = existingVersions.filter(v => v.id && !v.id.startsWith('temp-'));
   
@@ -20,6 +21,7 @@ export function createNewVersion(
     content,
     timestamp: Date.now(),
     siblingIndex: maxSiblingIndex + 1,
+    attachments: attachments || [],
   };
 
   if (model) {
@@ -36,9 +38,28 @@ export function getCleanedVersions(message: Message): Message[] {
 
 export function buildUpdatedVersionsList(
   message: Message,
-  newVersion: Message
+  newVersion: Message,
+  preserveCurrentAsVersion: boolean = false
 ): Message[] {
   const cleanedVersions = getCleanedVersions(message);
+  
+  if (preserveCurrentAsVersion) {
+    const currentMessageAsVersion: Message = {
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp || Date.now(),
+      siblingIndex: message.siblingIndex,
+      attachments: message.attachments || [],
+    };
+    
+    if (message.model) {
+      currentMessageAsVersion.model = message.model;
+    }
+    
+    return [...cleanedVersions, currentMessageAsVersion];
+  }
+  
   return [...cleanedVersions, newVersion];
 }
 
@@ -90,6 +111,7 @@ export function updateMessageWithVersions(
   
   return { 
     ...currentVersion,
+    attachments: message.attachments || currentVersion.attachments,
     versions: olderVersions
   };
 }

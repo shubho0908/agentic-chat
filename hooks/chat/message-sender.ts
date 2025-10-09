@@ -8,7 +8,7 @@ import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } fro
 import { saveUserMessage, storeMemory } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
-import { handleConversationSaving, buildMessagesForAPI } from "./conversation-manager";
+import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
 import { type ConversationResult } from "./types";
 
 interface SendMessageContext {
@@ -38,7 +38,10 @@ export async function handleSendMessage(
     onNavigate,
     saveToCacheMutate,
   } = context;
-
+  
+  let shouldNavigate = false;
+  let navigationPath = '';
+  
   const model = getModel();
   if (!model) {
     toast.error(TOAST_ERROR_MESSAGES.MODEL.NOT_SELECTED);
@@ -73,10 +76,39 @@ export async function handleSendMessage(
   try {
     let currentConversationId = conversationId;
     const isNewConversation = !currentConversationId;
-
-    let savedUserMessageId: string | null = null;
-    if (currentConversationId) {
-      savedUserMessageId = await saveUserMessage(currentConversationId, messageContent, attachments);
+    
+    if (isNewConversation) {
+      await handleConversationSaving(
+        true,
+        null,
+        messageContent,
+        "",
+        userMessage.timestamp ?? Date.now(),
+        queryClient,
+        (data: ConversationResult) => {
+          currentConversationId = data.conversationId;
+          onConversationIdUpdate(data.conversationId);
+          onMessagesUpdate((prev) =>
+            prev.map((msg) => {
+              if (msg.id === userMessage.id) {
+                return { ...msg, id: data.userMessageId };
+              }
+              return msg;
+            })
+          );
+          shouldNavigate = true;
+          navigationPath = `/c/${data.conversationId}`;
+        },
+        attachments,
+        true,
+        abortSignal
+      );
+      
+      if (!currentConversationId) {
+        throw new Error("Failed to create conversation");
+      }
+    } else if (currentConversationId) {
+      await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
     }
 
     const { cacheQuery, cacheData } = await performCacheCheck({
@@ -96,31 +128,26 @@ export async function handleSendMessage(
         )
       );
 
-      await handleConversationSaving(
-        isNewConversation,
-        currentConversationId,
-        messageContent,
-        assistantContent,
-        userMessage.timestamp ?? Date.now(),
-        queryClient,
-        (data: ConversationResult) => {
-          currentConversationId = data.conversationId;
-          onConversationIdUpdate(data.conversationId);
-          onMessagesUpdate((prev) =>
-            prev.map((msg) => {
-              if (msg.id === userMessage.id) {
-                return { ...msg, id: data.userMessageId };
-              }
-              if (msg.id === assistantMessageId) {
-                return { ...msg, id: data.assistantMessageId };
-              }
-              return msg;
-            })
-          );
-          onNavigate(`/c/${data.conversationId}`);
-        },
-        attachments
-      );
+      if (currentConversationId) {
+        await handleConversationSaving(
+          false,
+          currentConversationId,
+          messageContent,
+          assistantContent,
+          userMessage.timestamp ?? Date.now(),
+          queryClient,
+          (data: ConversationResult) => {
+            onMessagesUpdate((prev) =>
+              prev.map((msg) => {
+                if (msg.id === assistantMessageId) {
+                  return { ...msg, id: data.assistantMessageId };
+                }
+                return msg;
+              })
+            );
+          }
+        );
+      }
 
       return { success: true };
     }
@@ -153,36 +180,63 @@ export async function handleSendMessage(
         });
       }
 
-      await handleConversationSaving(
-        isNewConversation,
-        currentConversationId,
-        messageContent,
-        assistantContent,
-        userMessage.timestamp ?? Date.now(),
-        queryClient,
-        (data: ConversationResult) => {
-          currentConversationId = data.conversationId;
-          onConversationIdUpdate(data.conversationId);
-          onMessagesUpdate((prev) =>
-            prev.map((msg) => {
-              if (msg.id === userMessage.id) {
-                return { ...msg, id: data.userMessageId };
-              }
-              if (msg.id === assistantMessageId) {
-                return { ...msg, id: data.assistantMessageId };
-              }
-              return msg;
-            })
-          );
-          onNavigate(`/c/${data.conversationId}`);
-        },
-        attachments
-      );
+      if (currentConversationId) {
+        await handleConversationSaving(
+          false,
+          currentConversationId,
+          messageContent,
+          assistantContent,
+          userMessage.timestamp ?? Date.now(),
+          queryClient,
+          (data: ConversationResult) => {
+            onMessagesUpdate((prev) =>
+              prev.map((msg) => {
+                if (msg.id === assistantMessageId) {
+                  return { ...msg, id: data.assistantMessageId };
+                }
+                return msg;
+              })
+            );
+          }
+        );
+      }
 
       if (session?.user?.id) {
         const textContent = extractTextFromContent(messageContent);
         await storeMemory(textContent, assistantContent, currentConversationId);
       }
+    }
+
+    if (shouldNavigate && navigationPath && currentConversationId) {
+      const textContent = extractTextFromContent(messageContent);
+      queryClient.setQueryData(["conversation", currentConversationId], {
+        conversation: {
+          id: currentConversationId,
+          title: generateTitle(messageContent),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublic: false,
+        },
+        messages: {
+          items: [
+            {
+              id: messages.find(m => m.role === "user" && m.timestamp === userMessage.timestamp)?.id || userMessage.id,
+              role: "user" as const,
+              content: textContent,
+              createdAt: new Date(userMessage.timestamp ?? Date.now()).toISOString(),
+              attachments: attachments || [],
+            },
+            {
+              id: assistantMessageId,
+              role: "assistant" as const,
+              content: assistantContent,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      onNavigate(navigationPath);
     }
 
     return { success: true };

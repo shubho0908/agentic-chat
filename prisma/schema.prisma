@@ -78,6 +78,15 @@ enum MessageRole {
   @@map("message_role")
 }
 
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("processing_status")
+}
+
 model Conversation {
   id        String    @id @default(cuid())
   userId    String
@@ -118,13 +127,18 @@ model Message {
 }
 
 model Attachment {
-  id        String   @id @default(cuid())
-  messageId String
-  fileUrl   String   @db.Text
-  fileName  String   @db.VarChar(255)
-  fileType  String   @db.VarChar(100)
-  fileSize  Int
-  createdAt DateTime @default(now())
+  id               String            @id @default(cuid())
+  messageId        String
+  fileUrl          String            @db.Text
+  fileName         String            @db.VarChar(255)
+  fileType         String            @db.VarChar(100)
+  fileSize         Int
+  createdAt        DateTime          @default(now())
+  processingStatus ProcessingStatus  @default(PENDING)
+  processedAt      DateTime?
+  processingError  String?           @db.Text
+  chunkCount       Int?
+  totalTokens      Int?
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 

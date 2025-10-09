@@ -1,12 +1,16 @@
 'use server';
 
-import { qdrantClient } from '@/constants/qdrant';
+import { qdrantClient } from '@/lib/rag/storage/qdrant-client';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
 const MEMORY_COLLECTION_NAME = process.env.MEMORY_COLLECTION_NAME as string;
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
 const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS as string, 10);
+
+if (!MEMORY_COLLECTION_NAME || !EMBEDDING_MODEL || isNaN(EMBEDDING_DIMENSIONS)) {
+  throw new Error(`[Memory] Missing or invalid environment variables: MEMORY_COLLECTION_NAME=${MEMORY_COLLECTION_NAME}, EMBEDDING_MODEL=${EMBEDDING_MODEL}, EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}`);
+}
 
 let openaiClient: OpenAI | null = null;
 

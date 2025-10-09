@@ -60,10 +60,11 @@ export async function handleRegenerateResponse(
     "assistant",
     "",
     `temp-regen-${Date.now()}`,
-    model
+    model,
+    []
   );
   
-  const updatedVersions = buildUpdatedVersionsList(assistantMessage, newRegeneratedVersion);
+  const updatedVersions = buildUpdatedVersionsList(assistantMessage, newRegeneratedVersion, true);
 
   const updatedAssistantMessage: Message = {
     ...assistantMessage,

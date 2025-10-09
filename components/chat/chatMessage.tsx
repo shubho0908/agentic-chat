@@ -3,7 +3,6 @@ import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { OpenAIIcon } from "@/components/icons/openai-icon";
-import { OPENAI_MODELS } from "@/constants/openai-models";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/content-utils";
 import { MessageHeader } from "./messageHeader";
@@ -38,12 +37,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
 
-  const modelName = useMemo(
-    () => message.model
-      ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
-      : "AI Assistant",
-    [message.model]
-  );
+  const modelName = "AI Assistant"
 
   const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
   const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
@@ -59,12 +53,12 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   }, []);
   
   const handleEditSubmit = useCallback(() => {
-    if (!editText.trim() || !displayedMessage.id || !onEdit) return;
-    onEdit(displayedMessage.id, editText, displayedAttachments);
+    if (!editText.trim() || !message.id || !onEdit) return;
+    onEdit(message.id, editText, message.attachments);
     setIsEditing(false);
     setEditText("");
     setVersionIndex(-1);
-  }, [editText, displayedMessage.id, displayedAttachments, onEdit]);
+  }, [editText, message.id, message.attachments, onEdit]);
   
   const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {

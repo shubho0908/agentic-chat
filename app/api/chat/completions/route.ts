@@ -8,12 +8,15 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { getMemoryContext } from '@/lib/memory-conversation-context';
+import { getRAGContext } from '@/lib/rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
 
 export async function POST(request: NextRequest) {
   try {
     const { user: authUser, error } = await getAuthenticatedUser(await headers());
-    if (error) return error;
+    if (error) {
+      return error;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: authUser.id },
@@ -41,6 +44,7 @@ export async function POST(request: NextRequest) {
     let enhancedMessages = messages;
     try {
       const lastUserMessage = messages[messages.length - 1]?.content || '';
+      let contextToAdd = '';
       
       if (lastUserMessage) {
         const memoryContext = await getMemoryContext(
@@ -51,24 +55,44 @@ export async function POST(request: NextRequest) {
         );
 
         if (memoryContext) {
+          contextToAdd += memoryContext;
+        }
+
+        const ragContext = await getRAGContext(
+          typeof lastUserMessage === 'string' ? lastUserMessage : JSON.stringify(lastUserMessage),
+          authUser.id,
+          {
+            conversationId,
+            limit: 5,
+            scoreThreshold: 0.7,
+            waitForProcessing: true,
+            maxWaitTime: 30000,
+          }
+        );
+
+        if (ragContext) {
+          contextToAdd += ragContext;
+        }
+
+        if (contextToAdd) {
           const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
           
           if (systemMessageIndex >= 0) {
             enhancedMessages = [...enhancedMessages];
             enhancedMessages[systemMessageIndex] = {
               ...enhancedMessages[systemMessageIndex],
-              content: enhancedMessages[systemMessageIndex].content + memoryContext
+              content: enhancedMessages[systemMessageIndex].content + contextToAdd
             };
           } else {
             enhancedMessages = [
-              { role: 'system', content: memoryContext },
+              { role: 'system', content: contextToAdd },
               ...enhancedMessages
             ];
           }
         }
       }
     } catch {
-      // Memory context fetch failed, continue without it
+      // Context fetch failed, continue without it
     }
 
     const openai = new OpenAI({ apiKey });
