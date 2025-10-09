@@ -179,12 +179,25 @@ export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
   return !attachments || attachments.length === 0;
 }
 
-export function buildCacheQuery(messages: Message[], newContent: string | MessageContentPart[]): string {
+export function buildCacheQuery(
+  messages: Message[], 
+  newContent: string | MessageContentPart[],
+  options?: { includeVersionInfo?: boolean }
+): string {
+  const { includeVersionInfo = true } = options || {};
+  
   const textOnlyMessages = messages
     .filter(m => !m.attachments || m.attachments.length === 0)
     .slice(-4);
 
-  const contextParts = textOnlyMessages.map(m => `${m.role.toLowerCase()}: ${extractTextFromContent(m.content)}`);
+  const contextParts = textOnlyMessages.map(m => {
+    const text = extractTextFromContent(m.content);
+    const versionInfo = includeVersionInfo && m.versions && m.versions.length > 0 
+      ? `[v${m.siblingIndex || 0}]` 
+      : '';
+    return `${m.role.toLowerCase()}${versionInfo}: ${text}`;
+  });
+  
   const newText = extractTextFromContent(newContent);
   contextParts.push(`user: ${newText}`);
   return contextParts.join('\n');
@@ -352,8 +365,6 @@ export async function handleConversationSaving(
   currentConversationId: string | null,
   userContent: string | MessageContentPart[],
   assistantContent: string,
-  userMessageId: string,
-  assistantMessageId: string,
   userTimestamp: number,
   queryClient: QueryClient,
   onConversationCreated?: (data: { conversationId: string; userMessageId: string; assistantMessageId: string }) => void,

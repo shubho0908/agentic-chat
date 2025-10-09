@@ -45,55 +45,129 @@ export async function GET(
     const { conversation, error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
+    const includeAttachments = searchParams.get('attachments') !== 'false';
+    const includeVersions = searchParams.get('versions') === 'true';
+
     const originalMessages = await prisma.message.findMany({
       where: {
         conversationId,
-        parentMessageId: null
+        parentMessageId: null,
+        isDeleted: false
       },
       orderBy: { createdAt: 'asc' },
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
-      include: {
-        attachments: true
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        createdAt: true,
+        conversationId: true,
+        parentMessageId: true,
+        siblingIndex: true,
+        ...(includeAttachments && {
+          attachments: {
+            select: {
+              id: true,
+              fileUrl: true,
+              fileName: true,
+              fileType: true,
+              fileSize: true
+            }
+          }
+        })
       }
     });
 
     const messageIds = originalMessages.slice(0, Math.min(originalMessages.length, limit)).map(m => m.id);
 
-    const versions = messageIds.length > 0 ? await prisma.message.findMany({
+    const versionCounts = messageIds.length > 0 ? await prisma.message.groupBy({
+      by: ['parentMessageId'],
       where: {
-        parentMessageId: { in: messageIds }
+        parentMessageId: { in: messageIds },
+        isDeleted: false
       },
-      include: {
-        attachments: true
-      },
-      orderBy: { siblingIndex: 'asc' }
+      _count: true
     }) : [];
 
-    const versionsByParent = new Map<string, typeof versions>();
-    for (const version of versions) {
-      if (!version.parentMessageId) continue;
-      const existing = versionsByParent.get(version.parentMessageId) || [];
-      existing.push(version);
-      versionsByParent.set(version.parentMessageId, existing);
+    const versionCountMap = new Map(
+      versionCounts.map(vc => [vc.parentMessageId!, vc._count])
+    );
+
+    interface VersionMessage {
+      id: string;
+      role: string;
+      content: string;
+      createdAt: Date;
+      siblingIndex: number;
+      parentMessageId: string | null;
+      attachments?: Array<{
+        id: string;
+        fileUrl: string;
+        fileName: string;
+        fileType: string;
+        fileSize: number;
+      }>;
+    }
+
+    const versionsByParent = new Map<string, VersionMessage[]>();
+    
+    if (includeVersions && messageIds.length > 0) {
+      const versions = await prisma.message.findMany({
+        where: {
+          parentMessageId: { in: messageIds },
+          isDeleted: false
+        },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+          siblingIndex: true,
+          parentMessageId: true,
+          ...(includeAttachments && {
+            attachments: {
+              select: {
+                id: true,
+                fileUrl: true,
+                fileName: true,
+                fileType: true,
+                fileSize: true
+              }
+            }
+          })
+        },
+        orderBy: { siblingIndex: 'asc' }
+      });
+
+      for (const version of versions) {
+        if (!version.parentMessageId) continue;
+        const existing = versionsByParent.get(version.parentMessageId) || [];
+        existing.push(version);
+        versionsByParent.set(version.parentMessageId, existing);
+      }
     }
 
     const paginatedTree = originalMessages.slice(0, limit).map(msg => ({
       ...msg,
-      versions: versionsByParent.get(msg.id) || []
+      versionCount: (versionCountMap.get(msg.id) || 0) + 1,
+      ...(includeVersions && { versions: versionsByParent.get(msg.id) || [] })
     }));
 
     const transformedMessages = paginatedTree.map(msg => {
-      const msgWithAttachments = msg as MessageWithAttachments;
+      const msgWithAttachments = msg as MessageWithAttachments & { versionCount?: number };
       return {
         ...msgWithAttachments,
         role: msgWithAttachments.role.toLowerCase(),
-        attachments: msgWithAttachments.attachments || [],
-        versions: msgWithAttachments.versions?.map(v => ({
-          ...v,
-          role: v.role.toLowerCase(),
-          attachments: v.attachments || []
-        })) || []
+        attachments: includeAttachments ? (msgWithAttachments.attachments || []) : undefined,
+        versionCount: msgWithAttachments.versionCount,
+        ...(includeVersions && {
+          versions: msgWithAttachments.versions?.map(v => ({
+            ...v,
+            role: v.role.toLowerCase(),
+            attachments: includeAttachments ? (v.attachments || []) : undefined
+          })) || []
+        })
       };
     });
 
@@ -184,7 +258,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

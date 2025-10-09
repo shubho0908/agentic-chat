@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useState, useMemo, useCallback } from "react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
@@ -26,44 +26,47 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
   
-  if (message.role === "system") return null;
-
-  const versions = (message.versions || []) as Message[];
+  const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
   const totalVersions = versions.length;
   const currentVersion = versionIndex === -1 ? totalVersions : versionIndex + 1;
   
-  const displayedMessage: Message = versionIndex === -1 ? message : (versions[versionIndex] || message);
+  const displayedMessage = useMemo<Message>(
+    () => versionIndex === -1 ? message : (versions[versionIndex] || message),
+    [versionIndex, message, versions]
+  );
+  
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
 
-  const modelName = message.model
-    ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
-    : "AI Assistant";
+  const modelName = useMemo(
+    () => message.model
+      ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
+      : "AI Assistant",
+    [message.model]
+  );
 
-  const userInitial = userName?.charAt(0).toUpperCase() || "U";
-  const textContent = extractTextFromContent(displayedContent);
-  const isThinking = !textContent && !message.content;
+  const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
+  const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
   
-  const handleEditStart = () => {
+  const handleEditStart = useCallback(() => {
     setEditText(textContent);
     setIsEditing(true);
-  };
+  }, [textContent]);
   
-  const handleEditCancel = () => {
+  const handleEditCancel = useCallback(() => {
     setIsEditing(false);
     setEditText("");
-  };
+  }, []);
   
-  const handleEditSubmit = () => {
+  const handleEditSubmit = useCallback(() => {
     if (!editText.trim() || !displayedMessage.id || !onEdit) return;
-    // Always edit the currently displayed version
     onEdit(displayedMessage.id, editText, displayedAttachments);
     setIsEditing(false);
     setEditText("");
     setVersionIndex(-1);
-  };
+  }, [editText, displayedMessage.id, displayedAttachments, onEdit]);
   
-  const handlePreviousVersion = () => {
+  const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {
       if (versions.length > 0) {
         setVersionIndex(versions.length - 2);
@@ -71,9 +74,9 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
     } else if (versionIndex > 0) {
       setVersionIndex(versionIndex - 1);
     }
-  };
+  }, [versionIndex, versions.length]);
   
-  const handleNextVersion = () => {
+  const handleNextVersion = useCallback(() => {
     if (versionIndex === -1) return;
     
     if (versionIndex === versions.length - 2) {
@@ -81,7 +84,11 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
     } else {
       setVersionIndex(versionIndex + 1);
     }
-  };
+  }, [versionIndex, versions.length]);
+  
+  const isThinking = !textContent && !message.content;
+  
+  if (message.role === "system") return null;
 
   return (
     <div
@@ -174,4 +181,14 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   );
 }
 
-export const ChatMessage = memo(ChatMessageComponent);
+export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.versions?.length === nextProps.message.versions?.length &&
+    prevProps.userName === nextProps.userName &&
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onRegenerate === nextProps.onRegenerate
+  );
+});

@@ -2,24 +2,29 @@ import { prisma } from './prisma';
 import type { Message as PrismaMessage } from './generated/prisma';
 
 export async function getNextSiblingIndex(parentMessageId: string): Promise<number> {
-  const siblings = await prisma.message.findMany({
+  const maxSibling = await prisma.message.aggregate({
     where: {
       OR: [
         { id: parentMessageId },
         { parentMessageId: parentMessageId }
       ]
     },
-    select: { siblingIndex: true },
-    orderBy: { siblingIndex: 'desc' },
-    take: 1
+    _max: {
+      siblingIndex: true
+    }
   });
 
-  return siblings.length > 0 ? siblings[0].siblingIndex + 1 : 1;
+  return (maxSibling._max.siblingIndex ?? -1) + 1;
 }
 
-export async function getMessageVersions(messageId: string) {
-  const message = await prisma.message.findUnique({
-    where: { id: messageId },
+export async function getMessageVersions(
+  messageId: string,
+  options?: { includeAttachments?: boolean; limit?: number; offset?: number }
+) {
+  const { includeAttachments = false, limit, offset = 0 } = options || {};
+
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, isDeleted: false },
     select: { parentMessageId: true }
   });
 
@@ -32,47 +37,59 @@ export async function getMessageVersions(messageId: string) {
       OR: [
         { id: parentId },
         { parentMessageId: parentId }
-      ]
+      ],
+      isDeleted: false
     },
-    include: {
+    include: includeAttachments ? {
       attachments: true
-    },
-    orderBy: { siblingIndex: 'asc' }
+    } : undefined,
+    orderBy: { siblingIndex: 'asc' },
+    ...(limit && { take: limit }),
+    ...(offset && { skip: offset })
   });
 }
 
 export async function deleteMessagesAfter(conversationId: string, messageId: string) {
-  const targetMessage = await prisma.message.findUnique({
-    where: { id: messageId },
-    select: { createdAt: true, parentMessageId: true, conversationId: true }
+  const targetMessage = await prisma.message.findFirst({
+    where: { id: messageId, isDeleted: false, conversationId },
+    select: { createdAt: true, parentMessageId: true, siblingIndex: true }
   });
 
   if (!targetMessage) {
-    throw new Error('Message not found');
+    throw new Error('Message not found or already deleted');
   }
 
-  if (targetMessage.conversationId !== conversationId) {
-    throw new Error('Message does not belong to this conversation');
-  }
+  const now = new Date();
 
   const [deleteAfterResult, deleteSiblingsResult] = await prisma.$transaction([
-    prisma.message.deleteMany({
+    prisma.message.updateMany({
       where: {
         conversationId,
-        createdAt: { gt: targetMessage.createdAt }
+        createdAt: { gt: targetMessage.createdAt },
+        isDeleted: false
+      },
+      data: {
+        isDeleted: true,
+        deletedAt: now
       }
     }),
-    prisma.message.deleteMany({
+    prisma.message.updateMany({
       where: targetMessage.parentMessageId
         ? {
             conversationId,
             parentMessageId: targetMessage.parentMessageId,
-            id: { not: messageId }
+            siblingIndex: { gt: targetMessage.siblingIndex },
+            isDeleted: false
           }
         : {
             conversationId,
-            parentMessageId: messageId
-          }
+            parentMessageId: messageId,
+            isDeleted: false
+          },
+      data: {
+        isDeleted: true,
+        deletedAt: now
+      }
     })
   ]);
 
@@ -83,11 +100,36 @@ export async function deleteMessagesAfter(conversationId: string, messageId: str
   };
 }
 
+export async function getVersionCount(messageId: string): Promise<number> {
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, isDeleted: false },
+    select: { parentMessageId: true }
+  });
+
+  if (!message) return 0;
+
+  const parentId = message.parentMessageId || messageId;
+
+  const count = await prisma.message.count({
+    where: {
+      OR: [
+        { id: parentId },
+        { parentMessageId: parentId }
+      ],
+      isDeleted: false
+    }
+  });
+
+  return count;
+}
+
 export function buildMessageTree(messages: PrismaMessage[]) {
   const originals: PrismaMessage[] = [];
   const versionsByParent = new Map<string, PrismaMessage[]>();
 
   for (const msg of messages) {
+    if (msg.isDeleted) continue;
+    
     if (!msg.parentMessageId) {
       originals.push(msg);
     } else {

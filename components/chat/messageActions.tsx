@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useThrottle } from "@/hooks/useDebounce";
 import { Copy, Check, Edit2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export function MessageActions({
   isLoading = false,
 }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const handleCopy = async () => {
     try {
@@ -43,9 +45,20 @@ export function MessageActions({
     }
   };
 
+  const throttledRegenerate = useThrottle(
+    useCallback(() => {
+      if (onRegenerate && !isRegenerating) {
+        setIsRegenerating(true);
+        onRegenerate();
+        setTimeout(() => setIsRegenerating(false), 2000);
+      }
+    }, [onRegenerate, isRegenerating]),
+    2000
+  );
+
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
         {isUser && canEdit && !isEditing && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -70,14 +83,15 @@ export function MessageActions({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onRegenerate}
+                onClick={throttledRegenerate}
                 className="h-7 px-2 rounded-md"
+                disabled={isRegenerating || isLoading}
               >
                 <RefreshCw className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-              Regenerate response
+              {isRegenerating ? "Regenerating..." : "Regenerate response"}
             </TooltipContent>
           </Tooltip>
         )}

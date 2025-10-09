@@ -5,7 +5,6 @@ import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonR
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateAttachments } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
-import { getNextSiblingIndex, deleteMessagesAfter } from '@/lib/message-versioning';
 
 export async function PATCH(
   request: NextRequest,
@@ -47,31 +46,81 @@ export async function PATCH(
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
-    const existingMessage = await prisma.message.findUnique({
-      where: { id: messageId },
+    const existingMessage = await prisma.message.findFirst({
+      where: { 
+        id: messageId,
+        conversationId,
+        isDeleted: false
+      },
       select: { 
         conversationId: true, 
         role: true,
-        parentMessageId: true 
+        parentMessageId: true,
+        siblingIndex: true,
+        createdAt: true
       }
     });
 
     if (!existingMessage) {
-      return errorResponse('Message not found', undefined, HTTP_STATUS.NOT_FOUND);
+      return errorResponse('Message not found or already deleted', undefined, HTTP_STATUS.NOT_FOUND);
     }
-
-    if (existingMessage.conversationId !== conversationId) {
-      return errorResponse('Message does not belong to this conversation', undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-
-    await deleteMessagesAfter(conversationId, messageId);
 
     const parentId = existingMessage.parentMessageId || messageId;
+    const now = new Date();
     
-    const siblingIndex = await getNextSiblingIndex(parentId);
+    const newVersion = await prisma.$transaction(async (tx) => {
+      await tx.message.updateMany({
+        where: {
+          conversationId,
+          createdAt: { gt: existingMessage.createdAt },
+          isDeleted: false
+        },
+        data: {
+          isDeleted: true,
+          deletedAt: now
+        }
+      });
 
-    const [newVersion] = await prisma.$transaction([
-      prisma.message.create({
+      if (existingMessage.parentMessageId) {
+        await tx.message.updateMany({
+          where: {
+            conversationId,
+            parentMessageId: existingMessage.parentMessageId,
+            siblingIndex: { gt: existingMessage.siblingIndex },
+            isDeleted: false
+          },
+          data: {
+            isDeleted: true,
+            deletedAt: now
+          }
+        });
+      } else {
+        await tx.message.updateMany({
+          where: {
+            conversationId,
+            parentMessageId: messageId,
+            isDeleted: false
+          },
+          data: {
+            isDeleted: true,
+            deletedAt: now
+          }
+        });
+      }
+
+      const maxSibling = await tx.message.aggregate({
+        where: {
+          OR: [
+            { id: parentId },
+            { parentMessageId: parentId }
+          ]
+        },
+        _max: { siblingIndex: true }
+      });
+
+      const siblingIndex = (maxSibling._max.siblingIndex ?? -1) + 1;
+
+      const newVersion = await tx.message.create({
         data: {
           conversationId,
           role: existingMessage.role,
@@ -90,12 +139,15 @@ export async function PATCH(
         include: {
           attachments: true,
         }
-      }),
-      prisma.conversation.update({
+      });
+
+      await tx.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() }
-      })
-    ]);
+      });
+
+      return newVersion;
+    });
 
     return jsonResponse(newVersion, HTTP_STATUS.OK);
   } catch (error) {

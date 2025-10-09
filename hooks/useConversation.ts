@@ -30,7 +30,7 @@ interface ConversationData {
 
 async function fetchConversation(conversationId: string): Promise<ConversationData> {
   try {
-    const response = await fetch(`/api/conversations/${conversationId}`);
+    const response = await fetch(`/api/conversations/${conversationId}?versions=true`);
     
     if (!response) {
       throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);

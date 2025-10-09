@@ -5,7 +5,7 @@ import { isValidConversationId } from '@/lib/validation';
 import { errorResponse, jsonResponse } from '@/lib/api-utils';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

@@ -19,6 +19,15 @@ import {
 } from "./chat/helpers";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 
+interface VersionData {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  siblingIndex: number;
+  attachments?: Attachment[];
+}
+
 interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
@@ -141,8 +150,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             currentConversationId,
             messageContent,
             cachedResponse,
-            userMessage.id!,
-            assistantMessageId,
             userMessage.timestamp ?? Date.now(),
             queryClient,
             (data) => {
@@ -202,8 +209,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             currentConversationId,
             messageContent,
             assistantContent,
-            userMessage.id!,
-            assistantMessageId,
             userMessage.timestamp ?? Date.now(),
             queryClient,
             (data) => {
@@ -282,12 +287,33 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       let assistantContent = "";
 
       const messagesUpToEdit = messages.slice(0, messageIndex);
+      const originalMessagesState = [...messages];
+      
+      const existingVersions = messageToEdit.versions || [];
+      const cleanedVersions = existingVersions.filter(v => v.id && !v.id.startsWith('temp-'));
+      
+      const maxSiblingIndex = cleanedVersions.length > 0 
+        ? Math.max(...cleanedVersions.map(v => v.siblingIndex ?? 0))
+        : 0;
+      
+      const newEditedVersion: Message = {
+        id: `temp-edit-${Date.now()}`,
+        role: "user",
+        content: messageContent,
+        timestamp: Date.now(),
+        attachments,
+        siblingIndex: maxSiblingIndex + 1,
+      };
+      
+      const updatedVersions = [...cleanedVersions, newEditedVersion];
+      
       setMessages([
         ...messagesUpToEdit,
         {
           ...messageToEdit,
           content: messageContent,
           attachments,
+          versions: updatedVersions,
         },
         {
           role: "assistant",
@@ -303,10 +329,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         abortControllerRef.current = new AbortController();
 
         let updatedMessageId = messageToEdit.id;
+        let updatedMessageData: { parentMessageId?: string | null } | null = null;
         if (conversationId && messageToEdit.id) {
           const updatedMessage = await updateUserMessage(conversationId, messageToEdit.id, messageContent, attachments);
           if (updatedMessage?.id) {
             updatedMessageId = updatedMessage.id;
+            updatedMessageData = { parentMessageId: updatedMessage.parentMessageId };
           }
         }
 
@@ -342,10 +370,35 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             if (response.ok) {
               const savedAssistantMessage = await response.json();
               if (savedAssistantMessage?.id) {
+                const parentId = updatedMessageData?.parentMessageId || updatedMessageId;
+                
+                const versionsResponse = await fetch(
+                  `/api/conversations/${conversationId}/messages/${parentId}/versions`
+                );
+                
+                let versions: Message[] = [];
+                if (versionsResponse.ok) {
+                  const versionsData = await versionsResponse.json();
+                  if (versionsData?.versions && Array.isArray(versionsData.versions)) {
+                    versions = versionsData.versions.map((v: VersionData) => ({
+                      id: v.id,
+                      role: v.role as 'user' | 'assistant',
+                      content: v.content,
+                      timestamp: new Date(v.createdAt).getTime(),
+                      attachments: v.attachments || [],
+                      siblingIndex: v.siblingIndex,
+                    }));
+                  }
+                }
+                
                 setMessages((prev) =>
                   prev.map((msg) => {
-                    if (msg.id === messageToEdit.id) {
-                      return { ...msg, id: updatedMessageId! };
+                    if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
+                      return { 
+                        ...msg, 
+                        id: updatedMessageId!,
+                        versions: versions.length > 0 ? versions : msg.versions 
+                      };
                     }
                     if (msg.id === assistantMessageId) {
                       return { ...msg, id: savedAssistantMessage.id };
@@ -402,10 +455,35 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             if (response.ok) {
               const savedAssistantMessage = await response.json();
               if (savedAssistantMessage?.id) {
+                const parentId = updatedMessageData?.parentMessageId || updatedMessageId;
+                
+                const versionsResponse = await fetch(
+                  `/api/conversations/${conversationId}/messages/${parentId}/versions`
+                );
+                
+                let versions: Message[] = [];
+                if (versionsResponse.ok) {
+                  const versionsData = await versionsResponse.json();
+                  if (versionsData?.versions && Array.isArray(versionsData.versions)) {
+                    versions = versionsData.versions.map((v: VersionData) => ({
+                      id: v.id,
+                      role: v.role as 'user' | 'assistant',
+                      content: v.content,
+                      timestamp: new Date(v.createdAt).getTime(),
+                      attachments: v.attachments || [],
+                      siblingIndex: v.siblingIndex,
+                    }));
+                  }
+                }
+                
                 setMessages((prev) =>
                   prev.map((msg) => {
-                    if (msg.id === messageToEdit.id) {
-                      return { ...msg, id: updatedMessageId! };
+                    if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
+                      return { 
+                        ...msg, 
+                        id: updatedMessageId!,
+                        versions: versions.length > 0 ? versions : msg.versions 
+                      };
                     }
                     if (msg.id === assistantMessageId) {
                       return { ...msg, id: savedAssistantMessage.id };
@@ -421,6 +499,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {
+          setMessages(messagesUpToEdit);
           toast.info(TOAST_SUCCESS_MESSAGES.GENERATION_STOPPED);
           return;
         }
@@ -430,7 +509,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           description: errorMessage,
         });
         
-        setMessages((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
+        setMessages(originalMessagesState);
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
@@ -458,9 +537,30 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         return;
       }
 
+      const originalMessagesState = [...messages];
+      
+      const existingVersions = assistantMessage.versions || [];
+      const cleanedVersions = existingVersions.filter(v => v.id && !v.id.startsWith('temp-'));
+      
+      const maxSiblingIndex = cleanedVersions.length > 0 
+        ? Math.max(...cleanedVersions.map(v => v.siblingIndex ?? 0))
+        : 0;
+      
+      const newRegeneratedVersion: Message = {
+        id: `temp-regen-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        timestamp: Date.now(),
+        model: model,
+        siblingIndex: maxSiblingIndex + 1,
+      };
+      
+      const updatedVersions = [...cleanedVersions, newRegeneratedVersion];
+
       const updatedAssistantMessage: Message = {
         ...assistantMessage,
         content: "",
+        versions: updatedVersions,
       };
 
       const messagesUpToAssistant = messages.slice(0, messageIndex);
@@ -498,7 +598,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           );
 
           if (conversationId && assistantMessage.id) {
-            await fetch(`/api/conversations/${conversationId}/messages/${assistantMessage.id}`, {
+            const response = await fetch(`/api/conversations/${conversationId}/messages/${assistantMessage.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -506,6 +606,40 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
                 attachments: [],
               }),
             });
+            
+            if (response.ok) {
+              const updatedMessage = await response.json();
+              if (updatedMessage?.id) {
+                const parentId = updatedMessage.parentMessageId || updatedMessage.id;
+                
+                const versionsResponse = await fetch(
+                  `/api/conversations/${conversationId}/messages/${parentId}/versions`
+                );
+                
+                let versions: Message[] = [];
+                if (versionsResponse.ok) {
+                  const versionsData = await versionsResponse.json();
+                  if (versionsData?.versions && Array.isArray(versionsData.versions)) {
+                    versions = versionsData.versions.map((v: VersionData) => ({
+                      id: v.id,
+                      role: v.role as 'user' | 'assistant',
+                      content: v.content,
+                      timestamp: new Date(v.createdAt).getTime(),
+                      attachments: v.attachments || [],
+                      siblingIndex: v.siblingIndex,
+                    }));
+                  }
+                }
+                
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessage.id || msg.id === updatedMessage.id
+                      ? { ...msg, id: updatedMessage.id, versions: versions.length > 0 ? versions : msg.versions }
+                      : msg
+                  )
+                );
+              }
+            }
           }
 
           setIsLoading(false);
@@ -539,7 +673,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           }
 
           if (conversationId && assistantMessage.id) {
-            await fetch(`/api/conversations/${conversationId}/messages/${assistantMessage.id}`, {
+            const response = await fetch(`/api/conversations/${conversationId}/messages/${assistantMessage.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -548,11 +682,46 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
               }),
             });
             
+            if (response.ok) {
+              const updatedMessage = await response.json();
+              if (updatedMessage?.id) {
+                const parentId = updatedMessage.parentMessageId || updatedMessage.id;
+                
+                const versionsResponse = await fetch(
+                  `/api/conversations/${conversationId}/messages/${parentId}/versions`
+                );
+                
+                let versions: Message[] = [];
+                if (versionsResponse.ok) {
+                  const versionsData = await versionsResponse.json();
+                  if (versionsData?.versions && Array.isArray(versionsData.versions)) {
+                    versions = versionsData.versions.map((v: VersionData) => ({
+                      id: v.id,
+                      role: v.role as 'user' | 'assistant',
+                      content: v.content,
+                      timestamp: new Date(v.createdAt).getTime(),
+                      attachments: v.attachments || [],
+                      siblingIndex: v.siblingIndex,
+                    }));
+                  }
+                }
+                
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessage.id || msg.id === updatedMessage.id
+                      ? { ...msg, id: updatedMessage.id, versions: versions.length > 0 ? versions : msg.versions }
+                      : msg
+                  )
+                );
+              }
+            }
+            
             queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
           }
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {
+          setMessages(messagesUpToAssistant);
           toast.info(TOAST_SUCCESS_MESSAGES.GENERATION_STOPPED);
           return;
         }
@@ -562,13 +731,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           description: errorMessage,
         });
         
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessage.id
-              ? { ...msg, content: assistantMessage.content }
-              : msg
-          )
-        );
+        setMessages(originalMessagesState);
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
