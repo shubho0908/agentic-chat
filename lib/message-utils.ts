@@ -28,21 +28,16 @@ export function flattenMessageTree(messages: MessageWithVersions[]): MessageWith
 
   for (const msg of messages) {
     if (msg.versions && msg.versions.length > 0) {
-      const versions = msg.versions;
-      const latestVersion = versions[versions.length - 1];
+      const allVersions = [msg, ...msg.versions];
+      const sortedVersions = allVersions.sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
       
-      const allVersions: Message[] = [msg, ...versions].map((v, idx) => ({
-        ...v,
-        siblingIndex: idx,
-      }));
+      const newestVersion = sortedVersions[0];
+      const olderVersions = sortedVersions.slice(1);
       
-      const latestWithIndex = {
-        ...latestVersion,
-        siblingIndex: allVersions.length - 1,
-        versions: allVersions,
-      };
-      
-      result.push(latestWithIndex);
+      result.push({
+        ...newestVersion,
+        versions: olderVersions
+      });
     } else {
       result.push(msg);
     }

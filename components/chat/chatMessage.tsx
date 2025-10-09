@@ -27,8 +27,8 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const [versionIndex, setVersionIndex] = useState(-1);
   
   const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
-  const totalVersions = versions.length;
-  const currentVersion = versionIndex === -1 ? totalVersions : versionIndex + 1;
+  const totalVersions = versions.length + 1;
+  const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
   
   const displayedMessage = useMemo<Message>(
     () => versionIndex === -1 ? message : (versions[versionIndex] || message),
@@ -69,22 +69,22 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {
       if (versions.length > 0) {
-        setVersionIndex(versions.length - 1);
+        setVersionIndex(0);
       }
-    } else if (versionIndex > 0) {
-      setVersionIndex(versionIndex - 1);
+    } else if (versionIndex < versions.length - 1) {
+      setVersionIndex(versionIndex + 1);
     }
   }, [versionIndex, versions.length]);
   
   const handleNextVersion = useCallback(() => {
     if (versionIndex === -1) return;
     
-    if (versionIndex === versions.length - 1) {
-      setVersionIndex(-1);
+    if (versionIndex > 0) {
+      setVersionIndex(versionIndex - 1);
     } else {
-      setVersionIndex(versionIndex + 1);
+      setVersionIndex(-1);
     }
-  }, [versionIndex, versions.length]);
+  }, [versionIndex]);
   
   const isThinking = !textContent && !displayedMessage.content;
   

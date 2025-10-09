@@ -79,9 +79,34 @@ export function updateMessageWithVersions(
   newMessageId: string,
   versions: Message[]
 ): Message {
+  if (versions.length === 0) {
+    return { ...message, id: newMessageId };
+  }
+
+  const sortedVersions = [...versions].sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
+  
+  const currentVersion = sortedVersions.find(v => v.id === newMessageId) || sortedVersions[0];
+  const olderVersions = sortedVersions.filter(v => v.id !== currentVersion.id);
+  
   return { 
-    ...message, 
-    id: newMessageId,
-    versions: versions.length > 0 ? versions : message.versions 
+    ...currentVersion,
+    versions: olderVersions
+  };
+}
+
+export function normalizeMessageVersions(message: Message): Message {
+  if (!message.versions || message.versions.length === 0) {
+    return message;
+  }
+
+  const allVersions = [message, ...message.versions];
+  const sortedVersions = allVersions.sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
+  
+  const newestVersion = sortedVersions[0];
+  const olderVersions = sortedVersions.slice(1);
+  
+  return {
+    ...newestVersion,
+    versions: olderVersions
   };
 }
