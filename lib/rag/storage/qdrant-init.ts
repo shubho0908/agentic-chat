@@ -2,6 +2,7 @@
 
 import { qdrantClient } from './qdrant-client';
 import { RAG_CONFIG } from '../config';
+import { RAGError, RAGErrorCode } from '../common/errors';
 
 let collectionInitialized = false;
 let initializationPromise: Promise<void> | null = null;
@@ -36,9 +37,12 @@ export async function ensureDocumentsCollection(): Promise<void> {
 
       collectionInitialized = true;
     } catch (error) {
-      console.error('[Qdrant] Error ensuring collection exists:', error);
       initializationPromise = null;
-      throw error;
+      throw new RAGError(
+        `Error ensuring collection exists: ${error instanceof Error ? error.message : String(error)}`,
+        RAGErrorCode.QDRANT_COLLECTION_ERROR,
+        error
+      );
     }
   })();
 
@@ -50,7 +54,10 @@ export async function collectionExists(collectionName: string): Promise<boolean>
     const collections = await qdrantClient.getCollections();
     return collections.collections.some((col) => col.name === collectionName);
   } catch (error) {
-    console.error('[Qdrant] Error checking collection existence:', error);
-    return false;
+    throw new RAGError(
+      `Error checking collection existence: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.QDRANT_COLLECTION_ERROR,
+      error
+    );
   }
 }

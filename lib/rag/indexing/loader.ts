@@ -92,11 +92,7 @@ export async function loadDocument(
       };
     }
   } catch (error) {
-    console.error('Error loading document:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error loading document',
-    };
+    throw new Error(`Error loading document: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

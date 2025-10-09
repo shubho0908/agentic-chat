@@ -10,9 +10,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 interface FilePreviewProps {
   files: File[];
   onRemove: (index: number) => void;
+  disabled?: boolean;
 }
 
-export function FilePreview({ files, onRemove }: FilePreviewProps) {
+export function FilePreview({ files, onRemove, disabled = false }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -173,7 +174,8 @@ export function FilePreview({ files, onRemove }: FilePreviewProps) {
                       size="icon"
                       variant="ghost"
                       onClick={() => onRemove(index)}
-                      className="size-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80"
+                      disabled={disabled}
+                      className="size-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <X className="size-3" />
                     </Button>

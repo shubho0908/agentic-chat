@@ -1,3 +1,7 @@
+import { getQdrantConfig } from '../storage/qdrant-client';
+
+const qdrantConfig = getQdrantConfig();
+
 export const RAG_CONFIG = {
   chunking: {
     defaultSize: 800,
@@ -35,7 +39,10 @@ export const RAG_CONFIG = {
     scoreThreshold: 0.7,
   },
   qdrant: {
-    url: process.env.QDRANT_URL as string,
+    url: qdrantConfig.url,
+    apiKey: qdrantConfig.apiKey,
+    isCloudMode: qdrantConfig.isCloudMode,
+    isLocalMode: qdrantConfig.isLocalMode,
     documentsCollectionName: process.env.DOCUMENTS_COLLECTION_NAME as string,
     embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS as string),
   },

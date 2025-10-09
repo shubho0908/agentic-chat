@@ -1,6 +1,7 @@
 'use server';
 
 import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./qdrant-client";
+import { RAGError, RAGErrorCode } from '../common/errors';
 import OpenAI from "openai";
 
 const CACHE_COLLECTION_NAME = process.env.CACHE_COLLECTION_NAME as string;
@@ -35,8 +36,11 @@ export async function ensureCollection(embeddingDimension: number) {
       });
     }
   } catch (error) {
-    console.error("Error ensuring collection:", error);
-    throw error;
+    throw new RAGError(
+      `Error ensuring collection: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.QDRANT_COLLECTION_ERROR,
+      error
+    );
   }
 }
 
@@ -48,8 +52,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     });
     return embeddingResponse.data[0].embedding;
   } catch (error) {
-    console.error("Error generating embedding:", error);
-    throw error;
+    throw new RAGError(
+      `Error generating embedding: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.VECTOR_STORE_FAILED,
+      error
+    );
   }
 }
 
@@ -88,8 +95,11 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
 
     return null;
   } catch (error) {
-    console.error("Error searching semantic cache:", error);
-    return null;
+    throw new RAGError(
+      `Error searching semantic cache: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.QDRANT_SEARCH_FAILED,
+      error
+    );
   }
 }
 
@@ -111,6 +121,10 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
       ],
     });
   } catch (error) {
-    console.error("Error adding to semantic cache:", error);
+    throw new RAGError(
+      `Error adding to semantic cache: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.QDRANT_UPSERT_FAILED,
+      error
+    );
   }
 }

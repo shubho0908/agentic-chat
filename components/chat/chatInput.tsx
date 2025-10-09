@@ -1,4 +1,4 @@
-import { FormEvent, ClipboardEvent } from "react";
+import { FormEvent, ClipboardEvent, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,8 @@ export function ChatInput({
   disabled = false,
   centered = false,
 }: ChatInputProps) {
+  const [isSending, setIsSending] = useState(false);
+
   const {
     selectedFiles,
     uploadedAttachments,
@@ -67,18 +69,27 @@ export function ChatInput({
   }
 
   async function sendMessage() {
-    if (!input.trim() || isLoading || disabled || isUploading) return;
+    if (!input.trim() || isLoading || disabled || isUploading || isSending) return;
 
-    let attachmentsToSend = uploadedAttachments;
+    setIsSending(true);
 
-    if (selectedFiles.length > 0) {
-      attachmentsToSend = await uploadFiles();
-      if (attachmentsToSend.length === 0 && selectedFiles.length > 0) return;
+    try {
+      let attachmentsToSend = uploadedAttachments;
+
+      if (selectedFiles.length > 0) {
+        attachmentsToSend = await uploadFiles();
+        if (attachmentsToSend.length === 0 && selectedFiles.length > 0) {
+          setIsSending(false);
+          return;
+        }
+      }
+
+      await onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined);
+      clearInput();
+      clearAttachments();
+    } finally {
+      setIsSending(false);
     }
-
-    onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined);
-    clearInput();
-    clearAttachments();
   }
 
   function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
@@ -122,7 +133,7 @@ export function ChatInput({
                 handlers={handlers}
               >
                 <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:shadow-xl overflow-hidden">
-                  <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
+                  <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
                   <Textarea
                     ref={textareaRef}
                     value={input}
@@ -177,7 +188,7 @@ export function ChatInput({
             handlers={handlers}
           >
             <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md overflow-hidden">
-              <FilePreview files={selectedFiles} onRemove={handleRemoveFile} />
+              <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
               <Textarea
                 ref={textareaRef}
                 value={input}

@@ -117,11 +117,7 @@ export async function chunkDocuments(
       },
     };
   } catch (error) {
-    console.error('Error chunking documents:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error chunking documents',
-    };
+    throw new Error(`Error chunking documents: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     freeEncoder();
   }

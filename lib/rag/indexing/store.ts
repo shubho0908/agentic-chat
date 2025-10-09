@@ -5,6 +5,7 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import type { Document } from '@langchain/core/documents';
 import { ensureDocumentsCollection, collectionExists } from '../storage/qdrant-init';
 import { RAG_CONFIG } from '../config';
+import { RAGError, RAGErrorCode } from '../common/errors';
 
 function getEmbeddings() {
   return new OpenAIEmbeddings({
@@ -32,13 +33,25 @@ export async function addDocumentsToQdrant(
     },
   }));
 
+  interface QdrantStoreConfig {
+    url: string;
+    collectionName: string;
+    apiKey?: string;
+  }
+
+  const qdrantConfig: QdrantStoreConfig = {
+    url: RAG_CONFIG.qdrant.url,
+    collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
+  };
+
+  if (RAG_CONFIG.qdrant.apiKey) {
+    qdrantConfig.apiKey = RAG_CONFIG.qdrant.apiKey;
+  }
+
   await QdrantVectorStore.fromDocuments(
     docsWithMetadata,
     getEmbeddings(),
-    {
-      url: RAG_CONFIG.qdrant.url,
-      collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
-    }
+    qdrantConfig
   );
 }
 
@@ -61,6 +74,10 @@ export async function deleteDocumentChunks(attachmentId: string): Promise<void> 
     if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return;
     }
-    throw error;
+    throw new RAGError(
+      `Error deleting document chunks: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.QDRANT_DELETE_FAILED,
+      error
+    );
   }
 }

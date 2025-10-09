@@ -41,12 +41,24 @@ export async function searchDocumentChunks(
     });
   }
 
+  interface QdrantStoreConfig {
+    url: string;
+    collectionName: string;
+    apiKey?: string;
+  }
+
+  const qdrantConfig: QdrantStoreConfig = {
+    url: RAG_CONFIG.qdrant.url,
+    collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
+  };
+
+  if (RAG_CONFIG.qdrant.apiKey) {
+    qdrantConfig.apiKey = RAG_CONFIG.qdrant.apiKey;
+  }
+
   const vectorStore = await QdrantVectorStore.fromExistingCollection(
     getEmbeddings(),
-    {
-      url: RAG_CONFIG.qdrant.url,
-      collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
-    }
+    qdrantConfig
   );
 
   const results = await vectorStore.similaritySearch(query, limit, filter);

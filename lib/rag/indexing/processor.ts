@@ -39,12 +39,8 @@ export async function downloadFile(fileUrl: string): Promise<string> {
 }
 
 export async function cleanupFile(filePath: string): Promise<void> {
-  try {
-    const fs = await import('fs/promises');
-    await fs.unlink(filePath);
-  } catch (error) {
-    console.error('Error cleaning up file:', error);
-  }
+  const fs = await import('fs/promises');
+  await fs.unlink(filePath);
 }
 
 export async function processDocument(
@@ -185,12 +181,7 @@ export async function reprocessDocument(
 
     return await processDocument(attachmentId, userId);
   } catch (error) {
-    console.error('Error reprocessing document:', error);
-    return {
-      success: false,
-      attachmentId,
-      error: error instanceof Error ? error.message : 'Unknown error reprocessing document',
-    };
+    throw new Error(`Error reprocessing document: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -210,10 +201,6 @@ export async function deleteDocument(
       return { success: false, error: error.message };
     }
     
-    console.error('Error deleting document:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error deleting document',
-    };
+    throw new Error(`Error deleting document: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
