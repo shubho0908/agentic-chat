@@ -1,58 +1,94 @@
-import { memo, useState } from "react";
-import Image from "next/image";
-import { Maximize2, FileText, FileSpreadsheet, File as FileIcon } from "lucide-react";
-import type { Message } from "@/lib/schemas/chat";
+import { memo, useState, useMemo, useCallback } from "react";
+import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { OpenAIIcon } from "@/components/icons/openai-icon";
 import { OPENAI_MODELS } from "@/constants/openai-models";
 import { Response } from "../ai-elements/response";
-import { ImageLightbox } from "./imageLightbox";
-import { DocumentPreview } from "./documentPreview";
 import { extractTextFromContent } from "@/lib/content-utils";
-import { filterImageAttachments, filterDocumentAttachments } from "@/lib/attachment-utils";
+import { MessageHeader } from "./messageHeader";
+import { MessageEditForm } from "./messageEditForm";
+import { VersionNavigator } from "./versionNavigator";
+import { AttachmentDisplay } from "./attachmentDisplay";
+import { MessageActions } from "./messageActions";
 
 interface ChatMessageProps {
   message: Message;
   userName?: string | null;
+  onEdit?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
+  onRegenerate?: (messageId: string) => void;
+  isLoading?: boolean;
 }
 
-function formatTimestamp(timestamp?: number): string {
-  if (!timestamp) return "";
-  
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function ChatMessageComponent({ message, userName }: ChatMessageProps) {
+function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoading }: ChatMessageProps) {
   const isUser = message.role === "user";
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
-  const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [versionIndex, setVersionIndex] = useState(-1);
+  
+  const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
+  const totalVersions = versions.length;
+  const currentVersion = versionIndex === -1 ? totalVersions : versionIndex + 1;
+  
+  const displayedMessage = useMemo<Message>(
+    () => versionIndex === -1 ? message : (versions[versionIndex] || message),
+    [versionIndex, message, versions]
+  );
+  
+  const displayedContent = displayedMessage.content;
+  const displayedAttachments = displayedMessage.attachments;
+
+  const modelName = useMemo(
+    () => message.model
+      ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
+      : "AI Assistant",
+    [message.model]
+  );
+
+  const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
+  const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
+  
+  const handleEditStart = useCallback(() => {
+    setEditText(textContent);
+    setIsEditing(true);
+  }, [textContent]);
+  
+  const handleEditCancel = useCallback(() => {
+    setIsEditing(false);
+    setEditText("");
+  }, []);
+  
+  const handleEditSubmit = useCallback(() => {
+    if (!editText.trim() || !displayedMessage.id || !onEdit) return;
+    onEdit(displayedMessage.id, editText, displayedAttachments);
+    setIsEditing(false);
+    setEditText("");
+    setVersionIndex(-1);
+  }, [editText, displayedMessage.id, displayedAttachments, onEdit]);
+  
+  const handlePreviousVersion = useCallback(() => {
+    if (versionIndex === -1) {
+      if (versions.length > 0) {
+        setVersionIndex(versions.length - 1);
+      }
+    } else if (versionIndex > 0) {
+      setVersionIndex(versionIndex - 1);
+    }
+  }, [versionIndex, versions.length]);
+  
+  const handleNextVersion = useCallback(() => {
+    if (versionIndex === -1) return;
+    
+    if (versionIndex === versions.length - 1) {
+      setVersionIndex(-1);
+    } else {
+      setVersionIndex(versionIndex + 1);
+    }
+  }, [versionIndex, versions.length]);
+  
+  const isThinking = !textContent && !displayedMessage.content;
   
   if (message.role === "system") return null;
-
-  const modelName = message.model
-    ? OPENAI_MODELS.find((m) => m.id === message.model)?.name || message.model
-    : "AI Assistant";
-
-  const userInitial = userName?.charAt(0).toUpperCase() || "U";
-  
-  const textContent = extractTextFromContent(message.content);
-  const imageAttachments = filterImageAttachments(message.attachments);
-  const documentAttachments = filterDocumentAttachments(message.attachments);
-  
-  const getDocumentIcon = (fileType: string, fileName: string) => {
-    if (fileType === "application/pdf" || fileName.endsWith(".pdf")) {
-      return <FileText className="size-5" />;
-    }
-    if (fileType.includes("spreadsheet") || fileName.match(/\.(xlsx?|csv)$/)) {
-      return <FileSpreadsheet className="size-5" />;
-    }
-    if (fileType.includes("wordprocessingml") || fileName.endsWith(".docx")) {
-      return <FileText className="size-5" />;
-    }
-    return <FileIcon className="size-5" />;
-  };
 
   return (
     <div
@@ -81,92 +117,62 @@ function ChatMessageComponent({ message, userName }: ChatMessageProps) {
           </div>
 
           <div className="flex-1 space-y-2 overflow-hidden">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">
-                {isUser ? (userName || "User") : modelName}
-              </span>
-              {message.timestamp && (
-                <span className="text-xs text-muted-foreground">
-                  {formatTimestamp(message.timestamp)}
-                </span>
-              )}
-            </div>
-
-            {imageAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-3 mt-3">
-                {imageAttachments.map((attachment, idx) => (
-                  <div 
-                    key={attachment.id || `${message.id}-img-${idx}`} 
-                    className="group relative w-56 h-56 rounded-xl overflow-hidden border-2 border-border/60 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1 cursor-pointer"
-                    onClick={() => setLightboxImage(attachment.fileUrl)}
-                  >
-                    <Image
-                      src={attachment.fileUrl}
-                      alt={attachment.fileName}
-                      fill
-                      sizes="(max-width: 768px) 224px, 224px"
-                      className="object-cover"
-                      unoptimized
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    <div className="absolute bottom-0 left-0 right-0 p-3 text-white text-xs font-medium truncate opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                      {attachment.fileName}
-                    </div>
-                    <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100">
-                      <Maximize2 className="size-4 text-white" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {documentAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-3 mt-3">
-                {documentAttachments.map((attachment, idx) => (
-                  <div 
-                    key={attachment.id || `${message.id}-doc-${idx}`} 
-                    className="group relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-border/60 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer min-w-[200px] max-w-[280px]"
-                    onClick={() => setPreviewDocument({ url: attachment.fileUrl, name: attachment.fileName, type: attachment.fileType })}
-                  >
-                    <div className="flex-shrink-0 p-2 rounded-lg bg-background/80 border border-border/50">
-                      {getDocumentIcon(attachment.fileType, attachment.fileName)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{attachment.fileName}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {(attachment.fileSize / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            <ImageLightbox
-              imageUrl={lightboxImage || ""}
-              alt="Image preview"
-              open={!!lightboxImage}
-              onClose={() => setLightboxImage(null)}
+            <MessageHeader
+              isUser={isUser}
+              userName={userName}
+              modelName={modelName}
+              timestamp={displayedMessage.timestamp}
             />
 
-            <DocumentPreview
-              fileUrl={previewDocument?.url || ""}
-              fileName={previewDocument?.name || ""}
-              fileType={previewDocument?.type || ""}
-              open={!!previewDocument}
-              onClose={() => setPreviewDocument(null)}
+            <AttachmentDisplay
+              attachments={displayedAttachments}
+              messageId={message.id}
             />
 
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              {textContent ? (
-                <Response>{textContent}</Response>
-              ) : message.content ? (
-                <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
-              ) : (
-                <AIThinkingAnimation model={message.model} />
-              )}
-            </div>
+            {isEditing ? (
+              <MessageEditForm
+                editText={editText}
+                onEditTextChange={setEditText}
+                onSubmit={handleEditSubmit}
+                onCancel={handleEditCancel}
+              />
+            ) : (
+              <>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  {textContent ? (
+                    <Response>{textContent}</Response>
+                  ) : message.content ? (
+                    <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
+                  ) : (
+                    <AIThinkingAnimation model={message.model} />
+                  )}
+                </div>
+                
+                {totalVersions > 0 && (
+                  <VersionNavigator
+                    currentVersion={currentVersion}
+                    totalVersions={totalVersions}
+                    historyIndex={versionIndex}
+                    historyLength={versions.length}
+                    onPrevious={handlePreviousVersion}
+                    onNext={handleNextVersion}
+                  />
+                )}
+                
+                <div className="mt-2">
+                  <MessageActions
+                    isUser={isUser}
+                    isEditing={isEditing}
+                    textContent={textContent}
+                    onEditStart={handleEditStart}
+                    canEdit={!!onEdit}
+                    onRegenerate={onRegenerate && message.id ? () => onRegenerate(message.id!) : undefined}
+                    isThinking={isThinking}
+                    isLoading={isLoading}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -174,4 +180,14 @@ function ChatMessageComponent({ message, userName }: ChatMessageProps) {
   );
 }
 
-export const ChatMessage = memo(ChatMessageComponent);
+export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.versions?.length === nextProps.message.versions?.length &&
+    prevProps.userName === nextProps.userName &&
+    prevProps.isLoading === nextProps.isLoading &&
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onRegenerate === nextProps.onRegenerate
+  );
+});

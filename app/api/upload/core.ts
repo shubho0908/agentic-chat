@@ -41,12 +41,6 @@ export const ourFileRouter = {
       return { userId, [UTFiles]: fileOverrides };
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      console.log("RAG document upload complete for userId:", metadata.userId);
-      console.log("File url:", file.ufsUrl);
-      console.log("File name:", file.name);
-      console.log("File type:", file.type);
-      console.log("Custom ID:", file.customId);
-
       return { 
         uploadedBy: metadata.userId, 
         url: file.ufsUrl,

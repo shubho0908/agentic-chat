@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import type { Message } from "@/lib/schemas/chat";
+import type { Message, Attachment } from "@/lib/schemas/chat";
 import { ChatMessage } from "./chatMessage";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
@@ -9,9 +9,11 @@ interface ChatContainerProps {
   messages: Message[];
   isLoading: boolean;
   userName?: string | null;
+  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
+  onRegenerateMessage?: (messageId: string) => void;
 }
 
-export function ChatContainer({ messages, isLoading, userName }: ChatContainerProps) {
+export function ChatContainer({ messages, isLoading, userName, onEditMessage, onRegenerateMessage }: ChatContainerProps) {
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const isSharePage = pathname.startsWith("/share/");
@@ -32,7 +34,13 @@ export function ChatContainer({ messages, isLoading, userName }: ChatContainerPr
             key={message.id || `${message.role}-${index}`}
             ref={index === messages.length - 1 ? lastMessageRef : undefined}
           >
-            <ChatMessage message={message} userName={userName} />
+            <ChatMessage 
+              message={message} 
+              userName={userName} 
+              onEdit={onEditMessage} 
+              onRegenerate={onRegenerateMessage}
+              isLoading={isLoading}
+            />
           </div>
         ))}
       </div>

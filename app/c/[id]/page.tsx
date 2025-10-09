@@ -13,6 +13,7 @@ import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
+import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/message-utils";
 
 export default function ChatPage({
   params,
@@ -24,18 +25,15 @@ export default function ChatPage({
   const { toggleSharing, isToggling } = useConversations();
   
   const initialMessages = useMemo(() => {
-    return conversationData?.messages.items.map(msg => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      timestamp: new Date(msg.createdAt).getTime(),
-      attachments: msg.attachments || [],
-    })) || [];
+    if (!conversationData?.messages.items) return [];
+    
+    const dbMessages = convertDbMessagesToFrontend(conversationData.messages.items);
+    return flattenMessageTree(dbMessages);
   }, [conversationData?.messages.items]);
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
-  const { messages, isLoading, sendMessage, stopGeneration, clearChat } = useChat({
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat } = useChat({
     initialMessages,
     conversationId,
   });
@@ -114,6 +112,8 @@ export default function ChatPage({
         messages={messages} 
         isLoading={isLoading}
         userName={session?.user?.name}
+        onEditMessage={editMessage}
+        onRegenerateMessage={regenerateResponse}
       />
       <ChatInput
         onSend={handleSendMessage}
