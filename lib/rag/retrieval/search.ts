@@ -23,7 +23,7 @@ export async function searchDocumentChunks(
 ) {
   await ensureDocumentsCollection();
 
-  const { limit = RAG_CONFIG.search.defaultLimit, attachmentIds } = options;
+  const { limit = RAG_CONFIG.search.defaultLimit, scoreThreshold = RAG_CONFIG.search.scoreThreshold, attachmentIds } = options;
 
   const filter: {
     must: Array<{
@@ -61,15 +61,17 @@ export async function searchDocumentChunks(
     qdrantConfig
   );
 
-  const results = await vectorStore.similaritySearch(query, limit, filter);
+  const resultsWithScores = await vectorStore.similaritySearchWithScore(query, limit, filter);
 
-  return results.map((result) => ({
-    content: result.pageContent,
-    score: 1, 
-    metadata: {
-      attachmentId: result.metadata.attachmentId as string,
-      fileName: result.metadata.fileName as string,
-      page: result.metadata.loc?.pageNumber || result.metadata.page,
-    },
-  }));
+  return resultsWithScores
+    .filter(([, score]) => score >= scoreThreshold)
+    .map(([result, score]) => ({
+      content: result.pageContent,
+      score, 
+      metadata: {
+        attachmentId: result.metadata.attachmentId as string,
+        fileName: result.metadata.fileName as string,
+        page: result.metadata.loc?.pageNumber || result.metadata.page,
+      },
+    }));
 }
