@@ -1,0 +1,76 @@
+import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
+import { extractTextFromContent } from "@/lib/content-utils";
+import { type CacheCheckResult } from "./types";
+
+export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
+  return !attachments || attachments.length === 0;
+}
+
+export function buildCacheQuery(
+  messages: Message[], 
+  newContent: string | MessageContentPart[],
+  options?: { includeVersionInfo?: boolean }
+): string {
+  const { includeVersionInfo = true } = options || {};
+  
+  const textOnlyMessages = messages
+    .filter(m => !m.attachments || m.attachments.length === 0)
+    .slice(-4);
+
+  const contextParts = textOnlyMessages.map(m => {
+    const text = extractTextFromContent(m.content);
+    const versionInfo = includeVersionInfo && m.versions && m.versions.length > 0 
+      ? `[v${m.siblingIndex || 0}]` 
+      : '';
+    return `${m.role.toLowerCase()}${versionInfo}: ${text}`;
+  });
+  
+  const newText = extractTextFromContent(newContent);
+  contextParts.push(`user: ${newText}`);
+  return contextParts.join('\n');
+}
+
+export async function checkCache(
+  query: string,
+  signal: AbortSignal
+): Promise<CacheCheckResult> {
+  try {
+    const response = await fetch("/api/cache/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+      signal,
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (err) {
+    console.error("Cache check failed:", err);
+  }
+  return { cached: false };
+}
+
+export interface CacheCheckContext {
+  messages: Message[];
+  content: string | MessageContentPart[];
+  attachments?: Attachment[];
+  abortSignal: AbortSignal;
+}
+
+export async function performCacheCheck(
+  context: CacheCheckContext
+): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
+  const { messages, content, attachments, abortSignal } = context;
+  
+  const useCaching = shouldUseSemanticCache(attachments);
+  let cacheQuery = '';
+  let cacheData: CacheCheckResult = { cached: false };
+
+  if (useCaching) {
+    cacheQuery = buildCacheQuery(messages, content);
+    cacheData = await checkCache(cacheQuery, abortSignal);
+  }
+
+  return { cacheQuery, cacheData };
+}

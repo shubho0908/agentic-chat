@@ -122,7 +122,6 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
               userName={userName}
               modelName={modelName}
               timestamp={displayedMessage.timestamp}
-              editHistory={versions.length > 0 ? versions : undefined}
             />
 
             <AttachmentDisplay
@@ -167,7 +166,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                     textContent={textContent}
                     onEditStart={handleEditStart}
                     canEdit={!!onEdit}
-                    onRegenerate={message.id ? () => onRegenerate?.(message.id!) : undefined}
+                    onRegenerate={onRegenerate && message.id ? () => onRegenerate(message.id!) : undefined}
                     isThinking={isThinking}
                     isLoading={isLoading}
                   />

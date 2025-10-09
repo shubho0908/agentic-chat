@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -8,6 +8,17 @@ import { Button } from "@/components/ui/button";
 import { ChatContainer } from "@/components/chat/chatContainer";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useLayout } from "@/components/providers/layoutProvider";
+import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/message-utils";
+
+interface SharedMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+  siblingIndex: number;
+  attachments?: Attachment[];
+  versions?: SharedMessage[];
+}
 
 interface SharedConversation {
   id: string;
@@ -18,13 +29,7 @@ interface SharedConversation {
     name: string | null;
     email: string;
   };
-  messages: Array<{
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    createdAt: string;
-    attachments?: Attachment[];
-  }>;
+  messages: SharedMessage[];
 }
 
 async function fetchSharedConversation(conversationId: string): Promise<SharedConversation> {
@@ -61,6 +66,12 @@ export default function SharedConversationPage({
     queryFn: () => fetchSharedConversation(id),
     retry: false,
   });
+
+  const messages: Message[] = useMemo(() => {
+    if (!data?.messages) return [];
+    const dbMessages = convertDbMessagesToFrontend(data.messages);
+    return flattenMessageTree(dbMessages);
+  }, [data?.messages]);
 
   if (isLoading) {
     return (
@@ -126,14 +137,6 @@ export default function SharedConversationPage({
   if (!data) {
     return null;
   }
-
-  const messages: Message[] = data.messages.map(msg => ({
-    id: msg.id,
-    role: msg.role,
-    content: msg.content,
-    timestamp: new Date(msg.createdAt).getTime(),
-    attachments: msg.attachments || [],
-  }));
 
   return (
     <div className="flex h-screen flex-col">

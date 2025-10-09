@@ -1,11 +1,8 @@
-import type { Message } from "@/lib/schemas/chat";
-
 interface MessageHeaderProps {
   isUser: boolean;
   userName?: string | null;
   modelName: string;
   timestamp?: number;
-  editHistory?: Message[];
 }
 
 function formatTimestamp(timestamp?: number): string {
@@ -19,10 +16,7 @@ export function MessageHeader({
   userName,
   modelName,
   timestamp,
-  editHistory,
 }: MessageHeaderProps) {
-  const hasEdits = editHistory && editHistory.length > 0;
-  
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-semibold">
@@ -31,11 +25,6 @@ export function MessageHeader({
       {timestamp && (
         <span className="text-xs text-muted-foreground">
           {formatTimestamp(timestamp)}
-        </span>
-      )}
-      {hasEdits && (
-        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-          edited
         </span>
       )}
     </div>

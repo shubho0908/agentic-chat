@@ -32,12 +32,17 @@ export async function GET(
           }
         },
         messages: {
+          where: {
+            parentMessageId: null,
+            isDeleted: false,
+          },
           orderBy: { createdAt: 'asc' },
           select: {
             id: true,
             role: true,
             content: true,
             createdAt: true,
+            siblingIndex: true,
             attachments: {
               select: {
                 id: true,
@@ -45,6 +50,28 @@ export async function GET(
                 fileName: true,
                 fileType: true,
                 fileSize: true,
+              }
+            },
+            versions: {
+              where: {
+                isDeleted: false,
+              },
+              orderBy: { siblingIndex: 'asc' },
+              select: {
+                id: true,
+                role: true,
+                content: true,
+                createdAt: true,
+                siblingIndex: true,
+                attachments: {
+                  select: {
+                    id: true,
+                    fileUrl: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSize: true,
+                  }
+                }
               }
             }
           }
@@ -63,9 +90,20 @@ export async function GET(
     const transformedConversation = {
       ...conversation,
       messages: conversation.messages.map(msg => ({
-        ...msg,
+        id: msg.id,
         role: msg.role.toLowerCase(),
+        content: msg.content,
+        createdAt: msg.createdAt,
+        siblingIndex: msg.siblingIndex,
         attachments: msg.attachments || [],
+        versions: msg.versions?.map(v => ({
+          id: v.id,
+          role: v.role.toLowerCase(),
+          content: v.content,
+          createdAt: v.createdAt,
+          siblingIndex: v.siblingIndex,
+          attachments: v.attachments || [],
+        })) || [],
       }))
     };
 

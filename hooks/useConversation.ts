@@ -10,6 +10,9 @@ interface ConversationMessage {
   content: string;
   createdAt: string;
   attachments?: Attachment[];
+  siblingIndex?: number;
+  versions?: ConversationMessage[];
+  versionCount?: number;
 }
 
 interface ConversationDetails {
