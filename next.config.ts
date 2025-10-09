@@ -20,6 +20,28 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  serverExternalPackages: [
+    'pdf-parse',
+    'mammoth',
+    'tiktoken',
+    '@langchain/community',
+    '@langchain/textsplitters',
+  ],
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        'pdf-parse': false,
+        'mammoth': false,
+        'tiktoken': false,
+      };
+    }
+
+    return config;
+  },
 };
 
 export default nextConfig;

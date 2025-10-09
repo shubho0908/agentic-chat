@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
-import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { MAX_IMAGE_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { filterFiles, getFileNames } from "@/lib/file-validation";
@@ -40,7 +40,6 @@ export function useChatFileUpload() {
   function handleFilesSelected(files: File[]) {
     const { validImages, unsupportedImages, validDocuments, unsupportedFiles } = filterFiles(files);
     
-    // Show error for completely unsupported files
     if (unsupportedFiles.length > 0) {
       toast.error('Unsupported file format', {
         description: `${getFileNames(unsupportedFiles)} - Only images and documents are supported`,
@@ -48,7 +47,6 @@ export function useChatFileUpload() {
       });
     }
     
-    // Show error for unsupported image formats
     if (unsupportedImages.length > 0) {
       toast.error('Unsupported image format', {
         description: `${getFileNames(unsupportedImages)} - Supported: ${SUPPORTED_IMAGE_EXTENSIONS_DISPLAY}`,
@@ -56,7 +54,6 @@ export function useChatFileUpload() {
       });
     }
     
-    // Accept both images and documents
     const allValidFiles = [...validImages, ...validDocuments];
     
     if (allValidFiles.length === 0) {
@@ -66,11 +63,21 @@ export function useChatFileUpload() {
     setSelectedFiles(prev => {
       const newFiles = [...prev, ...allValidFiles];
       
-      if (newFiles.length > MAX_FILE_ATTACHMENTS) {
+      const imageCount = newFiles.filter(f => f.type.startsWith('image/')).length;
+      const documentCount = newFiles.filter(f => !f.type.startsWith('image/')).length;
+      
+      if (imageCount > MAX_IMAGE_ATTACHMENTS) {
         toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
-          description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files total`,
+          description: `You can only attach up to ${MAX_IMAGE_ATTACHMENTS} images`,
         });
-        return newFiles.slice(0, MAX_FILE_ATTACHMENTS);
+        return prev;
+      }
+      
+      if (documentCount > MAX_DOCUMENT_ATTACHMENTS) {
+        toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
+          description: `You can only attach ${MAX_DOCUMENT_ATTACHMENTS} document at a time`,
+        });
+        return prev;
       }
       
       return newFiles;

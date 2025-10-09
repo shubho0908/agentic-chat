@@ -9,7 +9,7 @@ import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { MAX_IMAGE_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 
 import type { Attachment } from "@/lib/schemas/chat";
@@ -50,10 +50,14 @@ export function ChatInput({
     clearInput,
   } = useChatTextarea(sendMessage);
 
+  const imageCount = selectedFiles.filter(f => f.type.startsWith('image/')).length;
+  const documentCount = selectedFiles.filter(f => !f.type.startsWith('image/')).length;
+  const maxFilesReached = imageCount >= MAX_IMAGE_ATTACHMENTS && documentCount >= MAX_DOCUMENT_ATTACHMENTS;
+
   const { dragState, dropZoneRef, handlers } = useDragAndDrop({
     onFilesDropped: handleFilesSelected,
-    disabled: disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS,
-    maxFiles: MAX_FILE_ATTACHMENTS,
+    disabled: disabled || isLoading || isUploading || maxFilesReached,
+    maxFiles: MAX_IMAGE_ATTACHMENTS + MAX_DOCUMENT_ATTACHMENTS,
     currentFileCount: selectedFiles.length,
   });
 
@@ -113,7 +117,7 @@ export function ChatInput({
             <form onSubmit={handleSubmit} className="relative">
               <DropZone
                 dragState={dragState}
-                disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                disabled={disabled || isLoading || isUploading || maxFilesReached}
                 dropZoneRef={dropZoneRef}
                 handlers={handlers}
               >
@@ -129,14 +133,13 @@ export function ChatInput({
                     placeholder={placeholder}
                     disabled={disabled || isLoading || isUploading}
                     rows={1}
-                    className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-16 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+                    className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-24 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
                   />
 
                   <div className="absolute bottom-3 right-3 flex items-center gap-2">
                     <FileUploadButton
-                      disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                      disabled={disabled || isLoading || isUploading || maxFilesReached}
                       onFilesSelected={handleFilesSelected}
-                      currentFileCount={selectedFiles.length}
                     />
                     <ActionButtons
                       isLoading={isLoading}
@@ -169,7 +172,7 @@ export function ChatInput({
         <form onSubmit={handleSubmit} className="relative">
           <DropZone
             dragState={dragState}
-            disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+            disabled={disabled || isLoading || isUploading || maxFilesReached}
             dropZoneRef={dropZoneRef}
             handlers={handlers}
           >
@@ -185,14 +188,13 @@ export function ChatInput({
                 placeholder={placeholder}
                 disabled={disabled || isLoading || isUploading}
                 rows={1}
-                className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-14 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+                className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-20 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
               />
 
               <div className="absolute bottom-2 right-2 flex items-center gap-1">
                 <FileUploadButton
-                  disabled={disabled || isLoading || isUploading || selectedFiles.length >= MAX_FILE_ATTACHMENTS}
+                  disabled={disabled || isLoading || isUploading || maxFilesReached}
                   onFilesSelected={handleFilesSelected}
-                  currentFileCount={selectedFiles.length}
                 />
                 <ActionButtons
                   isLoading={isLoading}

@@ -57,10 +57,11 @@ export async function handleEditMessage(
     "user",
     messageContent,
     `temp-edit-${Date.now()}`,
-    undefined
+    undefined,
+    attachments
   );
   
-  const updatedVersions = buildUpdatedVersionsList(messageToEdit, newEditedVersion);
+  const updatedVersions = buildUpdatedVersionsList(messageToEdit, newEditedVersion, true);
   
   onMessagesUpdate(() => [
     ...messagesUpToEdit,
@@ -83,7 +84,7 @@ export async function handleEditMessage(
     let updatedMessageId = messageToEdit.id;
     let updatedMessageData: { parentMessageId?: string | null } | null = null;
     if (conversationId && messageToEdit.id) {
-      const updatedMessage = await updateUserMessage(conversationId, messageToEdit.id, messageContent, attachments);
+      const updatedMessage = await updateUserMessage(conversationId, messageToEdit.id, messageContent, attachments, abortSignal);
       if (updatedMessage?.id) {
         updatedMessageId = updatedMessage.id;
         updatedMessageData = { parentMessageId: updatedMessage.parentMessageId };

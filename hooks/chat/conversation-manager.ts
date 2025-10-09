@@ -32,7 +32,9 @@ export function buildMessagesForAPI(
 async function createNewConversation(
   userContent: string | MessageContentPart[],
   assistantContent: string,
-  attachments?: Attachment[]
+  attachments?: Attachment[],
+  earlyCreate: boolean = false,
+  signal?: AbortSignal
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
@@ -40,6 +42,7 @@ async function createNewConversation(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
+      signal,
     });
 
     if (!createResponse.ok) return null;
@@ -47,10 +50,19 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    const userMessageId = await saveUserMessage(conversationId, userContent, attachments);
+    const userMessageId = await saveUserMessage(conversationId, userContent, attachments, signal);
+    
+    if (!userMessageId) {
+      return null;
+    }
+
+    if (earlyCreate) {
+      return { conversationId, userMessageId, assistantMessageId: '' };
+    }
+
     const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent);
 
-    if (!userMessageId || !assistantMessageId) {
+    if (!assistantMessageId) {
       return null;
     }
 
@@ -110,25 +122,29 @@ export async function handleConversationSaving(
   userTimestamp: number,
   queryClient: QueryClient,
   onConversationCreated?: (data: ConversationResult) => void,
-  attachments?: Attachment[]
+  attachments?: Attachment[],
+  earlyCreate: boolean = false,
+  signal?: AbortSignal
 ): Promise<void> {
   if (isNewConversation) {
-    const result = await createNewConversation(userContent, assistantContent, attachments);
+    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal);
 
     if (result && onConversationCreated) {
-      updateQueryCache(
-        queryClient,
-        result.conversationId,
-        userContent,
-        assistantContent,
-        result.userMessageId,
-        result.assistantMessageId,
-        userTimestamp,
-        attachments
-      );
+      if (!earlyCreate && assistantContent) {
+        updateQueryCache(
+          queryClient,
+          result.conversationId,
+          userContent,
+          assistantContent,
+          result.userMessageId,
+          result.assistantMessageId,
+          userTimestamp,
+          attachments
+        );
+      }
       onConversationCreated(result);
     }
-  } else if (currentConversationId) {
+  } else if (currentConversationId && assistantContent) {
     await saveAssistantMessage(currentConversationId, assistantContent);
   }
 }
