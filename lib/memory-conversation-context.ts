@@ -1,15 +1,13 @@
 'use server';
 
-import { qdrantClient } from '@/lib/rag/storage/qdrant-client';
+import { getPgPool } from '@/lib/rag/storage/pgvector-client';
+import { ensurePgVectorTables } from '@/lib/rag/storage/pgvector-init';
 import OpenAI from 'openai';
-import { v4 as uuidv4 } from 'uuid';
 
-const MEMORY_COLLECTION_NAME = process.env.MEMORY_COLLECTION_NAME as string;
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
-const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS as string, 10);
 
-if (!MEMORY_COLLECTION_NAME || !EMBEDDING_MODEL || isNaN(EMBEDDING_DIMENSIONS)) {
-  throw new Error(`[Memory] Missing or invalid environment variables: MEMORY_COLLECTION_NAME=${MEMORY_COLLECTION_NAME}, EMBEDDING_MODEL=${EMBEDDING_MODEL}, EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS}`);
+if (!EMBEDDING_MODEL) {
+  throw new Error(`[Memory] Missing environment variable: EMBEDDING_MODEL`);
 }
 
 let openaiClient: OpenAI | null = null;
@@ -23,29 +21,6 @@ function getOpenAIClient(): OpenAI {
     openaiClient = new OpenAI({ apiKey });
   }
   return openaiClient;
-}
-
-async function ensureCollection(): Promise<void> {
-  try {
-    const collections = await qdrantClient.getCollections();
-    const exists = collections.collections.some(c => c.name === MEMORY_COLLECTION_NAME);
-
-    if (!exists) {
-      await qdrantClient.createCollection(MEMORY_COLLECTION_NAME, {
-        vectors: { size: EMBEDDING_DIMENSIONS, distance: 'Cosine' },
-      });
-      
-      await qdrantClient.createPayloadIndex(MEMORY_COLLECTION_NAME, {
-        field_name: 'userId',
-        field_schema: 'keyword',
-      });
-      
-      console.log('[Memory] Collection created:', MEMORY_COLLECTION_NAME);
-    }
-  } catch (error) {
-    console.error('[Memory] Error ensuring collection:', error);
-    throw error;
-  }
 }
 
 async function generateEmbedding(text: string): Promise<number[]> {
@@ -63,26 +38,18 @@ export async function storeConversationMemory(
   conversationId?: string
 ): Promise<void> {
   try {
-    await ensureCollection();
+    await ensurePgVectorTables();
+    const pool = getPgPool();
 
     const memoryText = `User: ${userMessage}\nAssistant: ${assistantMessage}`;
     const embedding = await generateEmbedding(memoryText);
 
-    await qdrantClient.upsert(MEMORY_COLLECTION_NAME, {
-      wait: true,
-      points: [{
-        id: uuidv4(),
-        vector: embedding,
-        payload: {
-          userId,
-          conversationId: conversationId || null,
-          userMessage,
-          assistantMessage,
-          memory: memoryText,
-          timestamp: new Date().toISOString(),
-        },
-      }],
-    });
+    await pool.query(
+      `INSERT INTO conversation_memory 
+       (user_id, conversation_id, user_message, assistant_message, memory_text, embedding)
+       VALUES ($1, $2, $3, $4, $5, $6::vector)`,
+      [userId, conversationId || null, userMessage, assistantMessage, memoryText, JSON.stringify(embedding)]
+    );
 
     console.log('[Memory] Stored conversation:', {
       userId: userId.substring(0, 8) + '...',
@@ -107,25 +74,37 @@ export async function searchMemories(
   score: number;
 }>> {
   try {
-    await ensureCollection();
+    await ensurePgVectorTables();
+    const pool = getPgPool();
 
     const queryEmbedding = await generateEmbedding(query);
 
-    const results = await qdrantClient.search(MEMORY_COLLECTION_NAME, {
-      vector: queryEmbedding,
-      limit,
-      with_payload: true,
-      filter: {
-        must: [{ key: 'userId', match: { value: userId } }],
-      },
-    });
+    const result = await pool.query(
+      `SELECT 
+        user_message,
+        assistant_message,
+        created_at,
+        conversation_id,
+        1 - (embedding <=> $1::vector) AS score
+       FROM conversation_memory
+       WHERE user_id = $2
+       ORDER BY embedding <=> $1::vector
+       LIMIT $3`,
+      [JSON.stringify(queryEmbedding), userId, limit]
+    );
 
-    const memories = results.map(r => ({
-      userMessage: r.payload?.userMessage as string,
-      assistantMessage: r.payload?.assistantMessage as string,
-      timestamp: r.payload?.timestamp as string,
-      conversationId: r.payload?.conversationId as string | undefined,
-      score: r.score || 0,
+    const memories = result.rows.map((row: {
+      user_message: string;
+      assistant_message: string;
+      created_at: Date;
+      conversation_id: string | null;
+      score: number;
+    }) => ({
+      userMessage: row.user_message,
+      assistantMessage: row.assistant_message,
+      timestamp: row.created_at.toISOString(),
+      conversationId: row.conversation_id || undefined,
+      score: row.score,
     }));
 
     console.log('[Memory] Search results:', {
@@ -204,12 +183,11 @@ export async function getMemoryContext(
 
 export async function clearMemories(userId: string): Promise<void> {
   try {
-    await qdrantClient.delete(MEMORY_COLLECTION_NAME, {
-      wait: true,
-      filter: {
-        must: [{ key: 'userId', match: { value: userId } }],
-      },
-    });
+    const pool = getPgPool();
+    await pool.query(
+      'DELETE FROM conversation_memory WHERE user_id = $1',
+      [userId]
+    );
     console.log('[Memory] Cleared all memories for user:', userId.substring(0, 8) + '...');
   } catch (error) {
     console.error('[Memory] Error clearing memories:', error);
@@ -224,24 +202,29 @@ export async function getAllMemories(userId: string, limit: number = 50): Promis
   timestamp: string;
 }>> {
   try {
-    await ensureCollection();
+    await ensurePgVectorTables();
+    const pool = getPgPool();
 
-    const results = await qdrantClient.scroll(MEMORY_COLLECTION_NAME, {
-      filter: {
-        must: [{ key: 'userId', match: { value: userId } }],
-      },
-      limit,
-      with_payload: true,
-    });
+    const result = await pool.query(
+      `SELECT id, user_message, assistant_message, created_at
+       FROM conversation_memory
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
 
-    return results.points
-      .map(p => ({
-        id: p.id.toString(),
-        userMessage: p.payload?.userMessage as string,
-        assistantMessage: p.payload?.assistantMessage as string,
-        timestamp: p.payload?.timestamp as string,
-      }))
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return result.rows.map((row: {
+      id: string;
+      user_message: string;
+      assistant_message: string;
+      created_at: Date;
+    }) => ({
+      id: row.id,
+      userMessage: row.user_message,
+      assistantMessage: row.assistant_message,
+      timestamp: row.created_at.toISOString(),
+    }));
   } catch (error) {
     console.error('[Memory] Error getting all memories:', error);
     return [];
@@ -250,10 +233,11 @@ export async function getAllMemories(userId: string, limit: number = 50): Promis
 
 export async function deleteMemory(memoryId: string): Promise<boolean> {
   try {
-    await qdrantClient.delete(MEMORY_COLLECTION_NAME, {
-      wait: true,
-      points: [memoryId],
-    });
+    const pool = getPgPool();
+    await pool.query(
+      'DELETE FROM conversation_memory WHERE id = $1',
+      [memoryId]
+    );
     console.log('[Memory] Deleted memory:', memoryId);
     return true;
   } catch (error) {
@@ -268,23 +252,17 @@ export async function updateMemory(
   userId: string
 ): Promise<boolean> {
   try {
-    await ensureCollection();
+    await ensurePgVectorTables();
+    const pool = getPgPool();
     
     const embedding = await generateEmbedding(newMemoryText);
-    const memoryText = newMemoryText;
     
-    await qdrantClient.upsert(MEMORY_COLLECTION_NAME, {
-      wait: true,
-      points: [{
-        id: memoryId,
-        vector: embedding,
-        payload: {
-          userId,
-          memory: memoryText,
-          timestamp: new Date().toISOString(),
-        },
-      }],
-    });
+    await pool.query(
+      `UPDATE conversation_memory 
+       SET memory_text = $1, embedding = $2::vector, created_at = NOW()
+       WHERE id = $3 AND user_id = $4`,
+      [newMemoryText, JSON.stringify(embedding), memoryId, userId]
+    );
     
     console.log('[Memory] Updated memory:', memoryId);
     return true;

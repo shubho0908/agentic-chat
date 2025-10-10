@@ -95,8 +95,8 @@ export async function processDocument(
       metadata: chunk.metadata,
     }));
 
-    const { addDocumentsToQdrant } = await import('./store');
-    await addDocumentsToQdrant(
+    const { addDocumentsToPgVector } = await import('./store');
+    await addDocumentsToPgVector(
       langchainDocs,
       attachmentId,
       userId,

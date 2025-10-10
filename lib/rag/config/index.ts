@@ -1,7 +1,3 @@
-import { getQdrantConfig } from '../storage/qdrant-client';
-
-const qdrantConfig = getQdrantConfig();
-
 export const RAG_CONFIG = {
   chunking: {
     defaultSize: 800,
@@ -38,14 +34,6 @@ export const RAG_CONFIG = {
     defaultLimit: 5,
     scoreThreshold: 0.7,
   },
-  qdrant: {
-    url: qdrantConfig.url,
-    apiKey: qdrantConfig.apiKey,
-    isCloudMode: qdrantConfig.isCloudMode,
-    isLocalMode: qdrantConfig.isLocalMode,
-    documentsCollectionName: process.env.DOCUMENTS_COLLECTION_NAME as string,
-    embeddingDimensions: Number(process.env.EMBEDDING_DIMENSIONS as string),
-  },
   embeddings: {
     model: process.env.EMBEDDING_MODEL as string,
     apiKey: process.env.OPENAI_API_KEY as string,
@@ -61,8 +49,7 @@ export const RAG_CONFIG = {
 
 export function validateRAGConfig(): void {
   const required = [
-    'QDRANT_URL',
-    'DOCUMENTS_COLLECTION_NAME',
+    'DATABASE_URL',
     'EMBEDDING_DIMENSIONS',
     'EMBEDDING_MODEL',
     'OPENAI_API_KEY',
@@ -74,7 +61,8 @@ export function validateRAGConfig(): void {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 
-  if (isNaN(RAG_CONFIG.qdrant.embeddingDimensions)) {
+  const embeddingDimensions = Number(process.env.EMBEDDING_DIMENSIONS);
+  if (isNaN(embeddingDimensions)) {
     throw new Error('EMBEDDING_DIMENSIONS must be a valid number');
   }
 }

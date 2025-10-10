@@ -23,8 +23,6 @@ export interface RAGContextOptions {
   maxWaitTime?: number;
 }
 
-
-
 export async function getRAGContext(
   query: string,
   userId: string,
@@ -120,7 +118,7 @@ export async function getRAGContext(
     }
 
     const context = results
-      .map((result, index) => {
+      .map((result: { content: string; metadata: { fileName: string; page?: number } }, index: number) => {
         const source = result.metadata.fileName;
         const page = result.metadata.page ? ` (Page ${result.metadata.page})` : '';
         return `[Document ${index + 1}: ${source}${page}]\n${result.content}`;
