@@ -62,7 +62,7 @@ export function validateRAGConfig(): void {
   }
 
   const embeddingDimensions = Number(process.env.EMBEDDING_DIMENSIONS);
-  if (isNaN(embeddingDimensions)) {
-    throw new Error('EMBEDDING_DIMENSIONS must be a valid number');
+  if (isNaN(embeddingDimensions) || !Number.isInteger(embeddingDimensions) || embeddingDimensions <= 0) {
+    throw new Error('EMBEDDING_DIMENSIONS must be a positive integer');
   }
 }

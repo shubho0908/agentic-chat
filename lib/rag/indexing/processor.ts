@@ -5,7 +5,7 @@ import { loadDocument, isSupportedForRAG } from './loader';
 import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks } from './store';
 import { getAuthorizedAttachment } from '../auth/attachment';
-import { RAGError, logRAGError } from '../common/errors';
+import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@/lib/generated/prisma';
 
 export interface ProcessDocumentResult {
@@ -92,11 +92,18 @@ export async function processDocument(
 
     const langchainDocs = chunkResult.chunks.map(chunk => ({
       pageContent: chunk.content,
-      metadata: chunk.metadata,
+      metadata: chunk.metadata ?? {},
     }));
 
-    const { addDocumentsToPgVector } = await import('./store');
-    await addDocumentsToPgVector(
+    const storeModule = await import('./store');
+    if (typeof storeModule.addDocumentsToPgVector !== 'function') {
+      throw new RAGError(
+        'addDocumentsToPgVector export is missing or not a function',
+        RAGErrorCode.DATABASE_INIT_ERROR
+      );
+    }
+    
+    await storeModule.addDocumentsToPgVector(
       langchainDocs,
       attachmentId,
       userId,

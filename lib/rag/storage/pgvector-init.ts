@@ -1,6 +1,25 @@
 import { getPgPool, ensurePgVectorExtension, getPgVectorVersion, EMBEDDING_DIMENSIONS } from './pgvector-client';
 import { RAGError, RAGErrorCode } from '../common/errors';
 
+function formatIdentifier(identifier: string): string {
+  return '"' + identifier.replace(/"/g, '""') + '"';
+}
+
+function sqlFormat(template: string, ...args: (string | number)[]): string {
+  let argIndex = 0;
+  return template.replace(/%I/g, () => {
+    if (argIndex >= args.length) {
+      throw new Error('Not enough arguments for format string');
+    }
+    return formatIdentifier(String(args[argIndex++]));
+  }).replace(/%s/g, () => {
+    if (argIndex >= args.length) {
+      throw new Error('Not enough arguments for format string');
+    }
+    return String(args[argIndex++]);
+  });
+}
+
 /**
  * PgVector Table Initialization
  * 
@@ -90,8 +109,6 @@ async function validatePgVectorVersion(): Promise<void> {
       RAGErrorCode.DATABASE_INIT_ERROR
     );
   }
-
-  console.log(`[PgVector] Version ${version} validated for ${EMBEDDING_DIMENSIONS} dimensions`);
 }
 
 
@@ -101,7 +118,9 @@ async function getColumnType(client: ReturnType<typeof getPgPool>, tableName: st
     const result = await client.query(
       `SELECT data_type, udt_name 
        FROM information_schema.columns 
-       WHERE table_name = $1 AND column_name = $2`,
+       WHERE table_name = $1 
+         AND column_name = $2 
+         AND table_schema = current_schema()`,
       [tableName, columnName]
     );
     
@@ -115,8 +134,12 @@ async function getColumnType(client: ReturnType<typeof getPgPool>, tableName: st
     }
     
     return result.rows[0].data_type;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new RAGError(
+      `Failed to check column type: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.DATABASE_INIT_ERROR,
+      error
+    );
   }
 }
 
@@ -126,19 +149,20 @@ async function migrateColumnType(
   columnName: string,
   targetType: string
 ): Promise<void> {
-  console.log(`[PgVector] Migrating ${tableName}.${columnName} to ${targetType}`);
-  
   const indexName = `${tableName}_${columnName}_idx`;
-  await client.query(`DROP INDEX IF EXISTS ${indexName}`);
+  await client.query(sqlFormat('DROP INDEX IF EXISTS %I', indexName));
   
-  const countResult = await client.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+  const countResult = await client.query(sqlFormat('SELECT COUNT(*) as count FROM %I', tableName));
   const hasData = parseInt(countResult.rows[0].count) > 0;
   
   if (hasData) {
-    await client.query(`ALTER TABLE ${tableName} ALTER COLUMN ${columnName} TYPE ${targetType} USING ${columnName}::${targetType}`);
+    await client.query(
+      sqlFormat('ALTER TABLE %I ALTER COLUMN %I TYPE %s USING %I::%s', 
+        tableName, columnName, targetType, columnName, targetType)
+    );
   } else {
-    await client.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`);
-    await client.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${targetType}`);
+    await client.query(sqlFormat('ALTER TABLE %I DROP COLUMN %I', tableName, columnName));
+    await client.query(sqlFormat('ALTER TABLE %I ADD COLUMN %I %s', tableName, columnName, targetType));
   }
 }
 
@@ -156,6 +180,16 @@ export async function ensurePgVectorTables(): Promise<void> {
       const client = getPgPool();
       
       await ensurePgVectorExtension();
+      
+      try {
+        await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+      } catch (error: unknown) {
+        const err = error as { code?: string };
+        if (err.code !== '42710') {
+          // Postgres 13+ has built-in UUID, ignore if pgcrypto unavailable
+        }
+      }
+      
       await validatePgVectorVersion();
 
       const vectorConfig = getVectorTypeAndOps();
@@ -209,53 +243,74 @@ export async function ensurePgVectorTables(): Promise<void> {
       }
 
       // Create HNSW vector indexes with appropriate ops
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS document_chunk_embedding_idx 
-        ON document_chunk 
-        USING hnsw (embedding ${vectorConfig.ops})
-        WITH (m = ${HNSW_M}, ef_construction = ${HNSW_EF_CONSTRUCTION})
-      `);
+      await client.query(
+        sqlFormat(
+          'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',
+          'document_chunk_embedding_idx',
+          'document_chunk',
+          vectorConfig.ops,
+          HNSW_M,
+          HNSW_EF_CONSTRUCTION
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS semantic_cache_embedding_idx 
-        ON semantic_cache 
-        USING hnsw (embedding ${vectorConfig.ops})
-        WITH (m = ${HNSW_M}, ef_construction = ${HNSW_EF_CONSTRUCTION})
-      `);
+      await client.query(
+        sqlFormat(
+          'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',
+          'semantic_cache_embedding_idx',
+          'semantic_cache',
+          vectorConfig.ops,
+          HNSW_M,
+          HNSW_EF_CONSTRUCTION
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS conversation_memory_embedding_idx 
-        ON conversation_memory 
-        USING hnsw (embedding ${vectorConfig.ops})
-        WITH (m = ${HNSW_M}, ef_construction = ${HNSW_EF_CONSTRUCTION})
-      `);
+      await client.query(
+        sqlFormat(
+          'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',
+          'conversation_memory_embedding_idx',
+          'conversation_memory',
+          vectorConfig.ops,
+          HNSW_M,
+          HNSW_EF_CONSTRUCTION
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS document_chunk_metadata_idx 
-        ON document_chunk USING GIN (metadata)
-      `);
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I USING GIN (metadata)', 
+          'document_chunk_metadata_idx',
+          'document_chunk'
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS semantic_cache_user_id_idx 
-        ON semantic_cache (user_id)
-      `);
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (user_id)', 
+          'semantic_cache_user_id_idx',
+          'semantic_cache'
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS semantic_cache_created_at_idx 
-        ON semantic_cache (created_at)
-      `);
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (created_at)', 
+          'semantic_cache_created_at_idx',
+          'semantic_cache'
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS conversation_memory_user_id_idx 
-        ON conversation_memory (user_id)
-      `);
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (user_id)', 
+          'conversation_memory_user_id_idx',
+          'conversation_memory'
+        )
+      );
 
-      await client.query(`
-        CREATE INDEX IF NOT EXISTS conversation_memory_conversation_id_idx 
-        ON conversation_memory (conversation_id)
-      `);
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (conversation_id)', 
+          'conversation_memory_conversation_id_idx',
+          'conversation_memory'
+        )
+      );
 
-      console.log(`[PgVector] All vector tables and indexes ensured using ${vectorType}`);
       initialized = true;
     } catch (error) {
       initializationPromise = null;
