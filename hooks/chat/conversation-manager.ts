@@ -146,5 +146,7 @@ export async function handleConversationSaving(
     }
   } else if (currentConversationId && assistantContent) {
     await saveAssistantMessage(currentConversationId, assistantContent);
+    queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
   }
 }

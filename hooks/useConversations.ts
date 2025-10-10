@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import { HOOK_ERROR_MESSAGES, TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
 
@@ -12,13 +13,23 @@ interface Conversation {
   updatedAt: string;
 }
 
-async function fetchConversations(): Promise<Conversation[]> {
-  const response = await fetch("/api/conversations");
+interface ConversationsResponse {
+  items: Conversation[];
+  nextCursor?: string;
+}
+
+async function fetchConversations({ cursor }: { cursor?: string }): Promise<ConversationsResponse> {
+  const url = new URL("/api/conversations", window.location.origin);
+  url.searchParams.set("limit", "20");
+  if (cursor) {
+    url.searchParams.set("cursor", cursor);
+  }
+  
+  const response = await fetch(url.toString());
   if (!response.ok) {
     throw new Error(HOOK_ERROR_MESSAGES.FAILED_FETCH_CONVERSATIONS);
   }
-  const data = await response.json();
-  return data.items || [];
+  return response.json();
 }
 
 async function createConversation(): Promise<Conversation> {
@@ -75,10 +86,25 @@ async function toggleConversationSharing(id: string, isPublic: boolean): Promise
 export function useConversations() {
   const queryClient = useQueryClient();
 
-  const { data: conversations = [], isLoading, error } = useQuery({
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    error,
+  } = useInfiniteQuery({
     queryKey: ["conversations"],
-    queryFn: fetchConversations,
+    queryFn: ({ pageParam }) => fetchConversations({ cursor: pageParam }),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    staleTime: 30000,
   });
+
+  const conversations = useMemo(
+    () => data?.pages.flatMap((page) => page.items) ?? [],
+    [data]
+  );
 
   const createMutation = useMutation({
     mutationFn: createConversation,
@@ -96,20 +122,30 @@ export function useConversations() {
     onMutate: async (deletedId) => {
       await queryClient.cancelQueries({ queryKey: ["conversations"] });
 
-      const previousConversations = queryClient.getQueryData<Conversation[]>(["conversations"]);
+      const previousData = queryClient.getQueryData(["conversations"]);
 
-      queryClient.setQueryData<Conversation[]>(["conversations"], (old) => 
-        old ? old.filter((conv) => conv.id !== deletedId) : []
-      );
+      queryClient.setQueryData<{
+        pages: ConversationsResponse[];
+        pageParams: (string | undefined)[];
+      }>(["conversations"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((conv) => conv.id !== deletedId),
+          })),
+        };
+      });
 
-      return { previousConversations };
+      return { previousData };
     },
     onSuccess: () => {
       toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATION_DELETED);
     },
     onError: (_error, _deletedId, context) => {
-      if (context?.previousConversations) {
-        queryClient.setQueryData(["conversations"], context.previousConversations);
+      if (context?.previousData) {
+        queryClient.setQueryData(["conversations"], context.previousData);
       }
       toast.error(TOAST_ERROR_MESSAGES.CONVERSATION.FAILED_DELETE);
     },
@@ -121,9 +157,21 @@ export function useConversations() {
   const renameMutation = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => renameConversation(id, title),
     onSuccess: (updatedConversation) => {
-      queryClient.setQueryData<Conversation[]>(["conversations"], (old) => 
-        old ? old.map((conv) => conv.id === updatedConversation.id ? updatedConversation : conv) : []
-      );
+      queryClient.setQueryData<{
+        pages: ConversationsResponse[];
+        pageParams: (string | undefined)[];
+      }>(["conversations"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((conv) =>
+              conv.id === updatedConversation.id ? updatedConversation : conv
+            ),
+          })),
+        };
+      });
       toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATION_RENAMED);
     },
     onError: () => {
@@ -134,9 +182,21 @@ export function useConversations() {
   const toggleSharingMutation = useMutation({
     mutationFn: ({ id, isPublic }: { id: string; isPublic: boolean }) => toggleConversationSharing(id, isPublic),
     onSuccess: (updatedConversation) => {
-      queryClient.setQueryData<Conversation[]>(["conversations"], (old) => 
-        old ? old.map((conv) => conv.id === updatedConversation.id ? updatedConversation : conv) : []
-      );
+      queryClient.setQueryData<{
+        pages: ConversationsResponse[];
+        pageParams: (string | undefined)[];
+      }>(["conversations"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.map((conv) =>
+              conv.id === updatedConversation.id ? updatedConversation : conv
+            ),
+          })),
+        };
+      });
       if (updatedConversation.isPublic) {
         toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATION_SHARED);
       } else {
@@ -152,6 +212,9 @@ export function useConversations() {
     conversations,
     isLoading,
     error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     createConversation: createMutation.mutate,
     deleteConversation: deleteMutation.mutate,
     renameConversation: renameMutation.mutate,

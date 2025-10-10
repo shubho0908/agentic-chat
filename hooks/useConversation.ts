@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { ERROR_CODES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 
@@ -23,22 +24,37 @@ interface ConversationDetails {
   updatedAt: string;
 }
 
-interface ConversationData {
-  conversation: ConversationDetails;
-  messages: {
-    items: ConversationMessage[];
-    nextCursor?: string;
-  };
+interface MessagesPage {
+  items: ConversationMessage[];
+  nextCursor?: string;
 }
 
-async function fetchConversation(conversationId: string): Promise<ConversationData> {
+interface ConversationData {
+  conversation: ConversationDetails;
+  messages: MessagesPage;
+}
+
+async function fetchConversation(
+  conversationId: string,
+  cursor?: string
+): Promise<ConversationData> {
   try {
-    const response = await fetch(`/api/conversations/${conversationId}?versions=true`);
-    
+    const url = new URL(
+      `/api/conversations/${conversationId}`,
+      window.location.origin
+    );
+    url.searchParams.set("versions", "true");
+    url.searchParams.set("limit", "30");
+    if (cursor) {
+      url.searchParams.set("cursor", cursor);
+    }
+
+    const response = await fetch(url.toString());
+
     if (!response) {
       throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
     }
-    
+
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
@@ -48,18 +64,19 @@ async function fetchConversation(conversationId: string): Promise<ConversationDa
       }
       throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
     }
-    
+
     const data = await response.json();
     if (!data) {
       throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
     }
-    
+
     return data;
   } catch (error) {
-    if (error instanceof Error && (
-      error.message === ERROR_CODES.CONVERSATION_NOT_FOUND || 
-      error.message === ERROR_CODES.UNAUTHORIZED
-    )) {
+    if (
+      error instanceof Error &&
+      (error.message === ERROR_CODES.CONVERSATION_NOT_FOUND ||
+        error.message === ERROR_CODES.UNAUTHORIZED)
+    ) {
       throw error;
     }
     throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
@@ -67,15 +84,47 @@ async function fetchConversation(conversationId: string): Promise<ConversationDa
 }
 
 export function useConversation(conversationId: string | null) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: ["conversation", conversationId],
-    queryFn: () => fetchConversation(conversationId!),
+    queryFn: ({ pageParam }) =>
+      fetchConversation(conversationId!, pageParam),
+    getNextPageParam: (lastPage) => lastPage.messages.nextCursor,
+    initialPageParam: undefined as string | undefined,
     enabled: !!conversationId,
     retry: (failureCount, error) => {
-      if (error.message === ERROR_CODES.CONVERSATION_NOT_FOUND || error.message === ERROR_CODES.UNAUTHORIZED) {
+      if (
+        error.message === ERROR_CODES.CONVERSATION_NOT_FOUND ||
+        error.message === ERROR_CODES.UNAUTHORIZED
+      ) {
         return false;
       }
       return failureCount < 2;
     },
+    staleTime: 60000,
   });
+
+  const flattenedData = useMemo(() => {
+    if (!query.data) return undefined;
+
+    const firstPage = query.data.pages[0];
+    const allMessages = query.data.pages
+      .flatMap((page) => page.messages.items)
+      .reverse();
+
+    return {
+      conversation: firstPage.conversation,
+      messages: {
+        items: allMessages,
+        nextCursor: query.data.pages[query.data.pages.length - 1]?.messages.nextCursor,
+      },
+    };
+  }, [query.data]);
+
+  return {
+    ...query,
+    data: flattenedData,
+    fetchNextPage: query.fetchNextPage,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+  };
 }

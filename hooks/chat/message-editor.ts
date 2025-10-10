@@ -185,6 +185,7 @@ export async function handleEditMessage(
         }
         
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
     }
 

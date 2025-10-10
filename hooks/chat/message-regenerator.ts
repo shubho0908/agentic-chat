@@ -164,6 +164,7 @@ export async function handleRegenerateResponse(
         }
         
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
     }
 

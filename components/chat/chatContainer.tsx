@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Loader } from "lucide-react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { ChatMessage } from "./chatMessage";
 import { ScrollArea } from "@/components/ui/scrollArea";
@@ -20,24 +21,94 @@ interface ChatContainerProps {
     hasImages: boolean;
     imageCount: number;
   };
+  hasNextPage?: boolean;
+  fetchNextPage?: () => void;
+  isFetchingNextPage?: boolean;
 }
 
-export function ChatContainer({ messages, isLoading, userName, onEditMessage, onRegenerateMessage, memoryStatus }: ChatContainerProps) {
+export function ChatContainer({ 
+  messages, 
+  isLoading, 
+  userName, 
+  onEditMessage, 
+  onRegenerateMessage, 
+  memoryStatus,
+  hasNextPage,
+  fetchNextPage,
+  isFetchingNextPage
+}: ChatContainerProps) {
   const lastMessageRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
+  const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
   const isSharePage = pathname.startsWith("/share/");
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (shouldScrollToBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isLoading, shouldScrollToBottom]);
+
+  useEffect(() => {
+    if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {
+      const scrollElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+      if (scrollElement) {
+        const newScrollHeight = scrollElement.scrollHeight;
+        const scrollDiff = newScrollHeight - previousScrollHeightRef.current;
+        scrollElement.scrollTop = scrollDiff;
+        previousScrollHeightRef.current = 0;
+      }
+    }
+  }, [isFetchingNextPage]);
 
   function scrollToBottom() {
     lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }
 
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    setShouldScrollToBottom(isNearBottom);
+
+    const isNearTop = scrollTop < 200;
+    if (isNearTop && hasNextPage && !isFetchingNextPage && fetchNextPage) {
+      previousScrollHeightRef.current = scrollHeight;
+      fetchNextPage();
+    }
+  };
+
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
       <div className={cn("flex flex-col md:pt-0", !isSharePage && "pt-20")}>
+        {isFetchingNextPage && (
+          <div className="flex items-center justify-center py-4">
+            <Loader className="size-5 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading older messages...</span>
+          </div>
+        )}
+        {!isFetchingNextPage && hasNextPage && messages.length > 0 && (
+          <div className="flex items-center justify-center py-2">
+            <button
+              onClick={() => {
+                if (fetchNextPage) {
+                  const scrollElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+                  if (scrollElement) {
+                    previousScrollHeightRef.current = scrollElement.scrollHeight;
+                  }
+                  fetchNextPage();
+                }
+              }}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Load older messages
+            </button>
+          </div>
+        )}
         {messages.map((message, index) => (
           <div
             key={message.id || `${message.role}-${index}`}

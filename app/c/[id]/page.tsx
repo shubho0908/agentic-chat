@@ -21,7 +21,14 @@ export default function ChatPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: conversationId } = use(params);
-  const { data: conversationData, error: conversationError, isLoading: isLoadingConversation } = useConversation(conversationId);
+  const { 
+    data: conversationData, 
+    error: conversationError, 
+    isLoading: isLoadingConversation,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage
+  } = useConversation(conversationId);
   const { toggleSharing, isToggling } = useConversations();
   
   const initialMessages = useMemo(() => {
@@ -115,6 +122,9 @@ export default function ChatPage({
         onEditMessage={editMessage}
         onRegenerateMessage={regenerateResponse}
         memoryStatus={memoryStatus}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        isFetchingNextPage={isFetchingNextPage}
       />
       <ChatInput
         onSend={handleSendMessage}
