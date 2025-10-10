@@ -42,11 +42,36 @@ export async function POST(request: NextRequest) {
     }
 
     let enhancedMessages = messages;
+    const memoryStatusInfo = { 
+      hasMemories: false, 
+      hasDocuments: false, 
+      memoryCount: 0, 
+      documentCount: 0,
+      processingDocuments: false,
+      hasImages: false,
+      imageCount: 0
+    };
+    
     try {
       const lastUserMessage = messages[messages.length - 1]?.content || '';
+      
+      // Check if the message contains images
+      let hasImages = false;
+      if (Array.isArray(lastUserMessage)) {
+        const imageCount = lastUserMessage.filter(part => 
+          typeof part === 'object' && part !== null && 'image_url' in part
+        ).length;
+        if (imageCount > 0) {
+          memoryStatusInfo.hasImages = true;
+          memoryStatusInfo.imageCount = imageCount;
+          hasImages = true;
+        }
+      }
+      
       let contextToAdd = '';
       
-      if (lastUserMessage) {
+      // Skip memory/RAG retrieval if images are present - focus on visual analysis
+      if (lastUserMessage && !hasImages) {
         const memoryContext = await getMemoryContext(
           lastUserMessage,
           authUser.id,
@@ -56,6 +81,9 @@ export async function POST(request: NextRequest) {
 
         if (memoryContext) {
           contextToAdd += memoryContext;
+          memoryStatusInfo.hasMemories = true;
+          const memoryMatches = memoryContext.match(/\d+\./g);
+          memoryStatusInfo.memoryCount = memoryMatches?.length || 0;
         }
 
         const ragContext = await getRAGContext(
@@ -72,6 +100,9 @@ export async function POST(request: NextRequest) {
 
         if (ragContext) {
           contextToAdd += ragContext;
+          memoryStatusInfo.hasDocuments = true;
+          const documentMatches = ragContext.match(/\[Document \d+:/g);
+          memoryStatusInfo.documentCount = documentMatches?.length || 0;
         }
 
         if (contextToAdd) {
@@ -98,16 +129,29 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey });
 
     if (stream) {
-      const streamResponse = await openai.chat.completions.create({
-        model,
-        messages: enhancedMessages,
-        stream: true,
-      });
-
       const encoder = new TextEncoder();
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
+            // Send memory/document/image status first
+            if (memoryStatusInfo.hasMemories || memoryStatusInfo.hasDocuments || memoryStatusInfo.hasImages) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                type: 'memory_status',
+                hasMemories: memoryStatusInfo.hasMemories,
+                hasDocuments: memoryStatusInfo.hasDocuments,
+                memoryCount: memoryStatusInfo.memoryCount,
+                documentCount: memoryStatusInfo.documentCount,
+                hasImages: memoryStatusInfo.hasImages,
+                imageCount: memoryStatusInfo.imageCount
+              })}\n\n`));
+            }
+            
+            const streamResponse = await openai.chat.completions.create({
+              model,
+              messages: enhancedMessages,
+              stream: true,
+            });
+            
             for await (const chunk of streamResponse) {
               const text = chunk.choices[0]?.delta?.content || '';
               if (text) {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
-import { generateEmbedding, addToSemanticCache, ensureCollection } from '@/lib/rag/storage/cache';
+import { generateEmbedding, addToSemanticCache } from '@/lib/rag/storage/cache';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 const CacheSaveSchema = z.object({
@@ -25,7 +25,6 @@ export async function POST(req: Request) {
     }
 
     const { query, response } = parsedBody.data;
-    await ensureCollection(3072);
 
     const queryEmbedding = await generateEmbedding(query);
     await addToSemanticCache(query, response, queryEmbedding, user.id);

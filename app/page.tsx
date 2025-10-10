@@ -14,7 +14,7 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 
 function HomeContent() {
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat } = useChat();
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
   const [isConfigured, setIsConfigured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
@@ -77,6 +77,7 @@ function HomeContent() {
         userName={session?.user?.name}
         onEditMessage={editMessage}
         onRegenerateMessage={regenerateResponse}
+        memoryStatus={memoryStatus}
       />
       <ChatInput
         onSend={handleSendMessage}

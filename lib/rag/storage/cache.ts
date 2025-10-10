@@ -1,10 +1,10 @@
 'use server';
 
-import { qdrantClient, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./qdrant-client";
+import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./pgvector-client";
+import { ensurePgVectorTables } from './pgvector-init';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import OpenAI from "openai";
 
-const CACHE_COLLECTION_NAME = process.env.CACHE_COLLECTION_NAME as string;
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
 
 let client: OpenAI | null = null;
@@ -18,35 +18,6 @@ function getOpenAIClient(): OpenAI {
     client = new OpenAI({ apiKey });
   }
   return client;
-}
-
-export async function ensureCollection(embeddingDimension: number) {
-  try {
-    const collections = await qdrantClient.getCollections();
-    const exists = collections.collections.some(
-      (c) => c.name === CACHE_COLLECTION_NAME
-    );
-
-    if (!exists) {
-      await qdrantClient.createCollection(CACHE_COLLECTION_NAME, {
-        vectors: {
-          size: embeddingDimension,
-          distance: "Cosine",
-        },
-      });
-      
-      await qdrantClient.createPayloadIndex(CACHE_COLLECTION_NAME, {
-        field_name: 'userId',
-        field_schema: 'keyword',
-      });
-    }
-  } catch (error) {
-    throw new RAGError(
-      `Error ensuring collection: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.QDRANT_COLLECTION_ERROR,
-      error
-    );
-  }
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
@@ -67,42 +38,36 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 export async function searchSemanticCache(queryEmbedding: number[], userId: string): Promise<string | null> {
   try {
-    const searchResult = await qdrantClient.search(CACHE_COLLECTION_NAME, {
-      vector: queryEmbedding,
-      limit: 1,
-      with_payload: true,
-      filter: {
-        must: [
-          {
-            key: "userId",
-            match: {
-              value: userId
-            }
-          }
-        ]
-      }
-    });
+    await ensurePgVectorTables();
+    const pool = getPgPool();
 
-    if (
-      searchResult.length > 0 &&
-      searchResult[0].score !== undefined &&
-      searchResult[0].score >= SIMILARITY_THRESHOLD
-    ) {
-      const timestamp = searchResult[0].payload?.timestamp as string;
-      const cacheAge = (Date.now() - new Date(timestamp).getTime()) / 1000;
+    const result = await pool.query(
+      `SELECT 
+        answer, 
+        created_at,
+        1 - (embedding <=> $1::vector) AS score
+       FROM semantic_cache
+       WHERE user_id = $2
+       ORDER BY embedding <=> $1::vector
+       LIMIT 1`,
+      [JSON.stringify(queryEmbedding), userId]
+    );
+
+    if (result.rows.length > 0 && result.rows[0].score >= SIMILARITY_THRESHOLD) {
+      const cacheAge = (Date.now() - new Date(result.rows[0].created_at).getTime()) / 1000;
       
       if (cacheAge > CACHE_TTL_SECONDS) {
         return null;
       }
       
-      return searchResult[0].payload?.answer as string;
+      return result.rows[0].answer;
     }
 
     return null;
   } catch (error) {
     throw new RAGError(
       `Error searching semantic cache: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.QDRANT_SEARCH_FAILED,
+      RAGErrorCode.DATABASE_SEARCH_FAILED,
       error
     );
   }
@@ -110,25 +75,18 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
 
 export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userId: string): Promise<void> {
   try {
-    await qdrantClient.upsert(CACHE_COLLECTION_NAME, {
-      wait: true,
-      points: [
-        {
-          id: Date.now(),
-          vector: queryEmbedding,
-          payload: {
-            userId: userId,
-            question: userQuery,
-            answer: answer,
-            timestamp: new Date().toISOString()
-          },
-        },
-      ],
-    });
+    await ensurePgVectorTables();
+    const pool = getPgPool();
+
+    await pool.query(
+      `INSERT INTO semantic_cache (user_id, question, answer, embedding)
+       VALUES ($1, $2, $3, $4::vector)`,
+      [userId, userQuery, answer, JSON.stringify(queryEmbedding)]
+    );
   } catch (error) {
     throw new RAGError(
       `Error adding to semantic cache: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.QDRANT_UPSERT_FAILED,
+      RAGErrorCode.DATABASE_INSERT_FAILED,
       error
     );
   }

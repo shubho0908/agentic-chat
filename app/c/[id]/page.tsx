@@ -33,7 +33,7 @@ export default function ChatPage({
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat } = useChat({
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
   });
@@ -114,6 +114,7 @@ export default function ChatPage({
         userName={session?.user?.name}
         onEditMessage={editMessage}
         onRegenerateMessage={regenerateResponse}
+        memoryStatus={memoryStatus}
       />
       <ChatInput
         onSend={handleSendMessage}

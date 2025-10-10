@@ -1,7 +1,7 @@
 import { type StreamConfig } from "./types";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus } = config;
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -60,6 +60,18 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 
           if (parsed.error) {
             throw new Error(parsed.error);
+          }
+
+          if (parsed.type === 'memory_status' && onMemoryStatus) {
+            onMemoryStatus({
+              hasMemories: parsed.hasMemories,
+              hasDocuments: parsed.hasDocuments,
+              memoryCount: parsed.memoryCount,
+              documentCount: parsed.documentCount || 0,
+              processingDocuments: parsed.processingDocuments,
+              hasImages: parsed.hasImages || false,
+              imageCount: parsed.imageCount || 0,
+            });
           }
 
           if (parsed.content) {

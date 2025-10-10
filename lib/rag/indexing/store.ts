@@ -1,9 +1,10 @@
 'use server';
 
-import { QdrantVectorStore } from '@langchain/qdrant';
+import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import type { Document } from '@langchain/core/documents';
-import { ensureDocumentsCollection, collectionExists } from '../storage/qdrant-init';
+import { ensurePgVectorTables } from '../storage/pgvector-init';
+import { getPgPool } from '../storage/pgvector-client';
 import { RAG_CONFIG } from '../config';
 import { RAGError, RAGErrorCode } from '../common/errors';
 
@@ -14,69 +15,73 @@ function getEmbeddings() {
   });
 }
 
-export async function addDocumentsToQdrant(
+function getVectorStoreConfig() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new RAGError('DATABASE_URL is required', RAGErrorCode.DATABASE_CONFIG_ERROR);
+  }
+  
+  return {
+    postgresConnectionOptions: {
+      type: 'pg' as const,
+      connectionString,
+    },
+    tableName: 'document_chunk',
+    columns: {
+      idColumnName: 'id',
+      vectorColumnName: 'embedding',
+      contentColumnName: 'content',
+      metadataColumnName: 'metadata',
+    },
+  };
+}
+
+export async function addDocumentsToPgVector(
   documents: Document[],
   attachmentId: string,
   userId: string,
   fileName: string
 ): Promise<void> {
-  await ensureDocumentsCollection();
+  await ensurePgVectorTables();
 
-  const docsWithMetadata = documents.map((doc) => ({
-    ...doc,
-    metadata: {
-      ...doc.metadata,
-      userId,
-      attachmentId,
-      fileName,
-      timestamp: new Date().toISOString(),
-    },
-  }));
+  try {
+    const docsWithMetadata = documents.map((doc) => ({
+      ...doc,
+      metadata: {
+        ...doc.metadata,
+        attachmentId,
+        userId,
+        fileName,
+        timestamp: new Date().toISOString(),
+      },
+    }));
 
-  interface QdrantStoreConfig {
-    url: string;
-    collectionName: string;
-    apiKey?: string;
+    await PGVectorStore.fromDocuments(
+      docsWithMetadata,
+      getEmbeddings(),
+      getVectorStoreConfig()
+    );
+  } catch (error) {
+    throw new RAGError(
+      `Error adding documents to pgvector: ${error instanceof Error ? error.message : String(error)}`,
+      RAGErrorCode.VECTOR_STORE_FAILED,
+      error
+    );
   }
-
-  const qdrantConfig: QdrantStoreConfig = {
-    url: RAG_CONFIG.qdrant.url,
-    collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
-  };
-
-  if (RAG_CONFIG.qdrant.apiKey) {
-    qdrantConfig.apiKey = RAG_CONFIG.qdrant.apiKey;
-  }
-
-  await QdrantVectorStore.fromDocuments(
-    docsWithMetadata,
-    getEmbeddings(),
-    qdrantConfig
-  );
 }
 
 export async function deleteDocumentChunks(attachmentId: string): Promise<void> {
   try {
-    const { qdrantClient } = await import('../storage/qdrant-client');
+    const pool = getPgPool();
     
-    const exists = await collectionExists(RAG_CONFIG.qdrant.documentsCollectionName);
-    if (!exists) {
-      return;
-    }
-    
-    await qdrantClient.delete(RAG_CONFIG.qdrant.documentsCollectionName, {
-      wait: true,
-      filter: {
-        must: [{ key: 'attachmentId', match: { value: attachmentId } }],
-      },
-    });
+    await pool.query(
+      `DELETE FROM document_chunk WHERE metadata->>'attachmentId' = $1`,
+      [attachmentId]
+    );
   } catch (error) {
-    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
-      return;
-    }
     throw new RAGError(
       `Error deleting document chunks: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.QDRANT_DELETE_FAILED,
+      RAGErrorCode.DATABASE_DELETE_FAILED,
       error
     );
   }

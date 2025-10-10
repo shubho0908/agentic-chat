@@ -23,6 +23,7 @@ export interface UseChatReturn {
   regenerateResponse: (messageId: string) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
+  memoryStatus?: MemoryStatus;
 }
 
 export interface UpdateMessageResponse {
@@ -56,10 +57,21 @@ export interface MessageHandlerContext {
   onConversationIdUpdate: (id: string) => void;
 }
 
+export interface MemoryStatus {
+  hasMemories: boolean;
+  hasDocuments: boolean;
+  memoryCount: number;
+  documentCount: number;
+  processingDocuments?: boolean;
+  hasImages: boolean;
+  imageCount: number;
+}
+
 export interface StreamConfig {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>;
   model: string;
   signal: AbortSignal;
   onChunk: (fullContent: string) => void;
   conversationId?: string | null;
+  onMemoryStatus?: (status: MemoryStatus) => void;
 }

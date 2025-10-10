@@ -1,8 +1,8 @@
 'use server';
 
-import { QdrantVectorStore } from '@langchain/qdrant';
+import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { ensureDocumentsCollection } from '../storage/qdrant-init';
+import { ensurePgVectorTables } from '../storage/pgvector-init';
 import { RAG_CONFIG } from '../config';
 
 function getEmbeddings() {
@@ -10,6 +10,27 @@ function getEmbeddings() {
     model: RAG_CONFIG.embeddings.model,
     apiKey: RAG_CONFIG.embeddings.apiKey,
   });
+}
+
+function getVectorStoreConfig() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required');
+  }
+  
+  return {
+    postgresConnectionOptions: {
+      type: 'pg' as const,
+      connectionString,
+    },
+    tableName: 'document_chunk',
+    columns: {
+      idColumnName: 'id',
+      vectorColumnName: 'embedding',
+      contentColumnName: 'content',
+      metadataColumnName: 'metadata',
+    },
+  };
 }
 
 export async function searchDocumentChunks(
@@ -21,57 +42,36 @@ export async function searchDocumentChunks(
     attachmentIds?: string[];
   } = {}
 ) {
-  await ensureDocumentsCollection();
+  await ensurePgVectorTables();
 
   const { limit = RAG_CONFIG.search.defaultLimit, scoreThreshold = RAG_CONFIG.search.scoreThreshold, attachmentIds } = options;
 
-  const filter: {
-    must: Array<{
-      key: string;
-      match: { value?: string; any?: string[] };
-    }>;
-  } = {
-    must: [{ key: 'metadata.userId', match: { value: userId } }],
+  const vectorStore = new PGVectorStore(
+    getEmbeddings(),
+    getVectorStoreConfig()
+  );
+  
+  await vectorStore.ensureTableInDatabase();
+
+  const filter: Record<string, string | { $in: string[] }> = {
+    userId,
   };
 
   if (attachmentIds && attachmentIds.length > 0) {
-    filter.must.push({
-      key: 'metadata.attachmentId',
-      match: { any: attachmentIds },
-    });
+    filter.attachmentId = { $in: attachmentIds };
   }
 
-  interface QdrantStoreConfig {
-    url: string;
-    collectionName: string;
-    apiKey?: string;
-  }
+  const results = await vectorStore.similaritySearchWithScore(query, limit, filter);
 
-  const qdrantConfig: QdrantStoreConfig = {
-    url: RAG_CONFIG.qdrant.url,
-    collectionName: RAG_CONFIG.qdrant.documentsCollectionName,
-  };
-
-  if (RAG_CONFIG.qdrant.apiKey) {
-    qdrantConfig.apiKey = RAG_CONFIG.qdrant.apiKey;
-  }
-
-  const vectorStore = await QdrantVectorStore.fromExistingCollection(
-    getEmbeddings(),
-    qdrantConfig
-  );
-
-  const resultsWithScores = await vectorStore.similaritySearchWithScore(query, limit, filter);
-
-  return resultsWithScores
+  return results
     .filter(([, score]) => score >= scoreThreshold)
-    .map(([result, score]) => ({
-      content: result.pageContent,
-      score, 
+    .map(([doc, score]) => ({
+      content: doc.pageContent,
+      score,
       metadata: {
-        attachmentId: result.metadata.attachmentId as string,
-        fileName: result.metadata.fileName as string,
-        page: result.metadata.loc?.pageNumber || result.metadata.page,
+        attachmentId: doc.metadata.attachmentId as string,
+        fileName: doc.metadata.fileName as string,
+        page: doc.metadata.loc?.pageNumber || doc.metadata.page,
       },
     }));
 }
