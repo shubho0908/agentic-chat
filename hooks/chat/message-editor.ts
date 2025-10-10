@@ -10,6 +10,7 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
+import { type MemoryStatus } from "./types";
 
 interface EditMessageContext {
   messages: Message[];
@@ -18,6 +19,7 @@ interface EditMessageContext {
   queryClient: QueryClient;
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
   saveToCacheMutate: (data: { query: string; response: string }) => void;
+  onMemoryStatusUpdate?: (status: MemoryStatus) => void;
 }
 
 export async function handleEditMessage(
@@ -33,6 +35,7 @@ export async function handleEditMessage(
     queryClient,
     onMessagesUpdate,
     saveToCacheMutate,
+    onMemoryStatusUpdate,
   } = context;
 
   const messageIndex = messages.findIndex((m) => m.id === messageId);
@@ -149,6 +152,7 @@ export async function handleEditMessage(
         );
       },
       conversationId,
+      onMemoryStatus: onMemoryStatusUpdate,
     });
 
     if (responseContent && !abortSignal.aborted) {

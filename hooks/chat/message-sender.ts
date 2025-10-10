@@ -9,7 +9,7 @@ import { saveUserMessage, storeMemory } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
-import { type ConversationResult } from "./types";
+import { type ConversationResult, type MemoryStatus } from "./types";
 
 interface SendMessageContext {
   messages: Message[];
@@ -20,6 +20,7 @@ interface SendMessageContext {
   onConversationIdUpdate: (id: string) => void;
   onNavigate: (path: string) => void;
   saveToCacheMutate: (data: { query: string; response: string }) => void;
+  onMemoryStatusUpdate?: (status: MemoryStatus) => void;
 }
 
 export async function handleSendMessage(
@@ -37,6 +38,7 @@ export async function handleSendMessage(
     onConversationIdUpdate,
     onNavigate,
     saveToCacheMutate,
+    onMemoryStatusUpdate,
   } = context;
   
   let shouldNavigate = false;
@@ -168,6 +170,7 @@ export async function handleSendMessage(
         );
       },
       conversationId: currentConversationId,
+      onMemoryStatus: onMemoryStatusUpdate,
     });
 
     assistantContent = responseContent;

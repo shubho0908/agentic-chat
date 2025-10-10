@@ -11,9 +11,18 @@ interface ChatContainerProps {
   userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  memoryStatus?: {
+    hasMemories: boolean;
+    hasDocuments: boolean;
+    memoryCount: number;
+    documentCount: number;
+    processingDocuments?: boolean;
+    hasImages: boolean;
+    imageCount: number;
+  };
 }
 
-export function ChatContainer({ messages, isLoading, userName, onEditMessage, onRegenerateMessage }: ChatContainerProps) {
+export function ChatContainer({ messages, isLoading, userName, onEditMessage, onRegenerateMessage, memoryStatus }: ChatContainerProps) {
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const isSharePage = pathname.startsWith("/share/");
@@ -40,6 +49,7 @@ export function ChatContainer({ messages, isLoading, userName, onEditMessage, on
               onEdit={onEditMessage} 
               onRegenerate={onRegenerateMessage}
               isLoading={isLoading}
+              memoryStatus={index === messages.length - 1 && isLoading ? memoryStatus : undefined}
             />
           </div>
         ))}

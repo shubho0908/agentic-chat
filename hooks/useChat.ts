@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
-import { type UseChatOptions, type UseChatReturn } from "./chat/types";
+import { type UseChatOptions, type UseChatReturn, type MemoryStatus } from "./chat/types";
 import { handleSendMessage } from "./chat/message-sender";
 import { handleEditMessage } from "./chat/message-editor";
 import { handleRegenerateResponse } from "./chat/message-regenerator";
@@ -15,6 +15,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
+  const [memoryStatus, setMemoryStatus] = useState<MemoryStatus | undefined>();
   const abortControllerRef = useRef<AbortController | null>(null);
   const saveToCache = useSaveToCache();
   const router = useRouter();
@@ -40,6 +41,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (!content.trim() || isLoading) return;
 
       setIsLoading(true);
+      setMemoryStatus(undefined);
       abortControllerRef.current = new AbortController();
 
       await handleSendMessage(
@@ -57,6 +59,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           onNavigate: (path: string) => router.replace(path),
           saveToCacheMutate: saveToCache.mutate,
+          onMemoryStatusUpdate: setMemoryStatus,
         },
         session
       );
@@ -72,6 +75,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (isLoading) return;
 
       setIsLoading(true);
+      setMemoryStatus(undefined);
       abortControllerRef.current = new AbortController();
 
       await handleEditMessage(
@@ -85,6 +89,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           queryClient,
           onMessagesUpdate: setMessages,
           saveToCacheMutate: saveToCache.mutate,
+          onMemoryStatusUpdate: setMemoryStatus,
         }
       );
 
@@ -99,6 +104,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (isLoading) return;
 
       setIsLoading(true);
+      setMemoryStatus(undefined);
       abortControllerRef.current = new AbortController();
 
       await handleRegenerateResponse(
@@ -110,6 +116,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           queryClient,
           onMessagesUpdate: setMessages,
           saveToCacheMutate: saveToCache.mutate,
+          onMemoryStatusUpdate: setMemoryStatus,
         }
       );
 
@@ -152,5 +159,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     regenerateResponse,
     clearChat,
     stopGeneration,
+    memoryStatus,
   };
 }

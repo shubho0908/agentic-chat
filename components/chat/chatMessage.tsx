@@ -17,9 +17,18 @@ interface ChatMessageProps {
   onEdit?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerate?: (messageId: string) => void;
   isLoading?: boolean;
+  memoryStatus?: {
+    hasMemories: boolean;
+    hasDocuments: boolean;
+    memoryCount: number;
+    documentCount: number;
+    processingDocuments?: boolean;
+    hasImages: boolean;
+    imageCount: number;
+  };
 }
 
-function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoading }: ChatMessageProps) {
+function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoading, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === "user";
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -138,7 +147,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                   ) : message.content ? (
                     <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
-                    <AIThinkingAnimation model={message.model} />
+                    <AIThinkingAnimation model={message.model} memoryStatus={memoryStatus} />
                   )}
                 </div>
                 
@@ -182,6 +191,13 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevProps.userName === nextProps.userName &&
     prevProps.isLoading === nextProps.isLoading &&
     prevProps.onEdit === nextProps.onEdit &&
-    prevProps.onRegenerate === nextProps.onRegenerate
+    prevProps.onRegenerate === nextProps.onRegenerate &&
+    prevProps.memoryStatus?.hasMemories === nextProps.memoryStatus?.hasMemories &&
+    prevProps.memoryStatus?.hasDocuments === nextProps.memoryStatus?.hasDocuments &&
+    prevProps.memoryStatus?.memoryCount === nextProps.memoryStatus?.memoryCount &&
+    prevProps.memoryStatus?.documentCount === nextProps.memoryStatus?.documentCount &&
+    prevProps.memoryStatus?.processingDocuments === nextProps.memoryStatus?.processingDocuments &&
+    prevProps.memoryStatus?.hasImages === nextProps.memoryStatus?.hasImages &&
+    prevProps.memoryStatus?.imageCount === nextProps.memoryStatus?.imageCount
   );
 });
