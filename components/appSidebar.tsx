@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { MessageSquare, Plus, Trash2, MoreHorizontal, Loader, Pencil, Share2 } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sidebar,
   SidebarContent,
@@ -43,18 +44,50 @@ export function AppSidebar() {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const currentConversationId = pathname.startsWith("/c/") ? pathname.split("/c/")[1] : null;
+  const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const parentRef = React.useRef<HTMLDivElement>(null);
 
   const {
     conversations,
     isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
     deleteConversation,
     renameConversation,
     toggleSharing,
     isRenaming,
     isToggling,
   } = useConversations();
+
+  const virtualizer = useVirtualizer({
+    count: conversations.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 72,
+    overscan: 5,
+  });
+
+  React.useEffect(() => {
+    const virtualItems = virtualizer.getVirtualItems();
+    const [lastItem] = [...virtualItems].reverse();
+    
+    if (!lastItem) return;
+    
+    if (
+      lastItem.index >= conversations.length - 1 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage();
+    }
+  }, [
+    hasNextPage,
+    fetchNextPage,
+    conversations.length,
+    isFetchingNextPage,
+    virtualizer,
+  ]);
 
   const handleNewChat = () => {
     router.push("/");
@@ -113,106 +146,138 @@ export function AppSidebar() {
       </SidebarHeader>
       <Separator />
       <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden">
-        <SidebarContent className="flex-1 scrollbar-hide">
+        <SidebarContent ref={parentRef} className="flex-1 scrollbar-hide">
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-2">
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
+              {isLoading ? (
+                <SidebarMenu className="gap-2">
+                  {Array.from({ length: 5 }).map((_, index) => (
                     <SidebarMenuItem key={index}>
                       <SidebarMenuSkeleton />
                     </SidebarMenuItem>
-                  ))
-                ) : conversations.length === 0 ? (
-                  <div className="px-3 py-6 text-sm text-muted-foreground text-center">
-                    No conversations yet
-                  </div>
-                ) : (
-                  conversations.map((conversation) => {
-                    const isDeleting = deletingId === conversation.id;
-                    return (
-                      <SidebarMenuItem key={conversation.id} className={isDeleting ? "opacity-50 pointer-events-none" : ""}>
-                        <SidebarMenuButton asChild isActive={currentConversationId === conversation.id} disabled={isDeleting}>
-                          <Link href={`/c/${conversation.id}`} className={`py-3 px-3 ${isDeleting ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                            {isDeleting ? (
-                              <Loader className="size-4 shrink-0 animate-spin" />
-                            ) : null}
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <span className="truncate font-medium">{conversation.title}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(conversation.updatedAt), {
-                                  addSuffix: true,
-                                })}
-                              </span>
-                            </div>
-                          </Link>
-                        </SidebarMenuButton>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild disabled={isDeleting}>
-                            <SidebarMenuAction className="cursor-pointer" showOnHover>
+                  ))}
+                </SidebarMenu>
+              ) : conversations.length === 0 ? (
+                <div className="px-3 py-6 text-sm text-muted-foreground text-center">
+                  No conversations yet
+                </div>
+              ) : (
+                <div
+                  style={{
+                    height: `${virtualizer.getTotalSize()}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  <SidebarMenu
+                    className="gap-2"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((virtualItem) => {
+                      const conversation = conversations[virtualItem.index];
+                      const isDeleting = deletingId === conversation.id;
+                      return (
+                        <SidebarMenuItem
+                          key={conversation.id}
+                          data-index={virtualItem.index}
+                          ref={virtualizer.measureElement}
+                          className={isDeleting ? "opacity-50 pointer-events-none" : ""}
+                        >
+                          <SidebarMenuButton asChild isActive={currentConversationId === conversation.id} disabled={isDeleting}>
+                            <Link href={`/c/${conversation.id}`} className={`py-3 px-3 ${isDeleting ? "cursor-not-allowed" : "cursor-pointer"}`}>
                               {isDeleting ? (
-                                <Loader className="size-4 animate-spin" />
-                              ) : (
-                                <MoreHorizontal />
-                              )}
-                              <span className="sr-only">More</span>
-                            </SidebarMenuAction>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent side="right" align="start">
-                            <RenameDialog
-                              conversationId={conversation.id}
-                              currentTitle={conversation.title}
-                              onRename={(id, title) => renameConversation({ id, title })}
-                              isRenaming={isRenaming}
-                              trigger={
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  className="cursor-pointer"
-                                >
-                                  <Pencil className="mr-2 size-4" />
-                                  Rename
-                                </DropdownMenuItem>
-                              }
-                            />
-                            <ShareDialog
-                              conversationId={conversation.id}
-                              isPublic={conversation.isPublic}
-                              onToggleSharing={(id, isPublic) => toggleSharing({ id, isPublic })}
-                              isToggling={isToggling}
-                              trigger={
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  className="cursor-pointer"
-                                >
-                                  <Share2 className="mr-2 size-4" />
-                                  Share
-                                </DropdownMenuItem>
-                              }
-                            />
-                            <DropdownMenuSeparator />
-                            <DeleteDialog
-                              conversationId={conversation.id}
-                              conversationTitle={conversation.title}
-                              onDelete={handleDeleteConversation}
-                              isDeleting={isDeleting}
-                              trigger={
-                                <DropdownMenuItem
-                                  onSelect={(e) => e.preventDefault()}
-                                  className="text-destructive cursor-pointer"
-                                  disabled={isDeleting}
-                                >
-                                  <Trash2 className="mr-2 size-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              }
-                            />
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                                <Loader className="size-4 shrink-0 animate-spin" />
+                              ) : null}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <span className="truncate font-medium">{conversation.title}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDistanceToNow(new Date(conversation.updatedAt), {
+                                    addSuffix: true,
+                                  })}
+                                </span>
+                              </div>
+                            </Link>
+                          </SidebarMenuButton>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild disabled={isDeleting}>
+                              <SidebarMenuAction className="cursor-pointer" showOnHover>
+                                {isDeleting ? (
+                                  <Loader className="size-4 animate-spin" />
+                                ) : (
+                                  <MoreHorizontal />
+                                )}
+                                <span className="sr-only">More</span>
+                              </SidebarMenuAction>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent side="right" align="start">
+                              <RenameDialog
+                                conversationId={conversation.id}
+                                currentTitle={conversation.title}
+                                onRename={(id, title) => renameConversation({ id, title })}
+                                isRenaming={isRenaming}
+                                trigger={
+                                  <DropdownMenuItem
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="cursor-pointer"
+                                  >
+                                    <Pencil className="mr-2 size-4" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                }
+                              />
+                              <ShareDialog
+                                conversationId={conversation.id}
+                                isPublic={conversation.isPublic}
+                                onToggleSharing={(id, isPublic) => toggleSharing({ id, isPublic })}
+                                isToggling={isToggling}
+                                trigger={
+                                  <DropdownMenuItem
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="cursor-pointer"
+                                  >
+                                    <Share2 className="mr-2 size-4" />
+                                    Share
+                                  </DropdownMenuItem>
+                                }
+                              />
+                              <DropdownMenuSeparator />
+                              <DeleteDialog
+                                conversationId={conversation.id}
+                                conversationTitle={conversation.title}
+                                onDelete={handleDeleteConversation}
+                                isDeleting={isDeleting}
+                                trigger={
+                                  <DropdownMenuItem
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="text-destructive cursor-pointer"
+                                    disabled={isDeleting}
+                                  >
+                                    <Trash2 className="mr-2 size-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                }
+                              />
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                    {isFetchingNextPage && (
+                      <SidebarMenuItem>
+                        <div className="flex items-center justify-center py-4">
+                          <Loader className="size-4 animate-spin text-muted-foreground" />
+                        </div>
                       </SidebarMenuItem>
-                    );
-                  })
-                )}
-              </SidebarMenu>
+                    )}
+                  </SidebarMenu>
+                </div>
+              )}
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>

@@ -10,6 +10,8 @@ import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useSession } from "@/lib/auth-client";
 
 interface ChatMessageProps {
   message: Message;
@@ -33,6 +35,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
+  const { data: session } = useSession();
   
   const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
   const totalVersions = versions.length + 1;
@@ -49,6 +52,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const modelName = "AI Assistant"
 
   const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
+  const userImage = session?.user?.image;
   const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
   
   const handleEditStart = useCallback(() => {
@@ -103,20 +107,18 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
       <div className="mx-auto max-w-3xl">
         <div className="flex gap-4">
           <div className="flex-shrink-0">
-            <div
-              className={cn(
-                "flex size-8 items-center justify-center rounded-full transition-all",
-                isUser
-                  ? "bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 text-sm font-semibold"
-                  : "bg-secondary text-secondary-foreground"
-              )}
-            >
-              {isUser ? (
-                userInitial
-              ) : (
+            {isUser ? (
+              <Avatar className="size-8 border border-primary/20">
+                <AvatarImage src={userImage || undefined} alt={userName || "User"} />
+                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-semibold">
+                  {userInitial}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-all">
                 <OpenAIIcon className="size-4" />
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           <div className="flex-1 space-y-2 overflow-hidden">

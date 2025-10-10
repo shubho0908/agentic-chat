@@ -54,7 +54,7 @@ export async function GET(
         parentMessageId: null,
         isDeleted: false
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       select: {

@@ -45,7 +45,7 @@ export async function GET(
             parentMessageId: null,
             isDeleted: false,
           },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             role: true,

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const conversations = await prisma.conversation.findMany({
       where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
       select: {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         updatedAt: true,
         messages: {
           take: 1,
-          orderBy: { createdAt: 'desc' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           select: { 
             content: true, 
             role: true,

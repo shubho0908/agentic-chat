@@ -68,6 +68,9 @@ async function createNewConversation(
 
     return { conversationId, userMessageId, assistantMessageId };
   } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw err;
+    }
     console.error("Failed to create conversation:", err);
     return null;
   }
@@ -145,6 +148,10 @@ export async function handleConversationSaving(
       onConversationCreated(result);
     }
   } else if (currentConversationId && assistantContent) {
-    await saveAssistantMessage(currentConversationId, assistantContent);
+    const result = await saveAssistantMessage(currentConversationId, assistantContent);
+    if (result) {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
+    }
   }
 }

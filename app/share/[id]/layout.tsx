@@ -22,7 +22,7 @@ async function getSharedConversation(id: string) {
           },
         },
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           take: 10,
           select: {
             id: true,
