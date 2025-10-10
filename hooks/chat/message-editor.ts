@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { updateUserMessage, saveAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
@@ -193,7 +193,6 @@ export async function handleEditMessage(
   } catch (err) {
     if ((err as Error).name === "AbortError") {
       onMessagesUpdate(() => messagesUpToEdit);
-      toast.info(TOAST_SUCCESS_MESSAGES.GENERATION_STOPPED);
       return { success: false, error: "aborted" };
     }
     

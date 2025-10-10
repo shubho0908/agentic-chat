@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
@@ -172,7 +172,6 @@ export async function handleRegenerateResponse(
   } catch (err) {
     if ((err as Error).name === "AbortError") {
       onMessagesUpdate(() => messagesUpToAssistant);
-      toast.info(TOAST_SUCCESS_MESSAGES.GENERATION_STOPPED);
       return { success: false, error: "aborted" };
     }
     

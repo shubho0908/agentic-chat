@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { saveUserMessage, storeMemory } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
@@ -245,7 +245,7 @@ export async function handleSendMessage(
     return { success: true };
   } catch (err) {
     if ((err as Error).name === "AbortError") {
-      toast.info(TOAST_SUCCESS_MESSAGES.GENERATION_STOPPED);
+      onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
       return { success: false, error: "aborted" };
     }
     

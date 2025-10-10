@@ -44,7 +44,7 @@ export function AppSidebar() {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const currentConversationId = pathname.startsWith("/c/") ? pathname.split("/c/")[1] : null;
+  const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const parentRef = React.useRef<HTMLDivElement>(null);
 

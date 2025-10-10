@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { signOut, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
@@ -51,17 +52,23 @@ export function UserMenu() {
           size="icon"
           className="size-9 rounded-full hover:bg-accent/50 transition-all hover:scale-105 active:scale-95"
         >
-          <div className="size-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-sm font-semibold border border-primary/20 hover:border-primary/40 transition-colors">
-            {userInitial}
-          </div>
+          <Avatar className="size-8 border border-primary/20 hover:border-primary/40 transition-colors">
+            <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
+            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-semibold">
+              {userInitial}
+            </AvatarFallback>
+          </Avatar>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0 overflow-hidden" align="end" sideOffset={8}>
         <div className="space-y-1">
           <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-primary/5 to-primary/10 border-b border-border/40">
-            <div className="size-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-base font-semibold border-2 border-primary/20">
-              {userInitial}
-            </div>
+            <Avatar className="size-12 border-2 border-primary/20">
+              <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
+              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-base font-semibold">
+                {userInitial}
+              </AvatarFallback>
+            </Avatar>
             <div className="flex-1 min-w-0">
               {session.user.name && (
                 <p className="text-sm font-semibold truncate">{session.user.name}</p>

@@ -46,6 +46,9 @@ export async function checkCache(
       return await response.json();
     }
   } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw err;
+    }
     console.error("Cache check failed:", err);
   }
   return { cached: false };

@@ -42,7 +42,7 @@ export function ChatContainer({
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
-  const isSharePage = pathname.startsWith("/share/");
+  const isSharePage = pathname?.startsWith("/share/") ?? false;
 
   useEffect(() => {
     if (shouldScrollToBottom) {

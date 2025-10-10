@@ -13,7 +13,7 @@ async function getConversation(id: string) {
         createdAt: true,
         updatedAt: true,
         messages: {
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           take: 10,
           select: {
             id: true,

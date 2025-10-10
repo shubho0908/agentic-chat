@@ -51,10 +51,6 @@ async function fetchConversation(
 
     const response = await fetch(url.toString());
 
-    if (!response) {
-      throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
-    }
-
     if (!response.ok) {
       if (response.status === 404) {
         throw new Error(ERROR_CODES.CONVERSATION_NOT_FOUND);
@@ -93,8 +89,9 @@ export function useConversation(conversationId: string | null) {
     enabled: !!conversationId,
     retry: (failureCount, error) => {
       if (
-        error.message === ERROR_CODES.CONVERSATION_NOT_FOUND ||
-        error.message === ERROR_CODES.UNAUTHORIZED
+        error instanceof Error &&
+        (error.message === ERROR_CODES.CONVERSATION_NOT_FOUND ||
+          error.message === ERROR_CODES.UNAUTHORIZED)
       ) {
         return false;
       }
