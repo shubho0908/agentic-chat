@@ -68,9 +68,10 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               hasDocuments: parsed.hasDocuments,
               memoryCount: parsed.memoryCount,
               documentCount: parsed.documentCount || 0,
-              processingDocuments: parsed.processingDocuments,
               hasImages: parsed.hasImages || false,
               imageCount: parsed.imageCount || 0,
+              routingDecision: parsed.routingDecision,
+              skippedMemory: parsed.skippedMemory,
             });
           }
 

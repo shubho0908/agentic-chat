@@ -1,85 +1,83 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { OPENAI_MODELS } from "@/constants/openai-models";
-import { Brain, FileText, Eye } from "lucide-react";
-
-const reasoningThinkingMessages = [
-  "Analyzing the problem...",
-  "Reasoning through solutions...",
-  "Evaluating approaches...",
-  "Synthesizing insights...",
-  "Formulating response...",
-];
+import { Brain, FileText, Eye, Zap, Focus } from "lucide-react";
 
 interface AIThinkingAnimationProps {
-  model?: string;
   memoryStatus?: {
     hasMemories: boolean;
     hasDocuments: boolean;
     memoryCount: number;
     documentCount: number;
-    processingDocuments?: boolean;
     hasImages: boolean;
     imageCount: number;
+    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only';
+    skippedMemory?: boolean;
   };
 }
 
-export function AIThinkingAnimation({ model, memoryStatus }: AIThinkingAnimationProps) {
-  const [messageIndex, setMessageIndex] = useState(0);
-
-  const modelCategory = model
-    ? OPENAI_MODELS.find((m) => m.id === model)?.category
-    : "chat";
-
-  const isReasoningModel = modelCategory === "reasoning";
-  
+export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) {
   const hasContext = memoryStatus && (memoryStatus.hasMemories || memoryStatus.hasDocuments || memoryStatus.hasImages);
   
   const contextualMessage = useMemo(() => {
     if (!hasContext) {
-      return isReasoningModel ? reasoningThinkingMessages[messageIndex] : "Processing your request...";
+      return "Processing your request...";
     }
     
-    if (memoryStatus?.hasImages) {
-      return `Analyzing image${memoryStatus.imageCount > 1 ? 's' : ''} and generating response...`;
+    const routing = memoryStatus?.routingDecision;
+    
+    if (routing === 'vision-only') {
+      return `Analyzing image${memoryStatus.imageCount > 1 ? 's' : ''} with focused attention...`;
+    }
+    
+    if (routing === 'documents-only') {
+      return `Analyzing ${memoryStatus.documentCount} attached doc${memoryStatus.documentCount !== 1 ? 's' : ''} with focused context...`;
+    }
+    
+    if (routing === 'memory-only') {
+      return "Synthesizing response from conversation history...";
     }
     
     const contexts = [];
-    if (memoryStatus?.hasMemories) contexts.push("memories");
     if (memoryStatus?.hasDocuments) contexts.push("documents");
+    if (memoryStatus?.hasMemories) contexts.push("memories");
     
-    return `Synthesizing response with ${contexts.join(", ")}...`;
-  }, [hasContext, memoryStatus, isReasoningModel, messageIndex]);
+    return contexts.length > 0 
+      ? `Synthesizing response with ${contexts.join(" and ")}...`
+      : "Generating response...";
+  }, [hasContext, memoryStatus]);
 
-  useEffect(() => {
-    if (!isReasoningModel || hasContext) return;
-
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % reasoningThinkingMessages.length);
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [isReasoningModel, hasContext]);
-
-  const contextItems = useMemo(() => {
-    const items = [];
-    if (memoryStatus?.hasImages) {
-      items.push('images');
-    } else {
-      if (memoryStatus?.hasMemories) items.push('memories');
-      if (memoryStatus?.hasDocuments) items.push('documents');
+  const getRoutingIcon = () => {
+    switch (memoryStatus?.routingDecision) {
+      case 'vision-only': return <Eye className="w-3.5 h-3.5 text-cyan-500" />;
+      case 'documents-only': return <Focus className="w-3.5 h-3.5 text-amber-500" />;
+      case 'memory-only': return <Brain className="w-3.5 h-3.5 text-indigo-500" />;
+      default: return <Zap className="w-3.5 h-3.5 text-gray-500" />;
     }
-    return items;
-  }, [memoryStatus]);
+  };
+
+  const getRoutingLabel = () => {
+    switch (memoryStatus?.routingDecision) {
+      case 'vision-only': return 'Vision Focus';
+      case 'documents-only': return 'Document Focus';
+      case 'memory-only': return 'Memory Context';
+      default: return 'Standard';
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2.5">
       {hasContext && (
         <div className="flex flex-col gap-1 rounded-lg bg-muted/30 p-3 text-xs border border-border/50">
-          <div className="flex items-center gap-2 text-foreground/70 font-semibold mb-1">
-            <span>Context retrieved:</span>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-foreground/70 font-semibold">Context retrieved:</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/60 border border-border/30">
+              {getRoutingIcon()}
+              <span className="text-[10px] font-medium text-foreground/60">
+                {getRoutingLabel()}
+              </span>
+            </div>
           </div>
           
           <div className="flex flex-col gap-1.5">
@@ -89,38 +87,50 @@ export function AIThinkingAnimation({ model, memoryStatus }: AIThinkingAnimation
                 <Eye className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 animate-pulse flex-shrink-0" />
                 <span className="font-medium text-cyan-700 dark:text-cyan-300">
                   {memoryStatus.imageCount > 0
-                    ? `Analyzing ${memoryStatus.imageCount} ${memoryStatus.imageCount === 1 ? 'image' : 'images'}`
+                    ? `${memoryStatus.imageCount} ${memoryStatus.imageCount === 1 ? 'image' : 'images'}`
                     : 'Vision analysis'}
+                </span>
+                <span className="text-foreground/40 text-[10px] ml-auto">
+                  (text context skipped)
                 </span>
               </div>
             ) : (
               <>
-                {memoryStatus?.hasMemories && (
+                {memoryStatus?.hasDocuments && (
                   <div className="flex items-center gap-2">
                     <span className="text-foreground/40 font-mono text-[10px] select-none">
-                      {contextItems.indexOf('memories') === contextItems.length - 1 ? '└─' : '├─'}
+                      {!memoryStatus?.hasMemories ? '└─' : '├─'}
                     </span>
-                    <Brain className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 animate-pulse flex-shrink-0" />
-                    <span className="font-medium text-indigo-700 dark:text-indigo-300">
-                      {memoryStatus.memoryCount > 0 
-                        ? `${memoryStatus.memoryCount} relevant ${memoryStatus.memoryCount === 1 ? 'memory' : 'memories'}`
-                        : 'Searching memories'}
+                    <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse flex-shrink-0" />
+                    <span className="font-medium text-amber-700 dark:text-amber-300">
+                      {memoryStatus.documentCount > 0
+                        ? `${memoryStatus.documentCount} attached ${memoryStatus.documentCount === 1 ? 'doc' : 'docs'}`
+                        : 'Searching documents'}
                     </span>
                   </div>
                 )}
                 
-                {memoryStatus?.hasDocuments && (
+                {memoryStatus?.hasMemories && (
                   <div className="flex items-center gap-2">
-                    <span className="text-foreground/40 font-mono text-[10px] select-none">
-                      {contextItems.indexOf('documents') === contextItems.length - 1 ? '└─' : '├─'}
+                    <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
+                    <Brain className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 animate-pulse flex-shrink-0" />
+                    <span className="font-medium text-indigo-700 dark:text-indigo-300">
+                      {memoryStatus.memoryCount > 0 
+                        ? `${memoryStatus.memoryCount} ${memoryStatus.memoryCount === 1 ? 'memory' : 'memories'} (past chats)`
+                        : 'Searching memories'}
                     </span>
-                    <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-pulse flex-shrink-0" />
-                    <span className="font-medium text-amber-700 dark:text-amber-300">
-                      {memoryStatus.processingDocuments 
-                        ? 'Processing documents'
-                        : memoryStatus.documentCount > 0
-                          ? `${memoryStatus.documentCount} relevant ${memoryStatus.documentCount === 1 ? 'document' : 'documents'}`
-                          : 'Using documents'}
+                  </div>
+                )}
+
+                {memoryStatus?.skippedMemory && !memoryStatus?.hasMemories && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
+                    <Brain className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <span className="font-medium text-gray-500 dark:text-gray-400 line-through">
+                      Memories
+                    </span>
+                    <span className="text-foreground/40 text-[10px] ml-auto">
+                      (skipped - focused mode)
                     </span>
                   </div>
                 )}

@@ -62,6 +62,7 @@ export async function handleSendMessage(
 
   const assistantMessageId = `assistant-${Date.now()}`;
   let assistantContent = "";
+  let savedUserMessageId = userMessage.id;
 
   onMessagesUpdate((prev) => [
     ...prev,
@@ -89,6 +90,7 @@ export async function handleSendMessage(
         queryClient,
         (data: ConversationResult) => {
           currentConversationId = data.conversationId;
+          savedUserMessageId = data.userMessageId;
           onConversationIdUpdate(data.conversationId);
           onMessagesUpdate((prev) =>
             prev.map((msg) => {
@@ -110,7 +112,18 @@ export async function handleSendMessage(
         throw new Error("Failed to create conversation");
       }
     } else if (currentConversationId) {
-      await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
+      const savedMsgId = await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
+      if (savedMsgId) {
+        savedUserMessageId = savedMsgId;
+        onMessagesUpdate((prev) =>
+          prev.map((msg) => {
+            if (msg.id === userMessage.id) {
+              return { ...msg, id: savedMsgId };
+            }
+            return msg;
+          })
+        );
+      }
     }
 
     const { cacheQuery, cacheData } = await performCacheCheck({
@@ -213,30 +226,33 @@ export async function handleSendMessage(
     if (shouldNavigate && navigationPath && currentConversationId) {
       const textContent = extractTextFromContent(messageContent);
       queryClient.setQueryData(["conversation", currentConversationId], {
-        conversation: {
-          id: currentConversationId,
-          title: generateTitle(messageContent),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          isPublic: false,
-        },
-        messages: {
-          items: [
-            {
-              id: messages.find(m => m.role === "user" && m.timestamp === userMessage.timestamp)?.id || userMessage.id,
-              role: "user" as const,
-              content: textContent,
-              createdAt: new Date(userMessage.timestamp ?? Date.now()).toISOString(),
-              attachments: attachments || [],
-            },
-            {
-              id: assistantMessageId,
-              role: "assistant" as const,
-              content: assistantContent,
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        },
+        pages: [{
+          conversation: {
+            id: currentConversationId,
+            title: generateTitle(messageContent),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            isPublic: false,
+          },
+          messages: {
+            items: [
+              {
+                id: assistantMessageId,
+                role: "assistant" as const,
+                content: assistantContent,
+                createdAt: new Date().toISOString(),
+              },
+              {
+                id: savedUserMessageId,
+                role: "user" as const,
+                content: textContent,
+                createdAt: new Date(userMessage.timestamp ?? Date.now()).toISOString(),
+                attachments: attachments || [],
+              },
+            ],
+          },
+        }],
+        pageParams: [undefined],
       });
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       onNavigate(navigationPath);

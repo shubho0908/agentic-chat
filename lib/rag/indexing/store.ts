@@ -40,7 +40,8 @@ export async function addDocumentsToPgVector(
   documents: Document[],
   attachmentId: string,
   userId: string,
-  fileName: string
+  fileName: string,
+  conversationId: string
 ): Promise<void> {
   await ensurePgVectorTables();
 
@@ -52,6 +53,7 @@ export async function addDocumentsToPgVector(
         attachmentId,
         userId,
         fileName,
+        conversationId,
         timestamp: new Date().toISOString(),
       },
     }));

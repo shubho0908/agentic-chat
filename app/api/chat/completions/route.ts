@@ -7,8 +7,7 @@ import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
-import { getMemoryContext } from '@/lib/memory-conversation-context';
-import { getRAGContext } from '@/lib/rag/retrieval/context';
+import { routeContext } from '@/lib/context-router';
 import type { Message } from '@/lib/schemas/chat';
 
 export async function POST(request: NextRequest) {
@@ -42,88 +41,56 @@ export async function POST(request: NextRequest) {
     }
 
     let enhancedMessages = messages;
-    const memoryStatusInfo = { 
+    let memoryStatusInfo: { 
+      hasMemories: boolean;
+      hasDocuments: boolean;
+      memoryCount: number;
+      documentCount: number;
+      hasImages: boolean;
+      imageCount: number;
+      routingDecision: 'vision-only' | 'documents-only' | 'memory-only';
+      skippedMemory: boolean;
+    } = { 
       hasMemories: false, 
       hasDocuments: false, 
       memoryCount: 0, 
       documentCount: 0,
-      processingDocuments: false,
       hasImages: false,
-      imageCount: 0
+      imageCount: 0,
+      routingDecision: 'memory-only',
+      skippedMemory: false,
     };
     
     try {
       const lastUserMessage = messages[messages.length - 1]?.content || '';
       
-      // Check if the message contains images
-      let hasImages = false;
-      if (Array.isArray(lastUserMessage)) {
-        const imageCount = lastUserMessage.filter(part => 
-          typeof part === 'object' && part !== null && 'image_url' in part
-        ).length;
-        if (imageCount > 0) {
-          memoryStatusInfo.hasImages = true;
-          memoryStatusInfo.imageCount = imageCount;
-          hasImages = true;
+      const { context, metadata } = await routeContext(
+        lastUserMessage,
+        authUser.id,
+        messages.slice(0, -1) as Message[],
+        conversationId
+      );
+
+      memoryStatusInfo = metadata;
+
+      if (context) {
+        const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
+        
+        if (systemMessageIndex >= 0) {
+          enhancedMessages = [...enhancedMessages];
+          enhancedMessages[systemMessageIndex] = {
+            ...enhancedMessages[systemMessageIndex],
+            content: enhancedMessages[systemMessageIndex].content + context
+          };
+        } else {
+          enhancedMessages = [
+            { role: 'system', content: context },
+            ...enhancedMessages
+          ];
         }
       }
-      
-      let contextToAdd = '';
-      
-      // Skip memory/RAG retrieval if images are present - focus on visual analysis
-      if (lastUserMessage && !hasImages) {
-        const memoryContext = await getMemoryContext(
-          lastUserMessage,
-          authUser.id,
-          messages.slice(0, -1) as Message[],
-          conversationId
-        );
-
-        if (memoryContext) {
-          contextToAdd += memoryContext;
-          memoryStatusInfo.hasMemories = true;
-          const memoryMatches = memoryContext.match(/\d+\./g);
-          memoryStatusInfo.memoryCount = memoryMatches?.length || 0;
-        }
-
-        const ragContext = await getRAGContext(
-          typeof lastUserMessage === 'string' ? lastUserMessage : JSON.stringify(lastUserMessage),
-          authUser.id,
-          {
-            conversationId,
-            limit: 5,
-            scoreThreshold: 0.7,
-            waitForProcessing: true,
-            maxWaitTime: 30000,
-          }
-        );
-
-        if (ragContext) {
-          contextToAdd += ragContext;
-          memoryStatusInfo.hasDocuments = true;
-          const documentMatches = ragContext.match(/\[Document \d+:/g);
-          memoryStatusInfo.documentCount = documentMatches?.length || 0;
-        }
-
-        if (contextToAdd) {
-          const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
-          
-          if (systemMessageIndex >= 0) {
-            enhancedMessages = [...enhancedMessages];
-            enhancedMessages[systemMessageIndex] = {
-              ...enhancedMessages[systemMessageIndex],
-              content: enhancedMessages[systemMessageIndex].content + contextToAdd
-            };
-          } else {
-            enhancedMessages = [
-              { role: 'system', content: contextToAdd },
-              ...enhancedMessages
-            ];
-          }
-        }
-      }
-    } catch {
-      // Context fetch failed, continue without it
+    } catch (error) {
+      console.error('[Context Routing Error]', error);
     }
 
     const openai = new OpenAI({ apiKey });
@@ -142,7 +109,9 @@ export async function POST(request: NextRequest) {
                 memoryCount: memoryStatusInfo.memoryCount,
                 documentCount: memoryStatusInfo.documentCount,
                 hasImages: memoryStatusInfo.hasImages,
-                imageCount: memoryStatusInfo.imageCount
+                imageCount: memoryStatusInfo.imageCount,
+                routingDecision: memoryStatusInfo.routingDecision,
+                skippedMemory: memoryStatusInfo.skippedMemory
               })}\n\n`));
             }
             

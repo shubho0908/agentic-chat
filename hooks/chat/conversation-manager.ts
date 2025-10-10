@@ -8,11 +8,64 @@ export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
 }
 
+function isReferentialQuery(content: string | MessageContentPart[]): boolean {
+  const textQuery = typeof content === 'string' 
+    ? content 
+    : content.filter(p => typeof p === 'object' && 'type' in p && p.type === 'text' && 'text' in p && p.text).map(p => 'text' in p ? p.text : '').join(' ');
+
+  const normalized = textQuery.toLowerCase().trim();
+
+  const patterns = [
+    /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
+    /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
+    /\b(summarize|explain|analyze|describe)\s+(this|that|the|it)/i,
+    /^(summarize|summary|explain|analyze|describe)$/i,
+  ];
+
+  return patterns.some(p => p.test(normalized));
+}
+
+function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): boolean {
+  const recentMessages = messages.slice(-lookbackCount);
+  return recentMessages.some(msg => {
+    if (msg.attachments && msg.attachments.length > 0) return true;
+    
+    if (Array.isArray(msg.content)) {
+      return msg.content.some(part => 
+        typeof part === 'object' && part !== null && 'image_url' in part
+      );
+    }
+    return false;
+  });
+}
+
 export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
   systemPrompt: string
 ): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
+  const isReferential = isReferentialQuery(newContent);
+  const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
+
+  if (isReferential && hasAttachmentsInContext) {
+    const recentMessages = messages.slice(-4);
+    
+    return [
+      {
+        role: "system" as const,
+        content: "You are a helpful AI assistant. The user is asking about a specific document or image. Focus ONLY on answering their question using the current document/image context provided. Do not reference or mention any other previous documents, files, or unrelated conversations. Be direct and concise.",
+      },
+      ...recentMessages.map(({ role, content }) => ({
+        role: role as "user" | "assistant" | "system",
+        content,
+      })),
+      {
+        role: "user" as const,
+        content: newContent,
+      },
+    ];
+  }
+
   return [
     {
       role: "system" as const,
@@ -90,29 +143,32 @@ function updateQueryCache(
   const textContent = extractTextFromContent(userContent);
 
   queryClient.setQueryData(["conversation", conversationId], {
-    conversation: {
-      id: conversationId,
-      title,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    messages: {
-      items: [
-        {
-          id: userMessageId,
-          role: "user" as const,
-          content: textContent,
-          createdAt: new Date(userTimestamp).toISOString(),
-          attachments: attachments || [],
-        },
-        {
-          id: assistantMessageId,
-          role: "assistant" as const,
-          content: assistantContent,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    },
+    pages: [{
+      conversation: {
+        id: conversationId,
+        title,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      messages: {
+        items: [
+          {
+            id: userMessageId,
+            role: "user" as const,
+            content: textContent,
+            createdAt: new Date(userTimestamp).toISOString(),
+            attachments: attachments || [],
+          },
+          {
+            id: assistantMessageId,
+            role: "assistant" as const,
+            content: assistantContent,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }],
+    pageParams: [undefined],
   });
   queryClient.invalidateQueries({ queryKey: ["conversations"] });
 }

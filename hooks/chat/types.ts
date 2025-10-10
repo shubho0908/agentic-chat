@@ -62,9 +62,10 @@ export interface MemoryStatus {
   hasDocuments: boolean;
   memoryCount: number;
   documentCount: number;
-  processingDocuments?: boolean;
   hasImages: boolean;
   imageCount: number;
+  routingDecision?: 'vision-only' | 'documents-only' | 'memory-only';
+  skippedMemory?: boolean;
 }
 
 export interface StreamConfig {

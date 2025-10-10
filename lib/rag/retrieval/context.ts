@@ -110,6 +110,7 @@ export async function getRAGContext(
     const results = await searchDocumentChunks(query, userId, {
       limit,
       scoreThreshold,
+      conversationId,
       attachmentIds: completedAttachmentIds,
     });
 

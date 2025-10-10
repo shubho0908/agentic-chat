@@ -40,11 +40,16 @@ export async function searchDocumentChunks(
     limit?: number;
     scoreThreshold?: number;
     attachmentIds?: string[];
+    conversationId?: string;
   } = {}
 ) {
   await ensurePgVectorTables();
 
-  const { limit = RAG_CONFIG.search.defaultLimit, scoreThreshold = RAG_CONFIG.search.scoreThreshold, attachmentIds } = options;
+  const { limit = RAG_CONFIG.search.defaultLimit, scoreThreshold = RAG_CONFIG.search.scoreThreshold, attachmentIds, conversationId } = options;
+
+  if (!conversationId && !attachmentIds) {
+    console.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
+  }
 
   const vectorStore = new PGVectorStore(
     getEmbeddings(),
@@ -56,6 +61,10 @@ export async function searchDocumentChunks(
   const filter: Record<string, string | { $in: string[] }> = {
     userId,
   };
+
+  if (conversationId) {
+    filter.conversationId = conversationId;
+  }
 
   if (attachmentIds && attachmentIds.length > 0) {
     filter.attachmentId = { $in: attachmentIds };

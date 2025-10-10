@@ -24,9 +24,10 @@ interface ChatMessageProps {
     hasDocuments: boolean;
     memoryCount: number;
     documentCount: number;
-    processingDocuments?: boolean;
     hasImages: boolean;
     imageCount: number;
+    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only';
+    skippedMemory?: boolean;
   };
 }
 
@@ -149,7 +150,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                   ) : message.content ? (
                     <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
-                    <AIThinkingAnimation model={message.model} memoryStatus={memoryStatus} />
+                    <AIThinkingAnimation memoryStatus={memoryStatus} />
                   )}
                 </div>
                 
@@ -198,8 +199,9 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevProps.memoryStatus?.hasDocuments === nextProps.memoryStatus?.hasDocuments &&
     prevProps.memoryStatus?.memoryCount === nextProps.memoryStatus?.memoryCount &&
     prevProps.memoryStatus?.documentCount === nextProps.memoryStatus?.documentCount &&
-    prevProps.memoryStatus?.processingDocuments === nextProps.memoryStatus?.processingDocuments &&
     prevProps.memoryStatus?.hasImages === nextProps.memoryStatus?.hasImages &&
-    prevProps.memoryStatus?.imageCount === nextProps.memoryStatus?.imageCount
+    prevProps.memoryStatus?.imageCount === nextProps.memoryStatus?.imageCount &&
+    prevProps.memoryStatus?.routingDecision === nextProps.memoryStatus?.routingDecision &&
+    prevProps.memoryStatus?.skippedMemory === nextProps.memoryStatus?.skippedMemory
   );
 });

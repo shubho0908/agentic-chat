@@ -284,6 +284,30 @@ export async function ensurePgVectorTables(): Promise<void> {
       );
 
       await client.query(
+        sqlFormat(
+          `CREATE INDEX IF NOT EXISTS %I ON %I ((metadata->>'userId'))`,
+          'document_chunk_user_id_idx',
+          'document_chunk'
+        )
+      );
+
+      await client.query(
+        sqlFormat(
+          `CREATE INDEX IF NOT EXISTS %I ON %I ((metadata->>'conversationId'))`,
+          'document_chunk_conversation_id_idx',
+          'document_chunk'
+        )
+      );
+
+      await client.query(
+        sqlFormat(
+          `CREATE INDEX IF NOT EXISTS %I ON %I ((metadata->>'attachmentId'))`,
+          'document_chunk_attachment_id_idx',
+          'document_chunk'
+        )
+      );
+
+      await client.query(
         sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (user_id)', 
           'semantic_cache_user_id_idx',
           'semantic_cache'

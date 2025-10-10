@@ -100,7 +100,7 @@ export async function ensurePgVectorExtension(): Promise<void> {
   }
 }
 
-export const SIMILARITY_THRESHOLD = 0.7;
+export const SIMILARITY_THRESHOLD = 0.85;
 export const CACHE_TTL_SECONDS = (() => {
   const value = Number(process.env.CACHE_TTL_SECONDS);
   if (isNaN(value) || value <= 0) {

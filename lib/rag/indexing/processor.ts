@@ -18,39 +18,46 @@ export interface ProcessDocumentResult {
   };
 }
 
-export async function downloadFile(fileUrl: string): Promise<string> {
-  const fs = await import('fs/promises');
-  const path = await import('path');
-  const os = await import('os');
-
-  const tmpDir = os.tmpdir();
-  const fileName = fileUrl.split('/').pop() || 'temp-file';
-  const filePath = path.join(tmpDir, `${Date.now()}-${fileName}`);
-
+export async function downloadFile(fileUrl: string): Promise<Blob> {
   const response = await fetch(fileUrl);
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);
   }
 
-  const buffer = await response.arrayBuffer();
-  await fs.writeFile(filePath, Buffer.from(buffer));
-
-  return filePath;
-}
-
-export async function cleanupFile(filePath: string): Promise<void> {
-  const fs = await import('fs/promises');
-  await fs.unlink(filePath);
+  const arrayBuffer = await response.arrayBuffer();
+  return new Blob([arrayBuffer]);
 }
 
 export async function processDocument(
   attachmentId: string,
   userId: string
 ): Promise<ProcessDocumentResult> {
-  let tempFilePath: string | null = null;
-
   try {
-    const attachment = await getAuthorizedAttachment(attachmentId, userId);
+    const attachment = await prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      include: {
+        message: {
+          select: {
+            conversationId: true,
+            conversation: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!attachment) {
+      throw new RAGError('Attachment not found', RAGErrorCode.NOT_FOUND);
+    }
+
+    if (attachment.message.conversation.userId !== userId) {
+      throw new RAGError('Unauthorized', RAGErrorCode.UNAUTHORIZED);
+    }
+
+    const conversationId = attachment.message.conversationId;
 
     if (!isSupportedForRAG(attachment.fileType)) {
       await prisma.attachment.update({
@@ -75,9 +82,9 @@ export async function processDocument(
       },
     });
 
-    tempFilePath = await downloadFile(attachment.fileUrl);
+    const fileBlob = await downloadFile(attachment.fileUrl);
 
-    const loadResult = await loadDocument(tempFilePath, attachment.fileType);
+    const loadResult = await loadDocument(fileBlob, attachment.fileType, attachment.fileName);
     
     if (!loadResult.success || !loadResult.documents) {
       throw new Error(loadResult.error || 'Failed to load document');
@@ -107,7 +114,8 @@ export async function processDocument(
       langchainDocs,
       attachmentId,
       userId,
-      attachment.fileName
+      attachment.fileName,
+      conversationId
     );
 
     await prisma.attachment.update({
@@ -121,10 +129,6 @@ export async function processDocument(
       },
     });
 
-    if (tempFilePath) {
-      await cleanupFile(tempFilePath);
-    }
-
     return {
       success: true,
       attachmentId,
@@ -134,10 +138,6 @@ export async function processDocument(
       },
     };
   } catch (error) {
-    if (tempFilePath) {
-      await cleanupFile(tempFilePath);
-    }
-
     let errorMessage = 'Unknown error';
     if (error instanceof RAGError) {
       logRAGError(error, 'processDocument');

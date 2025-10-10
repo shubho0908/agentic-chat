@@ -14,8 +14,9 @@ export interface DocumentLoadResult {
 }
 
 export async function loadDocument(
-  filePath: string,
-  fileType: string
+  fileBlob: Blob,
+  fileType: string,
+  fileName: string
 ): Promise<DocumentLoadResult> {
   try {
     let loader;
@@ -24,7 +25,7 @@ export async function loadDocument(
     const lowerFileType = fileType.toLowerCase();
 
     if (lowerFileType === 'application/pdf' || lowerFileType.includes('pdf')) {
-      loader = new PDFLoader(filePath, {
+      loader = new PDFLoader(fileBlob, {
         splitPages: true,
       });
       documents = await loader.load();
@@ -41,7 +42,7 @@ export async function loadDocument(
       lowerFileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       lowerFileType.includes('docx')
     ) {
-      loader = new DocxLoader(filePath);
+      loader = new DocxLoader(fileBlob);
       documents = await loader.load();
 
       return {
@@ -55,7 +56,7 @@ export async function loadDocument(
       lowerFileType === 'application/msword' ||
       lowerFileType.includes('.doc')
     ) {
-      loader = new DocxLoader(filePath, { type: 'doc' });
+      loader = new DocxLoader(fileBlob);
       documents = await loader.load();
 
       return {
@@ -66,14 +67,13 @@ export async function loadDocument(
         },
       };
     } else if (lowerFileType.startsWith('text/') || lowerFileType === 'text/plain') {
-      const fs = await import('fs/promises');
-      const content = await fs.readFile(filePath, 'utf-8');
+      const content = await fileBlob.text();
       
       documents = [
         {
           pageContent: content,
           metadata: {
-            source: filePath,
+            source: fileName,
           },
         } as Document,
       ];

@@ -17,9 +17,10 @@ interface ChatContainerProps {
     hasDocuments: boolean;
     memoryCount: number;
     documentCount: number;
-    processingDocuments?: boolean;
     hasImages: boolean;
     imageCount: number;
+    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only';
+    skippedMemory?: boolean;
   };
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
