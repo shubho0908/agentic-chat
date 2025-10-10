@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { ExportSection } from "@/components/export/ExportSection";
 
 interface ShareDialogProps {
   conversationId: string;
@@ -126,7 +127,7 @@ export function ShareDialog({
                     id="share-link"
                     value={shareUrl}
                     readOnly
-                    className="flex-1"
+                    className="flex-1 cursor-pointer"
                     onClick={(e) => e.currentTarget.select()}
                   />
                   <Button
@@ -148,6 +149,12 @@ export function ShareDialog({
               </div>
             </>
           )}
+
+          <Separator className="my-4" />
+
+          <ExportSection 
+            conversationId={conversationId}
+          />
         </div>
       </DialogContent>
     </Dialog>
