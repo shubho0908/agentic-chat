@@ -24,7 +24,7 @@ export async function GET(
       );
     }
 
-    const conversation = await prisma.conversation.findUnique({
+    const conversation = await prisma.conversation.findFirst({
       where: {
         id: conversationId,
         userId: user.id,

@@ -13,7 +13,7 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
     paddingBottom: 12,
-    borderBottom: 1.5,
+    borderBottomWidth: 1.5,
     borderBottomColor: '#000000',
   },
   title: {
@@ -46,13 +46,13 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: '#fafafa',
     borderRadius: 2,
-    borderLeft: 2,
+    borderLeftWidth: 2,
     borderLeftColor: '#000000',
   },
   messageHeader: {
     marginBottom: 6,
     paddingBottom: 4,
-    borderBottom: 0.5,
+    borderBottomWidth: 0.5,
     borderBottomColor: '#cccccc',
   },
   messageHeaderRow: {
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   attachmentsSection: {
     marginTop: 8,
     paddingTop: 6,
-    borderTop: 0.5,
+    borderTopWidth: 0.5,
     borderTopColor: '#cccccc',
   },
   attachmentsTitle: {
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 7,
     color: '#666666',
-    borderTop: 0.5,
+    borderTopWidth: 0.5,
     borderTopColor: '#cccccc',
     paddingTop: 8,
   },
@@ -123,8 +123,18 @@ interface ConversationPDFProps {
   includeAttachments?: boolean;
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return 'Date unavailable';
+  }
+  
   const date = new Date(dateString);
+  
+  if (isNaN(date.getTime())) {
+    console.warn('Invalid date string:', dateString);
+    return 'Invalid date';
+  }
+  
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',

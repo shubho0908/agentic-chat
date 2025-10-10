@@ -82,8 +82,18 @@ function formatMessage(
   return lines.join('\n');
 }
 
-function formatDate(dateString: string): string {
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return 'Date unavailable';
+  }
+  
   const date = new Date(dateString);
+  
+  if (isNaN(date.getTime())) {
+    console.warn('Invalid date string:', dateString);
+    return 'Invalid date';
+  }
+  
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -96,7 +106,7 @@ function formatDate(dateString: string): string {
 
 export function downloadMarkdown(conversation: ExportConversation, options?: ExportOptions): void {
   const markdownContent = exportToMarkdown(conversation, options);
-  const blob = new Blob([markdownContent], { type: 'text/markdown' });
+  const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const fileName = `${sanitizeFileName(conversation.title || 'conversation')}_${new Date().toISOString().split('T')[0]}.md`;
@@ -106,13 +116,21 @@ export function downloadMarkdown(conversation: ExportConversation, options?: Exp
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  
+  // Delay revocation to ensure browser starts download
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 100);
 }
 
 function sanitizeFileName(name: string): string {
-  return name
+  const sanitized = name
     .replace(/[^a-z0-9]/gi, '_')
     .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '')
     .toLowerCase()
-    .slice(0, 50);
+    .slice(0, 50)
+    .replace(/_+$/g, '');
+  
+  return sanitized || 'conversation';
 }

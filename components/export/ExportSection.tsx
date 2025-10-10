@@ -48,8 +48,21 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
       const response = await fetch(`/api/conversations/${conversationId}/export`);
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch conversation data');
+        let errorMessage = 'Failed to fetch conversation data';
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          try {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          } catch {
+            errorMessage = response.statusText || errorMessage;
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const conversationData: ExportConversation = await response.json();
