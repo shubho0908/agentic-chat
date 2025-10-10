@@ -26,7 +26,7 @@ interface ChatMessageProps {
     documentCount: number;
     hasImages: boolean;
     imageCount: number;
-    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only';
+    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
     skippedMemory?: boolean;
   };
 }

@@ -3,7 +3,6 @@
 import { getMemoryContext } from './memory-conversation-context';
 import { getRAGContext } from './rag/retrieval/context';
 import type { Message } from './schemas/chat';
-import { prisma } from './prisma';
 
 export interface ContextRoutingResult {
   context: string;
@@ -14,7 +13,7 @@ export interface ContextRoutingResult {
     memoryCount: number;
     documentCount: number;
     imageCount: number;
-    routingDecision: 'vision-only' | 'documents-only' | 'memory-only';
+    routingDecision: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
     skippedMemory: boolean;
   };
 }
@@ -43,27 +42,6 @@ function isReferentialQuery(query: string | Array<{ type: string; text?: string;
   return patterns.some(p => p.test(normalized));
 }
 
-async function checkConversationHasDocuments(conversationId: string): Promise<boolean> {
-  try {
-    const attachments = await prisma.attachment.findMany({
-      where: {
-        message: {
-          conversationId,
-          isDeleted: false,
-        },
-      },
-      select: {
-        fileType: true,
-      },
-    });
-    
-    return attachments.some(a => !a.fileType.startsWith('image/'));
-  } catch (error) {
-    console.error('[Context Router] Error checking for documents:', error);
-    return false;
-  }
-}
-
 export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
@@ -81,7 +59,7 @@ export async function routeContext(
     memoryCount: number;
     documentCount: number;
     imageCount: number;
-    routingDecision: 'vision-only' | 'documents-only' | 'memory-only';
+    routingDecision: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
     skippedMemory: boolean;
   } = {
     hasMemories: false,
@@ -94,19 +72,9 @@ export async function routeContext(
     skippedMemory: false,
   };
 
-  if (hasImages) {
-    metadata.routingDecision = 'vision-only';
-    metadata.skippedMemory = true;
-    return { context: '', metadata };
-  }
-
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
-
-  const conversationHasDocumentsPromise = conversationId 
-    ? checkConversationHasDocuments(conversationId)
-    : Promise.resolve(false);
 
   const ragPromise = getRAGContext(textQuery, userId, {
     conversationId,
@@ -115,6 +83,13 @@ export async function routeContext(
     waitForProcessing: true,
     maxWaitTime: 30000,
   });
+
+  // For image-only queries (no text query or referential patterns), skip RAG
+  if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
+    metadata.routingDecision = 'vision-only';
+    metadata.skippedMemory = true;
+    return { context: '', metadata };
+  }
 
   if (isReferential) {
     metadata.routingDecision = 'documents-only';
@@ -135,13 +110,25 @@ export async function routeContext(
   if (ragResult) {
     metadata.hasDocuments = true;
     metadata.documentCount = ragResult ? 1 : 0;
+    
+    if (hasImages) {
+      metadata.routingDecision = 'hybrid';
+      metadata.skippedMemory = true;
+      return { context: ragResult, metadata };
+    }
+    
     metadata.routingDecision = 'documents-only';
     metadata.skippedMemory = true;
     return { context: ragResult, metadata };
   }
 
-  const hasDocuments = await conversationHasDocumentsPromise;
-  const memoryContext = await getMemoryContext(query, userId, messages, conversationId, hasDocuments);
+  if (hasImages) {
+    metadata.routingDecision = 'vision-only';
+    metadata.skippedMemory = true;
+    return { context: '', metadata };
+  }
+
+  const memoryContext = await getMemoryContext(query, userId, messages, conversationId);
 
   if (memoryContext) {
     metadata.hasMemories = true;
