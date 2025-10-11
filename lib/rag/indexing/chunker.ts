@@ -127,15 +127,29 @@ export function getOptimalChunkSize(fileSize: number, contentType: string): Chun
   let baseChunkSize = RAG_CONFIG.chunking.defaultSize;
   let baseOverlap = RAG_CONFIG.chunking.defaultOverlap;
 
-  if (contentType.includes('pdf')) {
+  const lowerContentType = contentType.toLowerCase();
+
+  if (lowerContentType.includes('pdf')) {
     const config = RAG_CONFIG.chunking.sizeByType.pdf;
     baseChunkSize = config.size;
     baseOverlap = config.overlap;
-  } else if (contentType.includes('word') || contentType.includes('doc')) {
+  } else if (lowerContentType.includes('word') || lowerContentType.includes('doc')) {
     const config = RAG_CONFIG.chunking.sizeByType.doc;
     baseChunkSize = config.size;
     baseOverlap = config.overlap;
-  } else if (contentType.includes('text')) {
+  } else if (lowerContentType.includes('spreadsheet') || lowerContentType.includes('excel') || lowerContentType.includes('xls')) {
+    const config = RAG_CONFIG.chunking.sizeByType.excel;
+    baseChunkSize = config.size;
+    baseOverlap = config.overlap;
+  } else if (lowerContentType.includes('csv')) {
+    const config = RAG_CONFIG.chunking.sizeByType.csv;
+    baseChunkSize = config.size;
+    baseOverlap = config.overlap;
+  } else if (lowerContentType.includes('markdown')) {
+    const config = RAG_CONFIG.chunking.sizeByType.markdown;
+    baseChunkSize = config.size;
+    baseOverlap = config.overlap;
+  } else if (lowerContentType.includes('text')) {
     const config = RAG_CONFIG.chunking.sizeByType.text;
     baseChunkSize = config.size;
     baseOverlap = config.overlap;

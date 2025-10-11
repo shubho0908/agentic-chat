@@ -18,14 +18,15 @@ export interface ProcessDocumentResult {
   };
 }
 
-export async function downloadFile(fileUrl: string): Promise<Blob> {
+export async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
   const response = await fetch(fileUrl);
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
-  return new Blob([arrayBuffer]);
+  const contentType = mimeType || response.headers.get('content-type') || 'application/octet-stream';
+  return new Blob([arrayBuffer], { type: contentType });
 }
 
 export async function processDocument(
@@ -82,7 +83,7 @@ export async function processDocument(
       },
     });
 
-    const fileBlob = await downloadFile(attachment.fileUrl);
+    const fileBlob = await downloadFile(attachment.fileUrl, attachment.fileType);
 
     const loadResult = await loadDocument(fileBlob, attachment.fileType, attachment.fileName);
     
