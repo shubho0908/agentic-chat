@@ -5,6 +5,7 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { ensurePgVectorTables } from '../storage/pgvector-init';
 import { RAG_CONFIG } from '../config';
 import { getUserApiKey } from '@/lib/api-utils';
+import { rerankDocuments } from './reranker';
 
 async function getEmbeddings(userId: string) {
   const apiKey = await getUserApiKey(userId);
@@ -43,11 +44,18 @@ export async function searchDocumentChunks(
     scoreThreshold?: number;
     attachmentIds?: string[];
     conversationId?: string;
+    useReranking?: boolean;
   } = {}
 ) {
   await ensurePgVectorTables();
 
-  const { limit = RAG_CONFIG.search.defaultLimit, scoreThreshold = RAG_CONFIG.search.scoreThreshold, attachmentIds, conversationId } = options;
+  const { 
+    limit = RAG_CONFIG.search.defaultLimit, 
+    scoreThreshold = RAG_CONFIG.search.scoreThreshold, 
+    attachmentIds, 
+    conversationId,
+    useReranking = true,
+  } = options;
 
   if (!conversationId && !attachmentIds) {
     console.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
@@ -73,9 +81,17 @@ export async function searchDocumentChunks(
     filter.attachmentId = { $in: attachmentIds };
   }
 
-  const results = await vectorStore.similaritySearchWithScore(query, limit, filter);
+  const enableReranking = useReranking && RAG_CONFIG.rerank.enabled;
+  
+  const candidateLimit = enableReranking 
+    ? limit * RAG_CONFIG.rerank.candidateMultiplier 
+    : limit;
 
-  return results
+  console.log(`[RAG Search] 🔍 Retrieving ${candidateLimit} candidates (reranking: ${enableReranking ? 'enabled' : 'disabled'})`);
+
+  const results = await vectorStore.similaritySearchWithScore(query, candidateLimit, filter);
+
+  const filteredResults = results
     .filter(([, score]) => score >= scoreThreshold)
     .map(([doc, score]) => ({
       content: doc.pageContent,
@@ -86,4 +102,16 @@ export async function searchDocumentChunks(
         page: doc.metadata.loc?.pageNumber || doc.metadata.page,
       },
     }));
+
+  if (enableReranking && filteredResults.length > 0) {
+    const rerankedResults = await rerankDocuments(query, filteredResults, {
+      topN: limit,
+    });
+
+    console.log(`[RAG Search] ✓ Returned ${rerankedResults.length} reranked results`);
+    return rerankedResults;
+  }
+
+  console.log(`[RAG Search] ✓ Returned ${Math.min(filteredResults.length, limit)} results (no reranking)`);
+  return filteredResults.slice(0, limit);
 }

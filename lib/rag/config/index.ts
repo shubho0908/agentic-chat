@@ -37,6 +37,11 @@ export const RAG_CONFIG = {
     defaultLimit: 5,
     scoreThreshold: 0.7,
   },
+  rerank: {
+    enabled: !!process.env.COHERE_API_KEY,
+    model: process.env.RERANKER_MODEL as string,
+    candidateMultiplier: 4,
+  },
   embeddings: {
     model: process.env.EMBEDDING_MODEL as string,
   },

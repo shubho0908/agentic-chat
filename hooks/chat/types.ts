@@ -1,5 +1,12 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 
+export enum RoutingDecision {
+  VisionOnly = 'vision-only',
+  DocumentsOnly = 'documents-only',
+  MemoryOnly = 'memory-only',
+  Hybrid = 'hybrid',
+}
+
 export interface VersionData {
   id: string;
   role: string;
@@ -54,7 +61,7 @@ export interface MemoryStatus {
   documentCount: number;
   hasImages: boolean;
   imageCount: number;
-  routingDecision?: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
+  routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
 }
 

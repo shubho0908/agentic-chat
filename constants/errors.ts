@@ -63,6 +63,8 @@ export const API_ERROR_MESSAGES = {
   ATTACHMENT_UNAUTHORIZED: "Unauthorized access to attachment",
   RAG_MISSING_ENV_VARS: "Missing required environment variables",
   RAG_INVALID_EMBEDDING_DIMENSIONS: "EMBEDDING_DIMENSIONS must be a positive integer",
+  RERANK_API_ERROR: "Reranking API error",
+  RERANK_MISSING_API_KEY: "Cohere API key not configured for reranking",
 } as const;
 
 export const TOAST_ERROR_MESSAGES = {
