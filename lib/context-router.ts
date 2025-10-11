@@ -3,6 +3,9 @@
 import { getMemoryContext } from './memory-conversation-context';
 import { getRAGContext } from './rag/retrieval/context';
 import type { Message } from './schemas/chat';
+import { prisma } from './prisma';
+import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
+import { RoutingDecision } from '@/hooks/chat/types';
 
 export interface ContextRoutingResult {
   context: string;
@@ -13,7 +16,7 @@ export interface ContextRoutingResult {
     memoryCount: number;
     documentCount: number;
     imageCount: number;
-    routingDecision: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
+    routingDecision: RoutingDecision;
     skippedMemory: boolean;
   };
 }
@@ -42,6 +45,31 @@ function isReferentialQuery(query: string | Array<{ type: string; text?: string;
   return patterns.some(p => p.test(normalized));
 }
 
+async function hasDocumentAttachments(conversationId: string): Promise<boolean> {
+  try {
+    const messages = await prisma.message.findMany({
+      where: {
+        conversationId,
+        isDeleted: false,
+      },
+      include: {
+        attachments: {
+          select: {
+            fileType: true,
+          },
+        },
+      },
+    });
+
+    const allAttachments = messages.flatMap(m => m.attachments);
+    const documentAttachments = filterDocumentAttachments(allAttachments);
+    
+    return documentAttachments.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
@@ -59,7 +87,7 @@ export async function routeContext(
     memoryCount: number;
     documentCount: number;
     imageCount: number;
-    routingDecision: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
+    routingDecision: RoutingDecision;
     skippedMemory: boolean;
   } = {
     hasMemories: false,
@@ -68,13 +96,17 @@ export async function routeContext(
     memoryCount: 0,
     documentCount: 0,
     imageCount,
-    routingDecision: 'memory-only',
+    routingDecision: RoutingDecision.MemoryOnly,
     skippedMemory: false,
   };
 
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+
+  const hasAttachmentsPromise = conversationId 
+    ? hasDocumentAttachments(conversationId)
+    : Promise.resolve(false);
 
   const ragPromise = getRAGContext(textQuery, userId, {
     conversationId,
@@ -86,13 +118,13 @@ export async function routeContext(
 
   // For image-only queries (no text query or referential patterns), skip RAG
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
-    metadata.routingDecision = 'vision-only';
+    metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: '', metadata };
   }
 
   if (isReferential) {
-    metadata.routingDecision = 'documents-only';
+    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
     const ragResult = await ragPromise;
@@ -105,25 +137,31 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const ragResult = await ragPromise;
+  const [ragResult, hasAttachments] = await Promise.all([ragPromise, hasAttachmentsPromise]);
 
   if (ragResult) {
     metadata.hasDocuments = true;
     metadata.documentCount = ragResult ? 1 : 0;
     
     if (hasImages) {
-      metadata.routingDecision = 'hybrid';
+      metadata.routingDecision = RoutingDecision.Hybrid;
       metadata.skippedMemory = true;
       return { context: ragResult, metadata };
     }
     
-    metadata.routingDecision = 'documents-only';
+    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
     return { context: ragResult, metadata };
   }
 
+  if (hasAttachments) {
+    metadata.routingDecision = RoutingDecision.DocumentsOnly;
+    metadata.skippedMemory = true;
+    return { context: '', metadata };
+  }
+
   if (hasImages) {
-    metadata.routingDecision = 'vision-only';
+    metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: '', metadata };
   }
@@ -134,7 +172,7 @@ export async function routeContext(
     metadata.hasMemories = true;
     const memoryMatches = memoryContext.match(/\d+\./g);
     metadata.memoryCount = memoryMatches?.length || 0;
-    metadata.routingDecision = 'memory-only';
+    metadata.routingDecision = RoutingDecision.MemoryOnly;
     return { context: memoryContext, metadata };
   }
 

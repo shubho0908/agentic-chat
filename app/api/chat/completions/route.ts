@@ -8,6 +8,7 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { routeContext } from '@/lib/context-router';
+import { RoutingDecision } from '@/hooks/chat/types';
 import type { Message } from '@/lib/schemas/chat';
 
 export async function POST(request: NextRequest) {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       documentCount: number;
       hasImages: boolean;
       imageCount: number;
-      routingDecision: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
+      routingDecision: RoutingDecision;
       skippedMemory: boolean;
     } = { 
       hasMemories: false, 
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
       documentCount: 0,
       hasImages: false,
       imageCount: 0,
-      routingDecision: 'memory-only',
+      routingDecision: RoutingDecision.MemoryOnly,
       skippedMemory: false,
     };
     
