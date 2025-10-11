@@ -3,26 +3,20 @@
 import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./pgvector-client";
 import { ensurePgVectorTables } from './pgvector-init';
 import { RAGError, RAGErrorCode } from '../common/errors';
+import { getUserApiKey } from '@/lib/api-utils';
 import OpenAI from "openai";
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
 
-let client: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!client) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not set in environment variables');
-    }
-    client = new OpenAI({ apiKey });
-  }
-  return client;
+async function getOpenAIClient(userId: string): Promise<OpenAI> {
+  const apiKey = await getUserApiKey(userId);
+  return new OpenAI({ apiKey });
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string, userId: string): Promise<number[]> {
   try {
-    const embeddingResponse = await getOpenAIClient().embeddings.create({
+    const client = await getOpenAIClient(userId);
+    const embeddingResponse = await client.embeddings.create({
       model: EMBEDDING_MODEL,
       input: text,
     });

@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
     const { query, response } = parsedBody.data;
 
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateEmbedding(query, user.id);
     await addToSemanticCache(query, response, queryEmbedding, user.id);
 
     return jsonResponse({ success: true, message: 'Response cached successfully' });

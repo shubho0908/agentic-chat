@@ -39,7 +39,6 @@ export const RAG_CONFIG = {
   },
   embeddings: {
     model: process.env.EMBEDDING_MODEL as string,
-    apiKey: process.env.OPENAI_API_KEY as string,
   },
   supportedFileTypes: [
     'application/pdf',
@@ -58,7 +57,6 @@ export function validateRAGConfig(): void {
     'DATABASE_URL',
     'EMBEDDING_DIMENSIONS',
     'EMBEDDING_MODEL',
-    'OPENAI_API_KEY',
   ];
 
   const missing = required.filter(key => !process.env[key]);
