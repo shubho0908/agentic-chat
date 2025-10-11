@@ -27,28 +27,6 @@ export enum RAGErrorCode {
   PROCESSING_FAILED = 'PROCESSING_FAILED',
 }
 
-export type RAGResult<T> = 
-  | { success: true; data: T }
-  | { success: false; error: RAGError };
-
-export function toRAGResult<T>(data: T): RAGResult<T> {
-  return { success: true, data };
-}
-
-export function toRAGError(error: unknown, code: RAGErrorCode, context?: string): RAGResult<never> {
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  const fullMessage = context ? `${context}: ${message}` : message;
-  
-  return {
-    success: false,
-    error: new RAGError(fullMessage, code, error),
-  };
-}
-
-export function isRAGError(error: unknown): error is RAGError {
-  return error instanceof RAGError;
-}
-
 export function logRAGError(error: RAGError, context: string): void {
   console.error(`[RAG Error] ${context}`, {
     code: error.code,

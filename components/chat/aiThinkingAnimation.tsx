@@ -3,18 +3,10 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Brain, FileText, Eye, Zap, Focus } from "lucide-react";
+import { MemoryStatus } from "@/hooks/chat/types";
 
 interface AIThinkingAnimationProps {
-  memoryStatus?: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    memoryCount: number;
-    documentCount: number;
-    hasImages: boolean;
-    imageCount: number;
-    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
-    skippedMemory?: boolean;
-  };
+  memoryStatus?: MemoryStatus
 }
 
 export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) {

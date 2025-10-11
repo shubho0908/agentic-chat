@@ -1,6 +1,7 @@
 import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
+import { API_ERROR_MESSAGES } from '@/constants/errors';
 import type { ExportConversation } from './types';
 
 export async function downloadPDF(
@@ -21,8 +22,8 @@ export async function downloadPDF(
     console.error('PDF generation failed:', error);
     throw new Error(
       error instanceof Error 
-        ? `Failed to generate PDF: ${error.message}` 
-        : 'Failed to generate PDF: Unknown error'
+        ? `${API_ERROR_MESSAGES.PDF_GENERATION_FAILED}: ${error.message}` 
+        : API_ERROR_MESSAGES.PDF_GENERATION_FAILED
     );
   }
 }

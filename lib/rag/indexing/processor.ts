@@ -8,7 +8,7 @@ import { getAuthorizedAttachment } from '../auth/attachment';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@/lib/generated/prisma';
 
-export interface ProcessDocumentResult {
+interface ProcessDocumentResult {
   success: boolean;
   attachmentId: string;
   error?: string;
@@ -18,7 +18,7 @@ export interface ProcessDocumentResult {
   };
 }
 
-export async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
+async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
   const response = await fetch(fileUrl);
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);

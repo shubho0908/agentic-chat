@@ -1,5 +1,4 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
-import { QueryClient } from "@tanstack/react-query";
 
 export interface VersionData {
   id: string;
@@ -46,15 +45,6 @@ export interface ConversationResult {
 export interface CacheCheckResult {
   cached: boolean;
   response?: string;
-}
-
-export interface MessageHandlerContext {
-  messages: Message[];
-  conversationId: string | null;
-  abortSignal: AbortSignal;
-  queryClient: QueryClient;
-  onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  onConversationIdUpdate: (id: string) => void;
 }
 
 export interface MemoryStatus {

@@ -2,6 +2,13 @@ import { type Message, type Attachment, type MessageContentPart } from "@/lib/sc
 import { extractTextFromContent } from "@/lib/content-utils";
 import { type CacheCheckResult } from "./types";
 
+interface CacheCheckContext {
+  messages: Message[];
+  content: string | MessageContentPart[];
+  attachments?: Attachment[];
+  abortSignal: AbortSignal;
+}
+
 export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
   return !attachments || attachments.length === 0;
 }
@@ -52,13 +59,6 @@ export async function checkCache(
     console.error("Cache check failed:", err);
   }
   return { cached: false };
-}
-
-export interface CacheCheckContext {
-  messages: Message[];
-  content: string | MessageContentPart[];
-  attachments?: Attachment[];
-  abortSignal: AbortSignal;
 }
 
 export async function performCacheCheck(

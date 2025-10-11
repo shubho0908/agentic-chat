@@ -18,8 +18,8 @@ export async function DELETE(
 
     if (!success) {
       return errorResponse(
-        'Failed to delete memory',
-        'Memory not found or could not be deleted',
+        API_ERROR_MESSAGES.MEMORY_DELETE_FAILED,
+        API_ERROR_MESSAGES.MEMORY_DELETE_NOT_FOUND,
         HTTP_STATUS.NOT_FOUND
       );
     }
@@ -58,8 +58,8 @@ export async function PATCH(
 
     if (!success) {
       return errorResponse(
-        'Failed to update memory',
-        'Memory not found or could not be updated',
+        API_ERROR_MESSAGES.MEMORY_UPDATE_FAILED,
+        API_ERROR_MESSAGES.MEMORY_UPDATE_NOT_FOUND,
         HTTP_STATUS.NOT_FOUND
       );
     }

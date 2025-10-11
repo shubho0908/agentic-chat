@@ -22,7 +22,8 @@ import { toast } from "sonner";
 import { ApiKeyInput } from "./apiKeyInput";
 import { ModelSelector } from "./modelSelector";
 import { isValidApiKey } from "../utils/byokUtils";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 
 interface BYOKProps {
   autoOpen?: boolean;

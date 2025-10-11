@@ -13,7 +13,8 @@ import { signOut, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 
 export function UserMenu() {
   const { data: session } = useSession();

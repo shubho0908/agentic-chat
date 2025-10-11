@@ -10,6 +10,7 @@ export const ERROR_CODES = {
   ENCRYPTION_ERROR: "ENCRYPTION_ERROR",
   UPLOAD_ERROR: "UPLOAD_ERROR",
   CACHE_ERROR: "CACHE_ERROR",
+  MODEL_REQUIRED: "MODEL_REQUIRED",
 } as const;
 
 export const API_ERROR_MESSAGES = {
@@ -17,6 +18,7 @@ export const API_ERROR_MESSAGES = {
   [ERROR_CODES.CONVERSATION_NOT_FOUND]: "Conversation not found",
   [ERROR_CODES.API_KEY_NOT_CONFIGURED]: "API key not configured",
   [ERROR_CODES.INVALID_API_KEY]: "Invalid API key",
+  [ERROR_CODES.MODEL_REQUIRED]: "Model is required and must be a string",
   INVALID_API_KEY_FORMAT: "Invalid OpenAI API key format",
   INVALID_CONVERSATION_ID: "Invalid conversation ID format",
   MISSING_MODEL_MESSAGES: "Missing required fields: model, messages",
@@ -43,9 +45,12 @@ export const API_ERROR_MESSAGES = {
   MEMORY_FETCH_FAILED: "Failed to fetch memories",
   MEMORY_ADD_FAILED: "Failed to add memory",
   MEMORY_DELETE_FAILED: "Failed to delete memory",
+  MEMORY_DELETE_NOT_FOUND: "Memory not found or could not be deleted",
   MEMORY_UPDATE_FAILED: "Failed to update memory",
+  MEMORY_UPDATE_NOT_FOUND: "Memory not found or could not be updated",
   MEMORY_SEARCH_FAILED: "Failed to search memories",
   MEMORY_EXTRACT_FAILED: "Failed to extract memories",
+  OG_IMAGE_GENERATION_FAILED: "Failed to generate image",
   INTERNAL_SERVER_ERROR: "Internal server error",
   NO_RESPONSE_STREAM: "No response stream",
   OPENAI_RATE_LIMIT: "Rate limit exceeded. Please try again later",
@@ -53,6 +58,11 @@ export const API_ERROR_MESSAGES = {
   OPENAI_INVALID_API_KEY: "Invalid OpenAI API key. Please update your API key",
   OPENAI_MODEL_NOT_FOUND: "Model not found or not accessible with your API key",
   OPENAI_CONTEXT_LENGTH_EXCEEDED: "Message context is too long for this model",
+  PDF_GENERATION_FAILED: "Failed to generate PDF",
+  ATTACHMENT_NOT_FOUND: "Attachment not found",
+  ATTACHMENT_UNAUTHORIZED: "Unauthorized access to attachment",
+  RAG_MISSING_ENV_VARS: "Missing required environment variables",
+  RAG_INVALID_EMBEDDING_DIMENSIONS: "EMBEDDING_DIMENSIONS must be a positive integer",
 } as const;
 
 export const TOAST_ERROR_MESSAGES = {
@@ -102,19 +112,6 @@ export const TOAST_ERROR_MESSAGES = {
     FAILED_SEARCH: "Failed to search memories",
     FAILED_EXTRACT: "Failed to extract memories",
   },
-} as const;
-
-export const TOAST_SUCCESS_MESSAGES = {
-  SETTINGS_SAVED: "Settings saved successfully",
-  SETTINGS_CLEARED: "Settings cleared",
-  CHAT_CLEARED: "Chat cleared",
-  CONVERSATION_CREATED: "New conversation created",
-  CONVERSATION_DELETED: "Conversation deleted",
-  CONVERSATION_RENAMED: "Conversation renamed",
-  CONVERSATION_SHARED: "Conversation is now public",
-  CONVERSATION_UNSHARED: "Conversation is now private",
-  LOGGED_OUT: "Logged out successfully",
-  GENERATION_STOPPED: "Generation stopped",
 } as const;
 
 export const ENCRYPTION_ERRORS = {

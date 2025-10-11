@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export const runtime = 'edge';
 
@@ -232,6 +233,8 @@ export async function GET() {
     );
   } catch (e: unknown) {
     console.error('Error generating homepage OG image:', e);
-    return new Response('Failed to generate image', { status: 500 });
+    return new Response(API_ERROR_MESSAGES.OG_IMAGE_GENERATION_FAILED, {
+      status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    });
   }
 }

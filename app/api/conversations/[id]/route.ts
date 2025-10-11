@@ -6,24 +6,30 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
 
-interface MessageWithAttachments {
+interface MessageAttachment {
+  id: string;
+  fileUrl: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+}
+
+interface BaseMessage {
   id: string;
   role: string;
   content: string;
   createdAt: Date;
-  conversationId: string;
-  parentMessageId: string | null;
   siblingIndex: number;
-  attachments: Array<{
-    id: string;
-    fileUrl: string;
-    fileName: string;
-    fileType: string;
-    fileSize: number;
-  }>;
-  versions?: MessageWithAttachments[];
+  parentMessageId: string | null;
+  attachments?: MessageAttachment[];
 }
 
+interface MessageWithAttachments extends BaseMessage {
+  conversationId: string;
+  versions?: VersionMessage[];
+}
+
+type VersionMessage = BaseMessage;
 
 export async function GET(
   request: NextRequest,
@@ -94,24 +100,8 @@ export async function GET(
       versionCounts.map(vc => [vc.parentMessageId!, vc._count])
     );
 
-    interface VersionMessage {
-      id: string;
-      role: string;
-      content: string;
-      createdAt: Date;
-      siblingIndex: number;
-      parentMessageId: string | null;
-      attachments?: Array<{
-        id: string;
-        fileUrl: string;
-        fileName: string;
-        fileType: string;
-        fileSize: number;
-      }>;
-    }
-
     const versionsByParent = new Map<string, VersionMessage[]>();
-    
+
     if (includeVersions && messageIds.length > 0) {
       const versions = await prisma.message.findMany({
         where: {

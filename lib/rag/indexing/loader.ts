@@ -6,7 +6,7 @@ import { RAG_CONFIG } from '../config';
 import { read, utils } from 'xlsx';
 import WordExtractor from 'word-extractor';
 
-export interface DocumentLoadResult {
+interface DocumentLoadResult {
   success: boolean;
   documents?: Document[];
   error?: string;
