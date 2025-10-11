@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { decryptApiKey } from '@/lib/encryption';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export async function getAuthenticatedUser(headers: Headers) {
@@ -17,6 +18,19 @@ export async function getAuthenticatedUser(headers: Headers) {
   }
   
   return { user: session.user, error: null };
+}
+
+export async function getUserApiKey(userId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { encryptedApiKey: true },
+  });
+
+  if (!user?.encryptedApiKey) {
+    throw new Error(API_ERROR_MESSAGES.API_KEY_NOT_CONFIGURED);
+  }
+
+  return decryptApiKey(user.encryptedApiKey);
 }
 
 export async function verifyConversationOwnership(conversationId: string, userId: string) {

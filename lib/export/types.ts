@@ -1,4 +1,4 @@
-export interface ExportAttachment {
+interface ExportAttachment {
   id: string;
   fileUrl: string;
   fileName: string;

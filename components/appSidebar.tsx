@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
-import { MessageSquare, Plus, Trash2, MoreHorizontal, Loader, Pencil, Share2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { MessageSquare, Plus, Loader } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sidebar,
@@ -14,28 +14,18 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuAction,
   SidebarMenuSkeleton,
+  useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { RenameDialog } from "@/components/renameDialog";
-import { ShareDialog } from "@/components/shareDialog";
-import { DeleteDialog } from "@/components/deleteDialog";
+import { ConversationItem } from "@/components/conversationItem";
 import { useConversations } from "@/hooks/useConversations";
 import { useSession } from "@/lib/auth-client";
-import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Separator } from "./ui/separator";
@@ -45,8 +35,11 @@ export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
-  const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+  const { isMobile, openMobile } = useSidebar();
+  const fetchingRef = useRef(false);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   const {
     conversations,
@@ -65,29 +58,70 @@ export function AppSidebar() {
     count: conversations.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 72,
-    overscan: 5,
+    overscan: 10,
+    enabled: conversations.length > 0,
   });
 
-  React.useEffect(() => {
-    const virtualItems = virtualizer.getVirtualItems();
-    const [lastItem] = [...virtualItems].reverse();
-    
-    if (!lastItem) return;
-    
-    if (
-      lastItem.index >= conversations.length - 1 &&
-      hasNextPage &&
-      !isFetchingNextPage
-    ) {
-      fetchNextPage();
+  useEffect(() => {
+    if (!isFetchingNextPage) {
+      fetchingRef.current = false;
     }
-  }, [
-    hasNextPage,
-    fetchNextPage,
-    conversations.length,
-    isFetchingNextPage,
-    virtualizer,
-  ]);
+  }, [isFetchingNextPage]);
+
+  useEffect(() => {
+    if (conversations.length === 0) return;
+
+    if (isMobile && openMobile && parentRef.current) {
+      const timer = setTimeout(() => {
+        virtualizer.measure();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    
+    if (!isMobile && parentRef.current) {
+      const timer = setTimeout(() => {
+        virtualizer.measure();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile, openMobile, conversations.length, virtualizer]);
+
+  useEffect(() => {
+    const scrollElement = parentRef.current;
+    const loader = loaderRef.current;
+    
+    if (!scrollElement || !loader || conversations.length === 0 || !hasNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !fetchingRef.current) {
+          fetchingRef.current = true;
+          fetchNextPage();
+        }
+      },
+      {
+        root: scrollElement,
+        rootMargin: '200px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loader);
+    
+    const checkInitialLoad = setTimeout(() => {
+      const { scrollHeight, clientHeight } = scrollElement;
+      if (scrollHeight <= clientHeight && !fetchingRef.current) {
+        fetchingRef.current = true;
+        fetchNextPage();
+      }
+    }, isMobile && openMobile ? 400 : 100);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(checkInitialLoad);
+    };
+  }, [hasNextPage, fetchNextPage, conversations.length, isMobile, openMobile]);
 
   const handleNewChat = () => {
     router.push("/");
@@ -146,7 +180,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <Separator />
       <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden">
-        <SidebarContent ref={parentRef} className="flex-1 scrollbar-hide">
+        <SidebarContent ref={parentRef} className="flex-1 overflow-y-auto scrollbar-hide">
           <SidebarGroup>
             <SidebarGroupContent>
               {isLoading ? (
@@ -163,116 +197,74 @@ export function AppSidebar() {
                 </div>
               ) : (
                 <div
+                  key={`${isMobile}-${openMobile}`}
+                  className="relative w-full"
                   style={{
-                    height: `${virtualizer.getTotalSize()}px`,
-                    width: '100%',
-                    position: 'relative',
+                    height: virtualizer.getTotalSize() || 'auto',
                   }}
                 >
                   <SidebarMenu
                     className="gap-2"
                     style={{
-                      position: 'absolute',
+                      position: virtualizer.getTotalSize() ? 'absolute' : 'relative',
                       top: 0,
                       left: 0,
                       width: '100%',
-                      transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
+                      transform: virtualizer.getVirtualItems()[0]
+                        ? `translateY(${virtualizer.getVirtualItems()[0].start}px)` 
+                        : 'none',
                     }}
                   >
-                    {virtualizer.getVirtualItems().map((virtualItem) => {
-                      const conversation = conversations[virtualItem.index];
-                      const isDeleting = deletingId === conversation.id;
-                      return (
-                        <SidebarMenuItem
+                    {virtualizer.getVirtualItems().length > 0 ? (
+                      virtualizer.getVirtualItems().map((virtualItem) => {
+                        const conversation = conversations[virtualItem.index];
+                        if (!conversation) return null;
+                        
+                        return (
+                          <ConversationItem
+                            key={conversation.id}
+                            ref={(node) => {
+                              if (node) {
+                                node.setAttribute('data-index', String(virtualItem.index));
+                                virtualizer.measureElement(node);
+                              }
+                            }}
+                            conversation={conversation}
+                            isActive={currentConversationId === conversation.id}
+                            isDeleting={deletingId === conversation.id}
+                            isRenaming={isRenaming}
+                            isToggling={isToggling}
+                            onDelete={handleDeleteConversation}
+                            onRename={renameConversation}
+                            onToggleSharing={toggleSharing}
+                          />
+                        );
+                      })
+                    ) : (
+                      conversations.map((conversation) => (
+                        <ConversationItem
                           key={conversation.id}
-                          data-index={virtualItem.index}
-                          ref={virtualizer.measureElement}
-                          className={isDeleting ? "opacity-50 pointer-events-none" : ""}
-                        >
-                          <SidebarMenuButton asChild isActive={currentConversationId === conversation.id} disabled={isDeleting}>
-                            <Link href={`/c/${conversation.id}`} className={`py-3 px-3 ${isDeleting ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                              {isDeleting ? (
-                                <Loader className="size-4 shrink-0 animate-spin" />
-                              ) : null}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <span className="truncate font-medium">{conversation.title}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDistanceToNow(new Date(conversation.updatedAt), {
-                                    addSuffix: true,
-                                  })}
-                                </span>
-                              </div>
-                            </Link>
-                          </SidebarMenuButton>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild disabled={isDeleting}>
-                              <SidebarMenuAction className="cursor-pointer" showOnHover>
-                                {isDeleting ? (
-                                  <Loader className="size-4 animate-spin" />
-                                ) : (
-                                  <MoreHorizontal />
-                                )}
-                                <span className="sr-only">More</span>
-                              </SidebarMenuAction>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent side="right" align="start">
-                              <RenameDialog
-                                conversationId={conversation.id}
-                                currentTitle={conversation.title}
-                                onRename={(id, title) => renameConversation({ id, title })}
-                                isRenaming={isRenaming}
-                                trigger={
-                                  <DropdownMenuItem
-                                    onSelect={(e) => e.preventDefault()}
-                                    className="cursor-pointer"
-                                  >
-                                    <Pencil className="mr-2 size-4" />
-                                    Rename
-                                  </DropdownMenuItem>
-                                }
-                              />
-                              <ShareDialog
-                                conversationId={conversation.id}
-                                isPublic={conversation.isPublic}
-                                onToggleSharing={(id, isPublic) => toggleSharing({ id, isPublic })}
-                                isToggling={isToggling}
-                                trigger={
-                                  <DropdownMenuItem
-                                    onSelect={(e) => e.preventDefault()}
-                                    className="cursor-pointer"
-                                  >
-                                    <Share2 className="mr-2 size-4" />
-                                    Share
-                                  </DropdownMenuItem>
-                                }
-                              />
-                              <DropdownMenuSeparator />
-                              <DeleteDialog
-                                conversationId={conversation.id}
-                                conversationTitle={conversation.title}
-                                onDelete={handleDeleteConversation}
-                                isDeleting={isDeleting}
-                                trigger={
-                                  <DropdownMenuItem
-                                    onSelect={(e) => e.preventDefault()}
-                                    className="text-destructive cursor-pointer"
-                                    disabled={isDeleting}
-                                  >
-                                    <Trash2 className="mr-2 size-4" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                }
-                              />
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </SidebarMenuItem>
-                      );
-                    })}
+                          conversation={conversation}
+                          isActive={currentConversationId === conversation.id}
+                          isDeleting={deletingId === conversation.id}
+                          isRenaming={isRenaming}
+                          isToggling={isToggling}
+                          onDelete={handleDeleteConversation}
+                          onRename={renameConversation}
+                          onToggleSharing={toggleSharing}
+                        />
+                      ))
+                    )}
                     {isFetchingNextPage && (
                       <SidebarMenuItem>
                         <div className="flex items-center justify-center py-4">
                           <Loader className="size-4 animate-spin text-muted-foreground" />
                         </div>
+                      </SidebarMenuItem>
+                    )}
+                    {hasNextPage && !isFetchingNextPage && (
+                      <SidebarMenuItem>
+                        <div ref={loaderRef} className="h-1 w-full" />
                       </SidebarMenuItem>
                     )}
                   </SidebarMenu>

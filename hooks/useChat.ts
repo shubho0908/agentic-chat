@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useSaveToCache } from "./useSemanticCache";
-import { TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
+import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import { type UseChatOptions, type UseChatReturn, type MemoryStatus } from "./chat/types";
 import { handleSendMessage } from "./chat/message-sender";
 import { handleEditMessage } from "./chat/message-editor";

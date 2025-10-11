@@ -5,6 +5,7 @@ import type { Message, Attachment } from "@/lib/schemas/chat";
 import { ChatMessage } from "./chatMessage";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
+import { MemoryStatus } from "@/hooks/chat/types";
 
 interface ChatContainerProps {
   messages: Message[];
@@ -12,16 +13,7 @@ interface ChatContainerProps {
   userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
-  memoryStatus?: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    memoryCount: number;
-    documentCount: number;
-    hasImages: boolean;
-    imageCount: number;
-    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
-    skippedMemory?: boolean;
-  };
+  memoryStatus?: MemoryStatus
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
   isFetchingNextPage?: boolean;

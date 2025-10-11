@@ -12,6 +12,7 @@ import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
+import { MemoryStatus } from "@/hooks/chat/types";
 
 interface ChatMessageProps {
   message: Message;
@@ -19,16 +20,7 @@ interface ChatMessageProps {
   onEdit?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerate?: (messageId: string) => void;
   isLoading?: boolean;
-  memoryStatus?: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    memoryCount: number;
-    documentCount: number;
-    hasImages: boolean;
-    imageCount: number;
-    routingDecision?: 'vision-only' | 'documents-only' | 'memory-only' | 'hybrid';
-    skippedMemory?: boolean;
-  };
+  memoryStatus?: MemoryStatus
 }
 
 function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoading, memoryStatus }: ChatMessageProps) {

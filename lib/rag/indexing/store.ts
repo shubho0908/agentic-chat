@@ -7,11 +7,13 @@ import { ensurePgVectorTables } from '../storage/pgvector-init';
 import { getPgPool } from '../storage/pgvector-client';
 import { RAG_CONFIG } from '../config';
 import { RAGError, RAGErrorCode } from '../common/errors';
+import { getUserApiKey } from '@/lib/api-utils';
 
-function getEmbeddings() {
+async function getEmbeddings(userId: string) {
+  const apiKey = await getUserApiKey(userId);
   return new OpenAIEmbeddings({
     model: RAG_CONFIG.embeddings.model,
-    apiKey: RAG_CONFIG.embeddings.apiKey,
+    apiKey,
   });
 }
 
@@ -58,9 +60,10 @@ export async function addDocumentsToPgVector(
       },
     }));
 
+    const embeddings = await getEmbeddings(userId);
     await PGVectorStore.fromDocuments(
       docsWithMetadata,
-      getEmbeddings(),
+      embeddings,
       getVectorStoreConfig()
     );
   } catch (error) {

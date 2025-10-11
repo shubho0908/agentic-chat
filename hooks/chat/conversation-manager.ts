@@ -1,6 +1,7 @@
 import { type Attachment, type MessageContentPart, type Message } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
+import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
 import { type ConversationResult } from "./types";
 
@@ -53,7 +54,7 @@ export function buildMessagesForAPI(
     return [
       {
         role: "system" as const,
-        content: "You are a helpful AI assistant. The user is asking about a specific document or image. Focus ONLY on answering their question using the current document/image context provided. Do not reference or mention any other previous documents, files, or unrelated conversations. Be direct and concise.",
+        content: DOCUMENT_FOCUSED_ASSISTANT_PROMPT,
       },
       ...recentMessages.map(({ role, content }) => ({
         role: role as "user" | "assistant" | "system",

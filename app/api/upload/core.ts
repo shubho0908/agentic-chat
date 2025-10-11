@@ -16,12 +16,24 @@ export const ourFileRouter = {
       maxFileSize: "16MB",
       maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
     },
+    "application/msword": {
+      maxFileSize: "16MB",
+      maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
+    },
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
       maxFileSize: "16MB",
       maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
     },
     "application/vnd.ms-excel": {
       maxFileSize: "16MB",
+      maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
+    },
+    "text/csv": {
+      maxFileSize: "16MB",
+      maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
+    },
+    "text/markdown": {
+      maxFileSize: "4MB",
       maxFileCount: MAX_DOCUMENT_ATTACHMENTS,
     },
   })

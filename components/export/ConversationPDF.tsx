@@ -1,4 +1,3 @@
-import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { ExportConversation, ExportMessage } from '@/lib/export/types';
 
@@ -149,11 +148,13 @@ function formatFileSize(bytes: number): string {
   return (bytes / 1024).toFixed(2) + ' KB';
 }
 
-const MessageComponent: React.FC<{ message: ExportMessage; index: number; includeAttachments: boolean }> = ({
-  message,
-  index,
-  includeAttachments,
-}) => {
+interface MessageComponentProps {
+  message: ExportMessage;
+  index: number;
+  includeAttachments: boolean;
+}
+
+function MessageComponent({ message, index, includeAttachments }: MessageComponentProps) {
   const isUser = message.role === 'user';
   
   return (
@@ -192,12 +193,12 @@ const MessageComponent: React.FC<{ message: ExportMessage; index: number; includ
       )}
     </View>
   );
-};
+}
 
-export const ConversationPDF: React.FC<ConversationPDFProps> = ({
+export function ConversationPDF({
   conversation,
   includeAttachments = true,
-}) => {
+}: ConversationPDFProps) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -250,4 +251,4 @@ export const ConversationPDF: React.FC<ConversationPDFProps> = ({
       </Page>
     </Document>
   );
-};
+}

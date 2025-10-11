@@ -4,11 +4,13 @@ import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { ensurePgVectorTables } from '../storage/pgvector-init';
 import { RAG_CONFIG } from '../config';
+import { getUserApiKey } from '@/lib/api-utils';
 
-function getEmbeddings() {
+async function getEmbeddings(userId: string) {
+  const apiKey = await getUserApiKey(userId);
   return new OpenAIEmbeddings({
     model: RAG_CONFIG.embeddings.model,
-    apiKey: RAG_CONFIG.embeddings.apiKey,
+    apiKey,
   });
 }
 
@@ -51,8 +53,9 @@ export async function searchDocumentChunks(
     console.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
   }
 
+  const embeddings = await getEmbeddings(userId);
   const vectorStore = new PGVectorStore(
-    getEmbeddings(),
+    embeddings,
     getVectorStoreConfig()
   );
   

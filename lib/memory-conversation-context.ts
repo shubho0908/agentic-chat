@@ -2,6 +2,7 @@
 
 import { getPgPool } from '@/lib/rag/storage/pgvector-client';
 import { ensurePgVectorTables } from '@/lib/rag/storage/pgvector-init';
+import { getUserApiKey } from '@/lib/api-utils';
 import OpenAI from 'openai';
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
@@ -10,21 +11,14 @@ if (!EMBEDDING_MODEL) {
   throw new Error(`[Memory] Missing environment variable: EMBEDDING_MODEL`);
 }
 
-let openaiClient: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!openaiClient) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not set');
-    }
-    openaiClient = new OpenAI({ apiKey });
-  }
-  return openaiClient;
+async function getOpenAIClient(userId: string): Promise<OpenAI> {
+  const apiKey = await getUserApiKey(userId);
+  return new OpenAI({ apiKey });
 }
 
-async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await getOpenAIClient().embeddings.create({
+async function generateEmbedding(text: string, userId: string): Promise<number[]> {
+  const client = await getOpenAIClient(userId);
+  const response = await client.embeddings.create({
     model: EMBEDDING_MODEL,
     input: text,
   });
@@ -42,7 +36,7 @@ export async function storeConversationMemory(
     const pool = getPgPool();
 
     const memoryText = `User: ${userMessage}\nAssistant: ${assistantMessage}`;
-    const embedding = await generateEmbedding(memoryText);
+    const embedding = await generateEmbedding(memoryText, userId);
 
     await pool.query(
       `INSERT INTO conversation_memory 
@@ -77,7 +71,7 @@ export async function searchMemories(
     await ensurePgVectorTables();
     const pool = getPgPool();
 
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateEmbedding(query, userId);
 
     const result = await pool.query(
       `SELECT 
@@ -255,7 +249,7 @@ export async function updateMemory(
     await ensurePgVectorTables();
     const pool = getPgPool();
     
-    const embedding = await generateEmbedding(newMemoryText);
+    const embedding = await generateEmbedding(newMemoryText, userId);
     
     await pool.query(
       `UPDATE conversation_memory 

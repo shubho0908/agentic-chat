@@ -3,7 +3,8 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
-import { HOOK_ERROR_MESSAGES, TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES } from "@/constants/errors";
+import { HOOK_ERROR_MESSAGES, TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 
 interface Conversation {
   id: string;

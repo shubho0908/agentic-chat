@@ -17,6 +17,9 @@ export const RAG_CONFIG = {
     sizeByType: {
       pdf: { size: 1000, overlap: 150 },
       doc: { size: 800, overlap: 100 },
+      excel: { size: 1200, overlap: 150 },
+      csv: { size: 1000, overlap: 120 },
+      markdown: { size: 700, overlap: 100 },
       text: { size: 600, overlap: 80 },
     },
     adjustmentByFileSize: {
@@ -36,33 +39,36 @@ export const RAG_CONFIG = {
   },
   embeddings: {
     model: process.env.EMBEDDING_MODEL as string,
-    apiKey: process.env.OPENAI_API_KEY as string,
   },
   supportedFileTypes: [
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/msword',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'text/csv',
     'text/plain',
     'text/markdown',
   ],
 };
+
+import { API_ERROR_MESSAGES } from '@/constants/errors';
 
 export function validateRAGConfig(): void {
   const required = [
     'DATABASE_URL',
     'EMBEDDING_DIMENSIONS',
     'EMBEDDING_MODEL',
-    'OPENAI_API_KEY',
   ];
 
   const missing = required.filter(key => !process.env[key]);
   
   if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    throw new Error(`${API_ERROR_MESSAGES.RAG_MISSING_ENV_VARS}: ${missing.join(', ')}`);
   }
 
   const embeddingDimensions = Number(process.env.EMBEDDING_DIMENSIONS);
   if (isNaN(embeddingDimensions) || !Number.isInteger(embeddingDimensions) || embeddingDimensions <= 0) {
-    throw new Error('EMBEDDING_DIMENSIONS must be a positive integer');
+    throw new Error(API_ERROR_MESSAGES.RAG_INVALID_EMBEDDING_DIMENSIONS);
   }
 }

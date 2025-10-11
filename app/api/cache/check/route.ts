@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     const { query } = parsedBody.data;
 
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateEmbedding(query, user.id);
     const cachedResponse = await searchSemanticCache(queryEmbedding, user.id);
 
     if (cachedResponse) {

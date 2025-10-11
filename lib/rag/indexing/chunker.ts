@@ -3,13 +3,13 @@ import type { Document } from '@langchain/core/documents';
 import { encoding_for_model, TiktokenModel, type Tiktoken } from 'tiktoken';
 import { RAG_CONFIG } from '../config';
 
-export interface ChunkConfig {
+interface ChunkConfig {
   chunkSize?: number;
   chunkOverlap?: number;
   separators?: string[];
 }
 
-export interface DocumentChunk {
+interface DocumentChunk {
   content: string;
   index: number;
   tokenCount: number;
@@ -22,7 +22,7 @@ export interface DocumentChunk {
   };
 }
 
-export interface ChunkResult {
+interface ChunkResult {
   success: boolean;
   chunks?: DocumentChunk[];
   error?: string;
@@ -34,6 +34,15 @@ export interface ChunkResult {
 }
 
 let encoderCache: Tiktoken | null = null;
+
+const CONTENT_TYPE_KEYWORDS: Record<keyof typeof RAG_CONFIG.chunking.sizeByType, string[]> = {
+  pdf: ['pdf'],
+  doc: ['word', 'doc'],
+  excel: ['spreadsheet', 'excel', 'xls'],
+  csv: ['csv'],
+  markdown: ['markdown'],
+  text: ['text'],
+};
 
 function getEncoder(): Tiktoken {
   if (!encoderCache) {
@@ -52,7 +61,7 @@ function countTokens(text: string): number {
   }
 }
 
-export function freeEncoder(): void {
+function freeEncoder(): void {
   if (encoderCache) {
     encoderCache.free();
     encoderCache = null;
@@ -127,16 +136,19 @@ export function getOptimalChunkSize(fileSize: number, contentType: string): Chun
   let baseChunkSize = RAG_CONFIG.chunking.defaultSize;
   let baseOverlap = RAG_CONFIG.chunking.defaultOverlap;
 
-  if (contentType.includes('pdf')) {
-    const config = RAG_CONFIG.chunking.sizeByType.pdf;
-    baseChunkSize = config.size;
-    baseOverlap = config.overlap;
-  } else if (contentType.includes('word') || contentType.includes('doc')) {
-    const config = RAG_CONFIG.chunking.sizeByType.doc;
-    baseChunkSize = config.size;
-    baseOverlap = config.overlap;
-  } else if (contentType.includes('text')) {
-    const config = RAG_CONFIG.chunking.sizeByType.text;
+  const lowerContentType = contentType.toLowerCase();
+  const sizeByType = RAG_CONFIG.chunking.sizeByType;
+
+  const matchedType = (Object.entries(CONTENT_TYPE_KEYWORDS) as Array<[
+    keyof typeof sizeByType,
+    string[]
+  ]>).find(([, keywords]) =>
+    keywords.some(keyword => lowerContentType.includes(keyword))
+  );
+
+  if (matchedType) {
+    const [typeKey] = matchedType;
+    const config = sizeByType[typeKey];
     baseChunkSize = config.size;
     baseOverlap = config.overlap;
   }

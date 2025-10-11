@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const { model, messages, stream = true, conversationId } = body;
 
     if (!model || typeof model !== 'string') {
-      return errorResponse('Model is required and must be a string', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const validation = validateChatMessages(messages);

@@ -14,7 +14,7 @@ import {
   filterDocumentAttachments,
 } from './status-helpers';
 
-export interface RAGContextOptions {
+interface RAGContextOptions {
   conversationId?: string;
   attachmentIds?: string[];
   limit?: number;

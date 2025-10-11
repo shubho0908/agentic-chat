@@ -1,10 +1,11 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { API_ERROR_MESSAGES } from '@/constants/errors';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import type { Attachment, Message, Conversation } from '@/lib/generated/prisma';
 
-export interface AuthorizedAttachment extends Attachment {
+interface AuthorizedAttachment extends Attachment {
   message: Message & {
     conversation: Pick<Conversation, 'userId'>;
   };
@@ -28,11 +29,11 @@ export async function getAuthorizedAttachment(
   });
 
   if (!attachment) {
-    throw new RAGError('Attachment not found', RAGErrorCode.NOT_FOUND);
+    throw new RAGError(API_ERROR_MESSAGES.ATTACHMENT_NOT_FOUND, RAGErrorCode.NOT_FOUND);
   }
 
   if (attachment.message.conversation.userId !== userId) {
-    throw new RAGError('Unauthorized access to attachment', RAGErrorCode.UNAUTHORIZED);
+    throw new RAGError(API_ERROR_MESSAGES.ATTACHMENT_UNAUTHORIZED, RAGErrorCode.UNAUTHORIZED);
   }
 
   return attachment as AuthorizedAttachment;
@@ -63,7 +64,7 @@ export async function getAuthorizedAttachments(
 
   if (unauthorized.length > 0) {
     throw new RAGError(
-      `Unauthorized access to ${unauthorized.length} attachment(s)`,
+      `${API_ERROR_MESSAGES.ATTACHMENT_UNAUTHORIZED}: ${unauthorized.length} attachment(s)`,
       RAGErrorCode.UNAUTHORIZED
     );
   }

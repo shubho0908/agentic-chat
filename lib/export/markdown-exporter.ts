@@ -12,10 +12,8 @@ export function exportToMarkdown(
 
   const lines: string[] = [];
 
-  // Title
   lines.push(`# ${conversation.title || 'Untitled Conversation'}\n`);
 
-  // Metadata
   if (includeMetadata) {
     lines.push('## Conversation Details\n');
     lines.push(`- **Created**: ${formatDate(conversation.createdAt)}`);
@@ -28,7 +26,6 @@ export function exportToMarkdown(
     lines.push('---\n');
   }
 
-  // Messages
   lines.push('## Conversation\n');
 
   conversation.messages.forEach((message, index) => {
@@ -50,11 +47,9 @@ function formatMessage(
   lines.push(`### Message ${index}: ${role}`);
   lines.push(`*${formatDate(message.createdAt)}*\n`);
   
-  // Content
   lines.push(message.content);
   lines.push('');
 
-  // Attachments
   if (includeAttachments && message.attachments && message.attachments.length > 0) {
     lines.push('**Attachments:**\n');
     message.attachments.forEach((attachment) => {
@@ -64,7 +59,6 @@ function formatMessage(
     lines.push('');
   }
 
-  // Versions (edit history)
   if (includeVersions && message.versions && message.versions.length > 0) {
     lines.push(`<details>`);
     lines.push(`<summary>📝 Edit History (${message.versions.length} version${message.versions.length > 1 ? 's' : ''})</summary>\n`);
