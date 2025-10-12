@@ -23,28 +23,32 @@ export async function getAttachmentStatuses(
 export async function waitForDocumentProcessing(
   attachmentIds: string[],
   options: {
-    maxWaitMs?: number;
     pollInterval?: number;
     useExponentialBackoff?: boolean;
   } = {}
 ): Promise<string[]> {
   const {
-    maxWaitMs = RAG_CONFIG.processing.maxWaitTime,
     pollInterval = RAG_CONFIG.processing.pollInterval,
     useExponentialBackoff = RAG_CONFIG.processing.exponentialBackoff,
   } = options;
 
-  const startTime = Date.now();
   let currentInterval = pollInterval;
+  let previousCompletedCount = 0;
 
-  while (Date.now() - startTime < maxWaitMs) {
+  while (true) {
     const statuses = await getAttachmentStatuses(attachmentIds);
     const partitioned = partitionByStatus(statuses);
     
+    const completedIds = extractIds(partitioned.completed);
     const stillProcessing = [...partitioned.processing, ...partitioned.pending];
+    const currentCompletedCount = completedIds.length;
+
+    if (currentCompletedCount > previousCompletedCount) {
+      previousCompletedCount = currentCompletedCount;
+    }
 
     if (stillProcessing.length === 0) {
-      return extractIds(partitioned.completed);
+      return completedIds;
     }
 
     await new Promise(resolve => setTimeout(resolve, currentInterval));
@@ -56,11 +60,6 @@ export async function waitForDocumentProcessing(
       );
     }
   }
-
-  const finalStatuses = await getAttachmentStatuses(attachmentIds);
-  const finalPartitioned = partitionByStatus(finalStatuses);
-  
-  return extractIds(finalPartitioned.completed);
 }
 
 export async function getCompletedAttachmentIds(

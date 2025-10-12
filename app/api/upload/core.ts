@@ -9,27 +9,27 @@ const f = createUploadthing();
 
 export const ourFileRouter = {
   ragDocumentUploader: f({
-    image: { maxFileSize: "8MB", maxFileCount: MAX_FILE_ATTACHMENTS },
-    pdf: { maxFileSize: "16MB", maxFileCount: MAX_FILE_ATTACHMENTS },
+    image: { maxFileSize: "2MB", maxFileCount: MAX_FILE_ATTACHMENTS },
+    pdf: { maxFileSize: "4MB", maxFileCount: MAX_FILE_ATTACHMENTS },
     text: { maxFileSize: "4MB", maxFileCount: MAX_FILE_ATTACHMENTS },
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
-      maxFileSize: "16MB",
+      maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "application/msword": {
-      maxFileSize: "16MB",
+      maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
-      maxFileSize: "16MB",
+      maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "application/vnd.ms-excel": {
-      maxFileSize: "16MB",
+      maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "text/csv": {
-      maxFileSize: "16MB",
+      maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
     "text/markdown": {

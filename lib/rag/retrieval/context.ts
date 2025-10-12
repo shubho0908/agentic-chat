@@ -20,7 +20,6 @@ interface RAGContextOptions {
   limit?: number;
   scoreThreshold?: number;
   waitForProcessing?: boolean;
-  maxWaitTime?: number;
 }
 
 export interface RAGContextResult {
@@ -41,7 +40,6 @@ export async function getRAGContext(
       limit = RAG_CONFIG.search.defaultLimit,
       scoreThreshold = RAG_CONFIG.search.scoreThreshold,
       waitForProcessing = true,
-      maxWaitTime = RAG_CONFIG.processing.maxWaitTime,
     } = options;
 
     let attachmentIds = providedAttachmentIds;
@@ -74,7 +72,7 @@ export async function getRAGContext(
       const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
 
       if (processingIds.length > 0 && waitForProcessing) {
-        const newlyCompleted = await waitForDocumentProcessing(processingIds, { maxWaitMs: maxWaitTime });
+        const newlyCompleted = await waitForDocumentProcessing(processingIds);
         attachmentIds = [...completedIds, ...newlyCompleted];
       } else {
         attachmentIds = completedIds;
@@ -99,8 +97,7 @@ export async function getRAGContext(
       const alreadyCompleted = extractIds(partitioned.completed);
 
       if (needProcessing.length > 0) {
-        console.log('[RAG Context] 🕐 Waiting for', needProcessing.length, 'documents to complete processing...');
-        const newlyCompleted = await waitForDocumentProcessing(needProcessing, { maxWaitMs: maxWaitTime });
+        const newlyCompleted = await waitForDocumentProcessing(needProcessing);
         completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
       } else {
         completedAttachmentIds = alreadyCompleted;

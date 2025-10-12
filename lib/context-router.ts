@@ -123,7 +123,6 @@ export async function routeContext(
     limit: 5,
     scoreThreshold: 0.7,
     waitForProcessing: true,
-    maxWaitTime: 30000,
   });
 
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
