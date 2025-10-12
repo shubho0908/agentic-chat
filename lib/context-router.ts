@@ -18,6 +18,7 @@ export interface ContextRoutingResult {
     imageCount: number;
     routingDecision: RoutingDecision;
     skippedMemory: boolean;
+    activeToolName?: string;
   };
 }
 
@@ -74,7 +75,8 @@ export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
   messages: Message[],
-  conversationId?: string
+  conversationId?: string,
+  activeTool?: string | null
 ): Promise<ContextRoutingResult> {
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
@@ -89,6 +91,7 @@ export async function routeContext(
     imageCount: number;
     routingDecision: RoutingDecision;
     skippedMemory: boolean;
+    activeToolName?: string;
   } = {
     hasMemories: false,
     hasDocuments: false,
@@ -104,6 +107,13 @@ export async function routeContext(
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
 
+  if (activeTool) {
+    metadata.routingDecision = RoutingDecision.ToolOnly;
+    metadata.skippedMemory = true;
+    metadata.activeToolName = activeTool;
+    return { context: '', metadata };
+  }
+
   const hasAttachmentsPromise = conversationId 
     ? hasDocumentAttachments(conversationId)
     : Promise.resolve(false);
@@ -116,7 +126,6 @@ export async function routeContext(
     maxWaitTime: 30000,
   });
 
-  // For image-only queries (no text query or referential patterns), skip RAG
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;

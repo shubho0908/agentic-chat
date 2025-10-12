@@ -1,4 +1,4 @@
-import { type Message, type Attachment } from "@/lib/schemas/chat";
+import { type Message, type Attachment, type ToolActivity } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/content-utils";
@@ -10,7 +10,7 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
-import { type MemoryStatus } from "./types";
+import { type MemoryStatus, ToolStatus } from "./types";
 
 interface EditMessageContext {
   messages: Message[];
@@ -26,7 +26,8 @@ export async function handleEditMessage(
   messageId: string,
   newContent: string,
   attachments: Attachment[] | undefined,
-  context: EditMessageContext
+  context: EditMessageContext,
+  activeTool?: string | null
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -54,6 +55,11 @@ export async function handleEditMessage(
   const assistantMessageId = `assistant-${Date.now()}`;
   const messagesUpToEdit = messages.slice(0, messageIndex);
   const originalMessagesState = [...messages];
+  const toolActivities: ToolActivity[] = [];
+  let currentMemoryStatus: MemoryStatus | undefined;
+  
+  const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === "assistant");
+  const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
   
   const newEditedVersion = createNewVersion(
     messageToEdit.versions || [],
@@ -80,7 +86,9 @@ export async function handleEditMessage(
       id: assistantMessageId,
       timestamp: Date.now(),
       model: model,
+      toolActivities: [],
     },
+    ...messagesAfterAssistant,
   ]);
 
   try {
@@ -99,6 +107,7 @@ export async function handleEditMessage(
       content: messageContent,
       attachments,
       abortSignal,
+      activeTool,
     });
 
     if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
@@ -152,7 +161,66 @@ export async function handleEditMessage(
         );
       },
       conversationId,
-      onMemoryStatus: onMemoryStatusUpdate,
+      onMemoryStatus: (status) => {
+        currentMemoryStatus = status;
+        onMemoryStatusUpdate?.(status);
+      },
+      onToolCall: (toolCall) => {
+        const activity: ToolActivity = {
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          status: ToolStatus.Calling,
+          args: toolCall.args,
+          timestamp: Date.now(),
+        };
+        
+        toolActivities.push(activity);
+        
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, toolActivities: [...toolActivities] }
+              : msg
+          )
+        );
+      },
+      onToolResult: (toolResult) => {
+        const activityIndex = toolActivities.findIndex(
+          (a) => a.toolCallId === toolResult.toolCallId
+        );
+        
+        if (activityIndex !== -1) {
+          toolActivities[activityIndex] = {
+            ...toolActivities[activityIndex],
+            status: ToolStatus.Completed,
+            result: toolResult.result,
+            timestamp: Date.now(),
+          };
+          
+          onMessagesUpdate((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, toolActivities: [...toolActivities] }
+                : msg
+            )
+          );
+        }
+      },
+      onToolProgress: (progress) => {
+        if (currentMemoryStatus && onMemoryStatusUpdate) {
+          const updatedStatus: MemoryStatus = {
+            ...currentMemoryStatus,
+            toolProgress: {
+              status: progress.status,
+              message: progress.message,
+              details: progress.details,
+            },
+          };
+          currentMemoryStatus = updatedStatus;
+          onMemoryStatusUpdate(updatedStatus);
+        }
+      },
+      activeTool,
     });
 
     if (responseContent && !abortSignal.aborted) {
@@ -192,7 +260,7 @@ export async function handleEditMessage(
     return { success: true };
   } catch (err) {
     if ((err as Error).name === "AbortError") {
-      onMessagesUpdate(() => messagesUpToEdit);
+      onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }
     

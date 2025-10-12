@@ -21,8 +21,18 @@ function HomeContent() {
   const { data: session, isPending } = useSession();
 
   const hasMessages = messages.length > 0;
+  
+  const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
+    const activeTool = localStorage.getItem('agentic-chat-active-tool');
+    return editMessage({ messageId, content, attachments, activeTool });
+  };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
+  const handleRegenerate = (messageId: string) => {
+    const activeTool = localStorage.getItem('agentic-chat-active-tool');
+    return regenerateResponse({ messageId, activeTool });
+  };
+
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null) => {
     if (isPending) {
       return;
     }
@@ -42,7 +52,7 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content, session, attachments);
+    await sendMessage({ content, session, attachments, activeTool });
   };
 
   if (!hasMessages) {
@@ -75,8 +85,8 @@ function HomeContent() {
         messages={messages} 
         isLoading={isLoading}
         userName={session?.user?.name}
-        onEditMessage={editMessage}
-        onRegenerateMessage={regenerateResponse}
+        onEditMessage={handleEdit}
+        onRegenerateMessage={handleRegenerate}
         memoryStatus={memoryStatus}
       />
       <ChatInput

@@ -51,11 +51,21 @@ export default function ChatPage({
 
   const conversationNotFound = !!conversationError;
 
+  const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
+    const activeTool = localStorage.getItem('agentic-chat-active-tool');
+    return editMessage({ messageId, content, attachments, activeTool });
+  };
+
+  const handleRegenerate = (messageId: string) => {
+    const activeTool = localStorage.getItem('agentic-chat-active-tool');
+    return regenerateResponse({ messageId, activeTool });
+  };
+
   const handleToggleSharing = (id: string, isPublic: boolean) => {
     toggleSharing({ id, isPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null) => {
     if (isPending) {
       return;
     }
@@ -74,7 +84,7 @@ export default function ChatPage({
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage(content, session, attachments);
+    await sendMessage({ content, session, attachments, activeTool });
   };
 
   if (conversationNotFound) {
@@ -119,8 +129,8 @@ export default function ChatPage({
         messages={messages} 
         isLoading={isLoading}
         userName={session?.user?.name}
-        onEditMessage={editMessage}
-        onRegenerateMessage={regenerateResponse}
+        onEditMessage={handleEdit}
+        onRegenerateMessage={handleRegenerate}
         memoryStatus={memoryStatus}
         hasNextPage={hasNextPage}
         fetchNextPage={fetchNextPage}

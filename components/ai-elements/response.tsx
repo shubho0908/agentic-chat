@@ -3,8 +3,12 @@
 import { cn } from "@/lib/utils";
 import { type ComponentProps, memo } from "react";
 import { Streamdown } from "streamdown";
+import type { ParsedSearchResult } from "@/lib/tools/parsing";
+import Link from "next/link";
 
-type ResponseProps = ComponentProps<typeof Streamdown>;
+type ResponseProps = ComponentProps<typeof Streamdown> & {
+  sources?: ParsedSearchResult[];
+};
 
 function fixMathDelimiters(text: string): string {
   const codeBlocks: string[] = [];
@@ -36,21 +40,44 @@ function fixMathDelimiters(text: string): string {
   return processed;
 }
 
-const ResponseComponent = ({ className, children, ...props }: ResponseProps) => {
+const ResponseComponent = ({ className, children, sources, ...props }: ResponseProps) => {
   const processedChildren = typeof children === 'string' 
     ? fixMathDelimiters(children)
     : children;
   
   return (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
+    <div className="space-y-4">
+      <Streamdown
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        {...props}
+      >
+        {processedChildren}
+      </Streamdown>
+      
+      {sources && sources.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-border/50">
+          <div className="flex flex-wrap gap-x-4 gap-y-2 items-baseline">
+            {sources.map((source, index) => (
+              <div key={index} className="flex items-baseline gap-1.5">
+                <span className="text-foreground/40 select-none">•</span>
+                <Link
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline decoration-dotted underline-offset-2 inline-flex items-center gap-1"
+                  title={source.title}
+                >
+                  <span className="truncate max-w-[200px]">{source.domain || source.title}</span>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-      {...props}
-    >
-      {processedChildren}
-    </Streamdown>
+    </div>
   );
 };
 

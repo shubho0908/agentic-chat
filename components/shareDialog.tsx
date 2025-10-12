@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { ExportSection } from "@/components/export/ExportSection";
+import { ExportSection } from "@/components/export/exportSection";
 
 interface ShareDialogProps {
   conversationId: string;

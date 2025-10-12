@@ -9,7 +9,7 @@ import type { ExportFormat, ExportConversation } from "@/lib/export/types";
 import { downloadJSON } from "@/lib/export/json-exporter";
 import { downloadMarkdown } from "@/lib/export/markdown-exporter";
 import { downloadPDF } from "@/lib/export/pdf-exporter";
-import { ConversationPDF } from "./ConversationPDF";
+import { ConversationPDF } from "./conversationPdf";
 import { cn } from "@/lib/utils";
 
 interface ExportSectionProps {

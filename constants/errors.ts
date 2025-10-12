@@ -139,6 +139,14 @@ export const HOOK_ERROR_MESSAGES = {
   UNKNOWN_ERROR_OCCURRED: "Unknown error occurred",
 } as const;
 
+export const TOOL_ERROR_MESSAGES = {
+  WEB_SEARCH: {
+    NOT_CONFIGURED: 'Web search is not configured. Please set TAVILY_API_KEY environment variable.',
+    NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
+    SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
+  },
+} as const;
+
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,

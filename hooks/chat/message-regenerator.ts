@@ -1,4 +1,4 @@
-import { type Message } from "@/lib/schemas/chat";
+import { type Message, type ToolActivity } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
@@ -9,7 +9,7 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
-import { type MemoryStatus } from "./types";
+import { type MemoryStatus, ToolStatus } from "./types";
 
 interface RegenerateContext {
   messages: Message[];
@@ -23,7 +23,8 @@ interface RegenerateContext {
 
 export async function handleRegenerateResponse(
   messageId: string,
-  context: RegenerateContext
+  context: RegenerateContext,
+  activeTool?: string | null
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -57,6 +58,10 @@ export async function handleRegenerateResponse(
   }
 
   const originalMessagesState = [...messages];
+  const toolActivities: ToolActivity[] = [];
+  let currentMemoryStatus: MemoryStatus | undefined;
+  
+  const messagesAfterAssistant = messages.slice(messageIndex + 1);
   
   const newRegeneratedVersion = createNewVersion(
     assistantMessage.versions || [],
@@ -73,10 +78,11 @@ export async function handleRegenerateResponse(
     ...assistantMessage,
     content: "",
     versions: updatedVersions,
+    toolActivities: [],
   };
 
   const messagesUpToAssistant = messages.slice(0, messageIndex);
-  onMessagesUpdate(() => [...messagesUpToAssistant, updatedAssistantMessage]);
+  onMessagesUpdate(() => [...messagesUpToAssistant, updatedAssistantMessage, ...messagesAfterAssistant]);
 
   try {
     if (conversationId && assistantMessage.id) {
@@ -88,6 +94,7 @@ export async function handleRegenerateResponse(
       content: previousUserMessage.content,
       attachments: previousUserMessage.attachments,
       abortSignal,
+      activeTool,
     });
 
     if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
@@ -136,7 +143,66 @@ export async function handleRegenerateResponse(
         );
       },
       conversationId,
-      onMemoryStatus: onMemoryStatusUpdate,
+      onMemoryStatus: (status) => {
+        currentMemoryStatus = status;
+        onMemoryStatusUpdate?.(status);
+      },
+      onToolCall: (toolCall) => {
+        const activity: ToolActivity = {
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          status: ToolStatus.Calling,
+          args: toolCall.args,
+          timestamp: Date.now(),
+        };
+        
+        toolActivities.push(activity);
+        
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, toolActivities: [...toolActivities] }
+              : msg
+          )
+        );
+      },
+      onToolResult: (toolResult) => {
+        const activityIndex = toolActivities.findIndex(
+          (a) => a.toolCallId === toolResult.toolCallId
+        );
+        
+        if (activityIndex !== -1) {
+          toolActivities[activityIndex] = {
+            ...toolActivities[activityIndex],
+            status: ToolStatus.Completed,
+            result: toolResult.result,
+            timestamp: Date.now(),
+          };
+          
+          onMessagesUpdate((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessage.id
+                ? { ...msg, toolActivities: [...toolActivities] }
+                : msg
+            )
+          );
+        }
+      },
+      onToolProgress: (progress) => {
+        if (currentMemoryStatus && onMemoryStatusUpdate) {
+          const updatedStatus: MemoryStatus = {
+            ...currentMemoryStatus,
+            toolProgress: {
+              status: progress.status,
+              message: progress.message,
+              details: progress.details,
+            },
+          };
+          currentMemoryStatus = updatedStatus;
+          onMemoryStatusUpdate(updatedStatus);
+        }
+      },
+      activeTool,
     });
 
     if (responseContent && !abortSignal.aborted) {
@@ -171,7 +237,7 @@ export async function handleRegenerateResponse(
     return { success: true };
   } catch (err) {
     if ((err as Error).name === "AbortError") {
-      onMessagesUpdate(() => messagesUpToAssistant);
+      onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }
     

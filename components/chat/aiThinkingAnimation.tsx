@@ -2,15 +2,24 @@
 
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Brain, FileText, Eye, Zap, Focus } from "lucide-react";
-import { MemoryStatus, RoutingDecision } from "@/hooks/chat/types";
+import { Brain, FileText, Eye, Zap, Focus, Wrench, Search } from "lucide-react";
+import { MemoryStatus, RoutingDecision, ToolProgressStatus } from "@/hooks/chat/types";
+import { TOOL_IDS } from "@/lib/tools/config";
 
 interface AIThinkingAnimationProps {
   memoryStatus?: MemoryStatus
 }
 
 export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) {
-  const hasContext = memoryStatus && (memoryStatus.hasMemories || memoryStatus.hasDocuments || memoryStatus.hasImages);
+  const isWebSearch = memoryStatus?.routingDecision === RoutingDecision.ToolOnly && 
+                       memoryStatus?.activeToolName === TOOL_IDS.WEB_SEARCH;
+  
+  const hasContext = memoryStatus && (
+    memoryStatus.hasMemories || 
+    memoryStatus.hasDocuments || 
+    memoryStatus.hasImages ||
+    memoryStatus.routingDecision === RoutingDecision.ToolOnly
+  );
   
   const contextualMessage = useMemo(() => {
     if (!hasContext) {
@@ -35,6 +44,14 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
       return "Synthesizing response from conversation history...";
     }
     
+    if (routing === RoutingDecision.ToolOnly) {
+      if (memoryStatus?.toolProgress?.message) {
+        return memoryStatus.toolProgress.message;
+      }
+      const toolName = memoryStatus?.activeToolName?.replace('_', ' ') || 'tool';
+      return `Using ${toolName} to process your request...`;
+    }
+    
     const contexts = [];
     if (memoryStatus?.hasDocuments) contexts.push("documents");
     if (memoryStatus?.hasMemories) contexts.push("memories");
@@ -50,6 +67,7 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
       case RoutingDecision.Hybrid: return <Zap className="w-3.5 h-3.5 text-purple-500" />;
       case RoutingDecision.DocumentsOnly: return <Focus className="w-3.5 h-3.5 text-amber-500" />;
       case RoutingDecision.MemoryOnly: return <Brain className="w-3.5 h-3.5 text-indigo-500" />;
+      case RoutingDecision.ToolOnly: return <Wrench className="w-3.5 h-3.5 text-blue-500" />;
       default: return <Zap className="w-3.5 h-3.5 text-gray-500" />;
     }
   };
@@ -60,6 +78,7 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
       case RoutingDecision.Hybrid: return 'Hybrid Mode';
       case RoutingDecision.DocumentsOnly: return 'Document Focus';
       case RoutingDecision.MemoryOnly: return 'Memory Context';
+      case RoutingDecision.ToolOnly: return 'Tool Active';
       default: return 'Standard';
     }
   };
@@ -91,6 +110,62 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
                 <span className="text-foreground/40 text-[10px] ml-auto">
                   (text context skipped)
                 </span>
+              </div>
+            ) : memoryStatus?.routingDecision === RoutingDecision.ToolOnly ? (
+              <div className="flex flex-col gap-1.5">
+                {isWebSearch ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground/40 font-mono text-[10px] select-none">
+                        {memoryStatus.toolProgress?.details?.sources && memoryStatus.toolProgress.details.sources.length > 0 ? '├─' : '└─'}
+                      </span>
+                      <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-pulse flex-shrink-0" />
+                      <span className="font-medium text-blue-700 dark:text-blue-300">
+                        {memoryStatus.toolProgress?.status === ToolProgressStatus.Searching && 'Searching web'}
+                        {memoryStatus.toolProgress?.status === ToolProgressStatus.Found && 
+                          `Found ${memoryStatus.toolProgress.details?.resultsCount || 0} sources`}
+                        {memoryStatus.toolProgress?.status === ToolProgressStatus.ProcessingSources && 
+                          `Processing ${memoryStatus.toolProgress.details?.processedCount || 0}/${memoryStatus.toolProgress.details?.resultsCount || 0}`}
+                        {memoryStatus.toolProgress?.status === ToolProgressStatus.Completed && 
+                          `${memoryStatus.toolProgress.details?.resultsCount || 0} sources analyzed`}
+                        {!memoryStatus.toolProgress?.status && 'Web search'}
+                      </span>
+                      <span className="text-foreground/40 text-[10px] ml-auto">
+                        (memory skipped)
+                      </span>
+                    </div>
+                    {memoryStatus.toolProgress?.details?.sources && memoryStatus.toolProgress.details.sources.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {memoryStatus.toolProgress.details.sources.slice(0, 5).map((source, idx) => (
+                            <span key={idx} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono">
+                              {source.domain}
+                            </span>
+                          ))}
+                          {memoryStatus.toolProgress.details.sources.length > 5 && (
+                            <span className="text-[10px] text-foreground/50">
+                              +{memoryStatus.toolProgress.details.sources.length - 5} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
+                    <Wrench className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-pulse flex-shrink-0" />
+                    <span className="font-medium text-blue-700 dark:text-blue-300">
+                      {memoryStatus.activeToolName 
+                        ? `${memoryStatus.activeToolName.replace('_', ' ')} tool`
+                        : 'Tool active'}
+                    </span>
+                    <span className="text-foreground/40 text-[10px] ml-auto">
+                      (memory skipped)
+                    </span>
+                  </div>
+                )}
               </div>
             ) : memoryStatus?.routingDecision === RoutingDecision.Hybrid ? (
               <>

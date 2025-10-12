@@ -1,7 +1,7 @@
 import { type StreamConfig } from "./types";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, activeTool } = config;
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -11,6 +11,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
       messages,
       stream: true,
       conversationId: conversationId || undefined,
+      activeTool: activeTool || null,
     }),
     signal,
   });
@@ -63,6 +64,12 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
           }
 
           if (parsed.type === 'memory_status' && onMemoryStatus) {
+            console.log('[Frontend Streaming] Received memory status:', {
+              routingDecision: parsed.routingDecision,
+              activeToolName: parsed.activeToolName,
+              hasMemories: parsed.hasMemories,
+              hasDocuments: parsed.hasDocuments,
+            });
             onMemoryStatus({
               hasMemories: parsed.hasMemories,
               hasDocuments: parsed.hasDocuments,
@@ -72,11 +79,39 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               imageCount: parsed.imageCount || 0,
               routingDecision: parsed.routingDecision,
               skippedMemory: parsed.skippedMemory,
+              activeToolName: parsed.activeToolName,
+            });
+          }
+
+          if (parsed.type === 'tool_call' && onToolCall) {
+            onToolCall({
+              toolName: parsed.toolName,
+              toolCallId: parsed.toolCallId,
+              args: parsed.args,
+            });
+          }
+
+          if (parsed.type === 'tool_result' && onToolResult) {
+            onToolResult({
+              toolName: parsed.toolName,
+              toolCallId: parsed.toolCallId,
+              result: parsed.result,
+            });
+          }
+
+          if (parsed.type === 'tool_progress' && onToolProgress) {
+            console.log('[Frontend Streaming] Received tool progress:', parsed);
+            onToolProgress({
+              toolName: parsed.toolName,
+              status: parsed.status,
+              message: parsed.message,
+              details: parsed.details,
             });
           }
 
           if (parsed.content) {
             fullContent += parsed.content;
+            console.log('[Frontend] Received content chunk, total length:', fullContent.length);
             onChunk(fullContent);
           }
         } catch (err) {

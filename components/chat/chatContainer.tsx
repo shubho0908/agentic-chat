@@ -87,6 +87,7 @@ export function ChatContainer({
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (
           <div className="flex items-center justify-center py-2">
             <button
+              type="button"
               onClick={() => {
                 if (fetchNextPage) {
                   const scrollElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
@@ -102,21 +103,29 @@ export function ChatContainer({
             </button>
           </div>
         )}
-        {messages.map((message, index) => (
-          <div
-            key={message.id || `${message.role}-${index}`}
-            ref={index === messages.length - 1 ? lastMessageRef : undefined}
-          >
-            <ChatMessage 
-              message={message} 
-              userName={userName} 
-              onEdit={onEditMessage} 
-              onRegenerate={onRegenerateMessage}
-              isLoading={isLoading}
-              memoryStatus={index === messages.length - 1 && isLoading ? memoryStatus : undefined}
-            />
-          </div>
-        ))}
+        {messages.map((message, index) => {
+          const messageContent = typeof message.content === 'string' ? message.content : '';
+          const isGeneratingMessage = isLoading && 
+            message.role === "assistant" && 
+            messageContent.trim() === '' && 
+            message.id?.startsWith("assistant-");
+          
+          return (
+            <div
+              key={message.id || `${message.role}-${index}`}
+              ref={index === messages.length - 1 ? lastMessageRef : undefined}
+            >
+              <ChatMessage 
+                message={message} 
+                userName={userName} 
+                onEdit={onEditMessage} 
+                onRegenerate={onRegenerateMessage}
+                isLoading={isGeneratingMessage || (isLoading && index === messages.length - 1)}
+                memoryStatus={isGeneratingMessage || (isLoading && index === messages.length - 1) ? memoryStatus : undefined}
+              />
+            </div>
+          );
+        })}
       </div>
     </ScrollArea>
   );

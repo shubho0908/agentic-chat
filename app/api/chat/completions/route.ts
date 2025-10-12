@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
 
-    const { model, messages, stream = true, conversationId } = body;
-
+    const { model, messages, stream = true, conversationId, activeTool } = body;
+    
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
@@ -69,11 +69,12 @@ export async function POST(request: NextRequest) {
         lastUserMessage,
         authUser.id,
         messages.slice(0, -1) as Message[],
-        conversationId
+        conversationId,
+        activeTool
       );
 
       memoryStatusInfo = metadata;
-
+      
       if (context) {
         const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
         
@@ -101,8 +102,13 @@ export async function POST(request: NextRequest) {
       const readableStream = new ReadableStream({
         async start(controller) {
           try {
-            // Send memory/document/image status first
-            if (memoryStatusInfo.hasMemories || memoryStatusInfo.hasDocuments || memoryStatusInfo.hasImages) {
+            const shouldSendMemoryStatus = 
+              memoryStatusInfo.hasMemories || 
+              memoryStatusInfo.hasDocuments || 
+              memoryStatusInfo.hasImages ||
+              memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly;
+            
+            if (shouldSendMemoryStatus) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
                 type: 'memory_status',
                 hasMemories: memoryStatusInfo.hasMemories,
@@ -112,8 +118,63 @@ export async function POST(request: NextRequest) {
                 hasImages: memoryStatusInfo.hasImages,
                 imageCount: memoryStatusInfo.imageCount,
                 routingDecision: memoryStatusInfo.routingDecision,
-                skippedMemory: memoryStatusInfo.skippedMemory
+                skippedMemory: memoryStatusInfo.skippedMemory,
+                activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ? activeTool : undefined
               })}\n\n`));
+            }
+            
+            if (activeTool === 'web_search') {
+              try {
+                const lastUserMessage = messages[messages.length - 1]?.content || '';
+                const textQuery = typeof lastUserMessage === 'string' 
+                  ? lastUserMessage 
+                  : lastUserMessage.filter((p: { type: string; text?: string }) => p.type === 'text' && p.text)
+                      .map((p: { text?: string }) => p.text).join(' ');
+                
+                const { executeWebSearch } = await import('@/lib/tools/web-search');
+                
+                const searchResults = await executeWebSearch(
+                  {
+                    query: textQuery,
+                    maxResults: 5,
+                    searchDepth: 'basic',
+                    includeAnswer: false,
+                  },
+                  (progress) => {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                      type: 'tool_progress',
+                      toolName: 'web_search',
+                      status: progress.status,
+                      message: progress.message,
+                      details: progress.details
+                    })}\n\n`));
+                  }
+                );
+                
+                const searchContext = `\n\n## Web Search Context\n\nThe user requested a web search. Here are the current results:\n\n${searchResults}\n\nIMPORTANT: Synthesize this information into a comprehensive, natural response. DO NOT use numbered citations like [1], [2], [3] anywhere in your answer. DO NOT include inline source references. Write naturally - the UI will automatically display source links at the bottom.`;
+                
+                const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
+                if (systemMessageIndex >= 0) {
+                  enhancedMessages = [...enhancedMessages];
+                  enhancedMessages[systemMessageIndex] = {
+                    ...enhancedMessages[systemMessageIndex],
+                    content: enhancedMessages[systemMessageIndex].content + searchContext
+                  };
+                } else {
+                  enhancedMessages = [
+                    { role: 'system', content: searchContext },
+                    ...enhancedMessages
+                  ];
+                }
+              } catch (error) {
+                console.error('[Chat API] Web search error:', error);
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+                  type: 'tool_progress',
+                  toolName: 'web_search',
+                  status: 'completed',
+                  message: 'Search failed, continuing without web results...'
+                })}\n\n`));
+              }
             }
             
             const streamResponse = await openai.chat.completions.create({
