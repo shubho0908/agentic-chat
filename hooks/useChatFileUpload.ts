@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
-import { MAX_IMAGE_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { filterFiles, getFileNames } from "@/lib/file-validation";
@@ -63,19 +63,9 @@ export function useChatFileUpload() {
     setSelectedFiles(prev => {
       const newFiles = [...prev, ...allValidFiles];
       
-      const imageCount = newFiles.filter(f => f.type.startsWith('image/')).length;
-      const documentCount = newFiles.filter(f => !f.type.startsWith('image/')).length;
-      
-      if (imageCount > MAX_IMAGE_ATTACHMENTS) {
+      if (newFiles.length > MAX_FILE_ATTACHMENTS) {
         toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
-          description: `You can only attach up to ${MAX_IMAGE_ATTACHMENTS} images`,
-        });
-        return prev;
-      }
-      
-      if (documentCount > MAX_DOCUMENT_ATTACHMENTS) {
-        toast.error(TOAST_ERROR_MESSAGES.UPLOAD.TOO_MANY_FILES, {
-          description: `You can only attach ${MAX_DOCUMENT_ATTACHMENTS} document at a time`,
+          description: `You can only attach up to ${MAX_FILE_ATTACHMENTS} files`,
         });
         return prev;
       }

@@ -10,7 +10,7 @@ import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { MAX_IMAGE_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
 import { isValidToolId } from "@/lib/tools/config";
@@ -73,14 +73,12 @@ export function ChatInput({
     clearInput,
   } = useChatTextarea(sendMessage);
 
-  const imageCount = selectedFiles.filter(f => f.type.startsWith('image/')).length;
-  const documentCount = selectedFiles.filter(f => !f.type.startsWith('image/')).length;
-  const maxFilesReached = imageCount >= MAX_IMAGE_ATTACHMENTS && documentCount >= MAX_DOCUMENT_ATTACHMENTS;
+  const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
 
   const { dragState, dropZoneRef, handlers } = useDragAndDrop({
     onFilesDropped: handleFilesSelected,
     disabled: disabled || isLoading || isUploading || maxFilesReached,
-    maxFiles: MAX_IMAGE_ATTACHMENTS + MAX_DOCUMENT_ATTACHMENTS,
+    maxFiles: MAX_FILE_ATTACHMENTS,
     currentFileCount: selectedFiles.length,
   });
 
@@ -188,7 +186,7 @@ export function ChatInput({
                     className="min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
                   />
 
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1">
                     <FileUploadButton
                       disabled={disabled || isLoading || isUploading || maxFilesReached}
                       onFilesSelected={handleFilesSelected}

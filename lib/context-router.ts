@@ -139,8 +139,8 @@ export async function routeContext(
     const ragResult = await ragPromise;
     if (ragResult) {
       metadata.hasDocuments = true;
-      metadata.documentCount = ragResult ? 1 : 0;
-      return { context: ragResult, metadata };
+      metadata.documentCount = ragResult.documentCount;
+      return { context: ragResult.context, metadata };
     }
 
     return { context: '', metadata };
@@ -150,17 +150,17 @@ export async function routeContext(
 
   if (ragResult) {
     metadata.hasDocuments = true;
-    metadata.documentCount = ragResult ? 1 : 0;
+    metadata.documentCount = ragResult.documentCount;
     
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.Hybrid;
       metadata.skippedMemory = true;
-      return { context: ragResult, metadata };
+      return { context: ragResult.context, metadata };
     }
     
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
-    return { context: ragResult, metadata };
+    return { context: ragResult.context, metadata };
   }
 
   if (hasAttachments) {

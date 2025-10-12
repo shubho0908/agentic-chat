@@ -88,32 +88,20 @@ export function ToolsMenu({
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={disabled}
+                className={`size-10 rounded-lg transition-all ${
+                  hasActiveTool 
+                    ? 'bg-primary/10 hover:bg-primary/15' 
+                    : 'hover:bg-accent'
+                }`}
+                aria-label="Tools"
               >
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  disabled={disabled}
-                  className={`size-10 rounded-lg transition-all ${
-                    hasActiveTool 
-                      ? 'bg-primary/10 hover:bg-primary/15' 
-                      : 'hover:bg-accent'
-                  }`}
-                  aria-label="Tools"
-                >
-                  <motion.div
-                    initial={{ rotate: 180, scale: 0 }}
-                    animate={{ rotate: 0, scale: 1 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                  >
-                    <Wrench className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
-                  </motion.div>
-                </Button>
-              </motion.div>
+                <Wrench className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
+              </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
