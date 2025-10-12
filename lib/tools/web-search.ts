@@ -1,8 +1,6 @@
-import type { Tool } from 'ai';
 import { TavilyClient } from 'tavily';
 import { z } from 'zod';
 import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
-import { WEB_SEARCH_TOOL_DESCRIPTION } from '@/lib/prompts';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource } from '@/hooks/chat/types';
 
@@ -42,12 +40,6 @@ export async function executeWebSearch(
     try {
       const startTime = Date.now();
 
-      console.log('[Web Search] Executing search:', {
-        query,
-        maxResults,
-        searchDepth,
-      });
-
       onProgress?.({
         status: 'searching',
         message: `Searching the web...`,
@@ -64,12 +56,6 @@ export async function executeWebSearch(
       });
 
       const responseTime = Date.now() - startTime;
-
-      console.log('[Web Search] Search completed:', {
-        query,
-        resultsCount: response.results?.length || 0,
-        responseTime: `${responseTime}ms`,
-      });
 
       if (!response.results || response.results.length === 0) {
         onProgress?.({
@@ -89,7 +75,6 @@ export async function executeWebSearch(
         }
       };
 
-      // Map results to sources
       const sources: WebSearchSource[] = response.results.map((result, index: number) => ({
         position: index + 1,
         title: result.title,
@@ -170,11 +155,3 @@ ${result.position}. ${result.title}
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED(errorMessage);
     }
 }
-
-export const webSearchTool: Tool<WebSearchInput, string> = {
-  description: WEB_SEARCH_TOOL_DESCRIPTION,
-  inputSchema: webSearchParamsSchema,
-  execute: async (input) => {
-    return executeWebSearch(input);
-  },
-};

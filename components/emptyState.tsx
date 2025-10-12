@@ -1,5 +1,3 @@
-"use client";
-
 import { ChatInput } from "@/components/chat/chatInput";
 
 interface EmptyStateProps {

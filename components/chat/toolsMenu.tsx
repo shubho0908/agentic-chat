@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wrench } from "lucide-react";
+import { Wrench, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,54 @@ export function ToolsMenu({
   };
 
   const hasActiveTool = activeTool !== null;
+  const showToolIcon = hasActiveTool;
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    if (showToolIcon && activeTool) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleToolSelect(activeTool);
+    }
+  };
+
+  if (showToolIcon && activeTool) {
+    const activeToolConfig = AVAILABLE_TOOLS[activeTool];
+    
+    return (
+      <TooltipProvider>
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                disabled={disabled}
+                onClick={handleButtonClick}
+                className="size-10 rounded-lg transition-all bg-gradient-to-br from-blue-500/20 via-blue-600/20 to-indigo-600/20 hover:from-blue-500/30 hover:via-blue-600/30 hover:to-indigo-600/30"
+                aria-label={`${activeToolConfig.name} (click to deactivate)`}
+              >
+                <motion.div
+                  initial={{ rotate: -180, scale: 0 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <Globe className="size-4 text-blue-500" />
+                </motion.div>
+              </Button>
+            </motion.div>
+          </TooltipTrigger>
+          <TooltipContent side="top" align="center">
+            <p>{activeToolConfig.name}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -40,20 +88,32 @@ export function ToolsMenu({
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                disabled={disabled}
-                className={`size-10 rounded-lg transition-all ${
-                  hasActiveTool 
-                    ? 'bg-primary/10 hover:bg-primary/15' 
-                    : 'hover:bg-accent'
-                }`}
-                aria-label="Tools"
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
               >
-                <Wrench className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
-              </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={disabled}
+                  className={`size-10 rounded-lg transition-all ${
+                    hasActiveTool 
+                      ? 'bg-primary/10 hover:bg-primary/15' 
+                      : 'hover:bg-accent'
+                  }`}
+                  aria-label="Tools"
+                >
+                  <motion.div
+                    initial={{ rotate: 180, scale: 0 }}
+                    animate={{ rotate: 0, scale: 1 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                  >
+                    <Wrench className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
+                  </motion.div>
+                </Button>
+              </motion.div>
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
@@ -63,7 +123,7 @@ export function ToolsMenu({
       </TooltipProvider>
 
       <DropdownMenuContent 
-        align="end" 
+        align="center" 
         side="top"
         className="w-56 border-muted/50 shadow-xl"
         sideOffset={8}

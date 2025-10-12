@@ -1,12 +1,10 @@
 import { FormEvent, ClipboardEvent, useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
 import { ToolsMenu } from "./toolsMenu";
-import { ActiveToolBadge } from "./activeToolBadge";
 import { FilePreview } from "./filePreview";
 import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
@@ -176,24 +174,6 @@ export function ChatInput({
                 handlers={handlers}
               >
                 <div className="relative rounded-2xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
-                  <AnimatePresence>
-                    {activeTool && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="overflow-hidden border-b border-border/50"
-                      >
-                        <div className="px-4 pt-3 pb-2">
-                          <ActiveToolBadge 
-                            toolId={activeTool}
-                            onRemove={handleToolDeactivated}
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                   <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
                   <Textarea
                     ref={textareaRef}
@@ -212,12 +192,15 @@ export function ChatInput({
                     <FileUploadButton
                       disabled={disabled || isLoading || isUploading || maxFilesReached}
                       onFilesSelected={handleFilesSelected}
+                      fileCount={selectedFiles.length}
                     />
-                    <ToolsMenu
-                      disabled={disabled || isLoading || isUploading}
-                      onToolSelected={handleToolSelected}
-                      activeTool={activeTool}
-                    />
+                    <div className="mr-1">
+                      <ToolsMenu
+                        disabled={disabled || isLoading || isUploading}
+                        onToolSelected={handleToolSelected}
+                        activeTool={activeTool}
+                      />
+                    </div>
                     <ActionButtons
                       isLoading={isLoading}
                       isUploading={isUploading}
@@ -256,24 +239,6 @@ export function ChatInput({
             handlers={handlers}
           >
             <div className="relative rounded-2xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
-              <AnimatePresence>
-                {activeTool && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="overflow-hidden border-b border-border/50"
-                  >
-                    <div className="px-5 pt-2.5 pb-2">
-                      <ActiveToolBadge 
-                        toolId={activeTool}
-                        onRemove={handleToolDeactivated}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
               <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
               <Textarea
                 ref={textareaRef}
@@ -292,12 +257,15 @@ export function ChatInput({
                 <FileUploadButton
                   disabled={disabled || isLoading || isUploading || maxFilesReached}
                   onFilesSelected={handleFilesSelected}
+                  fileCount={selectedFiles.length}
                 />
-                <ToolsMenu
-                  disabled={disabled || isLoading || isUploading}
-                  onToolSelected={handleToolSelected}
-                  activeTool={activeTool}
-                />
+                <div className="mr-1">
+                  <ToolsMenu
+                    disabled={disabled || isLoading || isUploading}
+                    onToolSelected={handleToolSelected}
+                    activeTool={activeTool}
+                  />
+                </div>
                 <ActionButtons
                   isLoading={isLoading}
                   isUploading={isUploading}

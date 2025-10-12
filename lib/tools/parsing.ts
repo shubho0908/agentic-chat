@@ -36,7 +36,7 @@ export function parseWebSearchResults(result: string): ParsedSearchResults | nul
         content: contentMatch ? contentMatch[1].trim() : '',
         domain,
         position: i,
-        score: 0.85 - (i - 1) * 0.05, // Simple scoring based on position
+        score: 0.85 - (i - 1) * 0.05,
       });
     }
   }
