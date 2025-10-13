@@ -28,7 +28,8 @@ export async function handleEditMessage(
   newContent: string,
   attachments: Attachment[] | undefined,
   context: EditMessageContext,
-  activeTool?: string | null
+  activeTool?: string | null,
+  memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -180,6 +181,7 @@ export async function handleEditMessage(
         }
       },
       activeTool,
+      memoryEnabled: memoryEnabled ?? false,
     });
 
     if (responseContent && !abortSignal.aborted) {

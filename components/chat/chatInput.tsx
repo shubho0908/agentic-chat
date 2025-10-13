@@ -14,13 +14,17 @@ import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/cons
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
 import { isValidToolId } from "@/lib/tools/config";
-
-import type { Attachment } from "@/lib/schemas/chat";
-
-const ACTIVE_TOOL_STORAGE_KEY = 'agentic-chat-active-tool';
+import type { MessageSendHandler } from "@/types/chat";
+import { 
+  getActiveTool as getStoredActiveTool, 
+  setActiveTool as storeActiveTool, 
+  removeActiveTool, 
+  getMemoryEnabled as getStoredMemoryEnabled, 
+  setMemoryEnabled as storeMemoryEnabled 
+} from "@/lib/storage";
 
 interface ChatInputProps {
-  onSend: (message: string, attachments?: Attachment[], activeTool?: string | null) => void;
+  onSend: MessageSendHandler;
   isLoading: boolean;
   onStop?: () => void;
   placeholder?: string;
@@ -38,21 +42,28 @@ export function ChatInput({
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(ACTIVE_TOOL_STORAGE_KEY);
+    const stored = getStoredActiveTool();
     if (stored && isValidToolId(stored)) {
       setActiveTool(stored as ToolId);
     }
+    
+    setMemoryEnabled(getStoredMemoryEnabled());
   }, []);
 
   useEffect(() => {
     if (activeTool) {
-      localStorage.setItem(ACTIVE_TOOL_STORAGE_KEY, activeTool);
+      storeActiveTool(activeTool);
     } else {
-      localStorage.removeItem(ACTIVE_TOOL_STORAGE_KEY);
+      removeActiveTool();
     }
   }, [activeTool]);
+
+  useEffect(() => {
+    storeMemoryEnabled(memoryEnabled);
+  }, [memoryEnabled]);
 
   const {
     selectedFiles,
@@ -103,7 +114,7 @@ export function ChatInput({
         }
       }
 
-      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled);
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -148,6 +159,13 @@ export function ChatInput({
     setActiveTool(null);
     toast.info('Tool deactivated', {
       duration: 2000,
+    });
+  }
+
+  function handleMemoryToggle(enabled: boolean) {
+    setMemoryEnabled(enabled);
+    toast.success(enabled ? 'Memory enabled' : 'Memory disabled', {
+      duration: 2500,
     });
   }
 
@@ -199,6 +217,8 @@ export function ChatInput({
                         disabled={disabled || isLoading || isUploading}
                         onToolSelected={handleToolSelected}
                         activeTool={activeTool}
+                        memoryEnabled={memoryEnabled}
+                        onMemoryToggle={handleMemoryToggle}
                       />
                     </div>
                     <ActionButtons
@@ -264,6 +284,8 @@ export function ChatInput({
                     disabled={disabled || isLoading || isUploading}
                     onToolSelected={handleToolSelected}
                     activeTool={activeTool}
+                    memoryEnabled={memoryEnabled}
+                    onMemoryToggle={handleMemoryToggle}
                   />
                 </div>
                 <ActionButtons

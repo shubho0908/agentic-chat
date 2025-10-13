@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/message-utils";
+import { getActiveTool, getMemoryEnabled } from "@/lib/storage";
 
 export default function ChatPage({
   params,
@@ -52,20 +53,22 @@ export default function ChatPage({
   const conversationNotFound = !!conversationError;
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = localStorage.getItem('agentic-chat-active-tool');
-    return editMessage({ messageId, content, attachments, activeTool });
+    const activeTool = getActiveTool();
+    const memoryEnabled = getMemoryEnabled();
+    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const activeTool = localStorage.getItem('agentic-chat-active-tool');
-    return regenerateResponse({ messageId, activeTool });
+    const activeTool = getActiveTool();
+    const memoryEnabled = getMemoryEnabled();
+    return regenerateResponse({ messageId, activeTool, memoryEnabled });
   };
 
   const handleToggleSharing = (id: string, isPublic: boolean) => {
     toggleSharing({ id, isPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean) => {
     if (isPending) {
       return;
     }
@@ -84,7 +87,7 @@ export default function ChatPage({
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage({ content, session, attachments, activeTool });
+    await sendMessage({ content, session, attachments, activeTool, memoryEnabled });
   };
 
   if (conversationNotFound) {

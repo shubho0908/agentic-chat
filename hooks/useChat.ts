@@ -37,7 +37,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null }) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean }) => {
       if (!content.trim() || isLoading) return;
 
       setIsLoading(true);
@@ -62,7 +62,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onMemoryStatusUpdate: setMemoryStatus,
         },
         session,
-        activeTool
+        activeTool,
+        memoryEnabled
       );
 
       setIsLoading(false);
@@ -72,7 +73,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, activeTool }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null }) => {
+    async ({ messageId, content, attachments, activeTool, memoryEnabled }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -92,7 +93,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           saveToCacheMutate: saveToCache.mutate,
           onMemoryStatusUpdate: setMemoryStatus,
         },
-        activeTool
+        activeTool,
+        memoryEnabled
       );
 
       setIsLoading(false);
@@ -102,7 +104,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, activeTool }: { messageId: string; activeTool?: string | null }) => {
+    async ({ messageId, activeTool, memoryEnabled }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -120,7 +122,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           saveToCacheMutate: saveToCache.mutate,
           onMemoryStatusUpdate: setMemoryStatus,
         },
-        activeTool
+        activeTool,
+        memoryEnabled
       );
 
       setIsLoading(false);

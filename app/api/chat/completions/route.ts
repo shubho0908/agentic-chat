@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
 
-    const { model, messages, stream = true, conversationId, activeTool } = body;
+    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = false } = body;
     
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
         authUser.id,
         messages.slice(0, -1) as Message[],
         conversationId,
-        activeTool
+        activeTool,
+        memoryEnabled
       );
 
       memoryStatusInfo = metadata;

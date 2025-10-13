@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useState, useEffect } from "react";
-import { Key, Settings2, Loader2 } from "lucide-react";
+import { Key, Settings2, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -221,7 +221,7 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
             }
           >
             {saveApiKeyMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader className="size-4 animate-spin" />
             ) : (
               <>
                 <span className="hidden xs:inline">

@@ -25,7 +25,8 @@ interface RegenerateContext {
 export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
-  activeTool?: string | null
+  activeTool?: string | null,
+  memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -167,6 +168,7 @@ export async function handleRegenerateResponse(
         }
       },
       activeTool,
+      memoryEnabled,
     });
 
     if (responseContent && !abortSignal.aborted) {

@@ -29,7 +29,8 @@ export async function handleSendMessage(
   attachments: Attachment[] | undefined,
   context: SendMessageContext,
   session?: { user: { id: string } },
-  activeTool?: string | null
+  activeTool?: string | null,
+  memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -250,6 +251,7 @@ export async function handleSendMessage(
         }
       },
       activeTool,
+      memoryEnabled,
     });
 
     assistantContent = responseContent;
@@ -283,7 +285,7 @@ export async function handleSendMessage(
         );
       }
 
-      if (session?.user?.id) {
+      if (session?.user?.id && memoryEnabled === true) {
         const textContent = extractTextFromContent(messageContent);
         await storeMemory(textContent, assistantContent, currentConversationId);
       }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wand } from "lucide-react";
+import { Wand, Brain } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, type ToolId } from "@/lib/tools/config";
 
@@ -18,12 +21,16 @@ interface ToolsMenuProps {
   onToolSelected?: (toolId: ToolId) => void;
   disabled?: boolean;
   activeTool?: ToolId | null;
+  memoryEnabled?: boolean;
+  onMemoryToggle?: (enabled: boolean) => void;
 }
 
 export function ToolsMenu({ 
   onToolSelected,
   disabled,
   activeTool = null,
+  memoryEnabled = false,
+  onMemoryToggle,
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -134,7 +141,36 @@ export function ToolsMenu({
           transition={{ duration: 0.15, ease: "easeOut" }}
         >
           <div>
-            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
+            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+              Memory Settings
+            </DropdownMenuLabel>
+            <div className="px-2 py-2">
+              <div className="flex items-center justify-between space-x-3">
+                <div className="flex items-center gap-2">
+                  <Brain className={`size-4 ${memoryEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <Label 
+                    htmlFor="memory-toggle" 
+                    className="text-sm font-medium cursor-pointer"
+                  >
+                    Memory
+                  </Label>
+                </div>
+                <Switch 
+                  id="memory-toggle"
+                  checked={memoryEnabled}
+                  onCheckedChange={onMemoryToggle}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {memoryEnabled 
+                  ? "AI will remember context from past conversations" 
+                  : "AI will not access conversation history"}
+              </p>
+            </div>
+            
+            <DropdownMenuSeparator />
+            
+            <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
               Available Tools
             </DropdownMenuLabel>
 

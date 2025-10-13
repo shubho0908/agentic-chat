@@ -76,7 +76,8 @@ export async function routeContext(
   userId: string,
   messages: Message[],
   conversationId?: string,
-  activeTool?: string | null
+  activeTool?: string | null,
+  memoryEnabled: boolean = false
 ): Promise<ContextRoutingResult> {
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
@@ -100,7 +101,7 @@ export async function routeContext(
     documentCount: 0,
     imageCount,
     routingDecision: RoutingDecision.MemoryOnly,
-    skippedMemory: false,
+    skippedMemory: !memoryEnabled, // Memory skipped if disabled
   };
 
   const textQuery = typeof query === 'string' 
@@ -150,15 +151,14 @@ export async function routeContext(
   if (ragResult) {
     metadata.hasDocuments = true;
     metadata.documentCount = ragResult.documentCount;
+    metadata.skippedMemory = true;
     
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.Hybrid;
-      metadata.skippedMemory = true;
       return { context: ragResult.context, metadata };
     }
     
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
-    metadata.skippedMemory = true;
     return { context: ragResult.context, metadata };
   }
 
@@ -174,7 +174,9 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const memoryContext = await getMemoryContext(query, userId, messages, conversationId);
+  const memoryContext = !memoryEnabled 
+    ? null 
+    : await getMemoryContext(query, userId, messages, conversationId);
 
   if (memoryContext) {
     metadata.hasMemories = true;

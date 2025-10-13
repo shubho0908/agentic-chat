@@ -1,7 +1,8 @@
 import { ChatInput } from "@/components/chat/chatInput";
+import type { MessageSendHandler } from "@/types/chat";
 
 interface EmptyStateProps {
-  onSend: (content: string) => Promise<void>;
+  onSend: MessageSendHandler;
   isLoading: boolean;
   onStop: () => void;
 }

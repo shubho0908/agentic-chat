@@ -19,6 +19,12 @@ export function ContextItem({
   labelClassName,
   skipped = false,
 }: ContextItemProps) {
+  const truncateLabel = (text: string, maxWords: number = 6) => {
+    const words = text.split(' ');
+    if (words.length <= maxWords) return text;
+    return words.slice(0, maxWords).join(' ') + '...';
+  };
+
   return (
     <div className="flex items-center gap-2">
       <span className="text-foreground/40 font-mono text-[10px] select-none">
@@ -28,13 +34,16 @@ export function ContextItem({
         className={`w-3.5 h-3.5 flex-shrink-0 ${
           skipped ? "" : "animate-pulse"
         } ${iconClassName}`}
+        suppressHydrationWarning
       />
       <span
-        className={`font-medium ${
+        className={`font-medium truncate max-w-[200px] ${
           skipped ? "line-through" : ""
         } ${labelClassName}`}
+        suppressHydrationWarning
+        title={label}
       >
-        {label}
+        {truncateLabel(label)}
       </span>
       {note && (
         <span className="text-foreground/40 text-[10px] ml-auto">{note}</span>

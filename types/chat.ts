@@ -63,18 +63,28 @@ export interface SendMessageOptions {
   session?: { user: { id: string } };
   attachments?: Attachment[];
   activeTool?: string | null;
+  memoryEnabled?: boolean;
 }
+
+export type MessageSendHandler = (
+  content: string,
+  attachments?: Attachment[],
+  activeTool?: string | null,
+  memoryEnabled?: boolean
+) => Promise<void> | void;
 
 export interface EditMessageOptions {
   messageId: string;
   content: string;
   attachments?: Attachment[];
   activeTool?: string | null;
+  memoryEnabled?: boolean;
 }
 
 export interface RegenerateMessageOptions {
   messageId: string;
   activeTool?: string | null;
+  memoryEnabled?: boolean;
 }
 
 export interface UseChatReturn {
@@ -147,4 +157,5 @@ export interface StreamConfig {
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
   activeTool?: string | null;
+  memoryEnabled?: boolean;
 }

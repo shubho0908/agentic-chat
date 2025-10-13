@@ -12,6 +12,7 @@ import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
+import { getActiveTool, getMemoryEnabled } from "@/lib/storage";
 
 function HomeContent() {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
@@ -23,16 +24,18 @@ function HomeContent() {
   const hasMessages = messages.length > 0;
   
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = localStorage.getItem('agentic-chat-active-tool');
-    return editMessage({ messageId, content, attachments, activeTool });
+    const activeTool = getActiveTool();
+    const memoryEnabled = getMemoryEnabled();
+    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const activeTool = localStorage.getItem('agentic-chat-active-tool');
-    return regenerateResponse({ messageId, activeTool });
+    const activeTool = getActiveTool();
+    const memoryEnabled = getMemoryEnabled();
+    return regenerateResponse({ messageId, activeTool, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean) => {
     if (isPending) {
       return;
     }
@@ -52,7 +55,7 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage({ content, session, attachments, activeTool });
+    await sendMessage({ content, session, attachments, activeTool, memoryEnabled });
   };
 
   if (!hasMessages) {
