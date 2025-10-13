@@ -103,10 +103,12 @@ export function ChatInput({
         }
       }
 
-      await onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool);
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
       clearInput();
       clearAttachments();
-    } finally {
       setIsSending(false);
     }
   }

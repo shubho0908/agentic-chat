@@ -52,18 +52,51 @@ async function fetchTranscript(
       duration: segment.duration
     }));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Could not find a transcript')) {
-      try {
-        const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-        return transcript.map(segment => ({
-          text: segment.text,
-          offset: segment.offset,
-          duration: segment.duration
-        }));
-      } catch {
-        throw new Error('No transcript available');
+    if (error instanceof Error) {
+      if (error.message.includes('Transcript is disabled')) {
+        throw new Error('The creator has disabled transcripts/captions for this video');
+      }
+
+      const languageMatch = error.message.match(/Available languages?: ([^\n]+)/i);
+      
+      if (languageMatch) {
+        const availableLangs = languageMatch[1].split(',').map(l => l.trim());
+        const firstAvailableLang = availableLangs[0];
+        
+        console.log(`[YouTube Tool] Language '${language}' not available for ${videoId}. Trying '${firstAvailableLang}' instead.`);
+        
+        try {
+          const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
+            lang: firstAvailableLang
+          });
+          
+          return transcript.map(segment => ({
+            text: segment.text,
+            offset: segment.offset,
+            duration: segment.duration
+          }));
+        } catch (fallbackError) {
+          console.error(`[YouTube Tool] Failed to fetch transcript in ${firstAvailableLang}:`, fallbackError);
+          throw new Error(`Transcript not available in requested language (${language}). Available: ${availableLangs.join(', ')} - but failed to fetch.`);
+        }
+      }
+
+      if (error.message.includes('Could not find') || error.message.includes('No transcripts')) {
+        try {
+          const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+          
+          return transcript.map(segment => ({
+            text: segment.text,
+            offset: segment.offset,
+            duration: segment.duration
+          }));
+        } catch (fallbackError) {
+          console.error(`[YouTube Tool] No transcripts available for ${videoId}:`, fallbackError);
+          throw new Error('No transcripts/captions are available for this video in any language');
+        }
       }
     }
+    
     throw error;
   }
 }
