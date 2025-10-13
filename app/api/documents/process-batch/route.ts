@@ -68,13 +68,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[Batch Processing] 🔄 Processing ${attachmentIds.length} documents in parallel`);
-
     const results = await Promise.allSettled(
       attachmentIds.map(id => processDocument(id, user.id))
     );
-
-    console.log(`[Batch Processing] ✓ Completed processing ${attachmentIds.length} documents`);
 
     const batchResults: BatchResult[] = results.map((result, index) => {
       if (result.status === 'fulfilled') {

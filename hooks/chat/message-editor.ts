@@ -10,7 +10,8 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
-import { type MemoryStatus, ToolStatus } from "./types";
+import type { MemoryStatus } from "@/types/chat";
+import { ToolStatus } from "@/types/core";
 
 interface EditMessageContext {
   messages: Message[];

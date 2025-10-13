@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
-import { type ConversationResult } from "./types";
+import type { ConversationResult } from "@/types/chat";
 
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);

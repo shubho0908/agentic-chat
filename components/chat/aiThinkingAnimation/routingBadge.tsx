@@ -1,4 +1,4 @@
-import { RoutingDecision } from "@/hooks/chat/types";
+import { RoutingDecision } from "@/types/chat";
 import { getRoutingIconConfig, getRoutingLabel } from "./utils";
 
 interface RoutingBadgeProps {

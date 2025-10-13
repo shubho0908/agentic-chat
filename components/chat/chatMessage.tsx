@@ -12,7 +12,8 @@ import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
-import { MemoryStatus, ToolStatus } from "@/hooks/chat/types";
+import type { MemoryStatus } from "@/types/chat";
+import { ToolStatus } from "@/types/core";
 import { parseWebSearchResults, type ParsedSearchResult } from "@/lib/tools/parsing";
 import { TOOL_IDS } from "@/lib/tools/config";
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolStatus } from "@/hooks/chat/types";
+import { ToolStatus } from "@/types/core";
 
 export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
@@ -86,12 +86,16 @@ export const chatErrorSchema = z.object({
   details: z.union([z.string(), z.number(), z.record(z.string(), z.string())]).optional(),
 });
 
-export type MessageRole = z.infer<typeof messageRoleSchema>;
-export type Attachment = z.infer<typeof attachmentSchema>;
 export type AttachmentInput = z.infer<typeof attachmentInputSchema>;
-export type MessageContentPart = z.infer<typeof messageContentPartSchema>;
-export type MessageHistoryEntry = z.infer<typeof messageHistoryEntrySchema>;
-export type ToolActivity = z.infer<typeof toolActivitySchema>;
-export type Message = z.infer<typeof messageSchema>;
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type ChatError = z.infer<typeof chatErrorSchema>;
+
+// Re-export types from centralized location for backwards compatibility
+export type {
+  MessageRole,
+  Attachment,
+  MessageContentPart,
+  MessageHistoryEntry,
+  ToolActivity,
+  Message,
+  ChatRequest,
+  ChatError,
+} from "@/types/core";

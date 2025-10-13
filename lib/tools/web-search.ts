@@ -2,7 +2,7 @@ import { TavilyClient } from 'tavily';
 import { z } from 'zod';
 import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
-import type { WebSearchSource } from '@/hooks/chat/types';
+import type { WebSearchSource, WebSearchProgress } from '@/types/tools';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
@@ -13,19 +13,6 @@ if (!TAVILY_API_KEY) {
 const client = TAVILY_API_KEY ? new TavilyClient({ apiKey: TAVILY_API_KEY }) : null;
 
 type WebSearchInput = z.infer<typeof webSearchParamsSchema>;
-
-export interface WebSearchProgress {
-  status: 'searching' | 'found' | 'processing_sources' | 'completed';
-  message: string;
-  details?: {
-    query?: string;
-    resultsCount?: number;
-    responseTime?: number;
-    sources?: WebSearchSource[];
-    currentSource?: WebSearchSource;
-    processedCount?: number;
-  };
-}
 
 export async function executeWebSearch(
   input: WebSearchInput,

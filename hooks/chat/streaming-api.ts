@@ -1,7 +1,7 @@
-import { type StreamConfig } from "./types";
+import type { StreamConfig } from "@/types/chat";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, activeTool } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, activeTool } = config;
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -64,12 +64,6 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
           }
 
           if (parsed.type === 'memory_status' && onMemoryStatus) {
-            console.log('[Frontend Streaming] Received memory status:', {
-              routingDecision: parsed.routingDecision,
-              activeToolName: parsed.activeToolName,
-              hasMemories: parsed.hasMemories,
-              hasDocuments: parsed.hasDocuments,
-            });
             onMemoryStatus({
               hasMemories: parsed.hasMemories,
               hasDocuments: parsed.hasDocuments,
@@ -99,19 +93,8 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.type === 'tool_progress' && onToolProgress) {
-            console.log('[Frontend Streaming] Received tool progress:', parsed);
-            onToolProgress({
-              toolName: parsed.toolName,
-              status: parsed.status,
-              message: parsed.message,
-              details: parsed.details,
-            });
-          }
-
           if (parsed.content) {
             fullContent += parsed.content;
-            console.log('[Frontend] Received content chunk, total length:', fullContent.length);
             onChunk(fullContent);
           }
         } catch (err) {

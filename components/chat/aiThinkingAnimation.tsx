@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { RoutingDecision } from "@/hooks/chat/types";
+import { RoutingDecision } from "@/types/chat";
 import { AIThinkingAnimationProps } from "./aiThinkingAnimation/types";
 import { getContextualMessage } from "./aiThinkingAnimation/utils";
 import { RoutingBadge } from "./aiThinkingAnimation/routingBadge";

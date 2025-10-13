@@ -8,8 +8,8 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { routeContext } from '@/lib/context-router';
-import { RoutingDecision } from '@/hooks/chat/types';
-import type { Message } from '@/lib/schemas/chat';
+import { RoutingDecision } from '@/types/chat';
+import type { Message } from '@/types/core';
 
 export async function POST(request: NextRequest) {
   try {

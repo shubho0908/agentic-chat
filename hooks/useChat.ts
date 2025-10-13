@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
-import { type UseChatOptions, type UseChatReturn, type MemoryStatus } from "./chat/types";
+import type { UseChatOptions, UseChatReturn, MemoryStatus } from "@/types/chat";
 import { handleSendMessage } from "./chat/message-sender";
 import { handleEditMessage } from "./chat/message-editor";
 import { handleRegenerateResponse } from "./chat/message-regenerator";

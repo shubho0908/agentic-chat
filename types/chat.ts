@@ -1,4 +1,5 @@
-import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
+import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
+import type { WebSearchSource } from './tools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -8,17 +9,35 @@ export enum RoutingDecision {
   ToolOnly = 'tool-only',
 }
 
-export enum ToolStatus {
-  Calling = 'calling',
-  Completed = 'completed',
-  Error = 'error',
-}
-
 export enum ToolProgressStatus {
   Searching = 'searching',
   Found = 'found',
   ProcessingSources = 'processing_sources',
   Completed = 'completed',
+}
+
+export interface MemoryStatus {
+  hasMemories: boolean;
+  hasDocuments: boolean;
+  memoryCount: number;
+  documentCount: number;
+  hasImages: boolean;
+  imageCount: number;
+  routingDecision?: RoutingDecision;
+  skippedMemory?: boolean;
+  activeToolName?: string;
+  toolProgress?: {
+    status: ToolProgressStatus;
+    message: string;
+    details?: {
+      query?: string;
+      resultsCount?: number;
+      responseTime?: number;
+      sources?: WebSearchSource[];
+      currentSource?: WebSearchSource;
+      processedCount?: number;
+    };
+  };
 }
 
 export interface VersionData {
@@ -87,33 +106,6 @@ export interface CacheCheckResult {
   response?: string;
 }
 
-export interface MemoryStatus {
-  hasMemories: boolean;
-  hasDocuments: boolean;
-  memoryCount: number;
-  documentCount: number;
-  hasImages: boolean;
-  imageCount: number;
-  routingDecision?: RoutingDecision;
-  skippedMemory?: boolean;
-  activeToolName?: string;
-  toolProgress?: {
-    status: ToolProgressStatus;
-    message: string;
-    details?: {
-      query?: string;
-      resultsCount?: number;
-      responseTime?: number;
-      sources?: WebSearchSource[];
-      currentSource?: WebSearchSource;
-      processedCount?: number;
-    };
-  };
-}
-
-export type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
-export type ToolArgs = Record<string, ToolArgValue>;
-
 export interface ToolCallEvent {
   toolName: string;
   toolCallId: string;
@@ -124,15 +116,6 @@ export interface ToolResultEvent {
   toolName: string;
   toolCallId: string;
   result: string;
-}
-
-export interface WebSearchSource {
-  title: string;
-  url: string;
-  domain: string;
-  snippet: string;
-  score: number;
-  position: number;
 }
 
 export interface ToolProgressEvent {
@@ -147,16 +130,6 @@ export interface ToolProgressEvent {
     currentSource?: WebSearchSource;
     processedCount?: number;
   };
-}
-
-export interface ToolActivity {
-  toolCallId: string;
-  toolName: string;
-  status: ToolStatus;
-  args: ToolArgs;
-  result?: string;
-  error?: string;
-  timestamp: number;
 }
 
 export interface StreamConfig {

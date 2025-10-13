@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wrench, Globe } from "lucide-react";
+import { Wand, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,7 +100,7 @@ export function ToolsMenu({
                 }`}
                 aria-label="Tools"
               >
-                <Wrench className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
+                <Wand className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>

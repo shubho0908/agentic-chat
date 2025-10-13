@@ -5,7 +5,7 @@ import type { Message, Attachment } from "@/lib/schemas/chat";
 import { ChatMessage } from "./chatMessage";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
-import { MemoryStatus } from "@/hooks/chat/types";
+import type { MemoryStatus } from "@/types/chat";
 
 interface ChatContainerProps {
   messages: Message[];

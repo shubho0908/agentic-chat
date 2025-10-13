@@ -2,10 +2,10 @@
 
 import { getMemoryContext } from './memory-conversation-context';
 import { getRAGContext } from './rag/retrieval/context';
-import type { Message } from './schemas/chat';
+import type { Message } from '@/types/core';
+import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
-import { RoutingDecision } from '@/hooks/chat/types';
 
 export interface ContextRoutingResult {
   context: string;

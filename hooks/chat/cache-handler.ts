@@ -1,6 +1,6 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
-import { type CacheCheckResult } from "./types";
+import type { CacheCheckResult } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
 
 interface CacheCheckContext {

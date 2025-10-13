@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import type { ExportConversation, ExportMessage } from '@/lib/export/types';
+import type { ExportConversation, ExportMessage } from '@/types/export';
 
 const styles = StyleSheet.create({
   page: {

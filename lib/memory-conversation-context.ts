@@ -44,12 +44,6 @@ export async function storeConversationMemory(
        VALUES ($1, $2, $3, $4, $5, $6::vector)`,
       [userId, conversationId || null, userMessage, assistantMessage, memoryText, JSON.stringify(embedding)]
     );
-
-    console.log('[Memory] Stored conversation:', {
-      userId: userId.substring(0, 8) + '...',
-      conversationId,
-      userPreview: userMessage.substring(0, 50),
-    });
   } catch (error) {
     console.error('[Memory] Error storing conversation:', error);
     throw error;
@@ -100,12 +94,6 @@ export async function searchMemories(
       conversationId: row.conversation_id || undefined,
       score: row.score,
     }));
-
-    console.log('[Memory] Search results:', {
-      userId: userId.substring(0, 8) + '...',
-      found: memories.length,
-      topScore: memories[0]?.score,
-    });
 
     return memories;
   } catch (error) {
@@ -182,7 +170,6 @@ export async function clearMemories(userId: string): Promise<void> {
       'DELETE FROM conversation_memory WHERE user_id = $1',
       [userId]
     );
-    console.log('[Memory] Cleared all memories for user:', userId.substring(0, 8) + '...');
   } catch (error) {
     console.error('[Memory] Error clearing memories:', error);
     throw error;
@@ -232,7 +219,6 @@ export async function deleteMemory(memoryId: string): Promise<boolean> {
       'DELETE FROM conversation_memory WHERE id = $1',
       [memoryId]
     );
-    console.log('[Memory] Deleted memory:', memoryId);
     return true;
   } catch (error) {
     console.error('[Memory] Error deleting memory:', error);
@@ -258,7 +244,6 @@ export async function updateMemory(
       [newMemoryText, JSON.stringify(embedding), memoryId, userId]
     );
     
-    console.log('[Memory] Updated memory:', memoryId);
     return true;
   } catch (error) {
     console.error('[Memory] Error updating memory:', error);

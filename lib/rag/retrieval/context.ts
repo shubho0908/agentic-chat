@@ -13,20 +13,7 @@ import {
   extractIds,
   filterDocumentAttachments,
 } from './status-helpers';
-
-interface RAGContextOptions {
-  conversationId?: string;
-  attachmentIds?: string[];
-  limit?: number;
-  scoreThreshold?: number;
-  waitForProcessing?: boolean;
-}
-
-export interface RAGContextResult {
-  context: string;
-  documentCount: number;
-  usedAttachmentIds: string[];
-}
+import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
 
 export async function getRAGContext(
   query: string,

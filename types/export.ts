@@ -1,10 +1,4 @@
-interface ExportAttachment {
-  id: string;
-  fileUrl: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-}
+import type { Attachment } from './core';
 
 export interface ExportMessage {
   id: string;
@@ -12,7 +6,7 @@ export interface ExportMessage {
   content: string;
   createdAt: string;
   timestamp?: number;
-  attachments?: ExportAttachment[];
+  attachments?: Attachment[];
   versions?: ExportMessage[];
 }
 

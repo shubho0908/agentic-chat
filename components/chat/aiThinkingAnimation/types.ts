@@ -1,4 +1,4 @@
-import { MemoryStatus } from "@/hooks/chat/types";
+import type { MemoryStatus } from "@/types/chat";
 
 export interface AIThinkingAnimationProps {
   memoryStatus?: MemoryStatus;

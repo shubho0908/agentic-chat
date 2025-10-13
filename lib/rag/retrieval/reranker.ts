@@ -2,27 +2,7 @@
 
 import { CohereClientV2 } from 'cohere-ai';
 import { RAG_CONFIG } from '../config';
-
-interface RerankDocument {
-  content: string;
-  score: number;
-  metadata: {
-    attachmentId: string;
-    fileName: string;
-    page?: number;
-  };
-}
-
-interface RerankResult {
-  content: string;
-  score: number;
-  originalScore: number;
-  metadata: {
-    attachmentId: string;
-    fileName: string;
-    page?: number;
-  };
-}
+import type { RerankDocument, RerankResult } from '@/types/rag';
 
 export async function rerankDocuments(
   query: string,

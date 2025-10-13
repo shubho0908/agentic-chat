@@ -1,5 +1,6 @@
-import { Eye, FileText, Brain, Search, Wrench } from "lucide-react";
-import { MemoryStatus, RoutingDecision, ToolProgressStatus } from "@/hooks/chat/types";
+import { Eye, FileText, Brain, Search, Wand } from "lucide-react";
+import type { MemoryStatus } from "@/types/chat";
+import { RoutingDecision, ToolProgressStatus } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
 import { ContextItem } from "./contextItem";
 import { isToolActive } from "./utils";
@@ -92,7 +93,7 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
 
     return (
       <ContextItem
-        icon={Wrench}
+        icon={Wand}
         label={
           memoryStatus.activeToolName
             ? `${memoryStatus.activeToolName.replace("_", " ")} tool`

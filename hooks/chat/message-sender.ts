@@ -1,4 +1,6 @@
-import { type Message, type Attachment, type ToolActivity } from "@/lib/schemas/chat";
+import type { Message, Attachment, ToolActivity } from "@/types/core";
+import type { ConversationResult, MemoryStatus } from "@/types/chat";
+import { ToolStatus } from "@/types/core";
 import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
@@ -9,7 +11,6 @@ import { saveUserMessage, storeMemory } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
-import { type ConversationResult, type MemoryStatus, ToolStatus } from "./types";
 
 interface SendMessageContext {
   messages: Message[];
@@ -179,18 +180,12 @@ export async function handleSendMessage(
       model,
       signal: abortSignal,
       onChunk: (fullContent) => {
-        console.log('[Message Sender] onChunk called, content length:', fullContent.length);
         onMessagesUpdate((prev) => {
           const updated = prev.map((msg) =>
             msg.id === assistantMessageId
               ? { ...msg, content: fullContent }
               : msg
           );
-          const assistantMsg = updated.find(m => m.id === assistantMessageId);
-          const contentPreview = typeof assistantMsg?.content === 'string' 
-            ? assistantMsg.content.substring(0, 50) 
-            : '[multimodal content]';
-          console.log('[Message Sender] Messages updated, assistant message:', contentPreview);
           return updated;
         });
       },
@@ -200,8 +195,6 @@ export async function handleSendMessage(
         onMemoryStatusUpdate?.(status);
       },
       onToolCall: (toolCall) => {
-        console.log('[Tool Call]', toolCall.toolName, toolCall.args);
-        
         const activity: ToolActivity = {
           toolCallId: toolCall.toolCallId,
           toolName: toolCall.toolName,
@@ -221,8 +214,6 @@ export async function handleSendMessage(
         );
       },
       onToolResult: (toolResult) => {
-        console.log('[Tool Result]', toolResult.toolName, toolResult.result.substring(0, 200));
-        
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -245,8 +236,6 @@ export async function handleSendMessage(
         }
       },
       onToolProgress: (progress) => {
-        console.log('[Tool Progress]', progress.toolName, progress.message);
-        
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,

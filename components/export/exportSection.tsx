@@ -5,7 +5,7 @@ import { Download, FileJson, FileText, File, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import type { ExportFormat, ExportConversation } from "@/lib/export/types";
+import type { ExportFormat, ExportConversation } from "@/types/export";
 import { downloadJSON } from "@/lib/export/json-exporter";
 import { downloadMarkdown } from "@/lib/export/markdown-exporter";
 import { downloadPDF } from "@/lib/export/pdf-exporter";

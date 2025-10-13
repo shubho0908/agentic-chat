@@ -1,5 +1,6 @@
-import { Brain, Eye, Zap, Focus, Wrench, LucideIcon } from "lucide-react";
-import { MemoryStatus, RoutingDecision } from "@/hooks/chat/types";
+import { Brain, Eye, Zap, Focus, Wand, LucideIcon } from "lucide-react";
+import type { MemoryStatus } from "@/types/chat";
+import { RoutingDecision } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
 import { AI_THINKING_MESSAGES } from "./types";
 
@@ -80,7 +81,7 @@ export function getRoutingIconConfig(routingDecision?: RoutingDecision): Routing
     case RoutingDecision.MemoryOnly:
       return { icon: Brain, className: "w-3.5 h-3.5 text-indigo-500" };
     case RoutingDecision.ToolOnly:
-      return { icon: Wrench, className: "w-3.5 h-3.5 text-blue-500" };
+      return { icon: Wand, className: "w-3.5 h-3.5 text-blue-500" };
     default:
       return { icon: Zap, className: "w-3.5 h-3.5 text-gray-500" };
   }

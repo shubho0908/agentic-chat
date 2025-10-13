@@ -1,17 +1,4 @@
-import type { ProcessingStatus } from '@/lib/generated/prisma';
-
-export interface AttachmentStatus {
-  id: string;
-  processingStatus: ProcessingStatus;
-  processingError?: string | null;
-}
-
-export interface PartitionedAttachments<T extends AttachmentStatus> {
-  completed: T[];
-  processing: T[];
-  failed: T[];
-  pending: T[];
-}
+import type { AttachmentStatus, PartitionedAttachments } from '@/types/rag';
 
 export function partitionByStatus<T extends AttachmentStatus>(
   attachments: T[]
