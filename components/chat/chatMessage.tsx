@@ -12,7 +12,7 @@ import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
-import { MemoryStatus } from "@/hooks/chat/types";
+import type { MemoryStatus } from "@/types/chat";
 
 interface ChatMessageProps {
   message: Message;
@@ -34,10 +34,10 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const totalVersions = versions.length + 1;
   const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
   
-  const displayedMessage = useMemo<Message>(
-    () => versionIndex === -1 ? message : (versions[versionIndex] || message),
-    [versionIndex, message, versions]
-  );
+  const displayedMessage = useMemo<Message>(() => {
+    const msg = versionIndex === -1 ? message : (versions[versionIndex] || message);
+    return msg;
+  }, [versionIndex, message, versions]);
   
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
@@ -142,7 +142,9 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                   ) : message.content ? (
                     <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
-                    <AIThinkingAnimation memoryStatus={memoryStatus} />
+                    <AIThinkingAnimation 
+                      memoryStatus={memoryStatus}
+                    />
                   )}
                 </div>
                 
@@ -179,10 +181,20 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
 }
 
 export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+  const prevActivities = prevProps.message.toolActivities || [];
+  const nextActivities = nextProps.message.toolActivities || [];
+  const toolActivitiesChanged = 
+    prevActivities.length !== nextActivities.length ||
+    prevActivities.some((prev, idx) => {
+      const next = nextActivities[idx];
+      return !next || prev.status !== next.status || prev.toolCallId !== next.toolCallId;
+    });
+  
   return (
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.content === nextProps.message.content &&
     prevProps.message.versions?.length === nextProps.message.versions?.length &&
+    !toolActivitiesChanged &&
     prevProps.userName === nextProps.userName &&
     prevProps.isLoading === nextProps.isLoading &&
     prevProps.onEdit === nextProps.onEdit &&

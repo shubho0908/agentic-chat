@@ -1,23 +1,15 @@
-import type { Message } from './schemas/chat';
+import type { Message, Attachment } from '@/types/core';
 
 type MessageWithVersions = Message & {
   versions?: Message[];
 };
-
-interface DbAttachment {
-  id?: string;
-  fileUrl: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-}
 
 interface DbMessage {
   id: string;
   role: string;
   content: string;
   createdAt: string | Date;
-  attachments?: DbAttachment[];
+  attachments?: Attachment[];
   parentMessageId?: string | null;
   siblingIndex?: number;
   versions?: DbMessage[];

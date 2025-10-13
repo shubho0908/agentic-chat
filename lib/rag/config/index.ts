@@ -28,7 +28,6 @@ export const RAG_CONFIG = {
     },
   },
   processing: {
-    maxWaitTime: 30000,
     pollInterval: 500,
     exponentialBackoff: true,
     maxBackoffInterval: 2000,

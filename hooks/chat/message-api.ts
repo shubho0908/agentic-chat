@@ -1,6 +1,6 @@
 import { type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
-import { type UpdateMessageResponse } from "./types";
+import type { UpdateMessageResponse } from "@/types/chat";
 
 interface SavedMessageWithAttachments {
   id: string;
@@ -10,16 +10,29 @@ interface SavedMessageWithAttachments {
   }>;
 }
 
-async function processDocumentAsync(attachmentId: string): Promise<void> {
+async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
+  if (attachmentIds.length === 0) return;
+
   try {
-    fetch('/api/documents/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ attachmentId }),
-      keepalive: true,
-    }).catch(() => {
-      // Silent failure - processing will be retried if needed
-    });
+    if (attachmentIds.length === 1) {
+      fetch('/api/documents/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attachmentId: attachmentIds[0] }),
+        keepalive: true,
+      }).catch(() => {
+        // Silent failure - processing will be retried if needed
+      });
+    } else {
+      fetch('/api/documents/process-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attachmentIds }),
+        keepalive: true,
+      }).catch(() => {
+        // Silent failure - processing will be retried if needed
+      });
+    }
   } catch {
     // Silent failure - processing will be retried if needed
   }
@@ -52,10 +65,12 @@ export async function saveUserMessage(
     const savedMessage: SavedMessageWithAttachments = await response.json();
     
     if (savedMessage.attachments && savedMessage.attachments.length > 0) {
-      const documentAttachment = savedMessage.attachments.find((att) => !att.fileType.startsWith('image/'));
+      const documentAttachmentIds = savedMessage.attachments
+        .filter((att) => !att.fileType.startsWith('image/'))
+        .map((att) => att.id);
       
-      if (documentAttachment) {
-        processDocumentAsync(documentAttachment.id);
+      if (documentAttachmentIds.length > 0) {
+        processDocumentsAsync(documentAttachmentIds);
       }
     }
     
@@ -122,10 +137,12 @@ export async function updateUserMessage(
     const updatedMessage: UpdateMessageResponse = await response.json();
     
     if (updatedMessage.attachments && updatedMessage.attachments.length > 0) {
-      const documentAttachment = updatedMessage.attachments.find((att) => att.id && !att.fileType.startsWith('image/'));
+      const documentAttachmentIds = updatedMessage.attachments
+        .filter((att) => att.id && !att.fileType.startsWith('image/'))
+        .map((att) => att.id as string);
       
-      if (documentAttachment?.id) {
-        processDocumentAsync(documentAttachment.id);
+      if (documentAttachmentIds.length > 0) {
+        processDocumentsAsync(documentAttachmentIds);
       }
     }
 

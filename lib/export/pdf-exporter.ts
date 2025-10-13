@@ -2,7 +2,7 @@ import React from 'react';
 import { pdf } from '@react-pdf/renderer';
 import { saveAs } from 'file-saver';
 import { API_ERROR_MESSAGES } from '@/constants/errors';
-import type { ExportConversation } from './types';
+import type { ExportConversation } from '@/types/export';
 
 export async function downloadPDF(
   conversation: ExportConversation,

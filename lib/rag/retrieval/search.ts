@@ -87,8 +87,6 @@ export async function searchDocumentChunks(
     ? limit * RAG_CONFIG.rerank.candidateMultiplier 
     : limit;
 
-  console.log(`[RAG Search] 🔍 Retrieving ${candidateLimit} candidates (reranking: ${enableReranking ? 'enabled' : 'disabled'})`);
-
   const results = await vectorStore.similaritySearchWithScore(query, candidateLimit, filter);
 
   const filteredResults = results
@@ -108,10 +106,7 @@ export async function searchDocumentChunks(
       topN: limit,
     });
 
-    console.log(`[RAG Search] ✓ Returned ${rerankedResults.length} reranked results`);
     return rerankedResults;
   }
-
-  console.log(`[RAG Search] ✓ Returned ${Math.min(filteredResults.length, limit)} results (no reranking)`);
   return filteredResults.slice(0, limit);
 }

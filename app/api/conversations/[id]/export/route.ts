@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
-import type { ExportConversation } from '@/lib/export/types';
+import type { ExportConversation } from '@/types/export';
 
 export async function GET(
   _request: NextRequest,

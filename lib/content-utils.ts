@@ -1,4 +1,4 @@
-import type { MessageContentPart, Attachment } from "@/lib/schemas/chat";
+import type { MessageContentPart, Attachment } from "@/types/core";
 
 export function extractTextFromContent(content: string | MessageContentPart[]): string {
   if (typeof content === 'string') {

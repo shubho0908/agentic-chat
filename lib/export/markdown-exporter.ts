@@ -1,4 +1,4 @@
-import type { ExportConversation, ExportMessage, ExportOptions } from './types';
+import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
 
 export function exportToMarkdown(
   conversation: ExportConversation,

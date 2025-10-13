@@ -8,8 +8,10 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { routeContext } from '@/lib/context-router';
-import { RoutingDecision } from '@/hooks/chat/types';
-import type { Message } from '@/lib/schemas/chat';
+import { RoutingDecision, type MemoryStatus } from '@/types/chat';
+import type { Message } from '@/types/core';
+import { injectContextToMessages } from '@/lib/chat/message-helpers';
+import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,8 +32,8 @@ export async function POST(request: NextRequest) {
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
 
-    const { model, messages, stream = true, conversationId } = body;
-
+    const { model, messages, stream = true, conversationId, activeTool } = body;
+    
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
@@ -42,16 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     let enhancedMessages = messages;
-    let memoryStatusInfo: { 
-      hasMemories: boolean;
-      hasDocuments: boolean;
-      memoryCount: number;
-      documentCount: number;
-      hasImages: boolean;
-      imageCount: number;
-      routingDecision: RoutingDecision;
-      skippedMemory: boolean;
-    } = { 
+    let memoryStatusInfo: MemoryStatus = { 
       hasMemories: false, 
       hasDocuments: false, 
       memoryCount: 0, 
@@ -69,26 +62,14 @@ export async function POST(request: NextRequest) {
         lastUserMessage,
         authUser.id,
         messages.slice(0, -1) as Message[],
-        conversationId
+        conversationId,
+        activeTool
       );
 
       memoryStatusInfo = metadata;
-
+      
       if (context) {
-        const systemMessageIndex = enhancedMessages.findIndex((m: Message) => m.role === 'system');
-        
-        if (systemMessageIndex >= 0) {
-          enhancedMessages = [...enhancedMessages];
-          enhancedMessages[systemMessageIndex] = {
-            ...enhancedMessages[systemMessageIndex],
-            content: enhancedMessages[systemMessageIndex].content + context
-          };
-        } else {
-          enhancedMessages = [
-            { role: 'system', content: context },
-            ...enhancedMessages
-          ];
-        }
+        enhancedMessages = injectContextToMessages(enhancedMessages, context);
       }
     } catch (error) {
       console.error('[Context Routing Error]', error);
@@ -97,53 +78,16 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey });
 
     if (stream) {
-      const encoder = new TextEncoder();
-      const readableStream = new ReadableStream({
-        async start(controller) {
-          try {
-            // Send memory/document/image status first
-            if (memoryStatusInfo.hasMemories || memoryStatusInfo.hasDocuments || memoryStatusInfo.hasImages) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                type: 'memory_status',
-                hasMemories: memoryStatusInfo.hasMemories,
-                hasDocuments: memoryStatusInfo.hasDocuments,
-                memoryCount: memoryStatusInfo.memoryCount,
-                documentCount: memoryStatusInfo.documentCount,
-                hasImages: memoryStatusInfo.hasImages,
-                imageCount: memoryStatusInfo.imageCount,
-                routingDecision: memoryStatusInfo.routingDecision,
-                skippedMemory: memoryStatusInfo.skippedMemory
-              })}\n\n`));
-            }
-            
-            const streamResponse = await openai.chat.completions.create({
-              model,
-              messages: enhancedMessages,
-              stream: true,
-            });
-            
-            for await (const chunk of streamResponse) {
-              const text = chunk.choices[0]?.delta?.content || '';
-              if (text) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`));
-              }
-            }
-            
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-          } catch (error) {
-            const { message } = parseOpenAIError(error);
-            
-            try {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: message })}\n\n`));
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            } catch {
-              // Failed to send error to client
-            }
-            controller.close();
-          }
-        },
+      const streamHandler = createChatStreamHandler({
+        memoryStatusInfo,
+        messages,
+        activeTool,
+        enhancedMessages,
+        model,
+        openai,
       });
+
+      const readableStream = new ReadableStream(streamHandler);
 
       return new Response(readableStream, {
         headers: {

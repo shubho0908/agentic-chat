@@ -13,21 +13,13 @@ import {
   extractIds,
   filterDocumentAttachments,
 } from './status-helpers';
-
-interface RAGContextOptions {
-  conversationId?: string;
-  attachmentIds?: string[];
-  limit?: number;
-  scoreThreshold?: number;
-  waitForProcessing?: boolean;
-  maxWaitTime?: number;
-}
+import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
 
 export async function getRAGContext(
   query: string,
   userId: string,
   options: RAGContextOptions = {}
-): Promise<string | null> {
+): Promise<RAGContextResult | null> {
   try {
     const {
       conversationId,
@@ -35,7 +27,6 @@ export async function getRAGContext(
       limit = RAG_CONFIG.search.defaultLimit,
       scoreThreshold = RAG_CONFIG.search.scoreThreshold,
       waitForProcessing = true,
-      maxWaitTime = RAG_CONFIG.processing.maxWaitTime,
     } = options;
 
     let attachmentIds = providedAttachmentIds;
@@ -68,7 +59,7 @@ export async function getRAGContext(
       const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
 
       if (processingIds.length > 0 && waitForProcessing) {
-        const newlyCompleted = await waitForDocumentProcessing(processingIds, { maxWaitMs: maxWaitTime });
+        const newlyCompleted = await waitForDocumentProcessing(processingIds);
         attachmentIds = [...completedIds, ...newlyCompleted];
       } else {
         attachmentIds = completedIds;
@@ -93,8 +84,7 @@ export async function getRAGContext(
       const alreadyCompleted = extractIds(partitioned.completed);
 
       if (needProcessing.length > 0) {
-        console.log('[RAG Context] 🕐 Waiting for', needProcessing.length, 'documents to complete processing...');
-        const newlyCompleted = await waitForDocumentProcessing(needProcessing, { maxWaitMs: maxWaitTime });
+        const newlyCompleted = await waitForDocumentProcessing(needProcessing);
         completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
       } else {
         completedAttachmentIds = alreadyCompleted;
@@ -107,8 +97,10 @@ export async function getRAGContext(
       return null;
     }
 
+    const adjustedLimit = Math.max(limit, Math.min(completedAttachmentIds.length * 3, 15));
+
     const results = await searchDocumentChunks(query, userId, {
-      limit,
+      limit: adjustedLimit,
       scoreThreshold,
       conversationId,
       attachmentIds: completedAttachmentIds,
@@ -118,15 +110,23 @@ export async function getRAGContext(
       return null;
     }
 
+    const usedAttachmentIds = Array.from(
+      new Set(results.map((r: { metadata: { attachmentId: string } }) => r.metadata.attachmentId))
+    );
+
     const context = results
-      .map((result: { content: string; metadata: { fileName: string; page?: number } }, index: number) => {
+      .map((result: { content: string; metadata: { fileName: string; page?: number; attachmentId: string } }, index: number) => {
         const source = result.metadata.fileName;
         const page = result.metadata.page ? ` (Page ${result.metadata.page})` : '';
         return `[Document ${index + 1}: ${source}${page}]\n${result.content}`;
       })
       .join('\n\n---\n\n');
 
-    return `\n\nRelevant document context:\n${context}`;
+    return {
+      context: `\n\nRelevant document context:\n${context}`,
+      documentCount: usedAttachmentIds.length,
+      usedAttachmentIds,
+    };
   } catch {
     return null;
   }

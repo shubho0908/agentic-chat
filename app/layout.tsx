@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/themeProvider";
 import { Toaster } from "@/components/ui/sonner";
-import { QueryProvider } from "@/components/providers/QueryProvider";
+import { QueryProvider } from "@/components/providers/queryProvider";
 import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";

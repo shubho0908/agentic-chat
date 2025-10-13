@@ -1,4 +1,4 @@
-import type { Attachment } from "@/lib/schemas/chat";
+import type { Attachment } from "@/types/core";
 
 interface UploadFileResponse {
   url: string;

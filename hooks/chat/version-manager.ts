@@ -1,5 +1,5 @@
 import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
-import { type VersionData } from "./types";
+import type { VersionData } from "@/types/chat";
 
 export function createNewVersion(
   existingVersions: Message[],

@@ -25,9 +25,9 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   const isPDF = fileType === "application/pdf" || fileName.endsWith(".pdf");
   const isCSV = fileType === "text/csv" || fileName.endsWith(".csv");
   const isTextFile = (fileType.startsWith("text/") || fileName.endsWith(".txt")) && !isCSV;
-  const isOfficeDoc = fileType.includes("wordprocessingml") || 
-                      fileType.includes("spreadsheetml") || 
-                      fileName.match(/\.(docx?|xlsx?|pptx?)$/);
+  const isOfficeDoc = fileType.includes("wordprocessingml") ||
+    fileType.includes("spreadsheetml") ||
+    fileName.match(/\.(docx?|xlsx?|pptx?)$/);
 
   useEffect(() => {
     if (open && fileUrl && (isTextFile || isCSV)) {

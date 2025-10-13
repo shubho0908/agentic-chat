@@ -1,16 +1,26 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
-import { type CacheCheckResult } from "./types";
+import type { CacheCheckResult } from "@/types/chat";
+import { TOOL_IDS } from "@/lib/tools/config";
 
 interface CacheCheckContext {
   messages: Message[];
   content: string | MessageContentPart[];
   attachments?: Attachment[];
   abortSignal: AbortSignal;
+  activeTool?: string | null;
 }
 
-export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
-  return !attachments || attachments.length === 0;
+export function shouldUseSemanticCache(attachments?: Attachment[], activeTool?: string | null): boolean {
+  if (attachments && attachments.length > 0) {
+    return false;
+  }
+  
+  if (activeTool === TOOL_IDS.WEB_SEARCH) {
+    return false;
+  }
+  
+  return true;
 }
 
 export function buildCacheQuery(
@@ -64,9 +74,9 @@ export async function checkCache(
 export async function performCacheCheck(
   context: CacheCheckContext
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
-  const { messages, content, attachments, abortSignal } = context;
+  const { messages, content, attachments, abortSignal, activeTool } = context;
   
-  const useCaching = shouldUseSemanticCache(attachments);
+  const useCaching = shouldUseSemanticCache(attachments, activeTool);
   let cacheQuery = '';
   let cacheData: CacheCheckResult = { cached: false };
 

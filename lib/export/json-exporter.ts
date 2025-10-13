@@ -1,4 +1,4 @@
-import type { ExportConversation, ExportOptions } from './types';
+import type { ExportConversation, ExportOptions } from '@/types/export';
 
 export function exportToJSON(
   conversation: ExportConversation,

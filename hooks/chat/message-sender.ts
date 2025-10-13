@@ -1,4 +1,6 @@
-import { type Message, type Attachment } from "@/lib/schemas/chat";
+import type { Message, Attachment, ToolActivity } from "@/types/core";
+import type { ConversationResult, MemoryStatus } from "@/types/chat";
+import { ToolStatus } from "@/types/core";
 import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
@@ -9,7 +11,6 @@ import { saveUserMessage, storeMemory } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
-import { type ConversationResult, type MemoryStatus } from "./types";
 
 interface SendMessageContext {
   messages: Message[];
@@ -27,7 +28,8 @@ export async function handleSendMessage(
   content: string,
   attachments: Attachment[] | undefined,
   context: SendMessageContext,
-  session?: { user: { id: string } }
+  session?: { user: { id: string } },
+  activeTool?: string | null
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -63,6 +65,8 @@ export async function handleSendMessage(
   const assistantMessageId = `assistant-${Date.now()}`;
   let assistantContent = "";
   let savedUserMessageId = userMessage.id;
+  const toolActivities: ToolActivity[] = [];
+  let currentMemoryStatus: MemoryStatus | undefined;
 
   onMessagesUpdate((prev) => [
     ...prev,
@@ -73,6 +77,7 @@ export async function handleSendMessage(
       id: assistantMessageId,
       timestamp: Date.now(),
       model: model,
+      toolActivities: [],
     },
   ]);
 
@@ -131,6 +136,7 @@ export async function handleSendMessage(
       content: messageContent,
       attachments,
       abortSignal,
+      activeTool,
     });
 
     if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
@@ -174,16 +180,76 @@ export async function handleSendMessage(
       model,
       signal: abortSignal,
       onChunk: (fullContent) => {
+        onMessagesUpdate((prev) => {
+          const updated = prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: fullContent }
+              : msg
+          );
+          return updated;
+        });
+      },
+      conversationId: currentConversationId,
+      onMemoryStatus: (status) => {
+        currentMemoryStatus = status;
+        onMemoryStatusUpdate?.(status);
+      },
+      onToolCall: (toolCall) => {
+        const activity: ToolActivity = {
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          status: ToolStatus.Calling,
+          args: toolCall.args,
+          timestamp: Date.now(),
+        };
+        
+        toolActivities.push(activity);
+        
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessageId
-              ? { ...msg, content: fullContent }
+              ? { ...msg, toolActivities: [...toolActivities] }
               : msg
           )
         );
       },
-      conversationId: currentConversationId,
-      onMemoryStatus: onMemoryStatusUpdate,
+      onToolResult: (toolResult) => {
+        const activityIndex = toolActivities.findIndex(
+          (a) => a.toolCallId === toolResult.toolCallId
+        );
+        
+        if (activityIndex !== -1) {
+          toolActivities[activityIndex] = {
+            ...toolActivities[activityIndex],
+            status: ToolStatus.Completed,
+            result: toolResult.result,
+            timestamp: Date.now(),
+          };
+          
+          onMessagesUpdate((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, toolActivities: [...toolActivities] }
+                : msg
+            )
+          );
+        }
+      },
+      onToolProgress: (progress) => {
+        if (currentMemoryStatus && onMemoryStatusUpdate) {
+          const updatedStatus: MemoryStatus = {
+            ...currentMemoryStatus,
+            toolProgress: {
+              status: progress.status,
+              message: progress.message,
+              details: progress.details,
+            },
+          };
+          currentMemoryStatus = updatedStatus;
+          onMemoryStatusUpdate(updatedStatus);
+        }
+      },
+      activeTool,
     });
 
     assistantContent = responseContent;

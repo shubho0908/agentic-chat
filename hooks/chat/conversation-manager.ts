@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
-import { type ConversationResult } from "./types";
+import type { ConversationResult } from "@/types/chat";
 
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
@@ -40,6 +40,8 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
   });
 }
 
+const MAX_CONTEXT_MESSAGES = 20;
+
 export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
@@ -67,12 +69,16 @@ export function buildMessagesForAPI(
     ];
   }
 
+  const contextMessages = messages.length > MAX_CONTEXT_MESSAGES 
+    ? messages.slice(-MAX_CONTEXT_MESSAGES)
+    : messages;
+
   return [
     {
       role: "system" as const,
       content: systemPrompt,
     },
-    ...messages.map(({ role, content }) => ({
+    ...contextMessages.map(({ role, content }) => ({
       role: role as "user" | "assistant" | "system",
       content,
     })),

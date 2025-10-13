@@ -1,21 +1,26 @@
-import { FormEvent, ClipboardEvent, useState } from "react";
+import { FormEvent, ClipboardEvent, useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
+import { ToolsMenu } from "./toolsMenu";
 import { FilePreview } from "./filePreview";
 import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { MAX_IMAGE_ATTACHMENTS, MAX_DOCUMENT_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
+import type { ToolId } from "@/lib/tools/config";
+import { isValidToolId } from "@/lib/tools/config";
 
 import type { Attachment } from "@/lib/schemas/chat";
 
+const ACTIVE_TOOL_STORAGE_KEY = 'agentic-chat-active-tool';
+
 interface ChatInputProps {
-  onSend: (message: string, attachments?: Attachment[]) => void;
+  onSend: (message: string, attachments?: Attachment[], activeTool?: string | null) => void;
   isLoading: boolean;
   onStop?: () => void;
   placeholder?: string;
@@ -32,6 +37,22 @@ export function ChatInput({
   centered = false,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
+  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem(ACTIVE_TOOL_STORAGE_KEY);
+    if (stored && isValidToolId(stored)) {
+      setActiveTool(stored as ToolId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTool) {
+      localStorage.setItem(ACTIVE_TOOL_STORAGE_KEY, activeTool);
+    } else {
+      localStorage.removeItem(ACTIVE_TOOL_STORAGE_KEY);
+    }
+  }, [activeTool]);
 
   const {
     selectedFiles,
@@ -52,14 +73,12 @@ export function ChatInput({
     clearInput,
   } = useChatTextarea(sendMessage);
 
-  const imageCount = selectedFiles.filter(f => f.type.startsWith('image/')).length;
-  const documentCount = selectedFiles.filter(f => !f.type.startsWith('image/')).length;
-  const maxFilesReached = imageCount >= MAX_IMAGE_ATTACHMENTS && documentCount >= MAX_DOCUMENT_ATTACHMENTS;
+  const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
 
   const { dragState, dropZoneRef, handlers } = useDragAndDrop({
     onFilesDropped: handleFilesSelected,
     disabled: disabled || isLoading || isUploading || maxFilesReached,
-    maxFiles: MAX_IMAGE_ATTACHMENTS + MAX_DOCUMENT_ATTACHMENTS,
+    maxFiles: MAX_FILE_ATTACHMENTS,
     currentFileCount: selectedFiles.length,
   });
 
@@ -84,10 +103,12 @@ export function ChatInput({
         }
       }
 
-      await onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool);
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
       clearInput();
       clearAttachments();
-    } finally {
       setIsSending(false);
     }
   }
@@ -108,6 +129,26 @@ export function ChatInput({
     if (files.length > 0) {
       handleFilesSelected(files);
     }
+  }
+
+  function handleToolSelected(toolId: ToolId) {
+    if (activeTool === toolId) {
+      handleToolDeactivated();
+      return;
+    }
+    
+    setActiveTool(toolId);
+    toast.success('Tool activated', {
+      description: `${toolId.replace('_', ' ')} is now enabled for your next query`,
+      duration: 2500,
+    });
+  }
+
+  function handleToolDeactivated() {
+    setActiveTool(null);
+    toast.info('Tool deactivated', {
+      duration: 2000,
+    });
   }
 
   if (centered) {
@@ -132,7 +173,7 @@ export function ChatInput({
                 dropZoneRef={dropZoneRef}
                 handlers={handlers}
               >
-                <div className="relative rounded-3xl bg-muted/50 shadow-lg transition-all focus-within:shadow-xl overflow-hidden">
+                <div className="relative rounded-2xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
                   <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
                   <Textarea
                     ref={textareaRef}
@@ -144,14 +185,22 @@ export function ChatInput({
                     placeholder={placeholder}
                     disabled={disabled || isLoading || isUploading}
                     rows={1}
-                    className="min-h-[64px] max-h-[200px] resize-none border-0 bg-transparent px-6 py-5 pr-24 text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+                    className="min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
                   />
 
-                  <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1">
                     <FileUploadButton
                       disabled={disabled || isLoading || isUploading || maxFilesReached}
                       onFilesSelected={handleFilesSelected}
+                      fileCount={selectedFiles.length}
                     />
+                    <div className="mr-1">
+                      <ToolsMenu
+                        disabled={disabled || isLoading || isUploading}
+                        onToolSelected={handleToolSelected}
+                        activeTool={activeTool}
+                      />
+                    </div>
                     <ActionButtons
                       isLoading={isLoading}
                       isUploading={isUploading}
@@ -161,6 +210,8 @@ export function ChatInput({
                       size="large"
                     />
                   </div>
+
+
                 </div>
               </DropZone>
             </form>
@@ -187,7 +238,7 @@ export function ChatInput({
             dropZoneRef={dropZoneRef}
             handlers={handlers}
           >
-            <div className="relative rounded-2xl bg-muted/50 shadow-sm transition-all focus-within:bg-muted focus-within:shadow-md overflow-hidden">
+            <div className="relative rounded-2xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
               <FilePreview files={selectedFiles} onRemove={handleRemoveFile} disabled={isSending} />
               <Textarea
                 ref={textareaRef}
@@ -199,14 +250,22 @@ export function ChatInput({
                 placeholder={placeholder}
                 disabled={disabled || isLoading || isUploading}
                 rows={1}
-                className="min-h-[56px] max-h-[200px] resize-none border-0 bg-transparent px-4 py-4 pr-20 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+                className="min-h-[88px] max-h-[280px] resize-none border-0 bg-transparent px-5 py-4 pr-24 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
               />
 
               <div className="absolute bottom-2 right-2 flex items-center gap-1">
                 <FileUploadButton
                   disabled={disabled || isLoading || isUploading || maxFilesReached}
                   onFilesSelected={handleFilesSelected}
+                  fileCount={selectedFiles.length}
                 />
+                <div className="mr-1">
+                  <ToolsMenu
+                    disabled={disabled || isLoading || isUploading}
+                    onToolSelected={handleToolSelected}
+                    activeTool={activeTool}
+                  />
+                </div>
                 <ActionButtons
                   isLoading={isLoading}
                   isUploading={isUploading}
@@ -215,6 +274,8 @@ export function ChatInput({
                   onStop={onStop}
                 />
               </div>
+
+
             </div>
           </DropZone>
         </form>
