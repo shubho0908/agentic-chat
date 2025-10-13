@@ -1,8 +1,9 @@
-import { Search } from "lucide-react";
+import { Search, Youtube } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',
+  YOUTUBE: 'youtube',
 } as const;
 
 export type ToolId = typeof TOOL_IDS[keyof typeof TOOL_IDS];
@@ -36,6 +37,20 @@ export const AVAILABLE_TOOLS: Record<ToolId, ToolConfig> = {
     },
     iconColor: '#3b82f6',
     iconColorClass: 'text-blue-500',
+  },
+  [TOOL_IDS.YOUTUBE]: {
+    id: TOOL_IDS.YOUTUBE,
+    name: 'YouTube',
+    description: 'Analyze YouTube videos',
+    icon: Youtube,
+    inputPrefix: 'Paste YouTube link: ',
+    gradientColors: {
+      from: '#FF0000',
+      via: '#CC0000',
+      to: '#880000',
+    },
+    iconColor: '#FF0000',
+    iconColorClass: 'text-red-600',
   },
 };
 

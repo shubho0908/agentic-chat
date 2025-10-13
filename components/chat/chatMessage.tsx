@@ -13,9 +13,6 @@ import { MessageActions } from "./messageActions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
 import type { MemoryStatus } from "@/types/chat";
-import { ToolStatus } from "@/types/core";
-import { parseWebSearchResults, type ParsedSearchResult } from "@/lib/tools/parsing";
-import { TOOL_IDS } from "@/lib/tools/config";
 
 interface ChatMessageProps {
   message: Message;
@@ -50,22 +47,6 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
   const userImage = session?.user?.image;
   const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
-  
-  const sources = useMemo<ParsedSearchResult[]>(() => {
-    if (!displayedMessage.toolActivities) return [];
-    
-    const allSources: ParsedSearchResult[] = [];
-    displayedMessage.toolActivities.forEach((activity) => {
-      if (activity.status === ToolStatus.Completed && activity.result && activity.toolName === TOOL_IDS.WEB_SEARCH) {
-        const parsed = parseWebSearchResults(activity.result);
-        if (parsed?.sources) {
-          allSources.push(...parsed.sources);
-        }
-      }
-    });
-    
-    return allSources;
-  }, [displayedMessage.toolActivities]);
   
   const handleEditStart = useCallback(() => {
     setEditText(textContent);
@@ -157,9 +138,9 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
               <>
                 <div className="prose prose-sm dark:prose-invert max-w-none">
                   {textContent ? (
-                    <Response sources={sources}>{textContent}</Response>
+                    <Response>{textContent}</Response>
                   ) : message.content ? (
-                    <Response sources={sources}>{typeof message.content === 'string' ? message.content : ''}</Response>
+                    <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
                     <AIThinkingAnimation 
                       memoryStatus={memoryStatus}

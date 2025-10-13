@@ -145,6 +145,16 @@ export const TOOL_ERROR_MESSAGES = {
     NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
     SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
   },
+  YOUTUBE: {
+    NO_URLS_DETECTED: 'YouTube tool is active but no YouTube URLs detected in your message. Please provide YouTube video links.',
+    INVALID_URL: (url: string) => `Invalid YouTube URL: ${url}`,
+    NO_TRANSCRIPT: (videoId: string) => `No transcript available for video ${videoId}. The video may not have captions enabled.`,
+    PRIVATE_VIDEO: 'This video is private or age-restricted and cannot be accessed.',
+    RATE_LIMIT: 'YouTube rate limit reached. Please try again later.',
+    NETWORK_ERROR: (error: string) => `Network error while fetching YouTube data: ${error}`,
+    TOOL_FAILED: (error: string) => `YouTube tool failed: ${error}`,
+    BATCH_LIMIT_EXCEEDED: 'Maximum 5 videos allowed per request.',
+  },
 } as const;
 
 export const HTTP_STATUS = {

@@ -16,8 +16,7 @@ export function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useDebouncedCallback<T extends (...args: any[]) => any>(
+export function useDebouncedCallback<T extends (...args: Parameters<T>) => ReturnType<T>>(
   callback: T,
   delay: number
 ): (...args: Parameters<T>) => void {
@@ -42,8 +41,7 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useThrottle<T extends (...args: any[]) => any>(
+export function useThrottle<T extends (...args: Parameters<T>) => ReturnType<T>>(
   callback: T,
   delay: number
 ): (...args: Parameters<T>) => void {

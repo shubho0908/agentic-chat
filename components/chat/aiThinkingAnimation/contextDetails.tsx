@@ -1,4 +1,4 @@
-import { Eye, FileText, Brain, Search, Wand } from "lucide-react";
+import { Eye, FileText, Brain, Search, Wand, Youtube } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision, ToolProgressStatus } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
@@ -11,6 +11,7 @@ interface ContextDetailsProps {
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   const isWebSearch = isToolActive(memoryStatus, TOOL_IDS.WEB_SEARCH);
+  const isYouTube = isToolActive(memoryStatus, TOOL_IDS.YOUTUBE);
 
   if (
     memoryStatus.hasImages &&
@@ -82,6 +83,52 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
                   {memoryStatus.toolProgress.details.sources.length > 5 && (
                     <span className="text-[10px] text-foreground/50">
                       +{memoryStatus.toolProgress.details.sources.length - 5} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+        </div>
+      );
+    }
+
+    if (isYouTube) {
+      return (
+        <div className="flex flex-col gap-1.5">
+          <ContextItem
+            icon={Youtube}
+            label={memoryStatus.toolProgress?.message || "YouTube analysis"}
+            treeSymbol={
+              memoryStatus.toolProgress?.details?.videos &&
+              memoryStatus.toolProgress.details.videos.length > 0
+                ? "├─"
+                : "└─"
+            }
+            note="(memory skipped)"
+            iconClassName="text-red-600 dark:text-red-400"
+            labelClassName="text-red-700 dark:text-red-300"
+          />
+          {memoryStatus.toolProgress?.details?.videos &&
+            memoryStatus.toolProgress.details.videos.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-foreground/40 font-mono text-[10px] select-none">
+                  └─
+                </span>
+                <div className="flex flex-wrap gap-1 items-center">
+                  {memoryStatus.toolProgress.details.videos
+                    .slice(0, 3)
+                    .map((video, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-700 dark:text-red-300 font-mono truncate max-w-[120px]"
+                        title={video.title}
+                      >
+                        {video.title}
+                      </span>
+                    ))}
+                  {memoryStatus.toolProgress.details.videos.length > 3 && (
+                    <span className="text-[10px] text-foreground/50">
+                      +{memoryStatus.toolProgress.details.videos.length - 3} more
                     </span>
                   )}
                 </div>

@@ -18,7 +18,7 @@ export async function executeWebSearch(
   input: WebSearchInput,
   onProgress?: (progress: WebSearchProgress) => void
 ): Promise<string> {
-    const { query, maxResults = 5, searchDepth = 'basic', includeAnswer = false } = input;
+    const { query, maxResults = 5, searchDepth = 'advanced', includeAnswer = false } = input;
 
     if (!client) {
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.NOT_CONFIGURED;
@@ -35,7 +35,7 @@ export async function executeWebSearch(
 
       const response = await client.search({
         query,
-        max_results: Math.min(Math.max(maxResults, 1), 10),
+        max_results: Math.max(maxResults, 1),
         search_depth: searchDepth as 'basic' | 'advanced',
         include_answer: includeAnswer,
         include_images: false,

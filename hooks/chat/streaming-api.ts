@@ -1,7 +1,7 @@
 import type { StreamConfig } from "@/types/chat";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, activeTool } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, activeTool } = config;
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -90,6 +90,15 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               toolName: parsed.toolName,
               toolCallId: parsed.toolCallId,
               result: parsed.result,
+            });
+          }
+
+          if (parsed.type === 'tool_progress' && onToolProgress) {
+            onToolProgress({
+              toolName: parsed.toolName,
+              status: parsed.status,
+              message: parsed.message,
+              details: parsed.details,
             });
           }
 

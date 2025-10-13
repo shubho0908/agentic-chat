@@ -49,10 +49,29 @@ export function getContextualMessage(
   }
 
   if (routing === RoutingDecision.ToolOnly) {
+    const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
+    
+    if (memoryStatus?.activeToolName === TOOL_IDS.YOUTUBE && memoryStatus?.toolProgress) {
+      const status = memoryStatus.toolProgress.status;
+      const videoCount = memoryStatus.toolProgress.details?.videoCount || 0;
+      const processedCount = memoryStatus.toolProgress.details?.processedCount || 0;
+      
+      if (status === 'searching') {
+        return 'Searching YouTube...';
+      } else if (status === 'found') {
+        return videoCount > 0 ? `Found ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : 'Found videos';
+      } else if (status === 'processing_sources') {
+        return videoCount > 0 ? `Extracting transcripts (${processedCount}/${videoCount})...` : 'Processing videos...';
+      } else if (status === 'completed') {
+        return 'Analysis complete';
+      }
+      return 'Analyzing YouTube videos...';
+    }
+    
     if (memoryStatus?.toolProgress?.message) {
       return memoryStatus.toolProgress.message;
     }
-    const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
+    
     return `Using ${toolName} to process your request...`;
   }
 

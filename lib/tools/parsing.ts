@@ -12,6 +12,12 @@ export interface ParsedSearchResults {
   sources: ParsedSearchResult[];
 }
 
+export interface ParsedYouTubeVideo {
+  videoId: string;
+  url: string;
+  title: string;
+}
+
 export function parseWebSearchResults(result: string): ParsedSearchResults | null {
   const resultsMatch = result.match(/Found (\d+) results?:/);
   const resultsCount = resultsMatch ? parseInt(resultsMatch[1]) : 0;
@@ -44,19 +50,30 @@ export function parseWebSearchResults(result: string): ParsedSearchResults | nul
   return { resultsCount, sources: sources.slice(0, 5) };
 }
 
-export function getToolIcon(toolName: string) {
-  const iconMap: Record<string, string> = {
-    'web_search': 'Search',
-  };
+export function parseYouTubeResults(result: string): ParsedYouTubeVideo[] {
+  const videos: ParsedYouTubeVideo[] = [];
   
-  return iconMap[toolName] || 'Search';
+  const videoBlocks = result.split(/^##\s+/m).filter(block => block.trim());
+  
+  for (const block of videoBlocks) {
+    const lines = block.split('\n');
+    const title = lines[0]?.trim();
+    
+    const urlMatch = block.match(/\*\*URL:\*\*\s*(https?:\/\/[^\s\n]+)/);
+    if (!urlMatch || !title) continue;
+    
+    const url = urlMatch[1].trim();
+    const videoIdMatch = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (!videoIdMatch) continue;
+    
+    const videoId = videoIdMatch[1];
+    
+    videos.push({
+      videoId,
+      url,
+      title
+    });
+  }
+  
+  return videos;
 }
-
-export function formatToolDisplayName(toolName: string): string {
-  return toolName.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-}
-
-export const getToolActivationInstruction = (toolName: string): string => {
-  const formattedToolName = toolName.replace('_', ' ');
-  return `[TOOL REQUESTED: ${toolName}] Use the ${formattedToolName} tool to answer this query.`;
-};

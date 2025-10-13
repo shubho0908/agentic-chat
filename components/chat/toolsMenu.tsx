@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wand, Globe } from "lucide-react";
+import { Wand } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +45,7 @@ export function ToolsMenu({
 
   if (showToolIcon && activeTool) {
     const activeToolConfig = AVAILABLE_TOOLS[activeTool];
+    const ActiveToolIcon = activeToolConfig.icon;
     
     return (
       <TooltipProvider>
@@ -61,15 +62,24 @@ export function ToolsMenu({
                 variant="ghost"
                 disabled={disabled}
                 onClick={handleButtonClick}
-                className="size-10 rounded-lg transition-all bg-gradient-to-br from-blue-500/20 via-blue-600/20 to-indigo-600/20 hover:from-blue-500/30 hover:via-blue-600/30 hover:to-indigo-600/30"
+                className="size-10 rounded-lg transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}33, ${activeToolConfig.gradientColors.via}33, ${activeToolConfig.gradientColors.to}33)`,
+                }}
                 aria-label={`${activeToolConfig.name} (click to deactivate)`}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}4D, ${activeToolConfig.gradientColors.via}4D, ${activeToolConfig.gradientColors.to}4D)`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}33, ${activeToolConfig.gradientColors.via}33, ${activeToolConfig.gradientColors.to}33)`;
+                }}
               >
                 <motion.div
                   initial={{ rotate: -180, scale: 0 }}
                   animate={{ rotate: 0, scale: 1 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
-                  <Globe className="size-4 text-blue-500" />
+                  <ActiveToolIcon className={`size-4 ${activeToolConfig.iconColorClass}`} />
                 </motion.div>
               </Button>
             </motion.div>

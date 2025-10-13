@@ -27,7 +27,7 @@ export const webSearchParamsSchema = z.object({
     .number()
     .optional()
     .default(5)
-    .describe('Maximum number of results to return (1-10)'),
+    .describe('Maximum number of results to return. Choose based on query complexity: 3-5 for simple queries, 5-10 for moderate research, 10+ for comprehensive analysis. Consider requesting more results if user would benefit from having resource links for further reading or verification'),
   searchDepth: z
     .enum(['basic', 'advanced'])
     .optional()

@@ -1,5 +1,5 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
-import type { WebSearchSource } from './tools';
+import type { WebSearchSource, YouTubeVideo } from './tools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -36,6 +36,10 @@ export interface MemoryStatus {
       sources?: WebSearchSource[];
       currentSource?: WebSearchSource;
       processedCount?: number;
+      videoCount?: number;
+      videos?: YouTubeVideo[];
+      failedCount?: number;
+      currentVideo?: YouTubeVideo;
     };
   };
 }

@@ -40,6 +40,8 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
   });
 }
 
+const MAX_CONTEXT_MESSAGES = 20;
+
 export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
@@ -67,12 +69,16 @@ export function buildMessagesForAPI(
     ];
   }
 
+  const contextMessages = messages.length > MAX_CONTEXT_MESSAGES 
+    ? messages.slice(-MAX_CONTEXT_MESSAGES)
+    : messages;
+
   return [
     {
       role: "system" as const,
       content: systemPrompt,
     },
-    ...messages.map(({ role, content }) => ({
+    ...contextMessages.map(({ role, content }) => ({
       role: role as "user" | "assistant" | "system",
       content,
     })),
