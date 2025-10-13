@@ -7,7 +7,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { updateUserMessage, saveAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
-import { performCacheCheck } from "./cache-handler";
+import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
@@ -103,49 +103,7 @@ export async function handleEditMessage(
       }
     }
 
-    const { cacheQuery, cacheData } = await performCacheCheck({
-      messages: messagesUpToEdit,
-      content: messageContent,
-      attachments,
-      abortSignal,
-      activeTool,
-    });
-
-    if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
-      const assistantContent = cacheData.response;
-      onMessagesUpdate((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? { ...msg, content: assistantContent }
-            : msg
-        )
-      );
-
-      if (conversationId) {
-        const conversationIdStr = conversationId;
-        const savedAssistantMessageId = await saveAssistantMessage(conversationIdStr, assistantContent);
-        
-        if (savedAssistantMessageId && updatedMessageId) {
-          const parentId = updatedMessageData?.parentMessageId || updatedMessageId;
-          const versions = await fetchMessageVersions(conversationIdStr, parentId);
-          
-          onMessagesUpdate((prev) =>
-            prev.map((msg) => {
-              if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
-                return updateMessageWithVersions(msg, updatedMessageId, versions);
-              }
-              if (msg.id === assistantMessageId) {
-                return { ...msg, id: savedAssistantMessageId };
-              }
-              return msg;
-            })
-          );
-        }
-      }
-
-      return { success: true };
-    }
-
+    const cacheQuery = buildCacheQuery(messagesUpToEdit, messageContent);
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
 
     const responseContent = await streamChatCompletion({

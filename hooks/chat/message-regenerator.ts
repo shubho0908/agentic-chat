@@ -6,7 +6,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
-import { performCacheCheck } from "./cache-handler";
+import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
@@ -90,44 +90,7 @@ export async function handleRegenerateResponse(
       await deleteMessagesAfter(conversationId, assistantMessage.id);
     }
 
-    const { cacheQuery, cacheData } = await performCacheCheck({
-      messages: messagesUpToAssistant,
-      content: previousUserMessage.content,
-      attachments: previousUserMessage.attachments,
-      abortSignal,
-      activeTool,
-    });
-
-    if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
-      const cachedResponse = cacheData.response;
-      onMessagesUpdate((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessage.id
-            ? { ...msg, content: cachedResponse }
-            : msg
-        )
-      );
-
-      if (conversationId && assistantMessage.id) {
-        const updatedMessage = await updateAssistantMessage(conversationId, assistantMessage.id, cachedResponse);
-        
-        if (updatedMessage?.id) {
-          const parentId = updatedMessage.parentMessageId || updatedMessage.id;
-          const versions = await fetchMessageVersions(conversationId, parentId);
-          
-          onMessagesUpdate((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessage.id || msg.id === updatedMessage.id
-                ? updateMessageWithVersions(msg, updatedMessage.id, versions)
-                : msg
-            )
-          );
-        }
-      }
-
-      return { success: true };
-    }
-
+    const cacheQuery = buildCacheQuery(messagesUpToAssistant, previousUserMessage.content);
     const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT);
 
     const responseContent = await streamChatCompletion({

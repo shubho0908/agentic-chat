@@ -10,7 +10,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
       model,
       messages,
       stream: true,
-      conversationId: conversationId || undefined,
+      conversationId,
       activeTool: activeTool || null,
     }),
     signal,
