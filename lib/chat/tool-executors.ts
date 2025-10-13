@@ -14,6 +14,7 @@ export async function executeWebSearchTool(
   try {
     const toolArgs = {
       query: textQuery,
+      maxResults: 5,
       searchDepth: 'advanced' as const,
       includeAnswer: false,
     };
