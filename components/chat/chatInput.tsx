@@ -41,17 +41,13 @@ export function ChatInput({
   centered = false,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
-  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
-  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(false);
-
-  useEffect(() => {
+  const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
     const stored = getStoredActiveTool();
-    if (stored && isValidToolId(stored)) {
-      setActiveTool(stored as ToolId);
-    }
-    
-    setMemoryEnabled(getStoredMemoryEnabled());
-  }, []);
+    return stored && isValidToolId(stored) ? (stored as ToolId) : null;
+  });
+  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(() => {
+    return getStoredMemoryEnabled();
+  });
 
   useEffect(() => {
     if (activeTool) {

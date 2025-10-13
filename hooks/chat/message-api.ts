@@ -192,23 +192,3 @@ export async function deleteMessagesAfter(
     console.error("Failed to delete messages:", err);
   }
 }
-
-export async function storeMemory(
-  userMessage: string,
-  assistantMessage: string,
-  conversationId: string | null
-): Promise<void> {
-  try {
-    await fetch('/api/memory/store', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userMessage,
-        assistantMessage,
-        conversationId,
-      }),
-    });
-  } catch (err) {
-    console.error('[Memory] Storage failed:', err);
-  }
-}

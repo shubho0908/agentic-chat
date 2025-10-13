@@ -7,10 +7,11 @@ import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-ut
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { saveUserMessage, storeMemory } from "./message-api";
+import { saveUserMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
+import { storeConversationMemory } from "@/lib/memory";
 
 interface SendMessageContext {
   messages: Message[];
@@ -287,7 +288,7 @@ export async function handleSendMessage(
 
       if (session?.user?.id && memoryEnabled === true) {
         const textContent = extractTextFromContent(messageContent);
-        await storeMemory(textContent, assistantContent, currentConversationId);
+        await storeConversationMemory(textContent, assistantContent, session.user.id);
       }
     }
 

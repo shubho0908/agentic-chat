@@ -1,6 +1,6 @@
 'use server';
 
-import { getMemoryContext } from './memory-conversation-context';
+import { getMemoryContext } from './memory';
 import { getRAGContext } from './rag/retrieval/context';
 import type { Message } from '@/types/core';
 import { RoutingDecision } from '@/types/chat';
@@ -174,9 +174,11 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const memoryContext = !memoryEnabled 
-    ? null 
-    : await getMemoryContext(query, userId, messages, conversationId);
+  if (!memoryEnabled) {
+    return { context: '', metadata };
+  }
+
+  const memoryContext = await getMemoryContext(textQuery, userId);
 
   if (memoryContext) {
     metadata.hasMemories = true;

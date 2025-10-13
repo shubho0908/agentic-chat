@@ -218,21 +218,7 @@ export async function ensurePgVectorTables(): Promise<void> {
         );
       `);
 
-      // Create conversation_memory table
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS conversation_memory (
-          id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-          user_id TEXT NOT NULL,
-          conversation_id TEXT,
-          user_message TEXT NOT NULL,
-          assistant_message TEXT NOT NULL,
-          memory_text TEXT NOT NULL,
-          embedding ${vectorType},
-          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-      `);
-
-      const tables = ['document_chunk', 'semantic_cache', 'conversation_memory'];
+      const tables = ['document_chunk', 'semantic_cache'];
       const expectedType = vectorType.includes('vector') ? 'vector' : vectorType.includes('halfvec') ? 'halfvec' : null;
       
       for (const tableName of tables) {
@@ -259,17 +245,6 @@ export async function ensurePgVectorTables(): Promise<void> {
           'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',
           'semantic_cache_embedding_idx',
           'semantic_cache',
-          vectorConfig.ops,
-          HNSW_M,
-          HNSW_EF_CONSTRUCTION
-        )
-      );
-
-      await client.query(
-        sqlFormat(
-          'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',
-          'conversation_memory_embedding_idx',
-          'conversation_memory',
           vectorConfig.ops,
           HNSW_M,
           HNSW_EF_CONSTRUCTION
@@ -318,20 +293,6 @@ export async function ensurePgVectorTables(): Promise<void> {
         sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (created_at)', 
           'semantic_cache_created_at_idx',
           'semantic_cache'
-        )
-      );
-
-      await client.query(
-        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (user_id)', 
-          'conversation_memory_user_id_idx',
-          'conversation_memory'
-        )
-      );
-
-      await client.query(
-        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (conversation_id)', 
-          'conversation_memory_conversation_id_idx',
-          'conversation_memory'
         )
       );
 
