@@ -203,11 +203,13 @@ export function ChatInput({
                   />
 
                   <div className="absolute bottom-3 right-3 flex items-center gap-1">
-                    <FileUploadButton
-                      disabled={disabled || isLoading || isUploading || maxFilesReached}
-                      onFilesSelected={handleFilesSelected}
-                      fileCount={selectedFiles.length}
-                    />
+                    <div className="hidden md:block">
+                      <FileUploadButton
+                        disabled={disabled || isLoading || isUploading || maxFilesReached}
+                        onFilesSelected={handleFilesSelected}
+                        fileCount={selectedFiles.length}
+                      />
+                    </div>
                     <div className="mr-1">
                       <ToolsMenu
                         disabled={disabled || isLoading || isUploading}
@@ -215,6 +217,8 @@ export function ChatInput({
                         activeTool={activeTool}
                         memoryEnabled={memoryEnabled}
                         onMemoryToggle={handleMemoryToggle}
+                        onFilesSelected={handleFilesSelected}
+                        fileCount={selectedFiles.length}
                       />
                     </div>
                     <ActionButtons
@@ -270,11 +274,13 @@ export function ChatInput({
               />
 
               <div className="absolute bottom-2 right-2 flex items-center gap-1">
-                <FileUploadButton
-                  disabled={disabled || isLoading || isUploading || maxFilesReached}
-                  onFilesSelected={handleFilesSelected}
-                  fileCount={selectedFiles.length}
-                />
+                <div className="hidden md:block">
+                  <FileUploadButton
+                    disabled={disabled || isLoading || isUploading || maxFilesReached}
+                    onFilesSelected={handleFilesSelected}
+                    fileCount={selectedFiles.length}
+                  />
+                </div>
                 <div className="mr-1">
                   <ToolsMenu
                     disabled={disabled || isLoading || isUploading}
@@ -282,6 +288,8 @@ export function ChatInput({
                     activeTool={activeTool}
                     memoryEnabled={memoryEnabled}
                     onMemoryToggle={handleMemoryToggle}
+                    onFilesSelected={handleFilesSelected}
+                    fileCount={selectedFiles.length}
                   />
                 </div>
                 <ActionButtons

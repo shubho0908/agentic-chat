@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Wand, Brain } from "lucide-react";
+import { useState, useRef } from "react";
+import { Settings, Brain, Paperclip } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,13 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, type ToolId } from "@/lib/tools/config";
+import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
+
+const ACCEPTED_FILE_TYPES = [
+  'image/*',
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+].join(',');
 
 interface ToolsMenuProps {
   onToolSelected?: (toolId: ToolId) => void;
@@ -23,6 +31,8 @@ interface ToolsMenuProps {
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
+  onFilesSelected?: (files: File[]) => void;
+  fileCount?: number;
 }
 
 export function ToolsMenu({ 
@@ -31,11 +41,25 @@ export function ToolsMenu({
   activeTool = null,
   memoryEnabled = false,
   onMemoryToggle,
+  onFilesSelected,
+  fileCount = 0,
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleToolSelect = (toolId: ToolId) => {
     onToolSelected?.(toolId);
+    setIsOpen(false);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      onFilesSelected?.(files);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setIsOpen(false);
   };
 
@@ -100,40 +124,66 @@ export function ToolsMenu({
   }
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                disabled={disabled}
-                className={`size-10 rounded-lg transition-all ${
-                  hasActiveTool 
-                    ? 'bg-primary/10 hover:bg-primary/15' 
-                    : 'hover:bg-accent'
-                }`}
-                aria-label="Tools"
-              >
-                <Wand className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center">
-            <p>{hasActiveTool ? 'Deactivate tool' : 'Tools'}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        onChange={handleFileSelect}
+        className="hidden"
+        accept={ACCEPTED_FILE_TYPES}
+        disabled={disabled}
+      />
 
-      <DropdownMenuContent 
-        align="center" 
-        side="top"
-        className="w-56 border-muted/50 shadow-xl"
-        sideOffset={8}
-        asChild
-      >
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <div className="relative">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    disabled={disabled}
+                    className={`size-10 rounded-lg transition-all ${
+                      hasActiveTool 
+                        ? 'bg-primary/10 hover:bg-primary/15' 
+                        : 'hover:bg-accent'
+                    }`}
+                    aria-label="Tools"
+                  >
+                    <motion.div
+                      animate={{ rotate: isOpen ? 45 : 0 }}
+                      transition={{ duration: 0.3, ease: "easeInOut" }}
+                    >
+                      <Settings className={`size-4 ${hasActiveTool ? 'text-primary' : ''}`} />
+                    </motion.div>
+                  </Button>
+                  {fileCount > 0 && (
+                    <Badge 
+                      variant="default"
+                      className="absolute -top-0.5 -right-0.5 size-4 flex items-center justify-center p-0 text-[9px] rounded-full md:hidden"
+                    >
+                      {fileCount}
+                    </Badge>
+                  )}
+                </div>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center">
+              <p>{hasActiveTool ? 'Deactivate tool' : 'Tools'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <DropdownMenuContent 
+          align="start"
+          side="top"
+          className="w-56 border-muted/50 shadow-xl md:w-64"
+          sideOffset={8}
+          asChild
+        >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -141,6 +191,30 @@ export function ToolsMenu({
           transition={{ duration: 0.15, ease: "easeOut" }}
         >
           <div>
+            {onFilesSelected && (
+              <>
+                <div className="md:hidden">
+                  <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                    Attachments
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={disabled}
+                    className="cursor-pointer gap-3 py-2.5"
+                  >
+                    <Paperclip className="size-4 text-muted-foreground" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium">Attach Files</span>
+                      <span className="text-xs text-muted-foreground">
+                        {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                </div>
+                <DropdownMenuSeparator className="md:hidden" />
+              </>
+            )}
+
             <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
               Memory Settings
             </DropdownMenuLabel>
@@ -217,5 +291,6 @@ export function ToolsMenu({
         </motion.div>
       </DropdownMenuContent>
     </DropdownMenu>
+    </>
   );
 }

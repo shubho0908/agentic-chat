@@ -50,7 +50,7 @@ export const AVAILABLE_TOOLS: Record<ToolId, ToolConfig> = {
       to: '#880000',
     },
     iconColor: '#FF0000',
-    iconColorClass: 'text-red-600',
+    iconColorClass: 'text-red-500',
   },
 };
 
