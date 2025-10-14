@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings, Brain, Paperclip } from "lucide-react";
+import { Settings2, Brain, Paperclip } from "lucide-react";
 import { motion } from "framer-motion";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -130,9 +130,10 @@ export function ToolsMenu({
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <button
+                  <Button
                     type="button"
                     disabled={disabled}
+                    variant="ghost"
                     className={cn(
                       buttonVariants({ variant: "ghost", size: "icon" }),
                       "size-10 rounded-lg active:scale-95 transition-transform",
@@ -142,14 +143,14 @@ export function ToolsMenu({
                     )}
                     aria-label="Tools"
                   >
-                    <Settings
-                      className={`size-4 transition-transform duration-300 ease-in-out ${hasActiveTool ? 'text-primary' : ''
+                    <Settings2
+                      className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''
                         }`}
                       style={{
-                        transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)'
+                        transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
                       }}
                     />
-                  </button>
+                  </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="top" align="center">

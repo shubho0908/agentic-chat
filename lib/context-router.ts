@@ -101,7 +101,7 @@ export async function routeContext(
     documentCount: 0,
     imageCount,
     routingDecision: RoutingDecision.MemoryOnly,
-    skippedMemory: !memoryEnabled, // Memory skipped if disabled
+    skippedMemory: !memoryEnabled,
   };
 
   const textQuery = typeof query === 'string' 

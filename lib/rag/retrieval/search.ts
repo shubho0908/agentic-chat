@@ -33,6 +33,7 @@ function getVectorStoreConfig() {
       contentColumnName: 'content',
       metadataColumnName: 'metadata',
     },
+    distanceStrategy: 'cosine' as const,
   };
 }
 
@@ -62,9 +63,10 @@ export async function searchDocumentChunks(
   }
 
   const embeddings = await getEmbeddings(userId);
+  const config = getVectorStoreConfig();
   const vectorStore = new PGVectorStore(
     embeddings,
-    getVectorStoreConfig()
+    config
   );
   
   await vectorStore.ensureTableInDatabase();
@@ -89,11 +91,22 @@ export async function searchDocumentChunks(
 
   const results = await vectorStore.similaritySearchWithScore(query, candidateLimit, filter);
 
-  const filteredResults = results
-    .filter(([, score]) => score >= scoreThreshold)
-    .map(([doc, score]) => ({
+  const convertedResults = results.map(([doc, distance]) => {
+    const similarity = 1 - distance;
+    return {
+      doc,
+      distance,
+      similarity,
+    };
+  });
+
+  const effectiveThreshold = enableReranking ? 0.3 : scoreThreshold;
+  
+  const filteredResults = convertedResults
+    .filter(({ similarity }) => similarity >= effectiveThreshold)
+    .map(({ doc, similarity }) => ({
       content: doc.pageContent,
-      score,
+      score: similarity,
       metadata: {
         attachmentId: doc.metadata.attachmentId as string,
         fileName: doc.metadata.fileName as string,
@@ -105,7 +118,6 @@ export async function searchDocumentChunks(
     const rerankedResults = await rerankDocuments(query, filteredResults, {
       topN: limit,
     });
-
     return rerankedResults;
   }
   return filteredResults.slice(0, limit);

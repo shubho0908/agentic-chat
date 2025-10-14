@@ -35,6 +35,7 @@ function getVectorStoreConfig() {
       contentColumnName: 'content',
       metadataColumnName: 'metadata',
     },
+    distanceStrategy: 'cosine' as const,
   };
 }
 

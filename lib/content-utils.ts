@@ -1,4 +1,5 @@
 import type { MessageContentPart, Attachment } from "@/types/core";
+import { filterImageAttachments } from "@/lib/attachment-utils";
 
 export function extractTextFromContent(content: string | MessageContentPart[]): string {
   if (typeof content === 'string') {
@@ -36,7 +37,7 @@ export function buildMultimodalContent(
     return text;
   }
   
-  const imageAttachments = attachments.filter(att => att.fileType.startsWith('image/'));
+  const imageAttachments = filterImageAttachments(attachments);
   
   if (imageAttachments.length === 0) {
     return text;

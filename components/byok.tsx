@@ -1,7 +1,7 @@
 "use client";
 
 import { type RefObject, useState, useEffect } from "react";
-import { Key, Settings2, Loader } from "lucide-react";
+import { Key, Loader, Cog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -149,7 +149,7 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
         >
           {isConfigured ? (
             <>
-              <Settings2 className="size-4" />
+              <Cog className="size-4" />
               <span className="hidden sm:inline">API Settings</span>
             </>
           ) : (

@@ -42,14 +42,12 @@ export function filterFiles(files: File[]): FileFilterResult {
   const unsupportedFiles: File[] = [];
   
   for (const file of files) {
-    if (isImageFile(file)) {
-      if (isSupportedImageExtension(file.name)) {
-        validImages.push(file);
-      } else {
-        unsupportedImages.push(file);
-      }
-    } else if (isSupportedDocumentExtension(file.name)) {
+    if (isSupportedDocumentExtension(file.name)) {
       validDocuments.push(file);
+    } else if (isSupportedImageExtension(file.name)) {
+      validImages.push(file);
+    } else if (isImageFile(file)) {
+      unsupportedImages.push(file);
     } else {
       unsupportedFiles.push(file);
     }

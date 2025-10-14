@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SUPPORTED_DOCUMENT_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS } from "@/constants/upload";
 
 interface FilePreviewProps {
   files: File[];
@@ -58,24 +59,40 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
     });
   };
 
+  const getFileExtension = (filename: string): string => {
+    const lastDot = filename.lastIndexOf('.');
+    if (lastDot === -1) return '';
+    return filename.slice(lastDot).toLowerCase();
+  };
+
+  const isDocumentFile = (file: File): boolean => {
+    const ext = getFileExtension(file.name);
+    return (SUPPORTED_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext);
+  };
+
+  const isImageFile = (file: File): boolean => {
+    const ext = getFileExtension(file.name);
+    return (SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
+  };
+
   const getFileIcon = (file: File) => {
-    if (file.type.startsWith("image/")) {
+    if (isDocumentFile(file)) {
+      if (file.name.endsWith(".pdf")) {
+        return <FileText className="size-4" />;
+      }
+      if (file.name.match(/\.(xlsx?|csv)$/)) {
+        return <FileSpreadsheet className="size-4" />;
+      }
+      return <FileText className="size-4" />;
+    }
+    if (isImageFile(file) || file.type.startsWith("image/")) {
       return <ImageIcon className="size-4" />;
-    }
-    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-      return <FileText className="size-4" />;
-    }
-    if (file.type.includes("spreadsheet") || file.name.match(/\.(xlsx?|csv)$/)) {
-      return <FileSpreadsheet className="size-4" />;
-    }
-    if (file.type.includes("wordprocessingml") || file.name.endsWith(".docx")) {
-      return <FileText className="size-4" />;
     }
     return <FileText className="size-4" />;
   };
 
   const getFilePreview = (file: File) => {
-    if (file.type.startsWith("image/")) {
+    if (isImageFile(file) && !isDocumentFile(file)) {
       return URL.createObjectURL(file);
     }
     return null;

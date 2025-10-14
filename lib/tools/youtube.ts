@@ -63,8 +63,6 @@ async function fetchTranscript(
         const availableLangs = languageMatch[1].split(',').map(l => l.trim());
         const firstAvailableLang = availableLangs[0];
         
-        console.log(`[YouTube Tool] Language '${language}' not available for ${videoId}. Trying '${firstAvailableLang}' instead.`);
-        
         try {
           const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
             lang: firstAvailableLang
