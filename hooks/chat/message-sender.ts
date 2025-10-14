@@ -1,6 +1,7 @@
 import type { Message, Attachment, ToolActivity } from "@/types/core";
 import type { ConversationResult, MemoryStatus } from "@/types/chat";
 import { ToolStatus } from "@/types/core";
+import { RoutingDecision } from "@/types/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
@@ -30,7 +31,6 @@ export async function handleSendMessage(
   attachments: Attachment[] | undefined,
   context: SendMessageContext,
   session?: { user: { id: string } },
-  activeTool?: string | null,
   memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -68,7 +68,15 @@ export async function handleSendMessage(
   let assistantContent = "";
   let savedUserMessageId = userMessage.id;
   const toolActivities: ToolActivity[] = [];
-  let currentMemoryStatus: MemoryStatus | undefined;
+  let currentMemoryStatus: MemoryStatus = {
+    hasMemories: false,
+    hasDocuments: false,
+    memoryCount: 0,
+    documentCount: 0,
+    hasImages: false,
+    imageCount: 0,
+    skippedMemory: false,
+  };
 
   onMessagesUpdate((prev) => [
     ...prev,
@@ -138,7 +146,6 @@ export async function handleSendMessage(
       content: messageContent,
       attachments,
       abortSignal,
-      activeTool,
     });
 
     if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
@@ -238,10 +245,12 @@ export async function handleSendMessage(
         }
       },
       onToolProgress: (progress) => {
-        if (currentMemoryStatus && onMemoryStatusUpdate) {
+        if (onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
+            routingDecision: currentMemoryStatus.routingDecision || RoutingDecision.ToolOnly,
             toolProgress: {
+              toolName: progress.toolName,
               status: progress.status,
               message: progress.message,
               details: progress.details,
@@ -251,7 +260,6 @@ export async function handleSendMessage(
           onMemoryStatusUpdate(updatedStatus);
         }
       },
-      activeTool,
       memoryEnabled,
     });
 

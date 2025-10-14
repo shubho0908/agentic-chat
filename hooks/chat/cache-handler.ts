@@ -7,15 +7,10 @@ interface CacheCheckContext {
   content: string | MessageContentPart[];
   attachments?: Attachment[];
   abortSignal: AbortSignal;
-  activeTool?: string | null;
 }
 
-export function shouldUseSemanticCache(attachments?: Attachment[], activeTool?: string | null): boolean {
+export function shouldUseSemanticCache(attachments?: Attachment[]): boolean {
   if (attachments && attachments.length > 0) {
-    return false;
-  }
-  
-  if (activeTool) {
     return false;
   }
   
@@ -73,9 +68,9 @@ export async function checkCache(
 export async function performCacheCheck(
   context: CacheCheckContext
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
-  const { messages, content, attachments, abortSignal, activeTool } = context;
+  const { messages, content, attachments, abortSignal } = context;
   
-  const useCaching = shouldUseSemanticCache(attachments, activeTool);
+  const useCaching = shouldUseSemanticCache(attachments);
   let cacheQuery = '';
   let cacheData: CacheCheckResult = { cached: false };
 

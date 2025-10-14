@@ -1,17 +1,17 @@
 import { Eye, FileText, Brain, Search, Wand, Youtube } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
-import { RoutingDecision, ToolProgressStatus } from "@/types/chat";
-import { TOOL_IDS } from "@/lib/tools/config";
+import { RoutingDecision } from "@/types/chat";
+import { WebSearchProgressStatus } from "@/types/tools";
 import { ContextItem } from "./contextItem";
-import { isToolActive } from "./utils";
+import { TOOL_IDS } from "@/lib/tools/config";
 
 interface ContextDetailsProps {
   memoryStatus: MemoryStatus;
 }
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
-  const isWebSearch = isToolActive(memoryStatus, TOOL_IDS.WEB_SEARCH);
-  const isYouTube = isToolActive(memoryStatus, TOOL_IDS.YOUTUBE);
+  const isWebSearch = memoryStatus.toolProgress?.toolName === TOOL_IDS.WEB_SEARCH;
+  const isYouTube = memoryStatus.toolProgress?.toolName === TOOL_IDS.YOUTUBE;
 
   if (
     memoryStatus.hasImages &&
@@ -42,14 +42,14 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
           <ContextItem
             icon={Search}
             label={
-              memoryStatus.toolProgress?.status === ToolProgressStatus.Searching
+              memoryStatus.toolProgress?.status === WebSearchProgressStatus.Searching
                 ? "Searching web"
-                : memoryStatus.toolProgress?.status === ToolProgressStatus.Found
+                : memoryStatus.toolProgress?.status === WebSearchProgressStatus.Found
                 ? `Found ${memoryStatus.toolProgress.details?.resultsCount || 0} sources`
                 : memoryStatus.toolProgress?.status ===
-                  ToolProgressStatus.ProcessingSources
+                  WebSearchProgressStatus.ProcessingSources
                 ? `Processing ${memoryStatus.toolProgress.details?.processedCount || 0}/${memoryStatus.toolProgress.details?.resultsCount || 0}`
-                : memoryStatus.toolProgress?.status === ToolProgressStatus.Completed
+                : memoryStatus.toolProgress?.status === WebSearchProgressStatus.Completed
                 ? `${memoryStatus.toolProgress.details?.resultsCount || 0} sources analyzed`
                 : "Web search"
             }
@@ -141,13 +141,9 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
     return (
       <ContextItem
         icon={Wand}
-        label={
-          memoryStatus.activeToolName
-            ? `${memoryStatus.activeToolName.replace("_", " ")} tool`
-            : "Tool active"
-        }
+        label="Tools available"
         treeSymbol="└─"
-        note="(memory skipped)"
+        note="(AI can call tools as needed)"
         iconClassName="text-blue-600 dark:text-blue-400"
         labelClassName="text-blue-700 dark:text-blue-300"
       />

@@ -76,7 +76,6 @@ export async function routeContext(
   userId: string,
   messages: Message[],
   conversationId?: string,
-  activeTool?: string | null,
   memoryEnabled: boolean = false
 ): Promise<ContextRoutingResult> {
   const imageCount = detectImages(query);
@@ -107,13 +106,6 @@ export async function routeContext(
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
-
-  if (activeTool) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = activeTool;
-    return { context: '', metadata };
-  }
 
   const hasAttachmentsPromise = conversationId 
     ? hasDocumentAttachments(conversationId)

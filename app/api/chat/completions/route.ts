@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
 
-    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = false } = body;
+    const { model, messages, stream = true, conversationId, memoryEnabled = false } = body;
     
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
         authUser.id,
         messages.slice(0, -1) as Message[],
         conversationId,
-        activeTool,
         memoryEnabled
       );
 
@@ -76,13 +75,16 @@ export async function POST(request: NextRequest) {
       console.error('[Context Routing Error]', error);
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ 
+      apiKey,
+      maxRetries: 2,
+      timeout: 60000,
+    });
 
     if (stream) {
       const streamHandler = createChatStreamHandler({
         memoryStatusInfo,
         messages,
-        activeTool,
         enhancedMessages,
         model,
         openai,

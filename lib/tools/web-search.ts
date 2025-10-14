@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource, WebSearchProgress } from '@/types/tools';
+import { WebSearchProgressStatus } from '@/types/tools';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
@@ -28,7 +29,7 @@ export async function executeWebSearch(
       const startTime = Date.now();
 
       onProgress?.({
-        status: 'searching',
+        status: WebSearchProgressStatus.Searching,
         message: `Searching the web...`,
         details: { query },
       });
@@ -46,7 +47,7 @@ export async function executeWebSearch(
 
       if (!response.results || response.results.length === 0) {
         onProgress?.({
-          status: 'completed',
+          status: WebSearchProgressStatus.Completed,
           message: 'No results found',
           details: { query, resultsCount: 0, responseTime },
         });
@@ -72,7 +73,7 @@ export async function executeWebSearch(
       }));
 
       onProgress?.({
-        status: 'found',
+        status: WebSearchProgressStatus.Found,
         message: `Found ${response.results.length} sources`,
         details: { 
           query, 
@@ -84,7 +85,7 @@ export async function executeWebSearch(
 
       for (let i = 0; i < sources.length; i++) {
         onProgress?.({
-          status: 'processing_sources',
+          status: WebSearchProgressStatus.ProcessingSources,
           message: `Analyzing source ${i + 1} of ${sources.length}...`,
           details: {
             query,
@@ -123,7 +124,7 @@ ${result.position}. ${result.title}
 `.trim();
 
       onProgress?.({
-        status: 'completed',
+        status: WebSearchProgressStatus.Completed,
         message: `Analysis complete`,
         details: { 
           query, 

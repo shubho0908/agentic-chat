@@ -1,3 +1,10 @@
+export enum WebSearchProgressStatus {
+  Searching = 'searching',
+  Found = 'found',
+  ProcessingSources = 'processing_sources',
+  Completed = 'completed',
+}
+
 export interface WebSearchSource {
   title: string;
   url: string;
@@ -8,7 +15,7 @@ export interface WebSearchSource {
 }
 
 export interface WebSearchProgress {
-  status: 'searching' | 'found' | 'processing_sources' | 'completed';
+  status: WebSearchProgressStatus;
   message: string;
   details?: {
     query?: string;
@@ -48,8 +55,16 @@ export interface YouTubeVideoContext {
   error?: string;
 }
 
+export enum YouTubeProgressStatus {
+  Detecting = 'detecting',
+  Extracting = 'extracting',
+  ProcessingChapters = 'processing_chapters',
+  Combining = 'combining',
+  Completed = 'completed',
+}
+
 export interface YouTubeProgress {
-  status: 'detecting' | 'extracting' | 'processing_chapters' | 'combining' | 'completed';
+  status: YouTubeProgressStatus;
   message: string;
   details?: {
     videoCount?: number;

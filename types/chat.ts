@@ -1,5 +1,6 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
 import type { WebSearchSource, YouTubeVideo } from './tools';
+import { WebSearchProgressStatus } from './tools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -7,13 +8,6 @@ export enum RoutingDecision {
   MemoryOnly = 'memory-only',
   Hybrid = 'hybrid',
   ToolOnly = 'tool-only',
-}
-
-export enum ToolProgressStatus {
-  Searching = 'searching',
-  Found = 'found',
-  ProcessingSources = 'processing_sources',
-  Completed = 'completed',
 }
 
 export interface MemoryStatus {
@@ -25,9 +19,9 @@ export interface MemoryStatus {
   imageCount: number;
   routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
-  activeToolName?: string;
   toolProgress?: {
-    status: ToolProgressStatus;
+    toolName: string;
+    status: WebSearchProgressStatus | string;
     message: string;
     details?: {
       query?: string;
@@ -62,14 +56,12 @@ export interface SendMessageOptions {
   content: string;
   session?: { user: { id: string } };
   attachments?: Attachment[];
-  activeTool?: string | null;
   memoryEnabled?: boolean;
 }
 
 export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
-  activeTool?: string | null,
   memoryEnabled?: boolean
 ) => Promise<void> | void;
 
@@ -77,13 +69,11 @@ export interface EditMessageOptions {
   messageId: string;
   content: string;
   attachments?: Attachment[];
-  activeTool?: string | null;
   memoryEnabled?: boolean;
 }
 
 export interface RegenerateMessageOptions {
   messageId: string;
-  activeTool?: string | null;
   memoryEnabled?: boolean;
 }
 
@@ -134,7 +124,7 @@ export interface ToolResultEvent {
 
 export interface ToolProgressEvent {
   toolName: string;
-  status: ToolProgressStatus;
+  status: WebSearchProgressStatus | string;
   message: string;
   details?: {
     query?: string;
@@ -143,6 +133,10 @@ export interface ToolProgressEvent {
     sources?: WebSearchSource[];
     currentSource?: WebSearchSource;
     processedCount?: number;
+    videoCount?: number;
+    videos?: YouTubeVideo[];
+    failedCount?: number;
+    currentVideo?: YouTubeVideo;
   };
 }
 
@@ -156,6 +150,5 @@ export interface StreamConfig {
   onToolCall?: (toolCall: ToolCallEvent) => void;
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
-  activeTool?: string | null;
   memoryEnabled?: boolean;
 }

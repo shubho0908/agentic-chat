@@ -5,7 +5,8 @@ import { Download, FileJson, FileText, File, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import type { ExportFormat, ExportConversation } from "@/types/export";
+import { ExportFormat } from "@/types/export";
+import type { ExportConversation } from "@/types/export";
 import { downloadJSON } from "@/lib/export/json-exporter";
 import { downloadMarkdown } from "@/lib/export/markdown-exporter";
 import { downloadPDF } from "@/lib/export/pdf-exporter";
@@ -18,19 +19,19 @@ interface ExportSectionProps {
 
 const exportFormats = [
   {
-    value: 'json' as ExportFormat,
+    value: ExportFormat.Json,
     label: 'JSON',
     description: 'Machine-readable format',
     icon: FileJson,
   },
   {
-    value: 'markdown' as ExportFormat,
+    value: ExportFormat.Markdown,
     label: 'Markdown',
     description: 'Human-readable text',
     icon: FileText,
   },
   {
-    value: 'pdf' as ExportFormat,
+    value: ExportFormat.Pdf,
     label: 'PDF',
     description: 'Professional document',
     icon: File,
@@ -38,7 +39,7 @@ const exportFormats = [
 ];
 
 export function ExportSection({ conversationId }: ExportSectionProps) {
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(ExportFormat.Markdown);
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
@@ -155,10 +156,10 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
       </Button>
 
       <p className="text-xs text-muted-foreground">
-        Export includes all messages{selectedFormat !== 'pdf' ? ', attachments,' : ''} and metadata.
-        {selectedFormat === 'json' && ' Perfect for backups and data portability.'}
-        {selectedFormat === 'markdown' && ' Easy to read and compatible with most text editors.'}
-        {selectedFormat === 'pdf' && ' Professional format suitable for printing and sharing.'}
+        Export includes all messages{selectedFormat !== ExportFormat.Pdf ? ', attachments,' : ''} and metadata.
+        {selectedFormat === ExportFormat.Json && ' Perfect for backups and data portability.'}
+        {selectedFormat === ExportFormat.Markdown && ' Easy to read and compatible with most text editors.'}
+        {selectedFormat === ExportFormat.Pdf && ' Professional format suitable for printing and sharing.'}
       </p>
     </div>
   );

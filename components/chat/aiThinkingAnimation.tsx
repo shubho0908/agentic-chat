@@ -14,7 +14,8 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
     (memoryStatus.hasMemories ||
       memoryStatus.hasDocuments ||
       memoryStatus.hasImages ||
-      memoryStatus.routingDecision === RoutingDecision.ToolOnly);
+      memoryStatus.routingDecision === RoutingDecision.ToolOnly ||
+      memoryStatus.toolProgress);
 
   const contextualMessage = useMemo(
     () => getContextualMessage(memoryStatus, !!hasContext),

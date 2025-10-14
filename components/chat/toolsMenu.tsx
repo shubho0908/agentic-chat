@@ -17,7 +17,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, type ToolId } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 
 const ACCEPTED_FILE_TYPES = [
@@ -27,9 +26,7 @@ const ACCEPTED_FILE_TYPES = [
 ].join(',');
 
 interface ToolsMenuProps {
-  onToolSelected?: (toolId: ToolId) => void;
   disabled?: boolean;
-  activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
@@ -37,9 +34,7 @@ interface ToolsMenuProps {
 }
 
 export function ToolsMenu({
-  onToolSelected,
   disabled,
-  activeTool = null,
   memoryEnabled = false,
   onMemoryToggle,
   onFilesSelected,
@@ -47,11 +42,6 @@ export function ToolsMenu({
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleToolSelect = (toolId: ToolId) => {
-    onToolSelected?.(toolId);
-    setIsOpen(false);
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -63,54 +53,6 @@ export function ToolsMenu({
     }
     setIsOpen(false);
   };
-
-  const hasActiveTool = activeTool !== null;
-  const showToolIcon = hasActiveTool;
-
-  const handleButtonClick = (e: React.MouseEvent) => {
-    if (showToolIcon && activeTool) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleToolSelect(activeTool);
-    }
-  };
-
-  if (showToolIcon && activeTool) {
-    const activeToolConfig = AVAILABLE_TOOLS[activeTool];
-    const ActiveToolIcon = activeToolConfig.icon;
-
-    return (
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <div
-              onClick={handleButtonClick}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200",
-                disabled ?? "pointer-events-none"
-              )}
-              style={{
-                background: `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}33, ${activeToolConfig.gradientColors.via}33, ${activeToolConfig.gradientColors.to}33)`,
-              }}
-              aria-label={`${activeToolConfig.name} (click to deactivate)`}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}4D, ${activeToolConfig.gradientColors.via}4D, ${activeToolConfig.gradientColors.to}4D)`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${activeToolConfig.gradientColors.from}33, ${activeToolConfig.gradientColors.via}33, ${activeToolConfig.gradientColors.to}33)`;
-              }}
-            >
-              <ActiveToolIcon className={`size-4 ${activeToolConfig.iconColorClass} animate-in spin-in-180 zoom-in-0 duration-300`} />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center">
-            <p>{activeToolConfig.name}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
 
   return (
     <>
@@ -136,16 +78,12 @@ export function ToolsMenu({
                     variant="ghost"
                     className={cn(
                       buttonVariants({ variant: "ghost", size: "icon" }),
-                      "size-10 rounded-lg active:scale-95 transition-transform",
-                      hasActiveTool
-                        ? 'bg-primary/10 hover:bg-primary/15'
-                        : 'hover:bg-accent'
+                      "size-10 rounded-lg active:scale-95 transition-transform hover:bg-accent"
                     )}
                     aria-label="Tools"
                   >
                     <Settings2
-                      className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''
-                        }`}
+                      className="size-4 transition-all duration-75"
                       style={{
                         transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
                       }}
@@ -154,7 +92,7 @@ export function ToolsMenu({
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="top" align="center">
-                <p>{hasActiveTool ? 'Deactivate tool' : 'Tools'}</p>
+                <p>Settings</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -207,66 +145,35 @@ export function ToolsMenu({
               )}
 
               <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                Memory Settings
+                Tools
               </DropdownMenuLabel>
-              <div className="px-2 py-2">
-                <div className="flex items-center justify-between space-x-3">
-                  <div className="flex items-center gap-2">
-                    <Brain className={`size-4 ${memoryEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <Label
-                      htmlFor="memory-toggle"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Memory
-                    </Label>
+              
+              <div className="px-2 py-2 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between space-x-3">
+                    <div className="flex items-center gap-2">
+                      <Brain className={`size-4 ${memoryEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <Label
+                        htmlFor="memory-toggle"
+                        className="text-sm font-medium cursor-pointer"
+                      >
+                        Memory
+                      </Label>
+                    </div>
+                    <Switch
+                      id="memory-toggle"
+                      checked={memoryEnabled}
+                      onCheckedChange={onMemoryToggle}
+                    />
                   </div>
-                  <Switch
-                    id="memory-toggle"
-                    checked={memoryEnabled}
-                    onCheckedChange={onMemoryToggle}
-                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {memoryEnabled
+                      ? "AI will remember context from past conversations"
+                      : "AI will not access conversation history"}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {memoryEnabled
-                    ? "AI will remember context from past conversations"
-                    : "AI will not access conversation history"}
-                </p>
               </div>
 
-              <DropdownMenuSeparator />
-
-              <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                Available Tools
-              </DropdownMenuLabel>
-
-              {Object.values(AVAILABLE_TOOLS).map((tool) => {
-                const ToolIcon = tool.icon;
-                const isActive = activeTool === tool.id;
-
-                return (
-                  <div key={tool.id}>
-                    <DropdownMenuItem
-                      onClick={() => handleToolSelect(tool.id)}
-                      className={`cursor-pointer gap-3 py-2.5 group ${isActive ? 'bg-primary/10' : ''
-                        }`}
-                    >
-                      <ToolIcon
-                        className={`size-4 transition-transform group-hover:scale-110 ${isActive ? tool.iconColorClass : 'text-muted-foreground'
-                          }`}
-                      />
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium">{tool.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {tool.description}
-                        </span>
-                      </div>
-                      {isActive && (
-                        <div className="ml-auto size-2 rounded-full bg-primary animate-in zoom-in-0 duration-200" />
-                      )}
-                    </DropdownMenuItem>
-                  </div>
-                );
-              })}
             </div>
           </motion.div>
         </DropdownMenuContent>

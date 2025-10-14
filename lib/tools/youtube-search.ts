@@ -68,11 +68,13 @@ export async function searchYouTubeVideos(
   }
 
   try {
+    const fetchCount = Math.min(maxResults + 5, 50);
+    
     const searchResponse = await youtubeClient.search.list({
       part: ['snippet'],
       q: query,
       type: ['video'],
-      maxResults: Math.min(maxResults * 3, 50),
+      maxResults: fetchCount,
       order: 'relevance',
       relevanceLanguage: 'en',
       safeSearch: 'moderate',

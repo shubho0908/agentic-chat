@@ -1,7 +1,7 @@
 import type { StreamConfig } from "@/types/chat";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, activeTool, memoryEnabled } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, memoryEnabled } = config;
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
@@ -11,7 +11,6 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
       messages,
       stream: true,
       conversationId,
-      activeTool: activeTool || null,
       memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : false,
     }),
     signal,
@@ -74,7 +73,6 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               imageCount: parsed.imageCount || 0,
               routingDecision: parsed.routingDecision,
               skippedMemory: parsed.skippedMemory,
-              activeToolName: parsed.activeToolName,
             });
           }
 

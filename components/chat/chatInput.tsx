@@ -12,15 +12,10 @@ import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
-import type { ToolId } from "@/lib/tools/config";
-import { isValidToolId } from "@/lib/tools/config";
 import type { MessageSendHandler } from "@/types/chat";
 import { 
-  getActiveTool as getStoredActiveTool, 
-  setActiveTool as storeActiveTool, 
-  removeActiveTool, 
   getMemoryEnabled as getStoredMemoryEnabled, 
-  setMemoryEnabled as storeMemoryEnabled 
+  setMemoryEnabled as storeMemoryEnabled
 } from "@/lib/storage";
 
 interface ChatInputProps {
@@ -41,21 +36,9 @@ export function ChatInput({
   centered = false,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
-  const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
-    const stored = getStoredActiveTool();
-    return stored && isValidToolId(stored) ? (stored as ToolId) : null;
-  });
   const [memoryEnabled, setMemoryEnabled] = useState<boolean>(() => {
     return getStoredMemoryEnabled();
   });
-
-  useEffect(() => {
-    if (activeTool) {
-      storeActiveTool(activeTool);
-    } else {
-      removeActiveTool();
-    }
-  }, [activeTool]);
 
   useEffect(() => {
     storeMemoryEnabled(memoryEnabled);
@@ -110,7 +93,7 @@ export function ChatInput({
         }
       }
 
-      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, memoryEnabled);
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -136,26 +119,6 @@ export function ChatInput({
     if (files.length > 0) {
       handleFilesSelected(files);
     }
-  }
-
-  function handleToolSelected(toolId: ToolId) {
-    if (activeTool === toolId) {
-      handleToolDeactivated();
-      return;
-    }
-    
-    setActiveTool(toolId);
-    toast.success('Tool activated', {
-      description: `${toolId.replace('_', ' ')} is now enabled for your next query`,
-      duration: 2500,
-    });
-  }
-
-  function handleToolDeactivated() {
-    setActiveTool(null);
-    toast.info('Tool deactivated', {
-      duration: 2000,
-    });
   }
 
   function handleMemoryToggle(enabled: boolean) {
@@ -213,8 +176,6 @@ export function ChatInput({
                     <div className="mr-1">
                       <ToolsMenu
                         disabled={disabled || isLoading || isUploading}
-                        onToolSelected={handleToolSelected}
-                        activeTool={activeTool}
                         memoryEnabled={memoryEnabled}
                         onMemoryToggle={handleMemoryToggle}
                         onFilesSelected={handleFilesSelected}
@@ -284,8 +245,6 @@ export function ChatInput({
                 <div className="mr-1">
                   <ToolsMenu
                     disabled={disabled || isLoading || isUploading}
-                    onToolSelected={handleToolSelected}
-                    activeTool={activeTool}
                     memoryEnabled={memoryEnabled}
                     onMemoryToggle={handleMemoryToggle}
                     onFilesSelected={handleFilesSelected}

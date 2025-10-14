@@ -11,7 +11,13 @@ export interface Attachment {
   fileSize: number;
 }
 
-export type MessageRole = 'user' | 'assistant' | 'system';
+export enum MessageRole {
+  User = 'user',
+  Assistant = 'assistant',
+  System = 'system',
+}
+
+export type MessageRoleType = 'user' | 'assistant' | 'system';
 
 export interface MessageContentPart {
   type: 'text' | 'image_url';
@@ -31,7 +37,7 @@ export interface MessageHistoryEntry {
 
 export interface Message {
   id?: string;
-  role: MessageRole;
+  role: MessageRoleType;
   content: MessageContent;
   timestamp?: number;
   model?: string;

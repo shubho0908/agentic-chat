@@ -1,18 +1,7 @@
 import { Brain, Eye, Zap, Focus, Wand, LucideIcon } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
-import { TOOL_IDS } from "@/lib/tools/config";
 import { AI_THINKING_MESSAGES } from "./types";
-
-export function isToolActive(
-  memoryStatus: MemoryStatus | undefined,
-  toolId: typeof TOOL_IDS[keyof typeof TOOL_IDS]
-): boolean {
-  return (
-    memoryStatus?.routingDecision === RoutingDecision.ToolOnly &&
-    memoryStatus?.activeToolName === toolId
-  );
-}
 
 export function getContextualMessage(
   memoryStatus: MemoryStatus | undefined,
@@ -48,31 +37,17 @@ export function getContextualMessage(
     return AI_THINKING_MESSAGES.MEMORY_SYNTHESIS;
   }
 
+  if (memoryStatus?.toolProgress) {
+    const progress = memoryStatus.toolProgress;
+    
+    if (progress.message) {
+      return progress.message;
+    }
+    return 'Processing with tools...';
+  }
+  
   if (routing === RoutingDecision.ToolOnly) {
-    const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
-    
-    if (memoryStatus?.activeToolName === TOOL_IDS.YOUTUBE && memoryStatus?.toolProgress) {
-      const status = memoryStatus.toolProgress.status;
-      const videoCount = memoryStatus.toolProgress.details?.videoCount || 0;
-      const processedCount = memoryStatus.toolProgress.details?.processedCount || 0;
-      
-      if (status === 'searching') {
-        return 'Searching YouTube...';
-      } else if (status === 'found') {
-        return videoCount > 0 ? `Found ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : 'Found videos';
-      } else if (status === 'processing_sources') {
-        return videoCount > 0 ? `Extracting transcripts (${processedCount}/${videoCount})...` : 'Processing videos...';
-      } else if (status === 'completed') {
-        return 'Analysis complete';
-      }
-      return 'Analyzing YouTube videos...';
-    }
-    
-    if (memoryStatus?.toolProgress?.message) {
-      return memoryStatus.toolProgress.message;
-    }
-    
-    return `Using ${toolName} to process your request...`;
+    return 'Preparing to use tools...';
   }
 
   const contexts = [];

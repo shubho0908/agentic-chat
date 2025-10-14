@@ -24,7 +24,11 @@ export interface ExportConversation {
   version: string;
 }
 
-export type ExportFormat = 'json' | 'markdown' | 'pdf';
+export enum ExportFormat {
+  Json = 'json',
+  Markdown = 'markdown',
+  Pdf = 'pdf',
+}
 
 export interface ExportOptions {
   includeAttachments?: boolean;

@@ -12,6 +12,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolStatus } from "@/types/core";
+import { RoutingDecision } from "@/types/chat";
 
 interface EditMessageContext {
   messages: Message[];
@@ -28,7 +29,6 @@ export async function handleEditMessage(
   newContent: string,
   attachments: Attachment[] | undefined,
   context: EditMessageContext,
-  activeTool?: string | null,
   memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -58,7 +58,15 @@ export async function handleEditMessage(
   const messagesUpToEdit = messages.slice(0, messageIndex);
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
-  let currentMemoryStatus: MemoryStatus | undefined;
+  let currentMemoryStatus: MemoryStatus = {
+    hasMemories: false,
+    hasDocuments: false,
+    memoryCount: 0,
+    documentCount: 0,
+    hasImages: false,
+    imageCount: 0,
+    skippedMemory: false,
+  };
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === "assistant");
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
@@ -167,10 +175,12 @@ export async function handleEditMessage(
         }
       },
       onToolProgress: (progress) => {
-        if (currentMemoryStatus && onMemoryStatusUpdate) {
+        if (onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
+            routingDecision: currentMemoryStatus.routingDecision || RoutingDecision.ToolOnly,
             toolProgress: {
+              toolName: progress.toolName,
               status: progress.status,
               message: progress.message,
               details: progress.details,
@@ -180,7 +190,6 @@ export async function handleEditMessage(
           onMemoryStatusUpdate(updatedStatus);
         }
       },
-      activeTool,
       memoryEnabled: memoryEnabled ?? false,
     });
 

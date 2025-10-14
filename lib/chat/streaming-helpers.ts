@@ -7,8 +7,7 @@ export function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
 }
 
 export function encodeMemoryStatus(
-  memoryStatusInfo: Omit<MemoryStatus, 'activeToolName'>,
-  activeTool?: string | null
+  memoryStatusInfo: MemoryStatus
 ): Uint8Array {
   return encodeSSEMessage({ 
     type: 'memory_status',
@@ -20,7 +19,6 @@ export function encodeMemoryStatus(
     imageCount: memoryStatusInfo.imageCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
-    activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ? activeTool : undefined
   });
 }
 

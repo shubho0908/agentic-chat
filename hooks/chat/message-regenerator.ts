@@ -11,6 +11,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolStatus } from "@/types/core";
+import { RoutingDecision } from "@/types/chat";
 
 interface RegenerateContext {
   messages: Message[];
@@ -25,7 +26,6 @@ interface RegenerateContext {
 export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
-  activeTool?: string | null,
   memoryEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -61,7 +61,15 @@ export async function handleRegenerateResponse(
 
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
-  let currentMemoryStatus: MemoryStatus | undefined;
+  let currentMemoryStatus: MemoryStatus = {
+    hasMemories: false,
+    hasDocuments: false,
+    memoryCount: 0,
+    documentCount: 0,
+    hasImages: false,
+    imageCount: 0,
+    skippedMemory: false,
+  };
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
   
@@ -154,10 +162,12 @@ export async function handleRegenerateResponse(
         }
       },
       onToolProgress: (progress) => {
-        if (currentMemoryStatus && onMemoryStatusUpdate) {
+        if (onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
+            routingDecision: currentMemoryStatus.routingDecision || RoutingDecision.ToolOnly,
             toolProgress: {
+              toolName: progress.toolName,
               status: progress.status,
               message: progress.message,
               details: progress.details,
@@ -167,7 +177,6 @@ export async function handleRegenerateResponse(
           onMemoryStatusUpdate(updatedStatus);
         }
       },
-      activeTool,
       memoryEnabled,
     });
 

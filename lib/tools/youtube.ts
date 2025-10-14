@@ -8,6 +8,7 @@ import { formatViewCount, formatTimestamp, createFallbackMetadata, formatDuratio
 import { youtubeClient } from './youtube-client';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { YouTubeProgress, YouTubeVideoContext, YouTubeVideo, YouTubeTranscriptSegment, YouTubeChapter } from '@/types/tools';
+import { YouTubeProgressStatus } from '@/types/tools';
 
 type YouTubeInput = z.infer<typeof youtubeParamsSchema>;
 
@@ -136,7 +137,7 @@ async function processVideo(
     const videoPrefix = videoNumber && totalVideos ? `[${videoNumber}/${totalVideos}] ` : '';
     
     onProgress?.({
-      status: 'extracting',
+      status: YouTubeProgressStatus.Extracting,
       message: `${videoPrefix}Fetching video metadata (ID: ${videoId})...`,
       details: { 
         currentVideoId: videoId, 
@@ -155,7 +156,7 @@ async function processVideo(
     };
 
     onProgress?.({
-      status: 'extracting',
+      status: YouTubeProgressStatus.Extracting,
       message: `${videoPrefix}Extracting transcript for "${video.title}" (language: ${options.language || 'en'})...`,
       details: { 
         currentVideo: video, 
@@ -168,7 +169,7 @@ async function processVideo(
     const transcript = await fetchTranscript(videoId, options.language);
     
     onProgress?.({
-      status: 'extracting',
+      status: YouTubeProgressStatus.Extracting,
       message: `${videoPrefix}Processing transcript for "${video.title}" (${transcript.length} segments)...`,
       details: { 
         currentVideo: video, 
@@ -183,7 +184,7 @@ async function processVideo(
     let chapters: YouTubeChapter[] = [];
     if (options.includeChapters) {
       onProgress?.({
-        status: 'processing_chapters',
+        status: YouTubeProgressStatus.ProcessingChapters,
         message: `${videoPrefix}Fetching video description for chapter extraction...`,
         details: { 
           currentVideo: video, 
@@ -196,7 +197,7 @@ async function processVideo(
       const description = await fetchVideoDescription(videoId);
       
       onProgress?.({
-        status: 'processing_chapters',
+        status: YouTubeProgressStatus.ProcessingChapters,
         message: `${videoPrefix}Parsing chapters from "${video.title}"...`,
         details: { 
           currentVideo: video, 
@@ -210,7 +211,7 @@ async function processVideo(
       
       if (chapters.length > 0) {
         onProgress?.({
-          status: 'processing_chapters',
+          status: YouTubeProgressStatus.ProcessingChapters,
           message: `${videoPrefix}Found ${chapters.length} chapters in "${video.title}"`,
           details: { 
             currentVideo: video, 
@@ -288,7 +289,7 @@ function formatVideoContext(context: YouTubeVideoContext, includeTimestamps: boo
   return output;
 }
 
-function extractNumberFromQuery(query: string): number {
+function extractNumberFromQuery(query: string, defaultValue: number = 1): number {
   const patterns = [
     /(?:top|best|first|get|find|show|fetch|search)\s+(\d+)/i,
     /(\d+)\s+(?:videos|results|items|things|vids)/i,
@@ -298,11 +299,12 @@ function extractNumberFromQuery(query: string): number {
     const match = query.match(pattern);
     if (match) {
       const num = parseInt(match[1]);
-      if (num > 0 && num <= 15) return num;
+      if (num > 0 && num <= 10) return num;
+      if (num > 10) return 10; // Cap at 10
     }
   }
   
-  return 3;
+  return defaultValue;
 }
 
 export async function executeYouTubeTool(
@@ -319,7 +321,7 @@ export async function executeYouTubeTool(
 
     if (urls.length === 0) {
       onProgress?.({
-        status: 'detecting',
+        status: YouTubeProgressStatus.Detecting,
         message: 'Analyzing message for YouTube URLs...',
         details: { step: 'url_detection' }
       });
@@ -328,7 +330,7 @@ export async function executeYouTubeTool(
       
       if (urls.length > 0) {
         onProgress?.({
-          status: 'detecting',
+          status: YouTubeProgressStatus.Detecting,
           message: `Detected ${urls.length} YouTube ${urls.length === 1 ? 'URL' : 'URLs'}`,
           details: { detectedUrls: urls, step: 'url_detected' }
         });
@@ -339,7 +341,7 @@ export async function executeYouTubeTool(
         searchQuery = messageContent.trim();
         
         onProgress?.({
-          status: 'detecting',
+          status: YouTubeProgressStatus.Detecting,
           message: 'No URLs found. Searching YouTube...',
           details: {}
         });
@@ -351,10 +353,12 @@ export async function executeYouTubeTool(
 
     if (searchMode) {
       try {
-        const maxResults = extractNumberFromQuery(searchQuery);
+        // Use maxResults from input if provided, otherwise extract from query, default to 1
+        const requestedResults = input.maxResults ?? extractNumberFromQuery(searchQuery, 1);
+        const maxResults = Math.max(1, Math.min(requestedResults, 10)); // Clamp between 1-10
         
         onProgress?.({
-          status: 'detecting',
+          status: YouTubeProgressStatus.Detecting,
           message: `Querying YouTube API for: "${searchQuery}"...`,
           details: { query: searchQuery, step: 'search_start' }
         });
@@ -362,7 +366,7 @@ export async function executeYouTubeTool(
         searchResults = await searchYouTubeVideos(searchQuery, maxResults);
         
         onProgress?.({
-          status: 'detecting',
+          status: YouTubeProgressStatus.Detecting,
           message: `YouTube API returned ${searchResults.length} results, ranking by relevance...`,
           details: { resultsCount: searchResults.length, videoCount: searchResults.length, step: 'search_results' }
         });
@@ -372,7 +376,7 @@ export async function executeYouTubeTool(
         }
 
         onProgress?.({
-          status: 'extracting',
+          status: YouTubeProgressStatus.Extracting,
           message: `Selected top ${searchResults.length} videos. Starting analysis...`,
           details: {
             videoCount: searchResults.length,
@@ -389,7 +393,7 @@ export async function executeYouTubeTool(
           results.push(result);
           
           onProgress?.({
-            status: 'extracting',
+            status: YouTubeProgressStatus.Extracting,
             message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
             details: {
               videoCount: urls.length,
@@ -410,7 +414,7 @@ export async function executeYouTubeTool(
       urls = urls.slice(0, 15);
 
       onProgress?.({
-        status: 'detecting',
+        status: YouTubeProgressStatus.Detecting,
         message: `Found ${urls.length} ${urls.length === 1 ? 'video' : 'videos'}. Starting analysis...`,
         details: { videoCount: urls.length, urls, step: 'analysis_start' }
       });
@@ -421,7 +425,7 @@ export async function executeYouTubeTool(
         results.push(result);
         
         onProgress?.({
-          status: 'extracting',
+          status: YouTubeProgressStatus.Extracting,
           message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
           details: {
             videoCount: urls.length,
@@ -438,7 +442,7 @@ export async function executeYouTubeTool(
     const failedResults = results.filter(r => r.error);
 
     onProgress?.({
-      status: 'completed',
+      status: YouTubeProgressStatus.Completed,
       message: `Analysis complete!`,
       details: {
         videoCount: results.length,
