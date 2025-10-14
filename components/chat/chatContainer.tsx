@@ -6,6 +6,7 @@ import { ChatMessage } from "./chatMessage";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
 import type { MemoryStatus } from "@/types/chat";
+import { Button } from "../ui/button";
 
 interface ChatContainerProps {
   messages: Message[];
@@ -86,7 +87,7 @@ export function ChatContainer({
         )}
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (
           <div className="flex items-center justify-center py-2">
-            <button
+            <Button
               type="button"
               onClick={() => {
                 if (fetchNextPage) {
@@ -100,7 +101,7 @@ export function ChatContainer({
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Load older messages
-            </button>
+            </Button>
           </div>
         )}
         {messages.map((message, index) => {

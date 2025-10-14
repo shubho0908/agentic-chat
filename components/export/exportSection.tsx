@@ -104,7 +104,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
             const isSelected = selectedFormat === format.value;
             
             return (
-              <button
+              <Button
                 key={format.value}
                 type="button"
                 onClick={() => setSelectedFormat(format.value)}
@@ -129,7 +129,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
                 <span className="text-[10px] text-muted-foreground mt-0.5">
                   {format.description}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>
