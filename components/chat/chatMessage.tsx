@@ -115,14 +115,12 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       allCitations.push(...sourcesAsCitations);
     }
     
-    // Add citations from memory status (for streaming/real-time updates)
     if (isLastMessage && memoryStatus?.toolProgress?.details?.citations) {
       allCitations.push(...memoryStatus.toolProgress.details.citations);
     }
     
-    // Remove duplicates based on URL
     const uniqueCitations = allCitations.reduce((acc, citation) => {
-      const existing = acc.find(c => c.url && citation.url && c.url === citation.url);
+      const existing = acc.find((c) => c.url && citation.url && c.url === citation.url);
       if (!existing) {
         acc.push(citation);
       }
@@ -133,13 +131,9 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);
   
   const followUpQuestions = useMemo(() => {
-    // Only show for assistant messages
     if (isUser) return [];
     
-    // Only show from saved metadata (after response is complete and saved to DB)
-    // Don't show during loading or from streaming memoryStatus
     if (displayedMessage.metadata?.followUpQuestions && displayedMessage.metadata.followUpQuestions.length > 0 && !isLoading) {
-      // Only show if this is the last message overall (ensures latest assistant message)
       if (isLastMessage) {
         return displayedMessage.metadata.followUpQuestions;
       }
@@ -281,7 +275,6 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
       return false;
     }
     
-    // Check for toolProgress changes (critical for real-time deep research UI updates)
     const prevProgress = prevProps.memoryStatus?.toolProgress;
     const nextProgress = nextProps.memoryStatus?.toolProgress;
     

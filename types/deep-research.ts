@@ -1,17 +1,34 @@
-/**
- * NEW TYPES FOR ENHANCED DEEP RESEARCH SYSTEM
- */
+import type { WebSearchSource } from './tools';
 
-import type { WebSearchSource, GateDecision, Citation, EvaluationResult } from '@/types/tools';
+export interface GateDecision {
+  shouldResearch: boolean;
+  reason: string;
+  confidence: 'low' | 'medium' | 'high';
+}
 
-// Re-export shared types for convenience
-export type { GateDecision, Citation, EvaluationResult };
+export interface DirectLLMResponse {
+  answer: string;
+  confidence: 'low' | 'medium' | 'high';
+}
 
-// ============================================================================
-// EVALUATION TYPES
-// ============================================================================
+export interface Citation {
+  id: string;
+  source: string;
+  author?: string;
+  year?: string;
+  url?: string;
+  relevance: string;
+}
 
 export type StrictnessLevel = 0 | 1 | 2;
+
+export interface EvaluationResult {
+  meetsStandards: boolean;
+  isRelevant: boolean;
+  feedback: string;
+  rewrittenPrompt?: string;
+  score: number;
+}
 
 export interface EvaluationCriteria {
   level: StrictnessLevel;
@@ -66,10 +83,6 @@ export const EVALUATION_CRITERIA: Record<StrictnessLevel, EvaluationCriteria> = 
   },
 };
 
-// ============================================================================
-// RESEARCH TYPES (Enhanced)
-// ============================================================================
-
 export interface EnhancedResearchTask {
   step: number;
   action: string;
@@ -87,30 +100,17 @@ export interface ResearchResponse {
   followUpQuestions: string[];
 }
 
-// ============================================================================
-// DIRECT LLM TYPES
-// ============================================================================
-
-export interface DirectLLMResponse {
-  answer: string;
-  confidence: 'low' | 'medium' | 'high';
-}
-
-// ============================================================================
-// PROGRESS TYPES (Enhanced)
-// ============================================================================
-
 export type DeepResearchStatus =
-  | 'gate_check'              // Checking if research needed
-  | 'gate_skip'               // Skipping - generic question
-  | 'planning'                // Planning research tasks
-  | 'researching'             // Executing research
-  | 'synthesizing'            // Combining findings
-  | 'evaluating'              // Quality evaluation
-  | 'retrying'                // Retry with feedback
-  | 'formatting'              // Final formatting
-  | 'completed'               // Done
-  | 'error';                  // Error occurred
+  | 'gate_check'
+  | 'gate_skip'
+  | 'planning'
+  | 'researching'
+  | 'synthesizing'
+  | 'evaluating'
+  | 'retrying'
+  | 'formatting'
+  | 'completed'
+  | 'error';
 
 export interface EnhancedDeepResearchProgress {
   status: DeepResearchStatus;
@@ -134,15 +134,9 @@ export interface EnhancedDeepResearchProgress {
     citations?: Citation[];
     followUpQuestions?: string[];
     wordCount?: number;
-    
-    // Error
     error?: string;
   };
 }
-
-// ============================================================================
-// STATE TYPES (for integration with existing code)
-// ============================================================================
 
 export interface EnhancedResearchState {
   // Input
@@ -164,8 +158,6 @@ export interface EnhancedResearchState {
   citations: Citation[];
   followUpQuestions: string[];
   finalResponse: string;
-  
-  // Meta
   error?: string;
   skipped: boolean;
 }

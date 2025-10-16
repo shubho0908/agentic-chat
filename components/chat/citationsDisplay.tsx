@@ -1,6 +1,6 @@
 import { BookOpen, ExternalLink, FileText } from "lucide-react";
 import { memo } from "react";
-import type { Citation } from "@/types/tools";
+import type { Citation } from "@/types/deep-research";
 
 interface CitationsDisplayProps {
   citations: Citation[];

@@ -1,6 +1,6 @@
-import type { Message } from "@/types/core";
-import type { MemoryStatus } from "@/types/chat";
-import { QueryClient } from "@tanstack/react-query";
+import type { Message } from "./core";
+import type { MemoryStatus } from "./chat";
+import type { QueryClient } from "@tanstack/react-query";
 
 export interface BaseChatContext {
   messages: Message[];

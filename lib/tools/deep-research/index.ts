@@ -1,6 +1,7 @@
 import { createResearchGraph } from './graph';
 import type { ResearchState } from './state';
-import type { DeepResearchProgress, WebSearchSource, Citation, GateDecision } from '@/types/tools';
+import type { DeepResearchProgress, WebSearchSource } from '@/types/tools';
+import type { Citation, GateDecision } from '@/types/deep-research';
 
 export interface DeepResearchInput {
   query: string;

@@ -1,5 +1,4 @@
-import { type Message, type Attachment, type ToolActivity } from "@/lib/schemas/chat";
-import { QueryClient } from "@tanstack/react-query";
+import { type Attachment, type ToolActivity } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
@@ -12,7 +11,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolStatus, MessageRole, type MessageMetadata } from "@/types/core";
-import type { EditMessageContext } from "./types";
+import type { EditMessageContext } from "@/types/chat-hooks";
 
 export async function handleEditMessage(
   messageId: string,

@@ -1,7 +1,6 @@
 import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/types/core";
 import type { ConversationResult, MemoryStatus } from "@/types/chat";
 import { ToolStatus } from "@/types/core";
-import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
@@ -12,7 +11,7 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
 import { storeConversationMemory } from "@/lib/memory";
-import type { SendMessageContext } from "./types";
+import type { SendMessageContext } from "@/types/chat-hooks";
 
 export async function handleSendMessage(
   content: string,

@@ -1,5 +1,4 @@
 import { type Message, type ToolActivity } from "@/lib/schemas/chat";
-import { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -11,7 +10,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolStatus, MessageRole, type MessageMetadata } from "@/types/core";
-import type { RegenerateContext } from "./types";
+import type { RegenerateContext } from "@/types/chat-hooks";
 
 export async function handleRegenerateResponse(
   messageId: string,

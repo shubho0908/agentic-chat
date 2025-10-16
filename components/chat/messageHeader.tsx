@@ -1,5 +1,5 @@
 import { SourcesSheet } from "./sourcesSheet";
-import type { Citation } from "@/types/tools";
+import type { Citation } from "@/types/deep-research";
 
 interface MessageHeaderProps {
   isUser: boolean;

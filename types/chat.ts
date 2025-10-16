@@ -1,12 +1,6 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
-import type { 
-  WebSearchSource, 
-  YouTubeVideo, 
-  GateDecision, 
-  EvaluationResult, 
-  Citation, 
-  ResearchTask 
-} from './tools';
+import type { WebSearchSource, YouTubeVideo, ResearchTask } from './tools';
+import type { GateDecision, EvaluationResult, Citation } from './deep-research';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',

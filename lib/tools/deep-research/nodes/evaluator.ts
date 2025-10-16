@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
-import type { EvaluationResult, StrictnessLevel } from '../types-new';
+import type { EvaluationResult, StrictnessLevel } from '@/types/deep-research';
 
 const MAX_ATTEMPTS = 2; // Total attempts allowed (1 initial + 1 retry)
 
@@ -74,7 +74,6 @@ export async function evaluatorNode(
       };
     }
 
-    // If evaluation fails and we haven't reached max attempts, trigger retry
     if (currentAttempt < MAX_ATTEMPTS) {
       return {
         evaluationResult,

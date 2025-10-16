@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
-import type { Citation } from '../types-new';
+import type { Citation } from '@/types/deep-research';
 
 function sanitizeJsonString(jsonString: string): string {
   try {
@@ -541,7 +541,6 @@ export async function formatterNode(
       };
     }
 
-    // Sanitize JSON string before parsing
     let parsed;
     try {
       const jsonString = sanitizeJsonString(jsonMatch[0]);
@@ -587,7 +586,6 @@ export async function formatterNode(
     const citations: Citation[] = parsed.citations || [];
     const followUpQuestions: string[] = parsed.followUpQuestions || [];
 
-    // Extract citations from completed tasks as fallback
     if (citations.length === 0 && state.completedTasks) {
       const taskSources = state.completedTasks
         .flatMap((task) => task.sources || [])
@@ -621,13 +619,9 @@ export async function formatterNode(
   }
 }
 
-/**
- * Helper function to extract citations from text using common patterns
- */
 function extractCitationsFromText(text: string): Citation[] {
   const citations: Citation[] = [];
   
-  // Match patterns like (Author, Year) or [Author Year]
   const citationPattern = /\(([^,]+),\s*(\d{4})\)|\[([^,]+)\s+(\d{4})\]/g;
   let match;
   let id = 1;

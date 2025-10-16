@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
-import type { GateDecision, DirectLLMResponse } from '../types-new';
+import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
 
 export async function gateNode(
   state: ResearchState,
@@ -65,7 +65,6 @@ export async function gateNode(
       if (directJsonMatch) {
         directLLMResponse = JSON.parse(directJsonMatch[0]);
       } else {
-        // If no JSON, use raw response
         directLLMResponse = {
           answer: directContent,
           confidence: 'medium',

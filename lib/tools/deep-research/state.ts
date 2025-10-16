@@ -6,7 +6,7 @@ import type {
   EvaluationResult,
   StrictnessLevel,
   DirectLLMResponse
-} from './types-new';
+} from '@/types/deep-research';
 
 export const ResearchStateAnnotation = Annotation.Root({
   originalQuery: Annotation<string>,

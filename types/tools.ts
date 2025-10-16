@@ -86,55 +86,31 @@ export interface ResearchTask {
   error?: string;
 }
 
-// Enhanced types for new deep research system
-export interface GateDecision {
-  shouldResearch: boolean;
-  reason: string;
-  confidence: 'low' | 'medium' | 'high';
-}
-
-export interface Citation {
-  id: string;
-  source: string;
-  author?: string;
-  year?: string;
-  url?: string;
-  relevance: string;
-}
-
-export interface EvaluationResult {
-  meetsStandards: boolean;
-  isRelevant: boolean;
-  feedback: string;
-  rewrittenPrompt?: string;
-  score: number;
-}
 
 export interface DeepResearchProgress {
   status: 
-    | 'gate_check'              // Checking if research needed
-    | 'gate_skip'               // Skipping - generic question
-    | 'routing'                 // Legacy router (deprecated)
-    | 'planning'                // Planning research tasks
-    | 'task_start'              // Starting a task
-    | 'task_progress'           // Task in progress
-    | 'task_complete'           // Task completed
-    | 'aggregating'             // Combining findings
-    | 'evaluating'              // Quality evaluation
-    | 'retrying'                // Retry with feedback
-    | 'formatting'              // Final formatting
-    | 'completed';              // Done
+    | 'gate_check'
+    | 'gate_skip'
+    | 'routing'
+    | 'planning'
+    | 'task_start'
+    | 'task_progress'
+    | 'task_complete'
+    | 'aggregating'
+    | 'evaluating'
+    | 'retrying'
+    | 'formatting'
+    | 'completed';
   message: string;
   details?: {
-    // Gate phase
-    gateDecision?: GateDecision;
+    gateDecision?: {
+      shouldResearch: boolean;
+      reason: string;
+      confidence: 'low' | 'medium' | 'high';
+    };
     skipped?: boolean;
     directResponse?: string;
-    
-    // Legacy routing
     routingDecision?: 'simple' | 'deep_research';
-    
-    // Research phase
     researchPlan?: ResearchQuestion[];
     currentTask?: ResearchTask;
     taskIndex?: number;
@@ -146,15 +122,24 @@ export interface DeepResearchProgress {
       status: string;
       message: string;
     };
-    
-    // Evaluation phase
-    evaluationResult?: EvaluationResult;
+    evaluationResult?: {
+      meetsStandards: boolean;
+      isRelevant: boolean;
+      feedback: string;
+      rewrittenPrompt?: string;
+      score: number;
+    };
     currentAttempt?: number;
     maxAttempts?: number;
     strictnessLevel?: 0 | 1 | 2;
-    
-    // Output phase
-    citations?: Citation[];
+    citations?: Array<{
+      id: string;
+      source: string;
+      author?: string;
+      year?: string;
+      url?: string;
+      relevance: string;
+    }>;
     followUpQuestions?: string[];
     wordCount?: number;
   };

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scrollArea";
-import type { Citation } from "@/types/tools";
+import type { Citation } from "@/types/deep-research";
 
 interface SourcesSheetProps {
   citations: Citation[];
