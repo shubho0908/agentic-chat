@@ -33,12 +33,23 @@ export async function aggregatorNode(
       })
       .join('\n\n---\n\n');
 
-    const response = await llm.invoke([
-      { role: 'system', content: AGGREGATOR_SYSTEM_PROMPT },
-      { role: 'user', content: `Synthesize these research findings:\n\n${findingsText}` },
-    ]);
+    const response = await llm.invoke(
+      [
+        { role: 'system', content: AGGREGATOR_SYSTEM_PROMPT },
+        { role: 'user', content: `Synthesize these research findings:\n\n${findingsText}` },
+      ],
+      { signal: config.abortSignal }
+    );
 
-    const aggregated = response.content.toString();
+    const aggregated = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
+    
     return {
       aggregatedResults: aggregated,
     };

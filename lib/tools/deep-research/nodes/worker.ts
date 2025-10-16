@@ -103,12 +103,22 @@ export async function workerNode(
 
     const workerPrompt = createWorkerPrompt(currentTask.question, previousFindings);
     
-    const response = await llm.invoke([
-      { role: 'system', content: workerPrompt },
-      { role: 'user', content: searchResults || 'Please answer based on your knowledge.' },
-    ]);
+    const response = await llm.invoke(
+      [
+        { role: 'system', content: workerPrompt },
+        { role: 'user', content: searchResults || 'Please answer based on your knowledge.' },
+      ],
+      { signal: config.abortSignal }
+    );
 
-    const result = response.content.toString();
+    const result = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
 
     updatedTask.status = 'completed';
     updatedTask.result = result;

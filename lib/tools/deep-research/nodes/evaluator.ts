@@ -39,14 +39,21 @@ export async function evaluatorNode(
       responseToEvaluate
     );
 
-    const response = await llm.invoke([
-      { role: 'system', content: evaluationPrompt },
-    ]);
+    const response = await llm.invoke(
+      [{ role: 'system', content: evaluationPrompt }],
+      { signal: config.abortSignal }
+    );
 
-    const content = response.content.toString();
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const rawContent = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
     
-    if (!jsonMatch) {
+    if (!rawContent.trim()) {
       return {
         evaluationResult: {
           meetsStandards: true,
@@ -59,7 +66,7 @@ export async function evaluatorNode(
       };
     }
 
-    const evaluationResult: EvaluationResult = JSON.parse(jsonMatch[0]);
+    const evaluationResult: EvaluationResult = JSON.parse(rawContent);
     const evaluationFeedback = [
       ...(state.evaluationFeedback || []),
       `Attempt ${currentAttempt} (Level ${strictnessLevel}): ${evaluationResult.feedback}`,

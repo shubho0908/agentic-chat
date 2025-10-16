@@ -16,15 +16,24 @@ export async function gateNode(
   });
 
   try {
-    const response = await llm.invoke([
-      { role: 'system', content: RESEARCH_GATE_PROMPT },
-      { role: 'user', content: state.originalQuery },
-    ]);
+    const response = await llm.invoke(
+      [
+        { role: 'system', content: RESEARCH_GATE_PROMPT },
+        { role: 'user', content: state.originalQuery },
+      ],
+      { signal: config.abortSignal }
+    );
 
-    const content = response.content.toString();
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    
-    if (!jsonMatch) {
+    const rawContent = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
+
+    if (!rawContent.trim()) {
       if (config.forceDeepResearch) {
         return {
           gateDecision: {
@@ -51,22 +60,31 @@ export async function gateNode(
       };
     }
 
-    const gateDecision: GateDecision = JSON.parse(jsonMatch[0]);
+    const gateDecision: GateDecision = JSON.parse(rawContent);
     if (!gateDecision.shouldResearch) {
-      const directResponse = await llm.invoke([
-        { role: 'system', content: DIRECT_LLM_PROMPT },
-        { role: 'user', content: state.originalQuery },
-      ]);
+      const directResponse = await llm.invoke(
+        [
+          { role: 'system', content: DIRECT_LLM_PROMPT },
+          { role: 'user', content: state.originalQuery },
+        ],
+        { signal: config.abortSignal }
+      );
 
-      const directContent = directResponse.content.toString();
-      const directJsonMatch = directContent.match(/\{[\s\S]*\}/);
+      const directRawContent = Array.isArray(directResponse.content)
+        ? directResponse.content
+            .filter((part): part is { type: 'text'; text: string } => 
+              part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+            )
+            .map((part) => part.text)
+            .join('\n')
+        : String(directResponse.content ?? '');
       
       let directLLMResponse: DirectLLMResponse;
-      if (directJsonMatch) {
-        directLLMResponse = JSON.parse(directJsonMatch[0]);
-      } else {
+      try {
+        directLLMResponse = JSON.parse(directRawContent);
+      } catch {
         directLLMResponse = {
-          answer: directContent,
+          answer: directRawContent,
           confidence: 'medium',
         };
       }

@@ -172,13 +172,16 @@ Use --- to separate major sections
 
 ### Citations & Sources (CRITICAL - NATURAL FLOW):
 - **NEVER use [1], [2], [3] footnote style** - disrupts reading
-- **NEVER use (Author, Year) academic style** - too formal
-- **USE NATURAL LANGUAGE INTEGRATION**:
+- **PREFER natural language integration** as primary citation style:
   - "Research from 2024 indicates X improves Y by 40%..."
   - "According to industry analysis, organizations see 30% gains..."
   - "Studies consistently demonstrate that..."
   - "Field research reveals..."
   - "Expert practitioners note..."
+- **ALLOW inline attributions** where natural (e.g., "According to Smith (2020)" or "Smith 2020 found...")
+  - Use when citing specific studies or authors
+  - Integrate seamlessly into narrative flow
+  - Keep citations unobtrusive and readable
 - Attribute naturally: "As highlighted in the Stanford 2024 study..."
 - Sources appear automatically at bottom - focus on narrative flow
 
@@ -522,28 +525,37 @@ export async function formatterNode(
   });
 
   try {
-    const response = await llm.invoke([
-      { role: 'system', content: ENHANCED_FORMATTER_PROMPT },
-      {
-        role: 'user',
-        content: `**Original Question:** ${originalQuery}\n\n**Research Findings:**\n${contentToFormat}\n\nCreate a comprehensive response with citations and follow-up questions.`,
-      },
-    ]);
+    const response = await llm.invoke(
+      [
+        { role: 'system', content: ENHANCED_FORMATTER_PROMPT },
+        {
+          role: 'user',
+          content: `**Original Question:** ${originalQuery}\n\n**Research Findings:**\n${contentToFormat}\n\nCreate a comprehensive response with citations and follow-up questions.`,
+        },
+      ],
+      { signal: config.abortSignal }
+    );
 
-    const content = response.content.toString();
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const rawContent = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
     
-    if (!jsonMatch) {
+    if (!rawContent.trim()) {
       return {
-        finalResponse: content,
-        citations: extractCitationsFromText(content),
+        finalResponse: rawContent,
+        citations: extractCitationsFromText(rawContent),
         followUpQuestions: [],
       };
     }
 
     let parsed;
     try {
-      const jsonString = sanitizeJsonString(jsonMatch[0]);
+      const jsonString = sanitizeJsonString(rawContent);
       parsed = JSON.parse(jsonString);
     } catch (parseError: unknown) {
       if (parseError instanceof Error && parseError.message.includes('position')) {
@@ -551,14 +563,14 @@ export async function formatterNode(
         if (posMatch) {
           const pos = parseInt(posMatch[1]);
           const start = Math.max(0, pos - 100);
-          const end = Math.min(jsonMatch[0].length, pos + 100);
-          const snippet = jsonMatch[0].substring(start, end);
+          const end = Math.min(rawContent.length, pos + 100);
+          const snippet = rawContent.substring(start, end);
           console.error('[Formatter] Error context:', JSON.stringify(snippet));
         }
       }
       
       try {
-        const responseMatch = jsonMatch[0].match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
+        const responseMatch = rawContent.match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/s);
         if (responseMatch) {
           const extractedResponse = responseMatch[1]
             .replace(/\\n/g, '\n')
@@ -576,13 +588,13 @@ export async function formatterNode(
       }
       
       return {
-        finalResponse: content,
-        citations: extractCitationsFromText(content),
+        finalResponse: rawContent,
+        citations: extractCitationsFromText(rawContent),
         followUpQuestions: [],
       };
     }
 
-    const finalResponse = parsed.response || content;
+    const finalResponse = parsed.response || rawContent;
     const citations: Citation[] = parsed.citations || [];
     const followUpQuestions: string[] = parsed.followUpQuestions || [];
 

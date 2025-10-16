@@ -16,19 +16,28 @@ export async function plannerNode(
   });
 
   try {
-    const response = await llm.invoke([
-      { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-      { role: 'user', content: `User query: "${state.originalQuery}"\n\nCreate a research plan.` },
-    ]);
+    const response = await llm.invoke(
+      [
+        { role: 'system', content: PLANNER_SYSTEM_PROMPT },
+        { role: 'user', content: `User query: "${state.originalQuery}"\n\nCreate a research plan.` },
+      ],
+      { signal: config.abortSignal }
+    );
 
-    const content = response.content.toString();
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const rawContent = Array.isArray(response.content)
+      ? response.content
+          .filter((part): part is { type: 'text'; text: string } => 
+            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          )
+          .map((part) => part.text)
+          .join('\n')
+      : String(response.content ?? '');
     
-    if (!jsonMatch) {
+    if (!rawContent.trim()) {
       throw new Error('Failed to parse research plan');
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(rawContent);
     const researchPlan: ResearchQuestion[] = parsed.plan || [];
 
     if (researchPlan.length === 0) {
