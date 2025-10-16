@@ -241,8 +241,8 @@ export async function handleSendMessage(
               status: progress.status,
               message: progress.message,
               details: {
-                ...currentMemoryStatus.toolProgress?.details,
-                ...progress.details,
+                ...(currentMemoryStatus.toolProgress?.details || {}),
+                ...(progress.details || {}),
               },
             },
           };
@@ -253,7 +253,7 @@ export async function handleSendMessage(
             if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
               const details = progress.details as { sources?: MessageMetadata['sources'] };
               messageMetadata = {
-                ...messageMetadata,
+                ...(messageMetadata || {}),
                 ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
               };
             }
@@ -262,14 +262,14 @@ export async function handleSendMessage(
             
             if ('citations' in details && details.citations) {
               messageMetadata = {
-                ...messageMetadata,
+                ...(messageMetadata || {}),
                 citations: details.citations,
               };
             }
             
             if ('followUpQuestions' in details && details.followUpQuestions) {
               messageMetadata = {
-                ...messageMetadata,
+                ...(messageMetadata || {}),
                 followUpQuestions: details.followUpQuestions,
               };
             }

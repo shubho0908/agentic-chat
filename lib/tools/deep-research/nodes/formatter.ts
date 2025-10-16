@@ -517,8 +517,8 @@ export async function formatterNode(
   }
 
   const llm = new ChatOpenAI({
-    modelName: config.model,
-    openAIApiKey: config.openaiApiKey,
+    model: config.model,
+    apiKey: config.openaiApiKey,
   });
 
   try {

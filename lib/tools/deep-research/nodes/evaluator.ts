@@ -13,8 +13,8 @@ export async function evaluatorNode(
     throw new Error('Research aborted by user');
   }
   const llm = new ChatOpenAI({
-    modelName: config.model,
-    openAIApiKey: config.openaiApiKey,
+    model: config.model,
+    apiKey: config.openaiApiKey,
   });
 
   try {
