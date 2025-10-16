@@ -12,18 +12,7 @@ import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
 import { storeConversationMemory } from "@/lib/memory";
-
-interface SendMessageContext {
-  messages: Message[];
-  conversationId: string | null;
-  abortSignal: AbortSignal;
-  queryClient: QueryClient;
-  onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  onConversationIdUpdate: (id: string) => void;
-  onNavigate: (path: string) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
-  onMemoryStatusUpdate?: (status: MemoryStatus) => void;
-}
+import type { SendMessageContext } from "./types";
 
 export async function handleSendMessage(
   content: string,

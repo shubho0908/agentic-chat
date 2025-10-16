@@ -40,7 +40,6 @@ export async function executeDeepResearch(
       details: {
         taskIndex,
         toolProgress,
-        // Include current state for UI rendering
         researchPlan: currentResearchState.researchPlan || [],
         currentTaskIndex: taskIndex,
         totalTasks: currentResearchState.taskQueue?.length || 0,

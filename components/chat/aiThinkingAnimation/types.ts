@@ -4,6 +4,28 @@ export interface AIThinkingAnimationProps {
   memoryStatus?: MemoryStatus;
 }
 
+export interface MemoryStatusProps {
+  memoryStatus: MemoryStatus;
+}
+
+export interface ContextDetailsProps extends MemoryStatusProps {
+  isLoading?: boolean;
+}
+
+export interface HybridContextProps {
+  imageCount: number;
+  documentCount: number;
+}
+
+export interface VisionOnlyContextProps {
+  imageCount: number;
+}
+
+export interface VisionContextItemProps {
+  imageCount: number;
+  treeSymbol?: "├─" | "└─";
+}
+
 export const AI_THINKING_MESSAGES = {
   DEFAULT: "Processing your request...",
   GENERATING: "Generating response...",

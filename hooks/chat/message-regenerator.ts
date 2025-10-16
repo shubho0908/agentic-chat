@@ -11,16 +11,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolStatus, MessageRole, type MessageMetadata } from "@/types/core";
-
-interface RegenerateContext {
-  messages: Message[];
-  conversationId: string | null;
-  abortSignal: AbortSignal;
-  queryClient: QueryClient;
-  onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
-  onMemoryStatusUpdate?: (status: MemoryStatus) => void;
-}
+import type { RegenerateContext } from "./types";
 
 export async function handleRegenerateResponse(
   messageId: string,
