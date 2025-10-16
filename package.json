@@ -96,6 +96,9 @@
     "@browserbasehq/stagehand": {
       "zod": "$zod",
       "openai": "$openai"
+    },
+    "zod-to-json-schema": {
+      "zod": "$zod"
     }
   }
 }
