@@ -30,7 +30,7 @@ export async function PATCH(
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     
-    const { content, attachments } = body;
+    const { content, attachments, metadata } = body;
 
     if (!content || typeof content !== 'string') {
       return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
@@ -127,6 +127,7 @@ export async function PATCH(
           content,
           parentMessageId: parentId,
           siblingIndex,
+          ...(metadata && { metadata }),
           attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
             create: (attachments as AttachmentInput[]).map(att => ({
               fileUrl: att.fileUrl,

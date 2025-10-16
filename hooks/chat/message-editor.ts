@@ -11,7 +11,7 @@ import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
-import { ToolStatus } from "@/types/core";
+import { ToolStatus, MessageRole, type MessageMetadata } from "@/types/core";
 
 interface EditMessageContext {
   messages: Message[];
@@ -29,7 +29,8 @@ export async function handleEditMessage(
   attachments: Attachment[] | undefined,
   context: EditMessageContext,
   activeTool?: string | null,
-  memoryEnabled?: boolean
+  memoryEnabled?: boolean,
+  deepResearchEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -45,7 +46,7 @@ export async function handleEditMessage(
   if (messageIndex === -1) return { success: false, error: "Message not found" };
 
   const messageToEdit = messages[messageIndex];
-  if (messageToEdit.role !== "user") return { success: false, error: "Cannot edit assistant message" };
+  if (messageToEdit.role !== MessageRole.USER) return { success: false, error: "Cannot edit assistant message" };
 
   const model = getModel();
   if (!model) {
@@ -59,8 +60,9 @@ export async function handleEditMessage(
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
+  let messageMetadata: MessageMetadata | undefined;
   
-  const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === "assistant");
+  const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
   
   const newEditedVersion = createNewVersion(
@@ -173,16 +175,51 @@ export async function handleEditMessage(
             toolProgress: {
               status: progress.status,
               message: progress.message,
-              details: progress.details,
+              // Merge details instead of replacing to preserve context from previous updates
+              details: {
+                ...currentMemoryStatus.toolProgress?.details,
+                ...progress.details,
+              },
             },
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
+          
+          if (progress.details) {
+            if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
+              const details = progress.details as { sources?: MessageMetadata['sources'] };
+              messageMetadata = {
+                ...messageMetadata,
+                ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
+              };
+            }
+            
+            if ('citations' in progress.details && 'followUpQuestions' in progress.details) {
+              const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+              messageMetadata = {
+                ...messageMetadata,
+                ...(details.citations && { citations: details.citations }),
+                ...(details.followUpQuestions && { followUpQuestions: details.followUpQuestions }),
+              };
+            }
+          }
         }
+      },
+      onUsageUpdated: () => {
+        queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
       },
       activeTool,
       memoryEnabled: memoryEnabled ?? false,
+      deepResearchEnabled: deepResearchEnabled ?? false,
     });
+
+    onMessagesUpdate((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantMessageId
+          ? { ...msg, metadata: messageMetadata }
+          : msg
+      )
+    );
 
     if (responseContent && !abortSignal.aborted) {
       if (cacheQuery) {
@@ -194,7 +231,7 @@ export async function handleEditMessage(
 
       if (conversationId) {
         const conversationIdStr = conversationId;
-        const savedAssistantMessageId = await saveAssistantMessage(conversationIdStr, responseContent);
+        const savedAssistantMessageId = await saveAssistantMessage(conversationIdStr, responseContent, messageMetadata);
         
         if (savedAssistantMessageId && updatedMessageId) {
           const parentId = updatedMessageData?.parentMessageId || updatedMessageId;
@@ -206,7 +243,7 @@ export async function handleEditMessage(
                 return updateMessageWithVersions(msg, updatedMessageId, versions);
               }
               if (msg.id === assistantMessageId) {
-                return { ...msg, id: savedAssistantMessageId };
+                return { ...msg, id: savedAssistantMessageId, metadata: messageMetadata };
               }
               return msg;
             })

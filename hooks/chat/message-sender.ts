@@ -1,4 +1,4 @@
-import type { Message, Attachment, ToolActivity } from "@/types/core";
+import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/types/core";
 import type { ConversationResult, MemoryStatus } from "@/types/chat";
 import { ToolStatus } from "@/types/core";
 import { QueryClient } from "@tanstack/react-query";
@@ -31,7 +31,8 @@ export async function handleSendMessage(
   context: SendMessageContext,
   session?: { user: { id: string } },
   activeTool?: string | null,
-  memoryEnabled?: boolean
+  memoryEnabled?: boolean,
+  deepResearchEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -69,6 +70,7 @@ export async function handleSendMessage(
   let savedUserMessageId = userMessage.id;
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
+  let messageMetadata: MessageMetadata | undefined;
 
   onMessagesUpdate((prev) => [
     ...prev,
@@ -112,7 +114,8 @@ export async function handleSendMessage(
         },
         attachments,
         true,
-        abortSignal
+        abortSignal,
+        messageMetadata
       );
       
       if (!currentConversationId) {
@@ -139,6 +142,7 @@ export async function handleSendMessage(
       attachments,
       abortSignal,
       activeTool,
+      deepResearchEnabled,
     });
 
     if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
@@ -163,12 +167,16 @@ export async function handleSendMessage(
             onMessagesUpdate((prev) =>
               prev.map((msg) => {
                 if (msg.id === assistantMessageId) {
-                  return { ...msg, id: data.assistantMessageId };
+                  return { ...msg, id: data.assistantMessageId, metadata: messageMetadata };
                 }
                 return msg;
               })
             );
-          }
+          },
+          undefined,
+          false,
+          undefined,
+          messageMetadata
         );
       }
 
@@ -244,18 +252,52 @@ export async function handleSendMessage(
             toolProgress: {
               status: progress.status,
               message: progress.message,
-              details: progress.details,
+              details: {
+                ...currentMemoryStatus.toolProgress?.details,
+                ...progress.details,
+              },
             },
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
+          
+          if (progress.details) {
+            if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
+              const details = progress.details as { sources?: MessageMetadata['sources'] };
+              messageMetadata = {
+                ...messageMetadata,
+                ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
+              };
+            }
+            
+            if ('citations' in progress.details && 'followUpQuestions' in progress.details) {
+              const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+              messageMetadata = {
+                ...messageMetadata,
+                ...(details.citations && { citations: details.citations }),
+                ...(details.followUpQuestions && { followUpQuestions: details.followUpQuestions }),
+              };
+            }
+          }
         }
+      },
+      onUsageUpdated: () => {
+        queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
       },
       activeTool,
       memoryEnabled,
+      deepResearchEnabled: deepResearchEnabled ?? false,
     });
 
     assistantContent = responseContent;
+
+    onMessagesUpdate((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantMessageId
+          ? { ...msg, metadata: messageMetadata }
+          : msg
+      )
+    );
 
     if (assistantContent && !abortSignal.aborted) {
       if (cacheQuery) {
@@ -277,16 +319,20 @@ export async function handleSendMessage(
             onMessagesUpdate((prev) =>
               prev.map((msg) => {
                 if (msg.id === assistantMessageId) {
-                  return { ...msg, id: data.assistantMessageId };
+                  return { ...msg, id: data.assistantMessageId, metadata: messageMetadata };
                 }
                 return msg;
               })
             );
-          }
+          },
+          undefined,
+          false,
+          undefined,
+          messageMetadata
         );
       }
 
-      if (session?.user?.id && memoryEnabled === true) {
+      if (session?.user?.id && memoryEnabled === true && !deepResearchEnabled) {
         const textContent = extractTextFromContent(messageContent);
         await storeConversationMemory(textContent, assistantContent, session.user.id);
       }

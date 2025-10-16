@@ -11,7 +11,13 @@ export interface Attachment {
   fileSize: number;
 }
 
-export type MessageRole = 'user' | 'assistant' | 'system';
+export const MessageRole = {
+  USER: 'user',
+  ASSISTANT: 'assistant',
+  SYSTEM: 'system',
+} as const;
+
+export type MessageRole = typeof MessageRole[keyof typeof MessageRole];
 
 export interface MessageContentPart {
   type: 'text' | 'image_url';
@@ -29,6 +35,35 @@ export interface MessageHistoryEntry {
   editedAt: number;
 }
 
+export interface MessageMetadata {
+  citations?: Array<{
+    id: string;
+    source: string;
+    author?: string;
+    year?: string;
+    url?: string;
+    relevance: string;
+  }>;
+  followUpQuestions?: string[];
+  sources?: Array<{
+    position?: number;
+    title: string;
+    url: string;
+    domain: string;
+    snippet?: string;
+    score?: number;
+  }>;
+  researchTask?: {
+    gateDecision?: {
+      shouldResearch: boolean;
+      reason: string;
+      confidence: 'low' | 'medium' | 'high';
+    };
+    totalTasks?: number;
+    completedTasks?: number;
+  };
+}
+
 export interface Message {
   id?: string;
   role: MessageRole;
@@ -36,6 +71,7 @@ export interface Message {
   timestamp?: number;
   model?: string;
   attachments?: Attachment[];
+  metadata?: MessageMetadata;
   editHistory?: MessageHistoryEntry[];
   parentMessageId?: string | null;
   siblingIndex?: number;

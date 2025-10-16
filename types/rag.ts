@@ -47,18 +47,3 @@ export interface RerankResult {
     page?: number;
   };
 }
-
-export interface ContextRoutingResult {
-  context: string;
-  metadata: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    hasImages: boolean;
-    memoryCount: number;
-    documentCount: number;
-    imageCount: number;
-    routingDecision: string;
-    skippedMemory: boolean;
-    activeToolName?: string;
-  };
-}

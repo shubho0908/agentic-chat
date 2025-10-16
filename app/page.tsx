@@ -12,7 +12,7 @@ import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getActiveTool, getMemoryEnabled } from "@/lib/storage";
+import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled } from "@/lib/storage";
 
 function HomeContent() {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
@@ -26,16 +26,18 @@ function HomeContent() {
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled });
+    const deepResearchEnabled = getDeepResearchEnabled();
+    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    return regenerateResponse({ messageId, activeTool, memoryEnabled });
+    const deepResearchEnabled = getDeepResearchEnabled();
+    return regenerateResponse({ messageId, activeTool, memoryEnabled, deepResearchEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {
     if (isPending) {
       return;
     }
@@ -55,7 +57,23 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage({ content, session, attachments, activeTool, memoryEnabled });
+    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled });
+  };
+
+  const handleFollowUpQuestion = async (question: string) => {
+    if (!session || !isConfigured) {
+      return;
+    }
+    const activeTool = getActiveTool();
+    const memoryEnabled = getMemoryEnabled();
+    const deepResearchEnabled = getDeepResearchEnabled();
+    await sendMessage({ 
+      content: question, 
+      session, 
+      activeTool, 
+      memoryEnabled, 
+      deepResearchEnabled 
+    });
   };
 
   if (!hasMessages) {
@@ -90,6 +108,7 @@ function HomeContent() {
         userName={session?.user?.name}
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
+        onSendMessage={handleFollowUpQuestion}
         memoryStatus={memoryStatus}
       />
       <ChatInput

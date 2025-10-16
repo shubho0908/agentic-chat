@@ -13,13 +13,15 @@ import type { Message } from '@/types/core';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const { user: authUser, error } = await getAuthenticatedUser(await headers());
     if (error) {
       return error;
     }
-
     const user = await prisma.user.findUnique({
       where: { id: authUser.id },
       select: { encryptedApiKey: true },
@@ -31,8 +33,8 @@ export async function POST(request: NextRequest) {
 
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
-
-    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = false } = body;
+    
+    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = false, deepResearchEnabled = false } = body;
     
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -64,7 +66,8 @@ export async function POST(request: NextRequest) {
         messages.slice(0, -1) as Message[],
         conversationId,
         activeTool,
-        memoryEnabled
+        memoryEnabled,
+        deepResearchEnabled
       );
 
       memoryStatusInfo = metadata;
@@ -79,6 +82,8 @@ export async function POST(request: NextRequest) {
     const openai = new OpenAI({ apiKey });
 
     if (stream) {
+      const abortController = new AbortController();
+      
       const streamHandler = createChatStreamHandler({
         memoryStatusInfo,
         messages,
@@ -86,15 +91,26 @@ export async function POST(request: NextRequest) {
         enhancedMessages,
         model,
         openai,
+        apiKey,
+        deepResearchEnabled,
+        abortSignal: abortController.signal,
+        userId: authUser.id,
       });
-
-      const readableStream = new ReadableStream(streamHandler);
+      const readableStream = new ReadableStream({
+        ...streamHandler,
+        cancel() {
+          abortController.abort();
+        },
+      }, {
+        highWaterMark: 1,
+      });
 
       return new Response(readableStream, {
         headers: {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-transform',
           'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
         },
       });
     } else {

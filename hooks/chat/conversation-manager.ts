@@ -4,6 +4,7 @@ import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/li
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
 import type { ConversationResult } from "@/types/chat";
+import type { MessageMetadata } from "@/types/core";
 
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
@@ -94,7 +95,8 @@ async function createNewConversation(
   assistantContent: string,
   attachments?: Attachment[],
   earlyCreate: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  metadata?: MessageMetadata
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
@@ -119,8 +121,7 @@ async function createNewConversation(
     if (earlyCreate) {
       return { conversationId, userMessageId, assistantMessageId: '' };
     }
-
-    const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent);
+    const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent, metadata);
 
     if (!assistantMessageId) {
       return null;
@@ -190,10 +191,11 @@ export async function handleConversationSaving(
   onConversationCreated?: (data: ConversationResult) => void,
   attachments?: Attachment[],
   earlyCreate: boolean = false,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  metadata?: MessageMetadata
 ): Promise<void> {
   if (isNewConversation) {
-    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal);
+    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata);
 
     if (result && onConversationCreated) {
       if (!earlyCreate && assistantContent) {
@@ -211,10 +213,19 @@ export async function handleConversationSaving(
       onConversationCreated(result);
     }
   } else if (currentConversationId && assistantContent) {
-    const result = await saveAssistantMessage(currentConversationId, assistantContent);
-    if (result) {
+    const assistantMessageId = await saveAssistantMessage(currentConversationId, assistantContent, metadata);
+    if (assistantMessageId) {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
+      
+      // Call callback to update local state with metadata
+      if (onConversationCreated) {
+        onConversationCreated({
+          conversationId: currentConversationId,
+          userMessageId: '', // Already saved earlier
+          assistantMessageId
+        });
+      }
     }
   }
 }

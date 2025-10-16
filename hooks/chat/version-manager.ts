@@ -7,7 +7,8 @@ export function createNewVersion(
   content: string | MessageContentPart[],
   messageId: string,
   model?: string,
-  attachments?: Attachment[]
+  attachments?: Attachment[],
+  metadata?: Record<string, unknown>
 ): Message {
   const cleanedVersions = existingVersions.filter(v => v.id && !v.id.startsWith('temp-'));
   
@@ -26,6 +27,10 @@ export function createNewVersion(
 
   if (model) {
     newVersion.model = model;
+  }
+
+  if (metadata) {
+    newVersion.metadata = metadata;
   }
 
   return newVersion;
@@ -85,6 +90,7 @@ export async function fetchMessageVersions(
         timestamp: new Date(v.createdAt).getTime(),
         attachments: v.attachments || [],
         siblingIndex: v.siblingIndex,
+        ...(v.metadata && { metadata: v.metadata }),
       }));
     }
 

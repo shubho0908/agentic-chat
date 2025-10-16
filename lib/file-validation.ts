@@ -12,29 +12,26 @@ interface ClipboardImageResult {
   hasUnsupportedFormats: boolean;
 }
 
-function getFileExtension(filename: string): string {
+export function getFileExtension(filename: string): string {
   const lastDot = filename.lastIndexOf('.');
   if (lastDot === -1) return '';
   return filename.slice(lastDot).toLowerCase();
 }
 
-function isImageFile(file: File): boolean {
+export function isImageFile(file: File): boolean {
   return file.type.startsWith('image/');
 }
 
-function isSupportedImageExtension(filename: string): boolean {
+export function isSupportedImageExtension(filename: string): boolean {
   const ext = getFileExtension(filename);
   return (SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
 }
 
-function isSupportedDocumentExtension(filename: string): boolean {
+export function isSupportedDocumentExtension(filename: string): boolean {
   const ext = getFileExtension(filename);
   return (SUPPORTED_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext);
 }
 
-/**
- * Filter and categorize files into valid images, unsupported images, valid documents, and unsupported files.
- */
 export function filterFiles(files: File[]): FileFilterResult {
   const validImages: File[] = [];
   const unsupportedImages: File[] = [];
@@ -56,9 +53,6 @@ export function filterFiles(files: File[]): FileFilterResult {
   return { validImages, unsupportedImages, validDocuments, unsupportedFiles };
 }
 
-/**
- * Get comma-separated list of filenames.
- */
 export function getFileNames(files: File[]): string {
   return files.map(f => f.name).join(', ');
 }

@@ -10,6 +10,7 @@ import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
+import { FollowUpQuestions } from "./followUpQuestions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
 import type { MemoryStatus } from "@/types/chat";
@@ -17,13 +18,16 @@ import type { MemoryStatus } from "@/types/chat";
 interface ChatMessageProps {
   message: Message;
   userName?: string | null;
-  onEdit?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
-  onRegenerate?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
+  onRegenerateMessage?: (messageId: string) => void;
+  onSendMessage?: (content: string) => void;
+  isSharePage?: boolean;
+  isLastMessage?: boolean;
   isLoading?: boolean;
-  memoryStatus?: MemoryStatus
+  memoryStatus?: MemoryStatus;
 }
 
-function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoading, memoryStatus }: ChatMessageProps) {
+function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === "user";
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -59,12 +63,12 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   }, []);
   
   const handleEditSubmit = useCallback(() => {
-    if (!editText.trim() || !message.id || !onEdit) return;
-    onEdit(message.id, editText, message.attachments);
+    if (!editText.trim() || !message.id || !onEditMessage) return;
+    onEditMessage(message.id, editText, message.attachments);
     setIsEditing(false);
     setEditText("");
     setVersionIndex(-1);
-  }, [editText, message.id, message.attachments, onEdit]);
+  }, [editText, message.id, message.attachments, onEditMessage]);
   
   const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {
@@ -87,6 +91,62 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
   }, [versionIndex]);
   
   const isThinking = !textContent && !displayedMessage.content;
+  
+  const citations = useMemo(() => {
+    if (isUser) return [];
+    
+    const allCitations = [];
+    
+    // Add citations from metadata
+    if (displayedMessage.metadata?.citations && displayedMessage.metadata.citations.length > 0) {
+      allCitations.push(...displayedMessage.metadata.citations);
+    }
+    
+    // Convert sources from metadata to citations format
+    if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
+      const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
+        id: `source-${index + 1}`,
+        source: source.title,
+        url: source.url,
+        relevance: source.snippet || `Source from ${source.domain}`,
+        author: source.domain,
+        year: new Date().getFullYear().toString(),
+      }));
+      allCitations.push(...sourcesAsCitations);
+    }
+    
+    // Add citations from memory status (for streaming/real-time updates)
+    if (isLastMessage && memoryStatus?.toolProgress?.details?.citations) {
+      allCitations.push(...memoryStatus.toolProgress.details.citations);
+    }
+    
+    // Remove duplicates based on URL
+    const uniqueCitations = allCitations.reduce((acc, citation) => {
+      const existing = acc.find(c => c.url && citation.url && c.url === citation.url);
+      if (!existing) {
+        acc.push(citation);
+      }
+      return acc;
+    }, [] as typeof allCitations);
+    
+    return uniqueCitations;
+  }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);
+  
+  const followUpQuestions = useMemo(() => {
+    // Only show for assistant messages
+    if (isUser) return [];
+    
+    // Only show from saved metadata (after response is complete and saved to DB)
+    // Don't show during loading or from streaming memoryStatus
+    if (displayedMessage.metadata?.followUpQuestions && displayedMessage.metadata.followUpQuestions.length > 0 && !isLoading) {
+      // Only show if this is the last message overall (ensures latest assistant message)
+      if (isLastMessage) {
+        return displayedMessage.metadata.followUpQuestions;
+      }
+    }
+    
+    return [];
+  }, [isUser, isLastMessage, isLoading, displayedMessage.metadata?.followUpQuestions]);
   
   if (message.role === "system") return null;
 
@@ -120,6 +180,7 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
               userName={userName}
               modelName={modelName}
               timestamp={displayedMessage.timestamp}
+              citations={citations}
             />
 
             <AttachmentDisplay
@@ -144,9 +205,18 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                   ) : (
                     <AIThinkingAnimation 
                       memoryStatus={memoryStatus}
+                      isLoading={isLoading}
                     />
                   )}
                 </div>
+                
+                {!isUser && followUpQuestions.length > 0 && (
+                  <FollowUpQuestions 
+                    questions={followUpQuestions}
+                    onQuestionClick={onSendMessage}
+                    disabled={isSharePage}
+                  />
+                )}
                 
                 {totalVersions > 0 && (
                   <VersionNavigator
@@ -159,18 +229,20 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
                   />
                 )}
                 
-                <div className="mt-2">
-                  <MessageActions
-                    isUser={isUser}
-                    isEditing={isEditing}
-                    textContent={textContent}
-                    onEditStart={handleEditStart}
-                    canEdit={!!onEdit}
-                    onRegenerate={onRegenerate && message.id ? () => onRegenerate(message.id!) : undefined}
-                    isThinking={isThinking}
-                    isLoading={isLoading}
-                  />
-                </div>
+                {!isSharePage && (
+                  <div className="mt-2">
+                    <MessageActions
+                      isUser={isUser}
+                      isEditing={isEditing}
+                      textContent={textContent}
+                      onEditStart={handleEditStart}
+                      canEdit={!!onEditMessage}
+                      onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
+                      isThinking={isThinking}
+                      isLoading={isLoading}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -181,31 +253,47 @@ function ChatMessageComponent({ message, userName, onEdit, onRegenerate, isLoadi
 }
 
 export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
-  const prevActivities = prevProps.message.toolActivities || [];
-  const nextActivities = nextProps.message.toolActivities || [];
-  const toolActivitiesChanged = 
-    prevActivities.length !== nextActivities.length ||
-    prevActivities.some((prev, idx) => {
-      const next = nextActivities[idx];
-      return !next || prev.status !== next.status || prev.toolCallId !== next.toolCallId;
-    });
+  if (
+    prevProps.message.id !== nextProps.message.id ||
+    prevProps.message.content !== nextProps.message.content ||
+    prevProps.isLastMessage !== nextProps.isLastMessage ||
+    prevProps.isLoading !== nextProps.isLoading
+  ) {
+    return false;
+  }
+
+  const prevMetadata = prevProps.message.metadata;
+  const nextMetadata = nextProps.message.metadata;
   
-  return (
-    prevProps.message.id === nextProps.message.id &&
-    prevProps.message.content === nextProps.message.content &&
-    prevProps.message.versions?.length === nextProps.message.versions?.length &&
-    !toolActivitiesChanged &&
-    prevProps.userName === nextProps.userName &&
-    prevProps.isLoading === nextProps.isLoading &&
-    prevProps.onEdit === nextProps.onEdit &&
-    prevProps.onRegenerate === nextProps.onRegenerate &&
-    prevProps.memoryStatus?.hasMemories === nextProps.memoryStatus?.hasMemories &&
-    prevProps.memoryStatus?.hasDocuments === nextProps.memoryStatus?.hasDocuments &&
-    prevProps.memoryStatus?.memoryCount === nextProps.memoryStatus?.memoryCount &&
-    prevProps.memoryStatus?.documentCount === nextProps.memoryStatus?.documentCount &&
-    prevProps.memoryStatus?.hasImages === nextProps.memoryStatus?.hasImages &&
-    prevProps.memoryStatus?.imageCount === nextProps.memoryStatus?.imageCount &&
-    prevProps.memoryStatus?.routingDecision === nextProps.memoryStatus?.routingDecision &&
-    prevProps.memoryStatus?.skippedMemory === nextProps.memoryStatus?.skippedMemory
-  );
+  if (
+    prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
+    prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
+    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length
+  ) {
+    return false;
+  }
+
+  if (prevProps.isLastMessage && nextProps.isLastMessage) {
+    const prevCitations = prevProps.memoryStatus?.toolProgress?.details?.citations;
+    const nextCitations = nextProps.memoryStatus?.toolProgress?.details?.citations;
+    
+    if (prevCitations?.length !== nextCitations?.length) {
+      return false;
+    }
+    
+    // Check for toolProgress changes (critical for real-time deep research UI updates)
+    const prevProgress = prevProps.memoryStatus?.toolProgress;
+    const nextProgress = nextProps.memoryStatus?.toolProgress;
+    
+    if (prevProgress?.status !== nextProgress?.status ||
+        prevProgress?.message !== nextProgress?.message ||
+        prevProgress?.details?.status !== nextProgress?.details?.status ||
+        prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
+        prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
+        prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length) {
+      return false;
+    }
+  }
+
+  return true;
 });

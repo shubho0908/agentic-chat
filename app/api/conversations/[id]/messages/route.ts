@@ -25,7 +25,7 @@ export async function POST(
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     
-    const { role, content, attachments } = body;
+    const { role, content, attachments, metadata } = body;
 
     const validation = validateMessageData(role, content);
     if (!validation.valid) {
@@ -48,6 +48,7 @@ export async function POST(
           conversationId,
           role,
           content,
+          ...(metadata && { metadata }),
           attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
             create: (attachments as AttachmentInput[]).map(att => ({
               fileUrl: att.fileUrl,

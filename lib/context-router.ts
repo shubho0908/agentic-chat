@@ -6,6 +6,7 @@ import type { Message } from '@/types/core';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
+import { TOOL_IDS } from './tools/config';
 
 export interface ContextRoutingResult {
   context: string;
@@ -77,7 +78,8 @@ export async function routeContext(
   messages: Message[],
   conversationId?: string,
   activeTool?: string | null,
-  memoryEnabled: boolean = false
+  memoryEnabled: boolean = false,
+  deepResearchEnabled: boolean = false
 ): Promise<ContextRoutingResult> {
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
@@ -107,6 +109,13 @@ export async function routeContext(
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+
+  if (deepResearchEnabled) {
+    metadata.routingDecision = RoutingDecision.ToolOnly;
+    metadata.skippedMemory = true;
+    metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
+    return { context: '', metadata };
+  }
 
   if (activeTool) {
     metadata.routingDecision = RoutingDecision.ToolOnly;

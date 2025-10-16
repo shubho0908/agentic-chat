@@ -308,11 +308,16 @@ function extractNumberFromQuery(query: string): number {
 export async function executeYouTubeTool(
   input: YouTubeInput,
   messageContent: string,
+  abortSignal?: AbortSignal,
   onProgress?: (progress: YouTubeProgress) => void
 ): Promise<string> {
   const startTime = Date.now();
 
   try {
+    if (abortSignal?.aborted) {
+      throw new Error('YouTube analysis aborted by user');
+    }
+
     let urls = input.urls || [];
     let searchMode = false;
     let searchQuery = '';
@@ -385,6 +390,10 @@ export async function executeYouTubeTool(
         urls = searchResults.map(r => constructYouTubeUrl(r.videoId));
         results = [];
         for (let i = 0; i < urls.length; i++) {
+          if (abortSignal?.aborted) {
+            throw new Error('YouTube analysis aborted by user');
+          }
+          
           const result = await processVideo(urls[i], input, onProgress, i + 1, urls.length);
           results.push(result);
           
@@ -417,6 +426,10 @@ export async function executeYouTubeTool(
 
       results = [];
       for (let i = 0; i < urls.length; i++) {
+        if (abortSignal?.aborted) {
+          throw new Error('YouTube analysis aborted by user');
+        }
+        
         const result = await processVideo(urls[i], input, onProgress, i + 1, urls.length);
         results.push(result);
         

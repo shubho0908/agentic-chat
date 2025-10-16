@@ -10,17 +10,20 @@ import { DropZone } from "./dropZone";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
+import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
-import { isValidToolId } from "@/lib/tools/config";
+import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
 import type { MessageSendHandler } from "@/types/chat";
 import { 
   getActiveTool as getStoredActiveTool, 
   setActiveTool as storeActiveTool, 
   removeActiveTool, 
   getMemoryEnabled as getStoredMemoryEnabled, 
-  setMemoryEnabled as storeMemoryEnabled 
+  setMemoryEnabled as storeMemoryEnabled,
+  getDeepResearchEnabled as getStoredDeepResearchEnabled,
+  setDeepResearchEnabled as storeDeepResearchEnabled
 } from "@/lib/storage";
 
 interface ChatInputProps {
@@ -48,6 +51,11 @@ export function ChatInput({
   const [memoryEnabled, setMemoryEnabled] = useState<boolean>(() => {
     return getStoredMemoryEnabled();
   });
+  const [deepResearchEnabled, setDeepResearchEnabled] = useState<boolean>(() => {
+    return getStoredDeepResearchEnabled();
+  });
+
+  const { data: usageData } = useDeepResearchUsage();
 
   useEffect(() => {
     if (activeTool) {
@@ -60,6 +68,28 @@ export function ChatInput({
   useEffect(() => {
     storeMemoryEnabled(memoryEnabled);
   }, [memoryEnabled]);
+
+  useEffect(() => {
+    storeDeepResearchEnabled(deepResearchEnabled);
+  }, [deepResearchEnabled]);
+
+  useEffect(() => {
+    if (usageData && usageData.remaining === 0) {
+      const needsDeactivation = deepResearchEnabled || activeTool === TOOL_IDS.DEEP_RESEARCH;
+      
+      if (needsDeactivation) {
+        setDeepResearchEnabled(false);
+        setActiveTool(null);
+        
+        if (deepResearchEnabled) {
+          toast.info('Deep Research deactivated', {
+            description: 'You have reached your monthly usage limit.',
+            duration: 5000,
+          });
+        }
+      }
+    }
+  }, [deepResearchEnabled, activeTool, usageData]);
 
   const {
     selectedFiles,
@@ -97,6 +127,14 @@ export function ChatInput({
   async function sendMessage() {
     if (!input.trim() || isLoading || disabled || isUploading || isSending) return;
 
+    if (deepResearchEnabled && usageData && usageData.remaining === 0) {
+      setDeepResearchEnabled(false);
+      toast.error('Deep Research limit reached', {
+        description: 'You have used all your deep research requests for this month. Your message will be sent with standard processing.',
+        duration: 5000,
+      });
+    }
+
     setIsSending(true);
 
     try {
@@ -110,7 +148,8 @@ export function ChatInput({
         }
       }
 
-      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled);
+      const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled, finalDeepResearchEnabled);
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -144,7 +183,22 @@ export function ChatInput({
       return;
     }
     
+    if (toolId === TOOL_IDS.DEEP_RESEARCH && usageData && usageData.remaining === 0) {
+      toast.error('Deep Research unavailable', {
+        description: `You have used all ${usageData.limit} deep research requests for this month. Resets on ${new Date(usageData.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`,
+        duration: 5000,
+      });
+      return;
+    }
+    
     setActiveTool(toolId);
+    
+    if (toolId === TOOL_IDS.DEEP_RESEARCH) {
+      setDeepResearchEnabled(true);
+    } else {
+      setDeepResearchEnabled(false);
+    }
+    
     toast.success('Tool activated', {
       description: `${toolId.replace('_', ' ')} is now enabled for your next query`,
       duration: 2500,
@@ -153,6 +207,11 @@ export function ChatInput({
 
   function handleToolDeactivated() {
     setActiveTool(null);
+    
+    if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
+      setDeepResearchEnabled(false);
+    }
+    
     toast.info('Tool deactivated', {
       duration: 2000,
     });
