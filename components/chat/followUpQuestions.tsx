@@ -1,5 +1,6 @@
 import { ArrowUpRight } from "lucide-react";
 import { memo } from "react";
+import { Button } from "../ui/button";
 
 interface FollowUpQuestionsProps {
   questions: string[];
@@ -28,7 +29,7 @@ function FollowUpQuestionsComponent({
       
       <div className="grid gap-2">
         {questions.map((question, index) => (
-          <button
+          <Button
             key={index}
             onClick={() => onQuestionClick?.(question)}
             disabled={disabled || !onQuestionClick}
@@ -53,7 +54,7 @@ function FollowUpQuestionsComponent({
                 </div>
               )}
             </div>
-          </button>
+          </Button>
         ))}
       </div>
     </div>

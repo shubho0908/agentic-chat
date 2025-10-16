@@ -1,4 +1,4 @@
-import type { Attachment } from './core';
+import type { Attachment } from '@/lib/schemas/chat';
 
 export interface ExportMessage {
   id: string;

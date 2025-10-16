@@ -1,4 +1,4 @@
-import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
+import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
 import type { WebSearchSource, YouTubeVideo, ResearchTask } from './tools';
 import type { GateDecision, EvaluationResult, Citation } from './deep-research';
 

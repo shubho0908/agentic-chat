@@ -1,4 +1,4 @@
-import type { Message } from "./core";
+import type { Message } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "./chat";
 import type { QueryClient } from "@tanstack/react-query";
 

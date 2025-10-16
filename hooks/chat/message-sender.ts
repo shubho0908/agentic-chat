@@ -1,6 +1,6 @@
-import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/types/core";
+import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import { ToolStatus } from "@/lib/schemas/chat";
 import type { ConversationResult, MemoryStatus } from "@/types/chat";
-import { ToolStatus } from "@/types/core";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
@@ -258,12 +258,19 @@ export async function handleSendMessage(
               };
             }
             
-            if ('citations' in progress.details && 'followUpQuestions' in progress.details) {
-              const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+            const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+            
+            if ('citations' in details && details.citations) {
               messageMetadata = {
                 ...messageMetadata,
-                ...(details.citations && { citations: details.citations }),
-                ...(details.followUpQuestions && { followUpQuestions: details.followUpQuestions }),
+                citations: details.citations,
+              };
+            }
+            
+            if ('followUpQuestions' in details && details.followUpQuestions) {
+              messageMetadata = {
+                ...messageMetadata,
+                followUpQuestions: details.followUpQuestions,
               };
             }
           }

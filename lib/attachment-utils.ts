@@ -1,4 +1,4 @@
-import type { Attachment } from "@/types/core";
+import type { Attachment } from "@/lib/schemas/chat";
 import { isSupportedDocumentExtension } from "./file-validation";
 
 interface UploadFileResponse {
@@ -17,16 +17,10 @@ function uploadResponseToAttachment(uploadResult: UploadFileResponse): Attachmen
   };
 }
 
-/**
- * Transform multiple upload responses to Attachment array.
- */
 export function uploadResponsesToAttachments(uploadResults: UploadFileResponse[]): Attachment[] {
   return uploadResults.map(uploadResponseToAttachment);
 }
 
-/**
- * Filter image attachments from all attachments.
- */
 export function filterImageAttachments(attachments?: Attachment[]): Attachment[] {
   if (!attachments || attachments.length === 0) {
     return [];

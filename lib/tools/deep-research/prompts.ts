@@ -1,7 +1,3 @@
-// ============================================================================
-// RESEARCH GATE PROMPTS
-// ============================================================================
-
 export const RESEARCH_GATE_PROMPT = `You are a research gatekeeper that decides if a query requires deep research or can be answered directly.
 
 **CRITICAL RULES - BE AGGRESSIVE ABOUT SKIPPING:**
@@ -85,10 +81,6 @@ Respond with ONLY a JSON object:
   "confidence": "low" | "medium" | "high"
 }`;
 
-// ============================================================================
-// LEGACY ROUTER PROMPT (kept for backwards compatibility)
-// ============================================================================
-
 export const ROUTER_SYSTEM_PROMPT = `You are a query complexity analyzer. Your task is to determine if a user query requires deep research or can be answered simply.
 
 **CRITICAL: Deep research is for queries that benefit from multi-source research and comprehensive analysis.**
@@ -135,10 +127,6 @@ Respond with ONLY a JSON object in this format:
   "reasoning": "Brief explanation of why"
 }`;
 
-// ============================================================================
-// RESEARCH PLANNING PROMPTS
-// ============================================================================
-
 export const PLANNER_SYSTEM_PROMPT = `You are a research planner. Break down complex queries into 3-4 focused research questions that will comprehensively answer the user's question.
 
 **Guidelines:**
@@ -159,10 +147,6 @@ Respond with ONLY a JSON object in this format:
     }
   ]
 }`;
-
-// ============================================================================
-// RESEARCH EXECUTION PROMPTS
-// ============================================================================
 
 export function createWorkerPrompt(question: string, previousFindings?: string): string {
   const basePrompt = `You are a research assistant. Answer this specific research question using the provided information.
@@ -255,10 +239,6 @@ Respond with ONLY a JSON object:
     "Thoughtful question 5?"
   ]
 }`;
-
-// ============================================================================
-// RESEARCH SYNTHESIS PROMPTS
-// ============================================================================
 
 export const AGGREGATOR_SYSTEM_PROMPT = `You are a research synthesizer. Combine multiple research findings into a coherent, structured summary.
 
@@ -395,10 +375,6 @@ export const FORMATTER_SYSTEM_PROMPT = `You are an expert research synthesizer c
 
 This is DEEP RESEARCH - users expect authoritative, exhaustive analysis with professional formatting and extensive detail.`;
 
-// ============================================================================
-// RESEARCH EVALUATION PROMPTS
-// ============================================================================
-
 export const EVALUATION_PROMPT = `You are a research quality evaluator. Check if the research output meets standards based on the current strictness level.
 
 **Strictness Levels:**
@@ -478,10 +454,6 @@ export function createEvaluationPrompt(
 ): string {
   return `${EVALUATION_PROMPT}\n\n**Current Strictness Level:** ${strictnessLevel}\n\n**Original Query:** ${query}\n\n**Research Response to Evaluate:**\n${response}`;
 }
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
 
 export function createEnhancedResearchPrompt(query: string): string {
   return `${ENHANCED_RESEARCH_PROMPT}\n\n**User Query:** ${query}`;

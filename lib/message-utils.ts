@@ -1,4 +1,4 @@
-import type { Message, Attachment } from '@/types/core';
+import type { Message, Attachment } from '@/lib/schemas/chat';
 
 type MessageWithVersions = Message & {
   versions?: Message[];

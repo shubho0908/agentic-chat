@@ -39,7 +39,6 @@ export function MessageActions({
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(textContent);
       } else if (typeof document !== "undefined") {
-        // Fallback for environments without navigator.clipboard
         const textarea = document.createElement("textarea");
         textarea.value = textContent;
         textarea.setAttribute("readonly", "");

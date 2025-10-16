@@ -1,4 +1,4 @@
-import type { MessageContentPart, Attachment } from "@/types/core";
+import type { MessageContentPart, Attachment } from "@/lib/schemas/chat";
 import { filterImageAttachments } from "@/lib/attachment-utils";
 
 export function extractTextFromContent(content: string | MessageContentPart[]): string {

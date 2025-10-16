@@ -2,7 +2,7 @@
 
 import { getMemoryContext } from './memory';
 import { getRAGContext } from './rag/retrieval/context';
-import type { Message } from '@/types/core';
+import type { Message } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
@@ -75,7 +75,7 @@ async function hasDocumentAttachments(conversationId: string): Promise<boolean> 
 export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
-  messages: Message[],
+  _messages: Message[],
   conversationId?: string,
   activeTool?: string | null,
   memoryEnabled: boolean = false,

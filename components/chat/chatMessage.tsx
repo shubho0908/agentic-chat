@@ -97,12 +97,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     
     const allCitations = [];
     
-    // Add citations from metadata
     if (displayedMessage.metadata?.citations && displayedMessage.metadata.citations.length > 0) {
       allCitations.push(...displayedMessage.metadata.citations);
     }
     
-    // Convert sources from metadata to citations format
     if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
       const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
         id: `source-${index + 1}`,

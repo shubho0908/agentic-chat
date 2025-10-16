@@ -59,18 +59,13 @@ export async function checkDeepResearchUsage(userId: string): Promise<DeepResear
 export async function incrementDeepResearchUsage(userId: string): Promise<DeepResearchUsageInfo> {
   const { year, month } = getCurrentMonthYear();
 
-  const currentUsage = await checkDeepResearchUsage(userId);
-  
-  if (!currentUsage.canUse) {
-    const resetDate = currentUsage.resetDate instanceof Date ? currentUsage.resetDate : new Date(currentUsage.resetDate);
-    throw new Error(`Deep research limit reached. You have used all ${MONTHLY_LIMIT} requests this month. Resets on ${resetDate.toLocaleDateString()}.`);
-  }
-  const updated = await prisma.deepResearchUsage.update({
+  const result = await prisma.deepResearchUsage.updateMany({
     where: {
-      userId_year_month: {
-        userId,
-        year,
-        month,
+      userId,
+      year,
+      month,
+      usageCount: {
+        lt: MONTHLY_LIMIT,
       },
     },
     data: {
@@ -79,6 +74,56 @@ export async function incrementDeepResearchUsage(userId: string): Promise<DeepRe
       },
     },
   });
+
+  if (result.count === 0) {
+    const existing = await prisma.deepResearchUsage.findUnique({
+      where: {
+        userId_year_month: {
+          userId,
+          year,
+          month,
+        },
+      },
+    });
+
+    if (!existing) {
+      const created = await prisma.deepResearchUsage.create({
+        data: {
+          userId,
+          year,
+          month,
+          usageCount: 1,
+        },
+      });
+
+      return {
+        usageCount: created.usageCount,
+        limit: MONTHLY_LIMIT,
+        remaining: MONTHLY_LIMIT - 1,
+        canUse: true,
+        resetDate: getResetDate(),
+      };
+    } else {
+      const resetDate = getResetDate();
+      throw new Error(
+        `Deep research limit reached. You have used all ${MONTHLY_LIMIT} requests this month. Resets on ${resetDate.toLocaleDateString()}.`
+      );
+    }
+  }
+
+  const updated = await prisma.deepResearchUsage.findUnique({
+    where: {
+      userId_year_month: {
+        userId,
+        year,
+        month,
+      },
+    },
+  });
+
+  if (!updated) {
+    throw new Error('Failed to retrieve updated usage information');
+  }
 
   const remaining = Math.max(0, MONTHLY_LIMIT - updated.usageCount);
 

@@ -1,4 +1,4 @@
-import { type Attachment, type ToolActivity } from "@/lib/schemas/chat";
+import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
@@ -10,7 +10,6 @@ import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
-import { ToolStatus, MessageRole, type MessageMetadata } from "@/types/core";
 import type { EditMessageContext } from "@/types/chat-hooks";
 
 export async function handleEditMessage(
@@ -165,7 +164,6 @@ export async function handleEditMessage(
             toolProgress: {
               status: progress.status,
               message: progress.message,
-              // Merge details instead of replacing to preserve context from previous updates
               details: {
                 ...(currentMemoryStatus.toolProgress?.details || {}),
                 ...(progress.details || {}),
@@ -184,12 +182,19 @@ export async function handleEditMessage(
               };
             }
             
-            if ('citations' in progress.details && 'followUpQuestions' in progress.details) {
-              const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+            const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+            
+            if ('citations' in details && details.citations) {
               messageMetadata = {
                 ...messageMetadata,
-                ...(details.citations && { citations: details.citations }),
-                ...(details.followUpQuestions && { followUpQuestions: details.followUpQuestions }),
+                citations: details.citations,
+              };
+            }
+            
+            if ('followUpQuestions' in details && details.followUpQuestions) {
+              messageMetadata = {
+                ...messageMetadata,
+                followUpQuestions: details.followUpQuestions,
               };
             }
           }

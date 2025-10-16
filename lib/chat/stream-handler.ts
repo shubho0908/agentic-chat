@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { Message } from '@/types/core';
+import type { Message } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openai-errors';
@@ -13,7 +13,7 @@ import {
   encodeDone,
   shouldSendMemoryStatus,
 } from './streaming-helpers';
-import { checkDeepResearchUsage, incrementDeepResearchUsage } from '@/lib/deep-research-usage';
+import { incrementDeepResearchUsage } from '@/lib/deep-research-usage';
 
 export interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
@@ -39,7 +39,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
   return {
     async start(controller: ReadableStreamDefaultController) {
       try {
-        // Check if already aborted
         if (abortSignal?.aborted) {
           try {
             controller.enqueue(encodeChatChunk('Request was aborted, please try again later.'));
@@ -76,71 +75,53 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             }
           } else {
             try {
-              // STRICT CHECK: Verify rate limit BEFORE proceeding
-              const usageInfo = await checkDeepResearchUsage(userId);
+              const updatedUsage = await incrementDeepResearchUsage(userId);
+              try {
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                  type: 'usage_updated',
+                  usageCount: updatedUsage.usageCount,
+                  remaining: updatedUsage.remaining,
+                  limit: updatedUsage.limit,
+                })}\n\n`));
+              } catch {
+                console.error('[Stream Handler] Could not send usage update event (controller closed)');
+              }
               
-              if (!usageInfo.canUse) {
-                // Rate limit reached - REJECT the request
-                const resetDate = usageInfo.resetDate instanceof Date ? usageInfo.resetDate : new Date(usageInfo.resetDate);
-                const limitMessage = `⚠️ **Deep Research Limit Reached**\n\nYou have used all **${usageInfo.limit} deep research requests** for this month.\n\n📅 Your limit will reset on **${resetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}**.\n\nI'll answer your question using standard processing instead.\n\n---\n\n`;
+              try {
+                const result = await executeDeepResearchTool(textQuery, controller, enhancedMessages, apiKey, model, true, abortSignal);
+                enhancedMessages = result.messages;
+                researchFailed = result.failed;
+              } catch (researchError) {
+                console.error('[Stream Handler] ❌ Deep research execution error:', researchError);
+                const errorMessage = `⚠️ Unable to complete deep research. Let me answer based on my knowledge instead.\n\n`;
+                try {
+                  controller.enqueue(encodeChatChunk(errorMessage));
+                } catch {
+                  console.error('[Stream Handler] Could not send error message (controller closed)');
+                }
+                researchFailed = true;
+              }
+            } catch (error) {
+              if (error instanceof Error && error.message.includes('limit reached')) {
+                const limitMessage = `⚠️ **Deep Research Limit Reached**\n\nYou have used all your deep research requests for this month.\n\n📅 Your limit will reset at the beginning of next month.\n\nI'll answer your question using standard processing instead.\n\n---\n\n`;
                 try {
                   controller.enqueue(encodeChatChunk(limitMessage));
                 } catch {
                   console.error('[Stream Handler] Could not send rate limit message (controller closed)');
                 }
               } else {
+                console.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
+                const errorMessage = `⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n`;
                 try {
-                  // Execute deep research
-                  const result = await executeDeepResearchTool(textQuery, controller, enhancedMessages, apiKey, model, true, abortSignal);
-                  enhancedMessages = result.messages;
-                  researchFailed = result.failed;
-                  
-                  // CRITICAL: Increment usage counter after successful deep research (not skipped)
-                  if (!result.failed && !abortSignal?.aborted) {
-                    try {
-                      const updatedUsage = await incrementDeepResearchUsage(userId);
-                      console.log(`[Stream Handler] ✅ Deep research usage incremented: ${updatedUsage.usageCount}/${updatedUsage.limit}`);
-                      
-                      // Send usage update event to frontend to trigger refetch
-                      try {
-                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                          type: 'usage_updated',
-                          usageCount: updatedUsage.usageCount,
-                          remaining: updatedUsage.remaining,
-                          limit: updatedUsage.limit,
-                        })}\n\n`));
-                      } catch {
-                        console.error('[Stream Handler] Could not send usage update event (controller closed)');
-                      }
-                    } catch (incrementError) {
-                      console.error('[Stream Handler] ❌ Failed to increment usage:', incrementError);
-                      // Continue anyway - the research was already done
-                    }
-                  }
-                } catch (usageError) {
-                  console.error('[Stream Handler] ❌ Deep research execution error:', usageError);
-                  const errorMessage = `⚠️ Unable to perform deep research at this time. Let me answer based on my knowledge instead.\n\n`;
-                  try {
-                    controller.enqueue(encodeChatChunk(errorMessage));
-                  } catch {
-                    console.error('[Stream Handler] Could not send error message (controller closed)');
-                  }
+                  controller.enqueue(encodeChatChunk(errorMessage));
+                } catch {
+                  console.error('[Stream Handler] Could not send error message (controller closed)');
                 }
-              }
-            } catch (error) {
-              console.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
-              // On unexpected errors, continue without deep research but inform user
-              const errorMessage = `⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n`;
-              try {
-                controller.enqueue(encodeChatChunk(errorMessage));
-              } catch {
-                console.error('[Stream Handler] Could not send error message (controller closed)');
               }
             }
           }
         }
         
-        // Check if aborted before starting LLM
         if (abortSignal?.aborted) {
           try {
             controller.enqueue(encodeChatChunk('Request was aborted, please try again later.'));
@@ -148,8 +129,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           controller.close();
           return;
         }
-        
-        // If research failed, send a message to user before LLM
         if (researchFailed) {
           const errorMessage = "I encountered an issue while conducting deep research. Let me provide an answer based on my knowledge instead.\n\n";
           try {

@@ -9,7 +9,7 @@ import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { routeContext } from '@/lib/context-router';
 import { RoutingDecision, type MemoryStatus } from '@/types/chat';
-import type { Message } from '@/types/core';
+import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 

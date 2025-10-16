@@ -1,10 +1,9 @@
-import { type Attachment, type MessageContentPart, type Message } from "@/lib/schemas/chat";
+import { type Attachment, type MessageContentPart, type Message, type MessageMetadata } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/content-utils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
 import type { ConversationResult } from "@/types/chat";
-import type { MessageMetadata } from "@/types/core";
 
 export function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
@@ -218,11 +217,10 @@ export async function handleConversationSaving(
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
       
-      // Call callback to update local state with metadata
       if (onConversationCreated) {
         onConversationCreated({
           conversationId: currentConversationId,
-          userMessageId: '', // Already saved earlier
+          userMessageId: '',
           assistantMessageId
         });
       }

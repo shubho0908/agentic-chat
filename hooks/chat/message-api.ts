@@ -1,7 +1,6 @@
-import { type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
+import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
 import type { UpdateMessageResponse } from "@/types/chat";
-import type { MessageMetadata } from "@/types/core";
 
 interface SavedMessageWithAttachments {
   id: string;
