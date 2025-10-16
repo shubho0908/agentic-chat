@@ -40,6 +40,7 @@ export async function GET(
       id: v.id,
       role: v.role.toLowerCase(),
       content: v.content,
+      metadata: v.metadata,
       createdAt: v.createdAt,
       siblingIndex: v.siblingIndex,
       attachments: 'attachments' in v ? v.attachments : []

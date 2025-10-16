@@ -2,10 +2,11 @@
 
 import { getMemoryContext } from './memory';
 import { getRAGContext } from './rag/retrieval/context';
-import type { Message } from '@/types/core';
+import type { Message } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
+import { TOOL_IDS } from './tools/config';
 
 export interface ContextRoutingResult {
   context: string;
@@ -74,10 +75,11 @@ async function hasDocumentAttachments(conversationId: string): Promise<boolean> 
 export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
-  messages: Message[],
+  _messages: Message[],
   conversationId?: string,
   activeTool?: string | null,
-  memoryEnabled: boolean = false
+  memoryEnabled: boolean = false,
+  deepResearchEnabled: boolean = false
 ): Promise<ContextRoutingResult> {
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
@@ -107,6 +109,13 @@ export async function routeContext(
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+
+  if (deepResearchEnabled) {
+    metadata.routingDecision = RoutingDecision.ToolOnly;
+    metadata.skippedMemory = true;
+    metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
+    return { context: '', metadata };
+  }
 
   if (activeTool) {
     metadata.routingDecision = RoutingDecision.ToolOnly;

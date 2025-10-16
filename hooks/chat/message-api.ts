@@ -1,4 +1,4 @@
-import { type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
+import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
 import type { UpdateMessageResponse } from "@/types/chat";
 
@@ -86,16 +86,20 @@ export async function saveUserMessage(
 
 export async function saveAssistantMessage(
   conversationId: string,
-  content: string
+  content: string,
+  metadata?: MessageMetadata
 ): Promise<string | null> {
   try {
+    const body = {
+      role: "ASSISTANT" as const,
+      content,
+      ...(metadata && { metadata }),
+    };
+
     const response = await fetch(`/api/conversations/${conversationId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: "ASSISTANT",
-        content,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -156,16 +160,20 @@ export async function updateUserMessage(
 export async function updateAssistantMessage(
   conversationId: string,
   messageId: string,
-  content: string
+  content: string,
+  metadata?: MessageMetadata
 ): Promise<UpdateMessageResponse | null> {
   try {
+    const body = {
+      content,
+      attachments: [],
+      ...(metadata && { metadata }),
+    };
+
     const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content,
-        attachments: [],
-      }),
+      body: JSON.stringify(body),
     });
     
     if (response.ok) {

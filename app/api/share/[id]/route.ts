@@ -41,6 +41,7 @@ export async function GET(
             id: true,
             role: true,
             content: true,
+            metadata: true,
             createdAt: true,
             siblingIndex: true,
             attachments: {
@@ -61,6 +62,7 @@ export async function GET(
                 id: true,
                 role: true,
                 content: true,
+                metadata: true,
                 createdAt: true,
                 siblingIndex: true,
                 attachments: {
@@ -93,6 +95,7 @@ export async function GET(
         id: msg.id,
         role: msg.role.toLowerCase(),
         content: msg.content,
+        metadata: msg.metadata,
         createdAt: msg.createdAt,
         siblingIndex: msg.siblingIndex,
         attachments: msg.attachments || [],
@@ -100,6 +103,7 @@ export async function GET(
           id: v.id,
           role: v.role.toLowerCase(),
           content: v.content,
+          metadata: v.metadata,
           createdAt: v.createdAt,
           siblingIndex: v.siblingIndex,
           attachments: v.attachments || [],

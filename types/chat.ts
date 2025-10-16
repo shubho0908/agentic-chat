@@ -1,5 +1,6 @@
-import type { Attachment, Message, ToolArgs, MessageContentPart } from './core';
-import type { WebSearchSource, YouTubeVideo } from './tools';
+import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { WebSearchSource, YouTubeVideo, ResearchTask } from './tools';
+import type { GateDecision, EvaluationResult, Citation } from './deep-research';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -27,19 +28,43 @@ export interface MemoryStatus {
   skippedMemory?: boolean;
   activeToolName?: string;
   toolProgress?: {
-    status: ToolProgressStatus;
+    status: ToolProgressStatus | string;
     message: string;
     details?: {
+      // Web search fields
       query?: string;
       resultsCount?: number;
       responseTime?: number;
       sources?: WebSearchSource[];
       currentSource?: WebSearchSource;
       processedCount?: number;
+      
+      // YouTube fields
       videoCount?: number;
       videos?: YouTubeVideo[];
       failedCount?: number;
       currentVideo?: YouTubeVideo;
+      
+      // Deep research fields
+      status?: string; // Deep research status
+      gateDecision?: GateDecision;
+      skipped?: boolean;
+      researchPlan?: ResearchTask[];
+      currentTaskIndex?: number;
+      totalTasks?: number;
+      completedTasks?: ResearchTask[];
+      evaluationResult?: EvaluationResult;
+      currentAttempt?: number;
+      maxAttempts?: number;
+      strictnessLevel?: 0 | 1 | 2;
+      citations?: Citation[];
+      followUpQuestions?: string[];
+      wordCount?: number;
+      toolProgress?: {
+        toolName: string;
+        status: string;
+        message: string;
+      };
     };
   };
 }
@@ -48,6 +73,7 @@ export interface VersionData {
   id: string;
   role: string;
   content: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   siblingIndex: number;
   attachments?: Attachment[];
@@ -64,13 +90,15 @@ export interface SendMessageOptions {
   attachments?: Attachment[];
   activeTool?: string | null;
   memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
 }
 
 export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
   activeTool?: string | null,
-  memoryEnabled?: boolean
+  memoryEnabled?: boolean,
+  deepResearchEnabled?: boolean
 ) => Promise<void> | void;
 
 export interface EditMessageOptions {
@@ -79,12 +107,14 @@ export interface EditMessageOptions {
   attachments?: Attachment[];
   activeTool?: string | null;
   memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
 }
 
 export interface RegenerateMessageOptions {
   messageId: string;
   activeTool?: string | null;
   memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
 }
 
 export interface UseChatReturn {
@@ -156,6 +186,8 @@ export interface StreamConfig {
   onToolCall?: (toolCall: ToolCallEvent) => void;
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
+  onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   activeTool?: string | null;
   memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
 }

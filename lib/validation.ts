@@ -151,17 +151,12 @@ function validateAttachment(attachment: unknown): ValidationResult {
   }
 
   const att = attachment as Record<string, unknown>;
-
-  // Validate fileUrl
   if (typeof att.fileUrl !== 'string' || !att.fileUrl.trim()) {
     return { valid: false, error: 'Attachment fileUrl is required and must be a non-empty string' };
   }
-
   if (!isValidUrl(att.fileUrl)) {
     return { valid: false, error: 'Attachment fileUrl must be a valid HTTP/HTTPS URL' };
   }
-
-  // Validate fileName
   if (typeof att.fileName !== 'string' || !att.fileName.trim()) {
     return { valid: false, error: 'Attachment fileName is required and must be a non-empty string' };
   }
@@ -170,7 +165,6 @@ function validateAttachment(attachment: unknown): ValidationResult {
     return { valid: false, error: `Attachment fileName exceeds maximum length of ${VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH}` };
   }
 
-  // Validate fileType
   if (typeof att.fileType !== 'string' || !att.fileType.trim()) {
     return { valid: false, error: 'Attachment fileType is required and must be a non-empty string' };
   }
@@ -179,7 +173,6 @@ function validateAttachment(attachment: unknown): ValidationResult {
     return { valid: false, error: `Attachment fileType exceeds maximum length of ${VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH}` };
   }
 
-  // Validate fileSize
   if (typeof att.fileSize !== 'number' || att.fileSize < 0) {
     return { valid: false, error: 'Attachment fileSize must be a non-negative number' };
   }

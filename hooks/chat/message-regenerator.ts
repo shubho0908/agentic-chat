@@ -1,5 +1,4 @@
-import { type Message, type ToolActivity } from "@/lib/schemas/chat";
-import { QueryClient } from "@tanstack/react-query";
+import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -10,23 +9,14 @@ import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
-import { ToolStatus } from "@/types/core";
-
-interface RegenerateContext {
-  messages: Message[];
-  conversationId: string | null;
-  abortSignal: AbortSignal;
-  queryClient: QueryClient;
-  onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
-  onMemoryStatusUpdate?: (status: MemoryStatus) => void;
-}
+import type { RegenerateContext } from "@/types/chat-hooks";
 
 export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
   activeTool?: string | null,
-  memoryEnabled?: boolean
+  memoryEnabled?: boolean,
+  deepResearchEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -44,12 +34,12 @@ export async function handleRegenerateResponse(
   }
 
   const assistantMessage = messages[messageIndex];
-  if (assistantMessage.role !== "assistant") {
+  if (assistantMessage.role !== MessageRole.ASSISTANT) {
     return { success: false, error: "Not an assistant message" };
   }
 
   const previousUserMessage = messages[messageIndex - 1];
-  if (previousUserMessage.role !== "user") {
+  if (previousUserMessage.role !== MessageRole.USER) {
     return { success: false, error: "No user message before assistant" };
   }
 
@@ -62,6 +52,7 @@ export async function handleRegenerateResponse(
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
+  let messageMetadata: MessageMetadata | undefined;
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
   
@@ -160,16 +151,57 @@ export async function handleRegenerateResponse(
             toolProgress: {
               status: progress.status,
               message: progress.message,
-              details: progress.details,
+              details: {
+                ...(currentMemoryStatus.toolProgress?.details || {}),
+                ...(progress.details || {}),
+              },
             },
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
+          
+          if (progress.details) {
+            if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
+              const details = progress.details as { sources?: MessageMetadata['sources'] };
+              messageMetadata = {
+                ...(messageMetadata || {}),
+                ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
+              };
+            }
+            
+            const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
+            
+            if ('citations' in details && details.citations) {
+              messageMetadata = {
+                ...(messageMetadata || {}),
+                citations: details.citations,
+              };
+            }
+            
+            if ('followUpQuestions' in details && details.followUpQuestions) {
+              messageMetadata = {
+                ...(messageMetadata || {}),
+                followUpQuestions: details.followUpQuestions,
+              };
+            }
+          }
         }
+      },
+      onUsageUpdated: () => {
+        queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
       },
       activeTool,
       memoryEnabled,
+      deepResearchEnabled: deepResearchEnabled ?? false,
     });
+
+    onMessagesUpdate((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantMessage.id
+          ? { ...msg, metadata: messageMetadata }
+          : msg
+      )
+    );
 
     if (responseContent && !abortSignal.aborted) {
       if (cacheQuery) {
@@ -180,7 +212,7 @@ export async function handleRegenerateResponse(
       }
 
       if (conversationId && assistantMessage.id) {
-        const updatedMessage = await updateAssistantMessage(conversationId, assistantMessage.id, responseContent);
+        const updatedMessage = await updateAssistantMessage(conversationId, assistantMessage.id, responseContent, messageMetadata);
         
         if (updatedMessage?.id) {
           const parentId = updatedMessage.parentMessageId || updatedMessage.id;
@@ -189,7 +221,7 @@ export async function handleRegenerateResponse(
           onMessagesUpdate((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessage.id || msg.id === updatedMessage.id
-                ? updateMessageWithVersions(msg, updatedMessage.id, versions)
+                ? { ...updateMessageWithVersions(msg, updatedMessage.id, versions), metadata: messageMetadata }
                 : msg
             )
           );

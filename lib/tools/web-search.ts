@@ -16,7 +16,8 @@ type WebSearchInput = z.infer<typeof webSearchParamsSchema>;
 
 export async function executeWebSearch(
   input: WebSearchInput,
-  onProgress?: (progress: WebSearchProgress) => void
+  onProgress?: (progress: WebSearchProgress) => void,
+  abortSignal?: AbortSignal
 ): Promise<string> {
     const { query, maxResults = 5, searchDepth = 'advanced', includeAnswer = false } = input;
 
@@ -25,6 +26,10 @@ export async function executeWebSearch(
     }
 
     try {
+      if (abortSignal?.aborted) {
+        throw new Error('Search aborted by user');
+      }
+
       const startTime = Date.now();
 
       onProgress?.({
@@ -41,6 +46,10 @@ export async function executeWebSearch(
         include_images: false,
         include_raw_content: false,
       });
+
+      if (abortSignal?.aborted) {
+        throw new Error('Search aborted by user');
+      }
 
       const responseTime = Date.now() - startTime;
 
@@ -83,6 +92,10 @@ export async function executeWebSearch(
       });
 
       for (let i = 0; i < sources.length; i++) {
+        if (abortSignal?.aborted) {
+          throw new Error('Search aborted by user');
+        }
+
         onProgress?.({
           status: 'processing_sources',
           message: `Analyzing source ${i + 1} of ${sources.length}...`,

@@ -1,12 +1,14 @@
-import type { Message, MessageContent } from '@/types/core';
+import type { Message, MessageContentPart } from '@/lib/schemas/chat';
+
+type MessageContent = string | MessageContentPart[];
 
 export function extractTextFromMessage(content: MessageContent): string {
   if (typeof content === 'string') {
     return content;
   }
   return content
-    .filter((p) => p.type === 'text' && p.text)
-    .map((p) => p.text)
+    .filter((p) => p.type === 'text')
+    .map((p) => p.type === 'text' ? p.text : '')
     .join(' ');
 }
 

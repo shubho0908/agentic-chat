@@ -1,22 +1,26 @@
 import type { StreamConfig } from "@/types/chat";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, activeTool, memoryEnabled } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled } = config;
+  
+  const requestPayload = {
+    model,
+    messages,
+    stream: true,
+    conversationId,
+    activeTool: activeTool || null,
+    memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : false,
+    deepResearchEnabled: deepResearchEnabled !== undefined ? deepResearchEnabled : false,
+
+  };
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: true,
-      conversationId,
-      activeTool: activeTool || null,
-      memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : false,
-    }),
+    body: JSON.stringify(requestPayload),
     signal,
   });
-
+  
   if (!response.ok) {
     let errorMessage = 'Failed to send message';
     try {
@@ -100,6 +104,14 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               status: parsed.status,
               message: parsed.message,
               details: parsed.details,
+            });
+          }
+
+          if (parsed.type === 'usage_updated' && onUsageUpdated) {
+            onUsageUpdated({
+              usageCount: parsed.usageCount,
+              remaining: parsed.remaining,
+              limit: parsed.limit,
             });
           }
 

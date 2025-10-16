@@ -37,7 +37,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean }) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
       if (!content.trim() || isLoading) return;
 
       setIsLoading(true);
@@ -63,7 +63,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         },
         session,
         activeTool,
-        memoryEnabled
+        memoryEnabled,
+        deepResearchEnabled
       );
 
       setIsLoading(false);
@@ -73,7 +74,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, activeTool, memoryEnabled }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean }) => {
+    async ({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -94,7 +95,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onMemoryStatusUpdate: setMemoryStatus,
         },
         activeTool,
-        memoryEnabled
+        memoryEnabled,
+        deepResearchEnabled
       );
 
       setIsLoading(false);
@@ -104,7 +106,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, activeTool, memoryEnabled }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean }) => {
+    async ({ messageId, activeTool, memoryEnabled, deepResearchEnabled }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -123,7 +125,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onMemoryStatusUpdate: setMemoryStatus,
         },
         activeTool,
-        memoryEnabled
+        memoryEnabled,
+        deepResearchEnabled
       );
 
       setIsLoading(false);

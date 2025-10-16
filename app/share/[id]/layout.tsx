@@ -2,6 +2,8 @@ import { Metadata } from "next";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = 'force-dynamic';
+
 async function getSharedConversation(id: string) {
   try {
     const conversation = await prisma.conversation.findUnique({
@@ -85,9 +87,9 @@ export async function generateMetadata({
     : `A conversation shared by ${userName} on Agentic Chat`;
 
   const headersList = await headers();
-  const protocol = headersList.get('x-forwarded-proto') || 'http';
-  const host = headersList.get('host');
-  const baseUrl = `${protocol}://${host}`;
+  const protocol = headersList.get('x-forwarded-proto') || 'https';
+  const host = headersList.get('host') || process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '');
+  const baseUrl = host ? `${protocol}://${host}` : process.env.NEXT_PUBLIC_APP_URL || 'https://localhost:3000';
   const ogImageUrl = `${baseUrl}/api/og?title=${encodeURIComponent(title)}`;
 
   return {

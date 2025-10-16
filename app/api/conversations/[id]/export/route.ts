@@ -50,6 +50,7 @@ export async function GET(
             id: true,
             role: true,
             content: true,
+            metadata: true,
             createdAt: true,
             attachments: {
               select: {
@@ -69,6 +70,7 @@ export async function GET(
                 id: true,
                 role: true,
                 content: true,
+                metadata: true,
                 createdAt: true,
                 attachments: {
                   select: {
@@ -106,6 +108,7 @@ export async function GET(
         id: msg.id,
         role: msg.role.toLowerCase(),
         content: msg.content,
+        metadata: msg.metadata,
         createdAt: msg.createdAt.toISOString(),
         attachments: msg.attachments.map((att) => ({
           id: att.id,
@@ -118,6 +121,7 @@ export async function GET(
           id: v.id,
           role: v.role.toLowerCase(),
           content: v.content,
+          metadata: v.metadata,
           createdAt: v.createdAt.toISOString(),
           attachments: v.attachments?.map((att) => ({
             id: att.id,

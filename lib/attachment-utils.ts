@@ -1,5 +1,5 @@
-import type { Attachment } from "@/types/core";
-import { SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
+import type { Attachment } from "@/lib/schemas/chat";
+import { isSupportedDocumentExtension } from "./file-validation";
 
 interface UploadFileResponse {
   url: string;
@@ -17,34 +17,17 @@ function uploadResponseToAttachment(uploadResult: UploadFileResponse): Attachmen
   };
 }
 
-/**
- * Transform multiple upload responses to Attachment array.
- */
 export function uploadResponsesToAttachments(uploadResults: UploadFileResponse[]): Attachment[] {
   return uploadResults.map(uploadResponseToAttachment);
 }
 
-function getFileExtension(filename: string): string {
-  const lastDot = filename.lastIndexOf('.');
-  if (lastDot === -1) return '';
-  return filename.slice(lastDot).toLowerCase();
-}
-
-function isDocumentByExtension(filename: string): boolean {
-  const ext = getFileExtension(filename);
-  return (SUPPORTED_DOCUMENT_EXTENSIONS as readonly string[]).includes(ext);
-}
-
-/**
- * Filter image attachments from all attachments.
- */
 export function filterImageAttachments(attachments?: Attachment[]): Attachment[] {
   if (!attachments || attachments.length === 0) {
     return [];
   }
   
   return attachments.filter(att => 
-    !isDocumentByExtension(att.fileName) && att.fileType.startsWith('image/')
+    !isSupportedDocumentExtension(att.fileName) && att.fileType.startsWith('image/')
   );
 }
 
@@ -54,6 +37,6 @@ export function filterDocumentAttachments(attachments?: Attachment[]): Attachmen
   }
   
   return attachments.filter(att => 
-    isDocumentByExtension(att.fileName) || !att.fileType.startsWith('image/')
+    isSupportedDocumentExtension(att.fileName) || !att.fileType.startsWith('image/')
   );
 }

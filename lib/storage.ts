@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
   ACTIVE_TOOL: 'agentic-chat-active-tool',
   MEMORY_ENABLED: 'agentic-chat-memory-enabled',
+  DEEP_RESEARCH_ENABLED: 'agentic-chat-deep-research-enabled',
 } as const;
 
 function isLocalStorageAvailable(): boolean {
@@ -89,6 +90,25 @@ export function removeActiveTool(): void {
   try {
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
   } catch {
+  }
+}
+
+export function getDeepResearchEnabled(): boolean {
+  if (!isLocalStorageAvailable()) return false;
+  try {
+    return localStorage.getItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setDeepResearchEnabled(enabled: boolean): boolean {
+  if (!isLocalStorageAvailable()) return false;
+  try {
+    localStorage.setItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED, String(enabled));
+    return true;
+  } catch {
+    return false;
   }
 }
 

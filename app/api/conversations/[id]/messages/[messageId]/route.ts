@@ -5,6 +5,7 @@ import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonR
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateAttachments } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
+import { messageMetadataSchema } from '@/lib/schemas/chat';
 
 export async function PATCH(
   request: NextRequest,
@@ -30,10 +31,17 @@ export async function PATCH(
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     
-    const { content, attachments } = body;
+    const { content, attachments, metadata } = body;
 
     if (!content || typeof content !== 'string') {
       return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (metadata !== undefined && metadata !== null) {
+      const metadataValidation = messageMetadataSchema.safeParse(metadata);
+      if (!metadataValidation.success) {
+        return errorResponse('Invalid metadata structure', metadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+      }
     }
 
     if (attachments !== undefined && attachments !== null) {
@@ -127,6 +135,7 @@ export async function PATCH(
           content,
           parentMessageId: parentId,
           siblingIndex,
+          ...(metadata && { metadata }),
           attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
             create: (attachments as AttachmentInput[]).map(att => ({
               fileUrl: att.fileUrl,

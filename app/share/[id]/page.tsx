@@ -14,6 +14,7 @@ interface SharedMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   siblingIndex: number;
   attachments?: Attachment[];

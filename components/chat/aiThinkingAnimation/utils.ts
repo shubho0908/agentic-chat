@@ -56,16 +56,14 @@ export function getContextualMessage(
       const videoCount = memoryStatus.toolProgress.details?.videoCount || 0;
       const processedCount = memoryStatus.toolProgress.details?.processedCount || 0;
       
-      if (status === 'searching') {
-        return 'Searching YouTube...';
-      } else if (status === 'found') {
-        return videoCount > 0 ? `Found ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : 'Found videos';
-      } else if (status === 'processing_sources') {
-        return videoCount > 0 ? `Extracting transcripts (${processedCount}/${videoCount})...` : 'Processing videos...';
-      } else if (status === 'completed') {
-        return 'Analysis complete';
-      }
-      return 'Analyzing YouTube videos...';
+      const statusMessages: Record<string, string> = {
+        'searching': 'Searching YouTube...',
+        'found': videoCount > 0 ? `Found ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : 'Found videos',
+        'processing_sources': videoCount > 0 ? `Extracting transcripts (${processedCount}/${videoCount})...` : 'Processing videos...',
+        'completed': 'Analysis complete',
+      };
+      
+      return statusMessages[status] || 'Analyzing YouTube videos...';
     }
     
     if (memoryStatus?.toolProgress?.message) {

@@ -8,9 +8,12 @@ import { RoutingBadge } from "./aiThinkingAnimation/routingBadge";
 import { ContextDetails } from "./aiThinkingAnimation/contextDetails";
 import { ThinkingMessage } from "./aiThinkingAnimation/thinkingMessage";
 
-export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) {
+export function AIThinkingAnimation({ memoryStatus, isLoading }: AIThinkingAnimationProps & { isLoading?: boolean }) {
+  const researchSkipped = memoryStatus?.toolProgress?.details?.skipped === true;
+  
   const hasContext =
     memoryStatus &&
+    !researchSkipped &&
     (memoryStatus.hasMemories ||
       memoryStatus.hasDocuments ||
       memoryStatus.hasImages ||
@@ -33,7 +36,7 @@ export function AIThinkingAnimation({ memoryStatus }: AIThinkingAnimationProps) 
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <ContextDetails memoryStatus={memoryStatus} />
+            <ContextDetails memoryStatus={memoryStatus} isLoading={isLoading} />
           </div>
         </div>
       )}

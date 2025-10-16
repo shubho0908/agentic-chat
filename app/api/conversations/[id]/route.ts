@@ -5,6 +5,7 @@ import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, err
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import type { Prisma } from '@/lib/generated/prisma';
 
 interface MessageAttachment {
   id: string;
@@ -18,6 +19,7 @@ interface BaseMessage {
   id: string;
   role: string;
   content: string;
+  metadata?: Prisma.JsonValue;
   createdAt: Date;
   siblingIndex: number;
   parentMessageId: string | null;
@@ -67,6 +69,7 @@ export async function GET(
         id: true,
         role: true,
         content: true,
+        metadata: true,
         createdAt: true,
         conversationId: true,
         parentMessageId: true,
@@ -112,6 +115,7 @@ export async function GET(
           id: true,
           role: true,
           content: true,
+          metadata: true,
           createdAt: true,
           siblingIndex: true,
           parentMessageId: true,

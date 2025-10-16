@@ -1,4 +1,4 @@
-import type { Message, Attachment } from '@/types/core';
+import type { Message, Attachment } from '@/lib/schemas/chat';
 
 type MessageWithVersions = Message & {
   versions?: Message[];
@@ -8,6 +8,7 @@ interface DbMessage {
   id: string;
   role: string;
   content: string;
+  metadata?: Record<string, unknown>;
   createdAt: string | Date;
   attachments?: Attachment[];
   parentMessageId?: string | null;
@@ -48,6 +49,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
       attachments: msg.attachments || [],
       parentMessageId: msg.parentMessageId,
       siblingIndex: msg.siblingIndex,
+      ...(msg.metadata && { metadata: msg.metadata }),
     };
 
     if (msg.versions && msg.versions.length > 0) {
@@ -59,6 +61,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
         attachments: v.attachments || [],
         parentMessageId: v.parentMessageId,
         siblingIndex: v.siblingIndex,
+        ...(v.metadata && { metadata: v.metadata }),
       }));
     }
 

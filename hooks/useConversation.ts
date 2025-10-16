@@ -9,6 +9,7 @@ interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   attachments?: Attachment[];
   siblingIndex?: number;

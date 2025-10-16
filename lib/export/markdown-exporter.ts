@@ -111,7 +111,6 @@ export function downloadMarkdown(conversation: ExportConversation, options?: Exp
   link.click();
   document.body.removeChild(link);
   
-  // Delay revocation to ensure browser starts download
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, 100);
