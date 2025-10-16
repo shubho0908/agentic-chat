@@ -13,7 +13,7 @@ export function ToolOnlyDefaultContext({ memoryStatus }: MemoryStatusProps) {
         icon={Wand}
         label={
           memoryStatus.activeToolName
-            ? `${memoryStatus.activeToolName.replace("_", " ")} tool`
+            ? `${memoryStatus.activeToolName.replace(/_/g, " ")} tool`
             : "Tool active"
         }
         treeSymbol="└─"

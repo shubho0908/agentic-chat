@@ -86,6 +86,35 @@ export const chatErrorSchema = z.object({
   details: z.union([z.string(), z.number(), z.record(z.string(), z.string())]).optional(),
 });
 
+export const messageMetadataSchema = z.object({
+  citations: z.array(z.object({
+    id: z.string(),
+    source: z.string(),
+    author: z.string().optional(),
+    year: z.string().optional(),
+    url: z.string().optional(),
+    relevance: z.string(),
+  })).optional(),
+  followUpQuestions: z.array(z.string()).optional(),
+  sources: z.array(z.object({
+    position: z.number().optional(),
+    title: z.string(),
+    url: z.string(),
+    domain: z.string(),
+    snippet: z.string().optional(),
+    score: z.number().optional(),
+  })).optional(),
+  researchTask: z.object({
+    gateDecision: z.object({
+      shouldResearch: z.boolean(),
+      reason: z.string(),
+      confidence: z.enum(['low', 'medium', 'high']),
+    }).optional(),
+    totalTasks: z.number().optional(),
+    completedTasks: z.number().optional(),
+  }).optional(),
+}).optional();
+
 export type AttachmentInput = z.infer<typeof attachmentInputSchema>;
 
 // Re-export types from centralized location for backwards compatibility

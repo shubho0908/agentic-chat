@@ -5,6 +5,7 @@ import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonR
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateAttachments } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
+import { messageMetadataSchema } from '@/lib/schemas/chat';
 
 export async function PATCH(
   request: NextRequest,
@@ -34,6 +35,13 @@ export async function PATCH(
 
     if (!content || typeof content !== 'string') {
       return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (metadata !== undefined && metadata !== null) {
+      const metadataValidation = messageMetadataSchema.safeParse(metadata);
+      if (!metadataValidation.success) {
+        return errorResponse('Invalid metadata structure', metadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+      }
     }
 
     if (attachments !== undefined && attachments !== null) {

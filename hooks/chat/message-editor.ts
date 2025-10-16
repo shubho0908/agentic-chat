@@ -50,7 +50,7 @@ export async function handleEditMessage(
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
-  let messageMetadata: MessageMetadata | undefined;
+  let messageMetadata: MessageMetadata = {};
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
@@ -167,8 +167,8 @@ export async function handleEditMessage(
               message: progress.message,
               // Merge details instead of replacing to preserve context from previous updates
               details: {
-                ...currentMemoryStatus.toolProgress?.details,
-                ...progress.details,
+                ...(currentMemoryStatus.toolProgress?.details || {}),
+                ...(progress.details || {}),
               },
             },
           };

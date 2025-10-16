@@ -95,8 +95,8 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   });
 
   let currentTaskDetails: { question?: string; tools?: string[] } | undefined = undefined;
-  if (isResearching && details?.researchPlan && details.researchPlan.length > 0) {
-    const safeCurrentIndex = Math.min(currentTaskIndex, totalTasks - 1);
+  if (isResearching && details?.researchPlan && details.researchPlan.length > 0 && totalTasks > 0) {
+    const safeCurrentIndex = Math.max(0, Math.min(currentTaskIndex, totalTasks - 1));
     const currentTask = details.researchPlan[safeCurrentIndex];
     if (currentTask) {
       currentTaskDetails = {
