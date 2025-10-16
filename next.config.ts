@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
     '@langchain/community',
     '@langchain/textsplitters',
   ],
+  outputFileTracingIncludes: {
+    '/**': [
+      './lib/generated/prisma/**/*',
+      './node_modules/.prisma/client/**/*',
+      './node_modules/@prisma/client/**/*',
+    ],
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
