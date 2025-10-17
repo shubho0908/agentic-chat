@@ -48,11 +48,12 @@ export function removeModel(): void {
 }
 
 export function getMemoryEnabled(): boolean {
-  if (!isLocalStorageAvailable()) return false;
+  if (!isLocalStorageAvailable()) return true;
   try {
-    return localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED) === 'true';
+    const stored = localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED);
+    return stored === null ? true : stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 }
 
