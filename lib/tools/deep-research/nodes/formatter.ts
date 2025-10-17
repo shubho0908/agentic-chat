@@ -522,7 +522,6 @@ export async function formatterNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
-    maxTokens: 12000,
   });
 
   try {

@@ -38,7 +38,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
 
     const grantedScopes = account.scope?.split(' ') || [];
     
-    const requiredScopes = SCOPE_GROUPS.GMAIL;
+    const requiredScopes = SCOPE_GROUPS.WORKSPACE;
     const missingScopes = requiredScopes.filter(
       scope => !grantedScopes.includes(scope)
     );

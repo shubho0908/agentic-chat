@@ -99,7 +99,6 @@ export async function workerNode(
     const llm = new ChatOpenAI({
       model: config.model,
       apiKey: config.openaiApiKey,
-      maxTokens: 4000,
     });
 
     const workerPrompt = createWorkerPrompt(currentTask.question, previousFindings);

@@ -3,7 +3,7 @@ import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk }
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
-import type { DeepResearchProgress, GoogleSuiteProgress } from '@/types/tools';
+import type { DeepResearchProgress } from '@/types/tools';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 
@@ -353,14 +353,14 @@ export async function executeGoogleSuiteTool(
 
     controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
 
-    const { executeGoogleSuiteTool } = await import('@/lib/tools/google-suite/gmail');
+    const { executeGoogleWorkspace } = await import('@/lib/tools/google-suite/executor');
 
-    const gmailResults = await executeGoogleSuiteTool(
-      textQuery,
+    const workspaceResults = await executeGoogleWorkspace({
+      query: textQuery,
       userId,
       apiKey,
       model,
-      (progress: GoogleSuiteProgress) => {
+      onProgress: (progress) => {
         if (streamClosed || abortSignal?.aborted) return;
 
         const mappedStatus = mapGoogleSuiteStatus(progress.status);
@@ -374,26 +374,26 @@ export async function executeGoogleSuiteTool(
           ));
           setImmediate(() => {});
         } catch {
-          console.error('[Google Suite Tool] Failed to enqueue progress (controller closed)');
+          console.error('[Google Workspace] Failed to enqueue progress (controller closed)');
           streamClosed = true;
         }
       },
-      abortSignal
-    );
+      abortSignal,
+    });
 
     if (!streamClosed && !abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeToolResult(TOOL_IDS.GOOGLE_SUITE, toolCallId, gmailResults));
+        controller.enqueue(encodeToolResult(TOOL_IDS.GOOGLE_SUITE, toolCallId, workspaceResults));
       } catch {
         streamClosed = true;
       }
     }
 
-    const gmailContext = `\n\n## Google Suite Context\n\n${gmailResults}\n${GMAIL_ANALYSIS_INSTRUCTIONS}`;
+    const workspaceContext = `\n\n## Google Workspace Context\n\n${workspaceResults}\n${GMAIL_ANALYSIS_INSTRUCTIONS}`;
 
-    return injectContextToMessages(messages, gmailContext);
+    return injectContextToMessages(messages, workspaceContext);
   } catch (error) {
-    console.error('[Chat API] Google Suite tool error:', error);
+    console.error('[Chat API] Google Workspace error:', error);
 
     if (error instanceof Error && error.message.includes('aborted')) {
       try {

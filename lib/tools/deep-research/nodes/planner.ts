@@ -13,7 +13,6 @@ export async function plannerNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
-    maxTokens: 3000,
   });
 
   try {

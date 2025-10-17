@@ -21,7 +21,6 @@ export async function aggregatorNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
-    maxTokens: 8000,
   });
 
   try {

@@ -47,6 +47,7 @@ export interface MemoryStatus {
       
       // Google Suite fields
       operation?: string;
+      tool?: string;
       error?: string;
       
       // Deep research fields
