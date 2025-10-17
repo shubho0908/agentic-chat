@@ -522,6 +522,7 @@ export async function formatterNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
+    maxTokens: 12000,
   });
 
   try {
@@ -530,7 +531,7 @@ export async function formatterNode(
         { role: 'system', content: ENHANCED_FORMATTER_PROMPT },
         {
           role: 'user',
-          content: `**Original Question:** ${originalQuery}\n\n**Research Findings:**\n${contentToFormat}\n\nCreate a comprehensive response with citations and follow-up questions.`,
+          content: `**Original Question:** ${originalQuery}\n\n**Research Findings:**\n${contentToFormat}\n\nCreate a comprehensive 8000-10000 word response with proper markdown formatting, natural citations, and strategic follow-up questions. The response must be a complete, expert-level research report.`,
         },
       ],
       { signal: config.abortSignal }

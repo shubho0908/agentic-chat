@@ -157,7 +157,6 @@ export const TOOL_ERROR_MESSAGES = {
     
     GROQ_API_KEY_NOT_CONFIGURED: 'GROQ_API_KEY not configured. Audio transcription unavailable for videos without captions.',
     AUDIO_DOWNLOAD_FAILED: 'Failed to download audio from YouTube. The video may be restricted or unavailable.',
-    YTDLP_INIT_FAILED: 'Failed to initialize yt-dlp. Audio transcription unavailable.',
     GROQ_API_ERROR: (status: number, message: string) => `Groq API error (${status}): ${message}`,
     AUDIO_TRANSCRIPTION_FAILED: (error: string) => `Audio transcription failed: ${error}`,
     FFMPEG_NOT_FOUND: 'FFmpeg not found. Required for audio extraction. Install with: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)',

@@ -13,13 +13,14 @@ export async function plannerNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
+    maxTokens: 3000,
   });
 
   try {
     const response = await llm.invoke(
       [
         { role: 'system', content: PLANNER_SYSTEM_PROMPT },
-        { role: 'user', content: `User query: "${state.originalQuery}"\n\nCreate a research plan.` },
+        { role: 'user', content: `User query: "${state.originalQuery}"\n\nCreate a comprehensive research plan with 10-12 detailed questions that will support an 8000-10000 word expert-level report.` },
       ],
       { signal: config.abortSignal }
     );

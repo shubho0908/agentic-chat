@@ -64,7 +64,7 @@ export async function workerNode(
       searchResults = await executeWebSearch(
         {
           query: currentTask.question,
-          maxResults: 5,
+          maxResults: 15,
           searchDepth: 'advanced',
           includeAnswer: false,
         },
@@ -99,6 +99,7 @@ export async function workerNode(
     const llm = new ChatOpenAI({
       model: config.model,
       apiKey: config.openaiApiKey,
+      maxTokens: 4000,
     });
 
     const workerPrompt = createWorkerPrompt(currentTask.question, previousFindings);

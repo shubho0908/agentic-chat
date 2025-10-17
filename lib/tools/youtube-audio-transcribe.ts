@@ -1,7 +1,8 @@
-import YTDlpWrap from 'yt-dlp-wrap';
+import ytdl from '@distube/ytdl-core';
 import { unlinkSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { spawn } from 'child_process';
 import type { YouTubeTranscriptSegment } from '@/types/tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import ffmpegPath from 'ffmpeg-static';
@@ -32,28 +33,67 @@ function getGroqApiKey(): string | undefined {
   return process.env.GROQ_API_KEY;
 }
 
-let ytDlpInstance: YTDlpWrap | null = null;
-let ytDlpInitialized = false;
-
-async function getYtDlpInstance(): Promise<YTDlpWrap> {
-  if (ytDlpInstance) return ytDlpInstance;
-  
-  if (!ytDlpInitialized) {
-    ytDlpInitialized = true;
-    
+async function downloadAudioWithYtdl(
+  videoId: string,
+  outputPath: string,
+  onProgress?: (message: string) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
     try {
-      ytDlpInstance = new YTDlpWrap();
-      await ytDlpInstance.getVersion();
-      return ytDlpInstance;
-    } catch {
-      const binaryPath = join(tmpdir(), 'yt-dlp');
-      ytDlpInstance = new YTDlpWrap(binaryPath);
-      await YTDlpWrap.downloadFromGithub(binaryPath);
-      return ytDlpInstance;
+      const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      
+      onProgress?.('Downloading audio from YouTube...');
+      
+      const audioStream = ytdl(videoUrl, {
+        quality: 'highestaudio',
+        filter: 'audioonly',
+      });
+
+      const ffmpegBinary = ffmpegPath || 'ffmpeg';
+      if (!ffmpegBinary) {
+        reject(new Error(TOOL_ERROR_MESSAGES.YOUTUBE.FFMPEG_NOT_FOUND));
+        return;
+      }
+
+      const ffmpegProcess = spawn(ffmpegBinary, [
+        '-i', 'pipe:0',
+        '-acodec', 'libmp3lame',
+        '-ab', '128k',
+        '-ar', '44100',
+        '-f', 'mp3',
+        outputPath
+      ], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      audioStream.pipe(ffmpegProcess.stdin);
+
+      let errorOutput = '';
+      ffmpegProcess.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      audioStream.on('error', (error) => {
+        reject(new Error(`YouTube audio stream error: ${error.message}`));
+      });
+
+      ffmpegProcess.on('error', (error) => {
+        reject(new Error(`FFmpeg process error: ${error.message}`));
+      });
+
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0 && existsSync(outputPath)) {
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg exited with code ${code}. Error: ${errorOutput}`));
+        }
+      });
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      reject(new Error(`Failed to download audio: ${errorMsg}`));
     }
-  }
-  
-  throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.YTDLP_INIT_FAILED);
+  });
 }
 
 export async function transcribeFromAudio(
@@ -68,29 +108,7 @@ export async function transcribeFromAudio(
   const audioPath = join(tmpdir(), `${videoId}.mp3`);
   
   try {
-    onProgress?.('Initializing yt-dlp...');
-    const ytDlp = await getYtDlpInstance();
-    
-    onProgress?.('Downloading audio from YouTube...');
-    
-    const ffmpegBinary = ffmpegPath || 'ffmpeg';
-    
-    const ytDlpArgs = [
-      `https://www.youtube.com/watch?v=${videoId}`,
-      '-x',
-      '--audio-format', 'mp3',
-      '--audio-quality', '5',
-      '-o', audioPath,
-      '--no-playlist',
-      '--no-warnings',
-      '--quiet'
-    ];
-    
-    if (ffmpegBinary && ffmpegBinary !== 'ffmpeg' && existsSync(ffmpegBinary)) {
-      ytDlpArgs.push('--ffmpeg-location', ffmpegBinary);
-    }
-    
-    await ytDlp.execPromise(ytDlpArgs);
+    await downloadAudioWithYtdl(videoId, audioPath, onProgress);
 
     if (!existsSync(audioPath)) {
       throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.AUDIO_DOWNLOAD_FAILED);

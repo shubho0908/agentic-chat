@@ -3,7 +3,7 @@ import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
 import type { EvaluationResult, StrictnessLevel } from '@/types/deep-research';
 
-const MAX_ATTEMPTS = 2; // Total attempts allowed (1 initial + 1 retry)
+const MAX_ATTEMPTS = 3; // Total attempts allowed (1 initial + 2 retries)
 
 export async function evaluatorNode(
   state: ResearchState,

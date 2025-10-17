@@ -34,7 +34,7 @@ function shouldContinueWorker(state: ResearchState): string {
 
 function shouldRetryOrFormat(state: ResearchState): string {
   const { evaluationResult, currentAttempt = 1 } = state;
-  const MAX_ATTEMPTS = 2; // Allow 2 total attempts (1 initial + 1 retry)
+  const MAX_ATTEMPTS = 3; // Allow 3 total attempts (1 initial + 2 retries)
   
   if (!evaluationResult) {
     return 'formatter';
@@ -44,7 +44,7 @@ function shouldRetryOrFormat(state: ResearchState): string {
     return 'formatter';
   }
   
-  if (currentAttempt <= MAX_ATTEMPTS) {
+  if (currentAttempt < MAX_ATTEMPTS) {
     return 'planner';
   }
   

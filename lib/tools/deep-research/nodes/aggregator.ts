@@ -21,6 +21,7 @@ export async function aggregatorNode(
   const llm = new ChatOpenAI({
     model: config.model,
     apiKey: config.openaiApiKey,
+    maxTokens: 8000,
   });
 
   try {
@@ -36,7 +37,10 @@ export async function aggregatorNode(
     const response = await llm.invoke(
       [
         { role: 'system', content: AGGREGATOR_SYSTEM_PROMPT },
-        { role: 'user', content: `Synthesize these research findings:\n\n${findingsText}` },
+        { 
+          role: 'user', 
+          content: `**Original Research Question:** ${state.originalQuery}\n\n**Number of Research Questions:** ${completedTasks.length}\n\n**Research Findings to Synthesize:**\n\n${findingsText}\n\nCreate a comprehensive 5000-6000 word synthesis that deeply integrates ALL findings with expert-level analysis, thematic organization, and critical evaluation. This will be the foundation for an 8000-10000 word final report.`
+        },
       ],
       { signal: config.abortSignal }
     );
