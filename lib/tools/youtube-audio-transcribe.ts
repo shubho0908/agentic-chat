@@ -7,6 +7,11 @@ import type { YouTubeTranscriptSegment } from '@/types/tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import ffmpegPath from 'ffmpeg-static';
 
+if (process.env.NODE_ENV === 'production') {
+  console.log('[FFmpeg] Binary path from ffmpeg-static:', ffmpegPath);
+  console.log('[FFmpeg] Platform:', process.platform, 'Arch:', process.arch);
+}
+
 interface GroqTranscriptionSegment {
   id: number;
   seek: number;
@@ -52,6 +57,11 @@ async function downloadAudioWithYtdl(
       const ffmpegBinary = ffmpegPath || 'ffmpeg';
       if (!ffmpegBinary) {
         reject(new Error(TOOL_ERROR_MESSAGES.YOUTUBE.FFMPEG_NOT_FOUND));
+        return;
+      }
+
+      if (typeof ffmpegBinary === 'string' && !existsSync(ffmpegBinary)) {
+        reject(new Error(`FFmpeg binary not found at: ${ffmpegBinary}. This is likely a deployment configuration issue. Please ensure ffmpeg-static is properly bundled.`));
         return;
       }
 
