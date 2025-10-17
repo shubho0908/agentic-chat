@@ -33,7 +33,6 @@ const nextConfig: NextConfig = {
       './lib/generated/prisma/**/*',
       './node_modules/.prisma/client/**/*',
       './node_modules/@prisma/client/**/*',
-      './node_modules/.pnpm/ffmpeg-static@*/node_modules/ffmpeg-static/**/*',
       './node_modules/ffmpeg-static/**/*',
     ],
   },
