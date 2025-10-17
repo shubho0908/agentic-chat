@@ -12,6 +12,8 @@ import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
 import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
 import type { MessageSendHandler } from "@/types/chat";
+import { useSession } from "@/lib/auth-client";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
@@ -51,6 +53,7 @@ export function ChatInput({
     return getStoredDeepResearchEnabled();
   });
 
+  const { data: session } = useSession();
   const { data: usageData } = useDeepResearchUsage();
 
   useEffect(() => {
@@ -110,8 +113,18 @@ export function ChatInput({
 
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
 
+  const handleFilesSelectedWithAuth = (files: File[]) => {
+    if (!session) {
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: 'Please sign in to attach files',
+      });
+      return;
+    }
+    handleFilesSelected(files);
+  };
+
   const { dragState, dropZoneRef, handlers } = useDragAndDrop({
-    onFilesDropped: handleFilesSelected,
+    onFilesDropped: handleFilesSelectedWithAuth,
     disabled: disabled || isLoading || isUploading || maxFilesReached,
     maxFiles: MAX_FILE_ATTACHMENTS,
     currentFileCount: selectedFiles.length,
@@ -119,6 +132,14 @@ export function ChatInput({
 
   async function sendMessage() {
     if (!input.trim() || isLoading || disabled || isUploading || isSending) return;
+
+    if (!session && selectedFiles.length > 0) {
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
+      });
+      setIsSending(false);
+      return;
+    }
 
     if (deepResearchEnabled && usageData && usageData.remaining === 0) {
       setDeepResearchEnabled(false);
@@ -166,6 +187,12 @@ export function ChatInput({
     }
 
     if (files.length > 0) {
+      if (!session) {
+        toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+          description: 'Please sign in to attach files',
+        });
+        return;
+      }
       handleFilesSelected(files);
     }
   }
@@ -240,7 +267,7 @@ export function ChatInput({
     onRemoveFile: handleRemoveFile,
     onToolSelected: handleToolSelected,
     onMemoryToggle: handleMemoryToggle,
-    onFilesSelected: handleFilesSelected,
+    onFilesSelected: handleFilesSelectedWithAuth,
     onStop,
   };
 
