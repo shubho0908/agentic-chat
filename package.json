@@ -98,7 +98,8 @@
   "overrides": {
     "@browserbasehq/stagehand": {
       "zod": "$zod",
-      "openai": "$openai"
+      "openai": "$openai",
+      "dotenv": "$dotenv"
     },
     "zod-to-json-schema": {
       "zod": "$zod"
