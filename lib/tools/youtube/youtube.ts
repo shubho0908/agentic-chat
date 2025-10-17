@@ -6,7 +6,6 @@ import { extractChapters, formatChapters } from './youtube-chapters';
 import { searchYouTubeVideos, searchResultToVideo, type YouTubeSearchResult } from './youtube-search';
 import { formatViewCount, formatTimestamp, createFallbackMetadata, formatDuration } from './youtube-utils';
 import { youtubeClient } from './youtube-client';
-import { transcribeFromAudio, hasGroqAPIKey } from './youtube-audio-transcribe';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { YouTubeProgress, YouTubeVideoContext, YouTubeVideo, YouTubeTranscriptSegment, YouTubeChapter } from '@/types/tools';
 
@@ -40,17 +39,12 @@ async function fetchVideoMetadata(videoId: string): Promise<Partial<YouTubeVideo
 
 async function fetchTranscript(
   videoId: string,
-  language: string = 'en',
-  onProgress?: (message: string) => void
+  language: string = 'en'
 ): Promise<YouTubeTranscriptSegment[]> {
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
       lang: language
     });
-    
-    if (transcript.length === 0) {
-      throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.NO_TRANSCRIPT(videoId));
-    }
 
     return transcript.map(segment => ({
       text: segment.text,
@@ -60,11 +54,7 @@ async function fetchTranscript(
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('Transcript is disabled')) {
-        if (hasGroqAPIKey()) {
-          onProgress?.('Captions disabled - extracting audio for transcription...');
-          return await transcribeFromAudio(videoId, onProgress);
-        }
-        throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.GROQ_API_KEY_NOT_CONFIGURED);
+        throw new Error('The creator has disabled transcripts/captions for this video');
       }
 
       const languageMatch = error.message.match(/Available languages?: ([^\n]+)/i);
@@ -78,21 +68,14 @@ async function fetchTranscript(
             lang: firstAvailableLang
           });
           
-          if (transcript.length === 0) {
-            throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.NO_TRANSCRIPT(videoId));
-          }
-          
           return transcript.map(segment => ({
             text: segment.text,
             offset: segment.offset,
             duration: segment.duration
           }));
-        } catch {
-          if (hasGroqAPIKey()) {
-            onProgress?.(`Language ${language} unavailable - using audio transcription...`);
-            return await transcribeFromAudio(videoId, onProgress);
-          }
-          throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.NO_TRANSCRIPT(videoId));
+        } catch (fallbackError) {
+          console.error(`[YouTube Tool] Failed to fetch transcript in ${firstAvailableLang}:`, fallbackError);
+          throw new Error(`Transcript not available in requested language (${language}). Available: ${availableLangs.join(', ')} - but failed to fetch.`);
         }
       }
 
@@ -105,12 +88,9 @@ async function fetchTranscript(
             offset: segment.offset,
             duration: segment.duration
           }));
-        } catch {
-          if (hasGroqAPIKey()) {
-            onProgress?.('No captions available - extracting audio for transcription...');
-            return await transcribeFromAudio(videoId, onProgress);
-          }
-          throw new Error(TOOL_ERROR_MESSAGES.YOUTUBE.GROQ_API_KEY_NOT_CONFIGURED);
+        } catch (fallbackError) {
+          console.error(`[YouTube Tool] No transcripts available for ${videoId}:`, fallbackError);
+          throw new Error('No transcripts/captions are available for this video in any language');
         }
       }
     }
@@ -148,7 +128,7 @@ async function processVideo(
       transcript: [],
       chapters: [],
       transcriptText: '',
-      error: TOOL_ERROR_MESSAGES.YOUTUBE.INVALID_URL(url)
+      error: `Invalid YouTube URL: ${url}`
     };
   }
 
@@ -185,13 +165,7 @@ async function processVideo(
       }
     });
 
-    const transcript = await fetchTranscript(videoId, options.language, (msg) => {
-      onProgress?.({
-        status: 'extracting',
-        message: `${videoPrefix}${msg}`,
-        details: { currentVideo: video, step: 'audio_transcribe' }
-      });
-    });
+    const transcript = await fetchTranscript(videoId, options.language);
     
     onProgress?.({
       status: 'extracting',
@@ -519,7 +493,7 @@ export async function executeYouTubeTool(
 
     results.forEach((context, index) => {
       if (index > 0) output += '\n---\n\n';
-      output += formatVideoContext(context, input.includeTimestamps !== false, true);
+      output += formatVideoContext(context, input.includeTimestamps !== false, false);
     });
 
     if (failedResults.length > 0) {

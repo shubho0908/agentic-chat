@@ -154,12 +154,6 @@ export const TOOL_ERROR_MESSAGES = {
     NETWORK_ERROR: (error: string) => `Network error while fetching YouTube data: ${error}`,
     TOOL_FAILED: (error: string) => `YouTube tool failed: ${error}`,
     BATCH_LIMIT_EXCEEDED: 'Maximum 5 videos allowed per request.',
-    
-    GROQ_API_KEY_NOT_CONFIGURED: 'GROQ_API_KEY not configured. Audio transcription unavailable for videos without captions.',
-    AUDIO_DOWNLOAD_FAILED: 'Failed to download audio from YouTube. The video may be restricted or unavailable.',
-    GROQ_API_ERROR: (status: number, message: string) => `Groq API error (${status}): ${message}`,
-    AUDIO_TRANSCRIPTION_FAILED: (error: string) => `Audio transcription failed: ${error}`,
-    FFMPEG_NOT_FOUND: 'FFmpeg not found. Required for audio extraction. Install with: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)',
   },
 } as const;
 

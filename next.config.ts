@@ -26,16 +26,7 @@ const nextConfig: NextConfig = {
     'tiktoken',
     '@langchain/community',
     '@langchain/textsplitters',
-    'ffmpeg-static',
   ],
-  outputFileTracingIncludes: {
-    '/api/chat/completions': [
-      './lib/generated/prisma/**/*',
-      './node_modules/.prisma/client/**/*',
-      './node_modules/@prisma/client/**/*',
-      './node_modules/ffmpeg-static/**/*',
-    ],
-  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

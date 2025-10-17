@@ -111,7 +111,7 @@ export async function executeYouTubeTool(
     
     controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
     
-    const { executeYouTubeTool } = await import('@/lib/tools/youtube');
+    const { executeYouTubeTool } = await import('@/lib/tools/youtube/youtube');
     
     let totalVideos = 0;
     let processedCount = 0;
