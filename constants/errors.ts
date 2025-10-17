@@ -144,6 +144,8 @@ export const TOOL_ERROR_MESSAGES = {
     NOT_CONFIGURED: 'Web search is not configured. Please set TAVILY_API_KEY environment variable.',
     NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
     SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
+    ABORTED: 'Search was aborted, please try again later.',
+    FAILED_FALLBACK: 'Search failed, continuing without web results...',
   },
   YOUTUBE: {
     NO_URLS_DETECTED: 'YouTube tool is active but no YouTube URLs detected in your message. Please provide YouTube video links.',
@@ -154,6 +156,26 @@ export const TOOL_ERROR_MESSAGES = {
     NETWORK_ERROR: (error: string) => `Network error while fetching YouTube data: ${error}`,
     TOOL_FAILED: (error: string) => `YouTube tool failed: ${error}`,
     BATCH_LIMIT_EXCEEDED: 'Maximum 5 videos allowed per request.',
+    ABORTED: 'YouTube analysis was aborted, please try again later.',
+    FAILED_FALLBACK: 'YouTube processing failed, continuing without video data...',
+  },
+  DEEP_RESEARCH: {
+    ABORTED: 'Research was aborted, please try again later.',
+    FAILED: 'Research failed',
+    FAILED_DETAILED: 'Deep research encountered an error and could not be completed. Please try again or rephrase your query.',
+    FAILED_FALLBACK: 'I encountered an issue while conducting deep research. Let me provide an answer based on my knowledge instead.\n\n',
+    EXECUTION_ERROR: '⚠️ Unable to complete deep research. Let me answer based on my knowledge instead.\n\n',
+    RATE_LIMIT: '⚠️ **Deep Research Limit Reached**\n\nYou have used all your deep research requests for this month.\n\n📅 Your limit will reset at the beginning of next month.\n\nI\'ll answer your question using standard processing instead.\n\n---\n\n',
+    TECHNICAL_ERROR: '⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n',
+    AUTH_REQUIRED: '⚠️ Authentication error: Unable to verify your identity for deep research. Please refresh and try again.\n\n',
+  },
+  GOOGLE_SUITE: {
+    ABORTED: 'Google Suite operation was aborted, please try again later.',
+    FAILED_FALLBACK: 'Google Suite operation failed, continuing without Gmail data...',
+    AUTH_REQUIRED: '⚠️ Authentication required for Google Suite access.',
+  },
+  GENERAL: {
+    REQUEST_ABORTED: 'Request was aborted, please try again later.',
   },
 } as const;
 

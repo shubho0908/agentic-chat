@@ -5,7 +5,7 @@ import type { MemoryStatus } from '@/types/chat';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { extractTextFromMessage } from './message-helpers';
-import { executeWebSearchTool, executeYouTubeTool, executeDeepResearchTool } from './tool-executors';
+import { executeWebSearchTool, executeYouTubeTool, executeDeepResearchTool, executeGoogleSuiteTool } from './tool-executors';
 import {
   encodeMemoryStatus,
   encodeChatChunk,
@@ -14,6 +14,7 @@ import {
   shouldSendMemoryStatus,
 } from './streaming-helpers';
 import { incrementDeepResearchUsage } from '@/lib/deep-research-usage';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 
 export interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
@@ -38,12 +39,25 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
   return {
     async start(controller: ReadableStreamDefaultController) {
+      let streamClosed = false;
+      
+      const safeClose = () => {
+        if (!streamClosed) {
+          try {
+            controller.close();
+            streamClosed = true;
+          } catch {
+            // Already closed
+          }
+        }
+      };
+      
       try {
         if (abortSignal?.aborted) {
           try {
-            controller.enqueue(encodeChatChunk('Request was aborted, please try again later.'));
+            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
           } catch {}
-          controller.close();
+          safeClose();
           return;
         }
 
@@ -62,14 +76,23 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         if (activeTool === TOOL_IDS.YOUTUBE) {
           enhancedMessages = await executeYouTubeTool(textQuery, controller, enhancedMessages, abortSignal);
         }
+
+        if (activeTool === TOOL_IDS.GOOGLE_SUITE) {
+          if (!userId) {
+            try {
+              controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REQUIRED));
+            } catch {}
+          } else {
+            enhancedMessages = await executeGoogleSuiteTool(textQuery, controller, enhancedMessages, userId, apiKey, model, abortSignal);
+          }
+        }
         
         let researchFailed = false;
         if (deepResearchEnabled) {
           if (!userId) {
             console.error('[Stream Handler] ❌ SECURITY: No userId provided, rejecting deep research request');
-            const errorMessage = `⚠️ Authentication error: Unable to verify your identity for deep research. Please refresh and try again.\n\n`;
             try {
-              controller.enqueue(encodeChatChunk(errorMessage));
+              controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.AUTH_REQUIRED));
             } catch {
               console.error('[Stream Handler] Could not send auth error message (controller closed)');
             }
@@ -93,9 +116,8 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 researchFailed = result.failed;
               } catch (researchError) {
                 console.error('[Stream Handler] ❌ Deep research execution error:', researchError);
-                const errorMessage = `⚠️ Unable to complete deep research. Let me answer based on my knowledge instead.\n\n`;
                 try {
-                  controller.enqueue(encodeChatChunk(errorMessage));
+                  controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.EXECUTION_ERROR));
                 } catch {
                   console.error('[Stream Handler] Could not send error message (controller closed)');
                 }
@@ -103,17 +125,15 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               }
             } catch (error) {
               if (error instanceof Error && error.message.includes('limit reached')) {
-                const limitMessage = `⚠️ **Deep Research Limit Reached**\n\nYou have used all your deep research requests for this month.\n\n📅 Your limit will reset at the beginning of next month.\n\nI'll answer your question using standard processing instead.\n\n---\n\n`;
                 try {
-                  controller.enqueue(encodeChatChunk(limitMessage));
+                  controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.RATE_LIMIT));
                 } catch {
                   console.error('[Stream Handler] Could not send rate limit message (controller closed)');
                 }
               } else {
                 console.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
-                const errorMessage = `⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n`;
                 try {
-                  controller.enqueue(encodeChatChunk(errorMessage));
+                  controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.TECHNICAL_ERROR));
                 } catch {
                   console.error('[Stream Handler] Could not send error message (controller closed)');
                 }
@@ -124,18 +144,17 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         if (abortSignal?.aborted) {
           try {
-            controller.enqueue(encodeChatChunk('Request was aborted, please try again later.'));
+            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
           } catch {}
-          controller.close();
+          safeClose();
           return;
         }
         if (researchFailed) {
-          const errorMessage = "I encountered an issue while conducting deep research. Let me provide an answer based on my knowledge instead.\n\n";
           try {
-            controller.enqueue(encodeChatChunk(errorMessage));
+            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_FALLBACK));
           } catch {
             console.error('[Stream Handler] Could not send error message (controller closed)');
-            controller.close();
+            safeClose();
             return;
           }
         }
@@ -160,19 +179,17 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         try {
           controller.enqueue(encodeDone());
-          controller.close();
         } catch {
-          console.error('[Stream Handler] Could not close (already closed)');
+          console.error('[Stream Handler] Could not enqueue done (controller closed)');
         }
+        safeClose();
       } catch (error) {
         if (error instanceof Error && (error.message.includes('aborted by user') || abortSignal?.aborted)) {
           console.error('🛑 [Stream Handler] Request aborted, closing stream cleanly');
           try {
-            controller.enqueue(encodeChatChunk('Request was aborted, please try again later.'));
+            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
           } catch {}
-          try {
-            controller.close();
-          } catch {}
+          safeClose();
           return;
         }
 
@@ -182,7 +199,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           controller.enqueue(encodeError(message));
           controller.enqueue(encodeDone());
         } catch {}
-        controller.close();
+        safeClose();
       }
     },
   };

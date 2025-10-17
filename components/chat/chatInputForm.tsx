@@ -30,6 +30,7 @@ interface FormHandlers {
   onMemoryToggle: (enabled: boolean) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
+  onAuthRequired?: () => void;
 }
 
 interface ChatInputFormProps {
@@ -61,7 +62,7 @@ export function ChatInputForm({
   centered = false,
 }: ChatInputFormProps) {
   const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onFilesSelected, onStop } = handlers;
+  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
 
   const textareaClassName = centered
     ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
@@ -110,6 +111,7 @@ export function ChatInputForm({
                 onMemoryToggle={onMemoryToggle}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
+                onAuthRequired={onAuthRequired}
               />
             </div>
             <ActionButtons

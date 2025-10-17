@@ -112,6 +112,17 @@ export function setDeepResearchEnabled(enabled: boolean): boolean {
   }
 }
 
+export function clearUserStorage(): void {
+  if (!isLocalStorageAvailable()) return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
+    localStorage.removeItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED);
+  } catch (error) {
+    console.error('Error clearing user storage:', error);
+  }
+}
+
 export { STORAGE_KEYS };
 
 

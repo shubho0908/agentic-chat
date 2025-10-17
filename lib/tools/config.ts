@@ -1,10 +1,13 @@
 import { Youtube, Telescope, Globe } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+import { GoogleIcon } from "@/components/icons/google-icon";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',
   YOUTUBE: 'youtube',
   DEEP_RESEARCH: 'deep_research',
+  GOOGLE_SUITE: 'google_suite',
 } as const;
 
 export type ToolId = typeof TOOL_IDS[keyof typeof TOOL_IDS];
@@ -13,7 +16,7 @@ export interface ToolConfig {
   id: ToolId;
   name: string;
   description: string;
-  icon: LucideIcon;
+  icon: LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
   inputPrefix?: string;
   gradientColors: {
     from: string;
@@ -62,6 +65,19 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
       to: '#6e70db',
     },
     iconColorClass: 'text-black dark:text-white',
+  },
+  [TOOL_IDS.GOOGLE_SUITE]: {
+    id: TOOL_IDS.GOOGLE_SUITE,
+    name: 'Google Suite',
+    description: 'Access Gmail and Google services',
+    icon: GoogleIcon,
+    inputPrefix: 'Gmail request: ',
+    gradientColors: {
+      from: '#4285F4',
+      via: '#DB4437',
+      to: '#F4B400',
+    },
+    iconColorClass: 'text-blue-600',
   },
 };
 

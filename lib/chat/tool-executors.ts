@@ -2,9 +2,10 @@ import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
-import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
-import type { DeepResearchProgress } from '@/types/tools';
-import { mapYouTubeStatus, mapDeepResearchStatus } from '@/lib/tools/status-mapping';
+import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
+import type { DeepResearchProgress, GoogleSuiteProgress } from '@/types/tools';
+import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 
 export async function executeWebSearchTool(
   textQuery: string,
@@ -18,7 +19,7 @@ export async function executeWebSearchTool(
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('Search was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
       } catch {}
       return messages;
     }
@@ -70,7 +71,7 @@ export async function executeWebSearchTool(
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('Search was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
       } catch {}
       return messages;
     }
@@ -79,7 +80,7 @@ export async function executeWebSearchTool(
       controller.enqueue(encodeToolProgress(
         TOOL_IDS.WEB_SEARCH,
         'completed',
-        'Search failed, continuing without web results...'
+        TOOL_ERROR_MESSAGES.WEB_SEARCH.FAILED_FALLBACK
       ));
     } catch {}
     
@@ -94,11 +95,12 @@ export async function executeYouTubeTool(
   abortSignal?: AbortSignal
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  let streamClosed = false;
   
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('YouTube analysis was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
       } catch {}
       return messages;
     }
@@ -109,7 +111,13 @@ export async function executeYouTubeTool(
       language: 'en',
     };
     
-    controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
+    try {
+      controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
+    } catch {
+      console.error('[YouTube Tool] Failed to enqueue tool call (controller closed)');
+      streamClosed = true;
+      return messages;
+    }
     
     const { executeYouTubeTool } = await import('@/lib/tools/youtube/youtube');
     
@@ -121,6 +129,8 @@ export async function executeYouTubeTool(
       textQuery,
       abortSignal,
       (progress) => {
+        if (streamClosed || abortSignal?.aborted) return;
+        
         if (progress.details?.videoCount) {
           totalVideos = progress.details.videoCount;
         }
@@ -128,27 +138,35 @@ export async function executeYouTubeTool(
           processedCount = progress.details.processedCount;
         }
         
-        const mappedStatus = mapYouTubeStatus(progress.status, {
-          step: progress.details?.step,
-          processedCount,
-          videoCount: totalVideos,
-        });
+        const mappedStatus = mapYouTubeStatus(progress.status);
         
-        controller.enqueue(encodeToolProgress(
-          TOOL_IDS.YOUTUBE,
-          mappedStatus,
-          progress.message,
-          {
-            ...progress.details,
-            processedCount,
-            videoCount: totalVideos
-          }
-        ));
-        setImmediate(() => {});
+        try {
+          controller.enqueue(encodeToolProgress(
+            TOOL_IDS.YOUTUBE,
+            mappedStatus,
+            progress.message,
+            {
+              ...progress.details,
+              processedCount,
+              videoCount: totalVideos
+            }
+          ));
+          setImmediate(() => {});
+        } catch {
+          console.error('[YouTube Tool] Failed to enqueue progress (controller closed)');
+          streamClosed = true;
+        }
       }
     );
     
-    controller.enqueue(encodeToolResult(TOOL_IDS.YOUTUBE, toolCallId, youtubeResults));
+    if (!streamClosed && !abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeToolResult(TOOL_IDS.YOUTUBE, toolCallId, youtubeResults));
+      } catch {
+        console.error('[YouTube Tool] Failed to enqueue result (controller closed)');
+        streamClosed = true;
+      }
+    }
     
     const youtubeContext = `\n\n## YouTube Video Context\n\n${youtubeResults}\n${YOUTUBE_ANALYSIS_INSTRUCTIONS}`;
     
@@ -158,16 +176,20 @@ export async function executeYouTubeTool(
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('YouTube analysis was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
       } catch {}
       return messages;
     }
     
-    controller.enqueue(encodeToolProgress(
-      TOOL_IDS.YOUTUBE,
-      'completed',
-      'YouTube processing failed, continuing without video data...'
-    ));
+    try {
+      controller.enqueue(encodeToolProgress(
+        TOOL_IDS.YOUTUBE,
+        'completed',
+        TOOL_ERROR_MESSAGES.YOUTUBE.FAILED_FALLBACK
+      ));
+    } catch {
+      console.error('[YouTube Tool] Failed to send error progress (controller closed)');
+    }
     return messages;
   }
 }
@@ -187,7 +209,7 @@ export async function executeDeepResearchTool(
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
       return { messages, failed: false };
     }
@@ -236,7 +258,7 @@ export async function executeDeepResearchTool(
     if (streamClosed || abortSignal?.aborted) {
       if (abortSignal?.aborted) {
         try {
-          controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+          controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
         } catch {}
       }
       return { messages, failed: false };
@@ -285,7 +307,7 @@ export async function executeDeepResearchTool(
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
       return { messages, failed: false };
     }
@@ -294,17 +316,100 @@ export async function executeDeepResearchTool(
       controller.enqueue(encodeToolProgress(
         TOOL_IDS.DEEP_RESEARCH,
         'completed',
-        'Research failed'
+        TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED
       ));
       
       controller.enqueue(encodeToolResult(
         TOOL_IDS.DEEP_RESEARCH, 
         toolCallId, 
-        'Deep research encountered an error and could not be completed. Please try again or rephrase your query.'
+        TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_DETAILED
       ));
     } catch {
       console.error('[Tool Executor] Failed to send error to UI (controller closed)');
     }
     return { messages, failed: true };
+  }
+}
+
+export async function executeGoogleSuiteTool(
+  textQuery: string,
+  controller: ReadableStreamDefaultController,
+  messages: Message[],
+  userId: string,
+  apiKey: string,
+  model: string,
+  abortSignal?: AbortSignal
+): Promise<Message[]> {
+  const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  let streamClosed = false;
+
+  try {
+    if (abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
+      } catch {}
+      return messages;
+    }
+
+    controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
+
+    const { executeGoogleSuiteTool } = await import('@/lib/tools/google-suite/gmail');
+
+    const gmailResults = await executeGoogleSuiteTool(
+      textQuery,
+      userId,
+      apiKey,
+      model,
+      (progress: GoogleSuiteProgress) => {
+        if (streamClosed || abortSignal?.aborted) return;
+
+        const mappedStatus = mapGoogleSuiteStatus(progress.status);
+
+        try {
+          controller.enqueue(encodeToolProgress(
+            TOOL_IDS.GOOGLE_SUITE,
+            mappedStatus,
+            progress.message,
+            progress.details
+          ));
+          setImmediate(() => {});
+        } catch {
+          console.error('[Google Suite Tool] Failed to enqueue progress (controller closed)');
+          streamClosed = true;
+        }
+      },
+      abortSignal
+    );
+
+    if (!streamClosed && !abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeToolResult(TOOL_IDS.GOOGLE_SUITE, toolCallId, gmailResults));
+      } catch {
+        streamClosed = true;
+      }
+    }
+
+    const gmailContext = `\n\n## Google Suite Context\n\n${gmailResults}\n${GMAIL_ANALYSIS_INSTRUCTIONS}`;
+
+    return injectContextToMessages(messages, gmailContext);
+  } catch (error) {
+    console.error('[Chat API] Google Suite tool error:', error);
+
+    if (error instanceof Error && error.message.includes('aborted')) {
+      try {
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
+      } catch {}
+      return messages;
+    }
+
+    try {
+      controller.enqueue(encodeToolProgress(
+        TOOL_IDS.GOOGLE_SUITE,
+        'completed',
+        TOOL_ERROR_MESSAGES.GOOGLE_SUITE.FAILED_FALLBACK
+      ));
+    } catch {}
+
+    return messages;
   }
 }

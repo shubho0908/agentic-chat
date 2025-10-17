@@ -9,6 +9,7 @@ import { ChatContainer } from "@/components/chat/chatContainer";
 import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
+import { AuthModal } from "@/components/authModal";
 import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
@@ -47,6 +48,7 @@ export default function ChatPage({
   });
   
   const [isConfigured, setIsConfigured] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
   const { data: session, isPending } = useSession();
 
@@ -99,7 +101,6 @@ export default function ChatPage({
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
-    // Send follow-up question with current tool settings
     await sendMessage({ 
       content: question, 
       session, 
@@ -163,7 +164,9 @@ export default function ChatPage({
         onSend={handleSendMessage}
         isLoading={isLoading}
         onStop={stopGeneration}
+        onAuthRequired={() => setShowAuthModal(true)}
       />
+      <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
   );
 }

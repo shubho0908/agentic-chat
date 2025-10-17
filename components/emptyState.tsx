@@ -5,14 +5,16 @@ interface EmptyStateProps {
   onSend: MessageSendHandler;
   isLoading: boolean;
   onStop: () => void;
+  onAuthRequired?: () => void;
 }
 
-export function EmptyState({ onSend, isLoading, onStop }: EmptyStateProps) {
+export function EmptyState({ onSend, isLoading, onStop, onAuthRequired }: EmptyStateProps) {
   return (
     <ChatInput
       onSend={onSend}
       isLoading={isLoading}
       onStop={onStop}
+      onAuthRequired={onAuthRequired}
       centered
     />
   );

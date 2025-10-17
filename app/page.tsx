@@ -89,6 +89,7 @@ function HomeContent() {
           onSend={handleSendMessage}
           isLoading={isLoading}
           onStop={stopGeneration}
+          onAuthRequired={() => setShowAuthModal(true)}
         />
         <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
       </>
@@ -115,6 +116,7 @@ function HomeContent() {
         onSend={handleSendMessage}
         isLoading={isLoading}
         onStop={stopGeneration}
+        onAuthRequired={() => setShowAuthModal(true)}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
