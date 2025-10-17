@@ -2,7 +2,9 @@
   "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' npm run build",
   "functions": {
     "app/**/*.{ts,tsx}": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 2048,
+      "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     }
   }
 }

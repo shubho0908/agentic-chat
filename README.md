@@ -21,9 +21,25 @@ A production-ready conversational AI system built with Next.js 15, React 19, and
 - Context windows up to 1M+ tokens
 
 ### 🛠️ Specialized Tools
-- **Web Search** - Real-time internet search via Tavily
-- **YouTube Analysis** - Transcript extraction, chapter parsing, and video insights
-- **Deep Research** - Multi-step autonomous research with usage limits (3/month)
+
+#### Web Search
+- Real-time internet search via Tavily API
+
+#### YouTube Analysis
+- **Multi-source Transcription**
+  - Primary: YouTube caption extraction with auto-language detection
+  - Fallback: Audio extraction + Groq Whisper transcription (when captions unavailable)
+- **Intelligent Search**
+  - Query YouTube directly without URLs
+  - Automatic relevance ranking and selection
+  - Process multiple videos simultaneously
+- **Rich Metadata Extraction**
+  - Video titles, channels, durations, view counts
+  - Chapter detection from descriptions
+  - Timestamp-annotated transcripts
+
+#### Deep Research
+- Multi-step autonomous research with usage limits (3/month)
 
 ### 📚 Document Intelligence (RAG)
 - **Multi-format Support**: PDF, DOCX, DOC, TXT, XLS, XLSX, CSV, MD

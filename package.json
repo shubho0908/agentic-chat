@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "test:doc": "tsx scripts/test-doc-loader.ts",
-    "test:mime": "tsx scripts/test-mime-detection.ts"
+    "test:mime": "tsx scripts/test-mime-detection.ts",
+    "test:youtube-audio": "tsx scripts/test-youtube-audio.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.42",
@@ -48,6 +49,7 @@
     "cmdk": "^1.1.1",
     "cohere-ai": "^7.19.0",
     "date-fns": "^4.1.0",
+    "ffmpeg-static": "^5.2.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.22",
     "googleapis": "^162.0.0",
@@ -74,6 +76,7 @@
     "word-extractor": "^1.0.4",
     "xlsx": "^0.18.5",
     "youtube-transcript": "^1.2.1",
+    "yt-dlp-wrap": "^2.3.12",
     "zod": "^4.1.11"
   },
   "devDependencies": {
@@ -85,6 +88,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/word-extractor": "^1.0.6",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
     "prisma": "^6.16.3",

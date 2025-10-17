@@ -210,7 +210,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                   />
                 )}
                 
-                {totalVersions > 0 && (
+                {isUser && totalVersions > 0 && (
                   <VersionNavigator
                     currentVersion={currentVersion}
                     totalVersions={totalVersions}

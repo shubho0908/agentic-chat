@@ -7,7 +7,6 @@ import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { buildCacheQuery } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
-import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
 
@@ -55,23 +54,12 @@ export async function handleRegenerateResponse(
   let messageMetadata: MessageMetadata | undefined;
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
-  
-  const newRegeneratedVersion = createNewVersion(
-    assistantMessage.versions || [],
-    "assistant",
-    "",
-    `temp-regen-${Date.now()}`,
-    model,
-    []
-  );
-  
-  const updatedVersions = buildUpdatedVersionsList(assistantMessage, newRegeneratedVersion, true);
 
   const updatedAssistantMessage: Message = {
     ...assistantMessage,
     content: "",
-    versions: updatedVersions,
     toolActivities: [],
+    metadata: undefined,
   };
 
   const messagesUpToAssistant = messages.slice(0, messageIndex);
@@ -212,20 +200,15 @@ export async function handleRegenerateResponse(
       }
 
       if (conversationId && assistantMessage.id) {
-        const updatedMessage = await updateAssistantMessage(conversationId, assistantMessage.id, responseContent, messageMetadata);
+        await updateAssistantMessage(conversationId, assistantMessage.id, responseContent, messageMetadata);
         
-        if (updatedMessage?.id) {
-          const parentId = updatedMessage.parentMessageId || updatedMessage.id;
-          const versions = await fetchMessageVersions(conversationId, parentId);
-          
-          onMessagesUpdate((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessage.id || msg.id === updatedMessage.id
-                ? { ...updateMessageWithVersions(msg, updatedMessage.id, versions), metadata: messageMetadata }
-                : msg
-            )
-          );
-        }
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, metadata: messageMetadata }
+              : msg
+          )
+        );
         
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
