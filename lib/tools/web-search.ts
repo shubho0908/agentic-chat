@@ -19,14 +19,22 @@ export async function executeWebSearch(
   onProgress?: (progress: WebSearchProgress) => void,
   abortSignal?: AbortSignal
 ): Promise<string> {
-    const { query: rawQuery, maxResults = 5, searchDepth = 'advanced', includeAnswer = false } = input;
-
     if (!client) {
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.NOT_CONFIGURED;
     }
 
-    if (!rawQuery || typeof rawQuery !== 'string' || rawQuery.trim().length === 0) {
-      console.error('[Web Search] Invalid query: empty or not a string');
+    let validatedInput;
+    try {
+      validatedInput = webSearchParamsSchema.parse(input);
+    } catch (error) {
+      console.error('[Web Search] Validation error:', error);
+      return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search parameters');
+    }
+
+    const { query: rawQuery, maxResults, searchDepth, includeAnswer } = validatedInput;
+
+    if (!rawQuery || rawQuery.trim().length === 0) {
+      console.error('[Web Search] Invalid query: empty');
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Query is empty or invalid');
     }
 
@@ -50,7 +58,7 @@ export async function executeWebSearch(
       query = query.trim();
     }
 
-    const validatedMaxResults = Math.min(Math.max(maxResults, 1), 20);
+    const clampedMaxResults = Math.min(Math.max(maxResults, 1), 20);
 
     try {
       if (abortSignal?.aborted) {
@@ -67,8 +75,8 @@ export async function executeWebSearch(
 
       const response = await client.search({
         query,
-        max_results: validatedMaxResults,
-        search_depth: searchDepth as 'basic' | 'advanced',
+        max_results: clampedMaxResults,
+        search_depth: searchDepth,
         include_answer: includeAnswer,
         include_images: false,
         include_raw_content: false,
@@ -175,28 +183,25 @@ ${result.position}. ${result.title}
 
       return formattedOutput;
     } catch (error) {
-      console.error('[Web Search] Error:', error);
+      console.error('[Web Search] Error:', error instanceof Error ? error.message : String(error));
       
       if (error && typeof error === 'object') {
         const errorObj = error as Record<string, unknown>;
         if ('response' in errorObj) {
           const response = errorObj.response as Record<string, unknown> | undefined;
           console.error('[Web Search] API Response Status:', response?.status);
-          console.error('[Web Search] API Response:', response);
         }
         if ('request' in errorObj) {
           const request = errorObj.request as Record<string, unknown> | undefined;
-          console.error('[Web Search] Request details:', {
-            url: request?.url,
-            method: request?.method,
-          });
+          console.error('[Web Search] Request method:', request?.method);
         }
       }
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
-        console.error('[Web Search] Query that caused 400:', rawQuery);
+        const safePreview = typeof rawQuery === 'string' ? rawQuery.slice(0, 50) + '...' : '';
+        console.warn('[Web Search] 400 Bad Request. Query preview (truncated):', safePreview);
         return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search query. The query may be too complex or contain unsupported characters.');
       }
 

@@ -22,6 +22,25 @@ export function formatEmailDate(dateString: string): string {
 
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+
+  if (diffMs < 0) {
+    const isToday = date.toDateString() === now.toDateString();
+    if (isToday) return `Today at ${formatTime(date)}`;
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return `Tomorrow at ${formatTime(date)}`;
+    }
+
+    const sameYear = now.getFullYear() === date.getFullYear();
+    if (sameYear) {
+      return `${MONTHS[date.getMonth()]} ${date.getDate()} at ${formatTime(date)}`;
+    }
+
+    return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  }
+
   const diffMinutes = Math.floor(diffMs / 60000);
 
   if (diffMinutes < 1) return 'Just now';
@@ -37,7 +56,7 @@ export function formatEmailDate(dateString: string): string {
   }
 
   const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays < 7 && diffDays >= 0) {
+  if (diffDays < 7) {
     return `${DAYS[date.getDay()]} at ${formatTime(date)}`;
   }
 

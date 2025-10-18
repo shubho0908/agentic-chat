@@ -20,7 +20,7 @@ export function parseEmailContent(message: gmail_v1.Schema$Message): ParsedEmail
   
   const getBody = (part: gmail_v1.Schema$MessagePart): string => {
     if (part.body?.data) {
-      return Buffer.from(part.body.data, 'base64').toString('utf-8');
+      return Buffer.from(part.body.data, 'base64url').toString('utf-8');
     }
     
     if (part.parts) {
