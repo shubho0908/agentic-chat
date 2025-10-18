@@ -20,7 +20,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId } from "@/lib/tools/config";
+import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
@@ -48,7 +48,7 @@ export function ToolsMenu({
   onToolSelected,
   disabled,
   activeTool = null,
-  memoryEnabled = false,
+  memoryEnabled = true,
   onMemoryToggle,
   onFilesSelected,
   fileCount = 0,
@@ -288,7 +288,9 @@ export function ToolsMenu({
                       Integrated Apps
                     </p>
                   </div>
-                  {Object.values(AVAILABLE_TOOLS).map((tool) => {
+                  {Object.values(AVAILABLE_TOOLS)
+                    .filter((tool): tool is ToolConfig => tool !== undefined)
+                    .map((tool) => {
                     const ToolIcon = tool.icon;
                     const isActive = activeTool === tool.id;
                     const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;

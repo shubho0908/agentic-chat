@@ -1,8 +1,17 @@
-import { Mail, Clock, Search, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet } from "lucide-react";
+import { Mail, Clock, Search, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon } from "lucide-react";
 import { GoogleSuiteStatus } from "@/types/tools";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
+
+const SERVICE_BADGE_CLASSES: Record<string, string> = {
+  blue: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  green: 'bg-green-500/10 text-green-700 dark:text-green-300',
+  indigo: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+  purple: 'bg-purple-500/10 text-purple-700 dark:text-purple-300',
+  emerald: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  amber: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+};
 
 export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   const progress = memoryStatus.toolProgress;
@@ -19,6 +28,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     if (tool.startsWith('docs_')) return "Docs";
     if (tool.startsWith('calendar_')) return "Calendar";
     if (tool.startsWith('sheets_')) return "Sheets";
+    if (tool.startsWith('slides_')) return "Slides";
     
     return "Google Workspace";
   };
@@ -65,7 +75,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     return `${service}: ${action}`;
   };
 
-  const getServiceIcon = () => {
+  const getServiceIcon = (): LucideIcon => {
     if (!tool) return Mail;
     
     if (tool.startsWith('gmail_')) return Mail;
@@ -73,6 +83,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     if (tool.startsWith('docs_')) return FileText;
     if (tool.startsWith('calendar_')) return Calendar;
     if (tool.startsWith('sheets_')) return Sheet;
+    if (tool.startsWith('slides_')) return Presentation;
     
     return Mail;
   };
@@ -127,6 +138,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     if (tool.startsWith('docs_')) return "indigo";
     if (tool.startsWith('calendar_')) return "purple";
     if (tool.startsWith('sheets_')) return "emerald";
+    if (tool.startsWith('slides_')) return "amber";
     
     return "blue";
   };
@@ -151,7 +163,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
           <span className="text-foreground/40 font-mono text-[10px] select-none">
             └─
           </span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded bg-${serviceColor}-500/10 text-${serviceColor}-700 dark:text-${serviceColor}-300 font-mono`}>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${SERVICE_BADGE_CLASSES[serviceColor] || SERVICE_BADGE_CLASSES.blue}`}>
             {tool ? formatToolName(tool) : operation ? formatOperation(operation) : "Processing"}
           </span>
         </div>
