@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Brain, Paperclip, Info, Wand2 } from "lucide-react";
+import { Settings2, Brain, Paperclip, Info, Atom } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/con
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { useSession } from "@/lib/auth-client";
+import { GOOGLE_SUITE_SERVICES } from "@/components/icons/google-suite-icons";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -272,7 +273,7 @@ export function ToolsMenu({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
                   <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                    <Wand2 className="size-4 text-purple-600 dark:text-purple-400" />
+                    <Atom className="size-4 text-purple-400 dark:text-purple-300" />
                   </div>
                   <div className="flex flex-col gap-0.5 flex-1">
                     <span className="font-medium">AI Tools</span>
@@ -373,28 +374,27 @@ export function ToolsMenu({
                                         onClick={(e) => e.stopPropagation()}
                                       />
                                     </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs">
-                                      <div className="space-y-1">
-                                        <p className="font-medium">
-                                          {googleSuiteLoading ? (
-                                            "Checking authorization..."
-                                          ) : needsAuth ? (
-                                            "Authorization Required"
-                                          ) : (
-                                            "Authorized"
-                                          )}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {isNotAuthenticated ? (
-                                            "Please login to use this tool. Google Suite allows AI to interact with your Gmail - read, send, and manage emails."
-                                          ) : googleSuiteLoading ? (
-                                            "Please wait..."
-                                          ) : needsAuth ? (
-                                            "Click to authorize access to your Gmail account. This allows the AI to read, send, and manage your emails."
-                                          ) : (
-                                            "You have authorized Google Suite access. The AI can interact with your Gmail."
-                                          )}
-                                        </p>
+                                    <TooltipContent side="right" className="max-w-xs p-3">
+                                      <div className="space-y-2">
+                                        <p className="font-medium text-sm">Available Services</p>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          {GOOGLE_SUITE_SERVICES.map((service) => {
+                                            const ServiceIcon = service.icon;
+                                            return (
+                                              <div
+                                                key={service.name}
+                                                className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-accent/20 transition-colors cursor-pointer"
+                                              >
+                                                <div className="size-8 flex items-center justify-center">
+                                                  <ServiceIcon className="size-7" />
+                                                </div>
+                                                <span className="text-[10px] font-medium text-center">
+                                                  {service.name}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
                                       </div>
                                     </TooltipContent>
                                   </Tooltip>
