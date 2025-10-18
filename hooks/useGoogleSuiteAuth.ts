@@ -73,6 +73,11 @@ export function useGoogleSuiteAuth() {
         no_user_info: 'Failed to retrieve user information',
         processing_failed: 'An error occurred during authorization',
         access_denied: 'Authorization was denied',
+        invalid_state: 'Invalid authorization state',
+        missing_state: 'Authorization state expired or missing',
+        state_mismatch: 'Authorization state mismatch - possible security issue',
+        not_authenticated: 'Please sign in to authorize Google Suite',
+        user_mismatch: 'User session mismatch - please try again',
       };
       setError(errorMessages[reason] || `Authorization failed: ${reason}`);
       window.history.replaceState({}, '', window.location.pathname);

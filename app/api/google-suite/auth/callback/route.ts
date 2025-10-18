@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
+import { getAuthenticatedUser } from '@/lib/api-utils';
 import { GOOGLE_SUITE_PROVIDER_ID } from '@/lib/tools/google-suite/scopes';
 import { createOAuth2Client } from '@/lib/tools/google-suite/client';
 
@@ -26,7 +28,52 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userId = state;
+    // Parse state parameter (format: nonce:userId)
+    const stateParts = state.split(':');
+    if (stateParts.length !== 2) {
+      console.error('[Google Suite Callback] Invalid state format');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=invalid_state`
+      );
+    }
+
+    const [receivedNonce, stateUserId] = stateParts;
+
+    // Retrieve stored nonce from cookie
+    const storedNonce = request.cookies.get('gsuite_oauth_state')?.value;
+
+    if (!storedNonce) {
+      console.error('[Google Suite Callback] Missing OAuth state cookie');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=missing_state`
+      );
+    }
+
+    // Validate nonce matches (CSRF protection)
+    if (receivedNonce !== storedNonce) {
+      console.error('[Google Suite Callback] OAuth state mismatch - possible CSRF attack');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=state_mismatch`
+      );
+    }
+
+    // Verify user is still authenticated and matches state
+    const { user, error: authError } = await getAuthenticatedUser(await headers());
+    if (authError || !user) {
+      console.error('[Google Suite Callback] User not authenticated');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=not_authenticated`
+      );
+    }
+
+    if (user.id !== stateUserId) {
+      console.error('[Google Suite Callback] User ID mismatch - authenticated user does not match state');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=user_mismatch`
+      );
+    }
+
+    const userId = user.id;
 
     const oauth2Client = createOAuth2Client();
 
@@ -91,9 +138,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(
+    // Clear OAuth state cookie after successful validation and processing
+    const response = NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=success`
     );
+    response.cookies.delete('gsuite_oauth_state');
+    
+    return response;
   } catch (error) {
     console.error('[Google Suite Callback] Error:', error);
     return NextResponse.redirect(

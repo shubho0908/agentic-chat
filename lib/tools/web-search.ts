@@ -48,7 +48,6 @@ export async function executeWebSearch(
       }
       
       query = query.trim();
-      console.log(`[Web Search] Truncated query: "${query}"`);
     }
 
     const validatedMaxResults = Math.min(Math.max(maxResults, 1), 20);
