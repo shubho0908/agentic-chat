@@ -139,27 +139,13 @@ export async function incrementDeepResearchUsage(userId: string): Promise<DeepRe
 export async function decrementDeepResearchUsage(userId: string): Promise<DeepResearchUsageInfo> {
   const { year, month } = getCurrentMonthYear();
 
-  const existing = await prisma.deepResearchUsage.findUnique({
+  const result = await prisma.deepResearchUsage.updateMany({
     where: {
-      userId_year_month: {
-        userId,
-        year,
-        month,
-      },
-    },
-  });
-
-  if (!existing || existing.usageCount === 0) {
-    console.warn('[Deep Research Usage] Attempted to decrement usage when count is already 0');
-    return checkDeepResearchUsage(userId);
-  }
-
-  const updated = await prisma.deepResearchUsage.update({
-    where: {
-      userId_year_month: {
-        userId,
-        year,
-        month,
+      userId,
+      year,
+      month,
+      usageCount: {
+        gt: 0,
       },
     },
     data: {
@@ -168,6 +154,25 @@ export async function decrementDeepResearchUsage(userId: string): Promise<DeepRe
       },
     },
   });
+
+  if (result.count === 0) {
+    console.warn('[Deep Research Usage] Attempted to decrement usage when count is already 0 or record does not exist');
+    return checkDeepResearchUsage(userId);
+  }
+
+  const updated = await prisma.deepResearchUsage.findUnique({
+    where: {
+      userId_year_month: {
+        userId,
+        year,
+        month,
+      },
+    },
+  });
+
+  if (!updated) {
+    throw new Error('Failed to retrieve updated usage information after decrement');
+  }
 
   const remaining = Math.max(0, MONTHLY_LIMIT - updated.usageCount);
 

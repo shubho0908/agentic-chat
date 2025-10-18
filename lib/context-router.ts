@@ -236,11 +236,10 @@ export async function routeContext(
     const hasAnyAttachment = await hasAnyAttachments(conversationId);
     if (hasAnyAttachment) {
       metadata.skippedMemory = true;
-      return { context: '', metadata };
     }
   }
 
-  if (!memoryEnabled) {
+  if (!memoryEnabled || metadata.skippedMemory) {
     return { context: '', metadata };
   }
 
@@ -252,12 +251,6 @@ export async function routeContext(
     metadata.memoryCount = memoryMatches?.length || 0;
     metadata.routingDecision = RoutingDecision.MemoryOnly;
     return { context: memoryContext, metadata };
-  }
-
-  // If we reach here with no context found, update routing decision based on what was attempted
-  if (!memoryEnabled) {
-    metadata.routingDecision = RoutingDecision.MemoryOnly;
-    metadata.skippedMemory = true;
   }
 
   return { context: '', metadata };

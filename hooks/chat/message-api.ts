@@ -1,6 +1,7 @@
 import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
 import type { UpdateMessageResponse } from "@/types/chat";
+import { isSupportedForRAG } from "@/lib/rag/indexing/loader";
 
 interface SavedMessageWithAttachments {
   id: string;
@@ -66,7 +67,7 @@ export async function saveUserMessage(
     
     if (savedMessage.attachments && savedMessage.attachments.length > 0) {
       const documentAttachmentIds = savedMessage.attachments
-        .filter((att) => !att.fileType.startsWith('image/'))
+        .filter((att) => isSupportedForRAG(att.fileType))
         .map((att) => att.id);
       
       if (documentAttachmentIds.length > 0) {
@@ -142,7 +143,7 @@ export async function updateUserMessage(
     
     if (updatedMessage.attachments && updatedMessage.attachments.length > 0) {
       const documentAttachmentIds = updatedMessage.attachments
-        .filter((att) => att.id && !att.fileType.startsWith('image/'))
+        .filter((att) => att.id && isSupportedForRAG(att.fileType))
         .map((att) => att.id as string);
       
       if (documentAttachmentIds.length > 0) {
