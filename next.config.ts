@@ -26,6 +26,8 @@ const nextConfig: NextConfig = {
     'tiktoken',
     '@langchain/community',
     '@langchain/textsplitters',
+    '@prisma/client',
+    '@prisma/engines',
   ],
   webpack: (config, { isServer }) => {
     if (!isServer) {

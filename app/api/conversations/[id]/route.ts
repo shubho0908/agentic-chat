@@ -5,7 +5,7 @@ import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, err
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
-import type { Prisma } from '@/lib/generated/prisma';
+import type { Prisma } from '@prisma/client';
 
 interface MessageAttachment {
   id: string;

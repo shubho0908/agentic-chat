@@ -1,4 +1,4 @@
-import type { ProcessingStatus } from '@/lib/generated/prisma';
+import type { ProcessingStatus } from '@prisma/client';
 
 export interface AttachmentStatus {
   id: string;

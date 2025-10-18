@@ -7,7 +7,7 @@ import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { getAuthorizedAttachment } from '../auth/attachment';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
-import type { ProcessingStatus } from '@/lib/generated/prisma';
+import type { ProcessingStatus } from '@prisma/client';
 
 interface ProcessDocumentResult {
   success: boolean;

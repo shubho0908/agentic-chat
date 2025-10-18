@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import type { Message as PrismaMessage } from './generated/prisma';
+import type { Message as PrismaMessage } from '@prisma/client';
 
 export async function getNextSiblingIndex(parentMessageId: string): Promise<number> {
   const maxSibling = await prisma.message.aggregate({

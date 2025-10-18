@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { API_ERROR_MESSAGES } from '@/constants/errors';
 import { RAGError, RAGErrorCode } from '../common/errors';
-import type { Attachment, Message, Conversation } from '@/lib/generated/prisma';
+import type { Attachment, Message, Conversation } from '@prisma/client';
 
 interface AuthorizedAttachment extends Attachment {
   message: Message & {
