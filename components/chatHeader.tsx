@@ -34,7 +34,7 @@ export function ChatHeader({
   const { data: session, isPending } = useSession();
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white dark:bg-black/30 dark:backdrop-blur-md dark:backdrop-saturate-150 p-4 shadow-sm dark:shadow-xl border-b border-border/40 dark:border-white/20 md:left-auto md:top-4 md:right-4 md:bg-transparent md:backdrop-blur-none md:backdrop-saturate-100 md:p-0 md:shadow-none md:border-0">
+    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white dark:bg-black/30 p-4 shadow-sm dark:shadow-xl border-b border-border/40 dark:border-white/20 md:left-auto md:top-4 md:right-4 md:bg-transparent md:p-0 md:shadow-none md:border-0">
       {session && (
         <SidebarTrigger className="md:hidden" />
       )}

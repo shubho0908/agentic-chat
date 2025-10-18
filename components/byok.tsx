@@ -143,7 +143,7 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
           className={cn(
             "gap-2 rounded-xl transition-all",
             isConfigured
-              ? "bg-background/80 backdrop-blur-sm shadow-sm hover:shadow-md"
+              ? "shadow-sm hover:shadow-md"
               : "shadow-md hover:shadow-lg"
           )}
         >
