@@ -40,7 +40,6 @@ const CONTENT_TYPE_KEYWORDS: Record<keyof typeof RAG_CONFIG.chunking.sizeByType,
   doc: ['word', 'doc'],
   excel: ['spreadsheet', 'excel', 'xls'],
   csv: ['csv'],
-  markdown: ['markdown'],
   text: ['text'],
 };
 

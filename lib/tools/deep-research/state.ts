@@ -34,6 +34,13 @@ export const ResearchStateAnnotation = Annotation.Root({
   followUpQuestions: Annotation<string[]>,
   finalResponse: Annotation<string>,
   
+  // Context flags
+  hasDocuments: Annotation<boolean>,
+  attachmentIds: Annotation<string[]>,
+  imageContext: Annotation<string>,
+  hasImages: Annotation<boolean>,
+  documentContextForPlanning: Annotation<string>,
+  
   // Error handling
   error: Annotation<string | undefined>,
 });

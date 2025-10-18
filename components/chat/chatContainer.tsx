@@ -119,9 +119,7 @@ export function ChatContainer({
                 onSendMessage={onSendMessage}
                 isLastMessage={index === messages.length - 1}
                 isLoading={isLoading}
-                memoryStatus={
-                  index === messages.length - 1 ? memoryStatus : undefined
-                }
+                memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}
               />
             </div>
           ))}

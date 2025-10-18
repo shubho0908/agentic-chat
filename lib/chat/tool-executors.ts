@@ -6,6 +6,10 @@ import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS, GMAIL_
 import type { DeepResearchProgress } from '@/types/tools';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
+import { executeWebSearch } from '@/lib/tools/web-search';
+import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube/youtube';
+import { executeDeepResearch } from '@/lib/tools/deep-research';
+import { executeGoogleWorkspace } from '@/lib/tools/google-suite/executor';
 
 export async function executeWebSearchTool(
   textQuery: string,
@@ -31,8 +35,6 @@ export async function executeWebSearchTool(
     };
     
     controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
-    
-    const { executeWebSearch } = await import('@/lib/tools/web-search');
     
     const searchResults = await executeWebSearch(
       toolArgs,
@@ -119,12 +121,10 @@ export async function executeYouTubeTool(
       return messages;
     }
     
-    const { executeYouTubeTool } = await import('@/lib/tools/youtube/youtube');
-    
     let totalVideos = 0;
     let processedCount = 0;
     
-    const youtubeResults = await executeYouTubeTool(
+    const youtubeResults = await executeYouTubeToolCore(
       toolArgs,
       textQuery,
       abortSignal,
@@ -201,8 +201,13 @@ export async function executeDeepResearchTool(
   apiKey: string,
   model: string,
   forceDeepResearch: boolean = true,
-  abortSignal?: AbortSignal
-): Promise<{ messages: Message[]; failed: boolean }> {
+  abortSignal?: AbortSignal,
+  userId?: string,
+  conversationId?: string,
+  imageContext?: string,
+  attachmentIds?: string[],
+  documentContextForPlanning?: string
+): Promise<{ messages: Message[]; failed: boolean; skipped?: boolean }> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
   
@@ -211,13 +216,11 @@ export async function executeDeepResearchTool(
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: false };
     }
     
     controller.enqueue(encodeToolCall(TOOL_IDS.DEEP_RESEARCH, toolCallId, { query: textQuery }));
     setImmediate(() => {});
-    
-    const { executeDeepResearch } = await import('@/lib/tools/deep-research');
     
     const progressCallback = (progress: DeepResearchProgress) => {
       if (streamClosed || abortSignal?.aborted) {
@@ -253,6 +256,11 @@ export async function executeDeepResearchTool(
       onProgress: progressCallback,
       forceDeepResearch: forceDeepResearch,
       abortSignal,
+      userId,
+      conversationId,
+      imageContext,
+      attachmentIds,
+      documentContextForPlanning,
     });
     
     if (streamClosed || abortSignal?.aborted) {
@@ -261,7 +269,7 @@ export async function executeDeepResearchTool(
           controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
         } catch {}
       }
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: result.skipped };
     }
     
     try {
@@ -300,7 +308,7 @@ export async function executeDeepResearchTool(
     
     const researchContext = `\n\n## Deep Research Results\n\n${formattedResult}`;
     
-    return { messages: injectContextToMessages(messages, researchContext), failed: false };
+    return { messages: injectContextToMessages(messages, researchContext), failed: false, skipped: result.skipped };
   } catch (error) {
     console.error('[Chat API] Deep research error:', error);
     streamClosed = true;
@@ -309,7 +317,7 @@ export async function executeDeepResearchTool(
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: false };
     }
     
     try {
@@ -327,7 +335,7 @@ export async function executeDeepResearchTool(
     } catch {
       console.error('[Tool Executor] Failed to send error to UI (controller closed)');
     }
-    return { messages, failed: true };
+    return { messages, failed: true, skipped: false };
   }
 }
 
@@ -352,8 +360,6 @@ export async function executeGoogleSuiteTool(
     }
 
     controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
-
-    const { executeGoogleWorkspace } = await import('@/lib/tools/google-suite/executor');
 
     const workspaceResults = await executeGoogleWorkspace({
       query: textQuery,

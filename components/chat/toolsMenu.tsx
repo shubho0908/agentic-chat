@@ -285,7 +285,7 @@ export function ToolsMenu({
                 <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1">
                   <div className="px-2 py-1.5 mb-1">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Available Tools
+                      Integrated Apps
                     </p>
                   </div>
                   {Object.values(AVAILABLE_TOOLS).map((tool) => {
@@ -376,7 +376,7 @@ export function ToolsMenu({
                                     </TooltipTrigger>
                                     <TooltipContent side="right" className="max-w-xs p-3">
                                       <div className="space-y-2">
-                                        <p className="font-medium text-sm">Available Services</p>
+                                        <p className="font-medium text-sm">Available Tools</p>
                                         <div className="grid grid-cols-3 gap-2">
                                           {GOOGLE_SUITE_SERVICES.map((service) => {
                                             const ServiceIcon = service.icon;

@@ -266,22 +266,29 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   }
 
   if (prevProps.isLastMessage && nextProps.isLastMessage) {
-    const prevCitations = prevProps.memoryStatus?.toolProgress?.details?.citations;
-    const nextCitations = nextProps.memoryStatus?.toolProgress?.details?.citations;
+    const prevStatus = prevProps.memoryStatus;
+    const nextStatus = nextProps.memoryStatus;
     
-    if (prevCitations?.length !== nextCitations?.length) {
+    if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
+        prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
+        prevStatus?.hasImages !== nextStatus?.hasImages ||
+        prevStatus?.memoryCount !== nextStatus?.memoryCount ||
+        prevStatus?.documentCount !== nextStatus?.documentCount ||
+        prevStatus?.imageCount !== nextStatus?.imageCount ||
+        prevStatus?.routingDecision !== nextStatus?.routingDecision) {
       return false;
     }
     
-    const prevProgress = prevProps.memoryStatus?.toolProgress;
-    const nextProgress = nextProps.memoryStatus?.toolProgress;
+    const prevProgress = prevStatus?.toolProgress;
+    const nextProgress = nextStatus?.toolProgress;
     
     if (prevProgress?.status !== nextProgress?.status ||
         prevProgress?.message !== nextProgress?.message ||
         prevProgress?.details?.status !== nextProgress?.details?.status ||
         prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
         prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
-        prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length) {
+        prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
+        prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
       return false;
     }
   }

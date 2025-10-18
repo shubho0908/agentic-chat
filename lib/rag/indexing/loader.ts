@@ -158,8 +158,6 @@ export async function loadDocument(
     } else if (
       lowerFileType.startsWith('text/') || 
       lowerFileType === 'text/plain' ||
-      lowerFileType === 'text/markdown' ||
-      lowerFileName.endsWith('.md') ||
       lowerFileName.endsWith('.txt')
     ) {
       const content = await fileBlob.text();
@@ -173,7 +171,7 @@ export async function loadDocument(
         } as Document,
       ];
 
-      const fileType = lowerFileType.includes('markdown') || lowerFileName.endsWith('.md') ? 'markdown' : 'text';
+      const fileType = 'text';
 
       return {
         success: true,

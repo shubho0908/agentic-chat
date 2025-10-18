@@ -21,7 +21,6 @@ export const SUPPORTED_DOCUMENT_EXTENSIONS = [
   '.xls',
   '.xlsx',
   '.csv',
-  '.md',
 ] as const;
 
 export const SUPPORTED_IMAGE_EXTENSIONS_DISPLAY = SUPPORTED_IMAGE_EXTENSIONS.join(', ');

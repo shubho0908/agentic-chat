@@ -1,4 +1,4 @@
-import { ClipboardEvent, useState, useEffect } from "react";
+import { ClipboardEvent, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
@@ -55,16 +55,20 @@ export function ChatInput({
     return getStoredDeepResearchEnabled();
   });
 
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage();
+  const prevSessionRef = useRef<typeof session | undefined>(undefined);
 
   useEffect(() => {
-    if (!session) {
-      setActiveTool(null);
-      setMemoryEnabled(false);
-      setDeepResearchEnabled(false);
+    if (!isPending && prevSessionRef.current !== undefined) {
+      if (prevSessionRef.current && !session) {
+        setActiveTool(null);
+        setMemoryEnabled(false);
+        setDeepResearchEnabled(false);
+      }
     }
-  }, [session]);
+    prevSessionRef.current = session;
+  }, [session, isPending]);
 
   useEffect(() => {
     if (activeTool) {

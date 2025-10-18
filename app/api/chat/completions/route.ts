@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
         deepResearchEnabled,
         abortSignal: abortController.signal,
         userId: authUser.id,
+        conversationId,
       });
       const readableStream = new ReadableStream({
         ...streamHandler,

@@ -18,7 +18,27 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   const isGoogleSuite = isToolActive(memoryStatus, TOOL_IDS.GOOGLE_SUITE);
 
   if (isDeepResearch) {
-    return <DeepResearchContext memoryStatus={memoryStatus} />;
+    const progress = memoryStatus.toolProgress;
+    const status = progress?.details?.status || progress?.status;
+    
+    const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', 'analyzing_documents'];
+    const isPreparingDocs = status && docPrepStatuses.includes(status);
+    const isProcessingImages = status === 'processing_images';
+    
+    const researchHasStarted = status && !['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'].includes(status);
+    
+    if (researchHasStarted) {
+      return <DeepResearchContext memoryStatus={memoryStatus} />;
+    }
+    if (isPreparingDocs && memoryStatus.hasDocuments) {
+      return <DefaultRAGContext memoryStatus={memoryStatus} />;
+    }
+    if (isProcessingImages && memoryStatus.hasImages) {
+      return <VisionOnlyContext imageCount={memoryStatus.imageCount} />;
+    }
+    if (memoryStatus.hasDocuments || memoryStatus.hasImages) {
+      return <DefaultRAGContext memoryStatus={memoryStatus} />;
+    }
   }
 
   if (

@@ -19,7 +19,6 @@ export const RAG_CONFIG = {
       doc: { size: 800, overlap: 100 },
       excel: { size: 1200, overlap: 150 },
       csv: { size: 1000, overlap: 120 },
-      markdown: { size: 700, overlap: 100 },
       text: { size: 600, overlap: 80 },
     },
     adjustmentByFileSize: {
@@ -52,7 +51,6 @@ export const RAG_CONFIG = {
     'application/vnd.ms-excel',
     'text/csv',
     'text/plain',
-    'text/markdown',
   ],
 };
 

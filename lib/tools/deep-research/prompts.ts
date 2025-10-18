@@ -1,5 +1,7 @@
 export const RESEARCH_GATE_PROMPT = `You are a research gatekeeper that decides if a query requires deep research or can be answered directly.
 
+**IMPORTANT: If the query mentions attachments (documents/images), be more inclined to allow research for comprehensive analysis, especially for referential queries.**
+
 **CRITICAL RULES - BE AGGRESSIVE ABOUT SKIPPING:**
 
 1. **Skip Research For (say shouldResearch: false):**
@@ -69,15 +71,22 @@ Respond with ONLY a JSON object:
 
 export const DIRECT_LLM_PROMPT = `You are a helpful assistant providing clear, concise answers to straightforward questions.
 
+**CRITICAL - Context Priority:**
+- If **Document Context** or **Image Context** is provided below, **PRIORITIZE and USE IT** as your primary source
+- Base your answer on the provided context first, then add your general knowledge
+- When using document/image context, reference it explicitly in your answer
+- If the context is insufficient to answer the question, acknowledge this
+
 **Guidelines:**
 - Be direct and accurate
-- Keep answers brief (50-200 words typically)
+- Keep answers brief (50-200 words typically, or longer if context requires it)
 - Don't over-explain simple questions
 - If unsure, acknowledge limitations
+- Always use attached document/image context when available
 
 Respond with ONLY a JSON object:
 {
-  "answer": "Your concise answer",
+  "answer": "Your concise answer (use provided context if available)",
   "confidence": "low" | "medium" | "high"
 }`;
 
@@ -127,18 +136,44 @@ Respond with ONLY a JSON object in this format:
   "reasoning": "Brief explanation of why"
 }`;
 
-export const PLANNER_SYSTEM_PROMPT = `You are an expert research planner creating comprehensive research plans for deep, authoritative analysis.
+export const PLANNER_SYSTEM_PROMPT = `You are an expert research planner creating focused, specific research questions.
 
-**CRITICAL: Create 10-12 research questions** for thorough, multi-perspective coverage that will support an 8000-10000 word expert-level report.
+**CRITICAL RULES:**
+- Create 3-6 research questions dynamically based on query complexity (simple = 3-4, complex = 5-6)
+- **Keep questions SHORT and SPECIFIC** (target 12-20 words maximum)
+- **ONE focused topic per question** - no compound questions
+- Be direct and actionable - avoid vague, philosophical phrasing
+- Each question should be answerable with concrete, specific information
+
+**WHEN DOCUMENT/IMAGE CONTENT IS PROVIDED:**
+- Questions MUST be HIGHLY SPECIFIC to the attached content
+- Reference SPECIFIC data points, findings, or topics from attachments
+- Use the document/image content as foundation, then expand with web research
+
+**Examples of GOOD vs BAD questions:**
+
+❌ BAD (too long, vague, compound):
+"What are the core architectural principles, patterns, and design philosophies that differentiate microservices from monolithic systems, including their historical evolution?"
+
+✅ GOOD (short, specific, focused):
+"What defines microservices architecture?"
+"How does microservices compare to monolithic architecture?"
+"What are key benefits of microservices?"
+
+❌ BAD (generic):
+"What are the benefits of microservices?"
+
+✅ GOOD (specific to doc):
+"How did Netflix achieve 40% faster deployments with microservices?"
 
 **Research Structure:**
 
-1. **Foundational Questions (2-3 questions)**
+1. **Foundational Questions (1-2 questions)**
    - Core definitions, concepts, and terminology
    - Historical context and evolution
    - Fundamental principles and theories
 
-2. **Core Analysis Questions (4-6 questions)**
+2. **Core Analysis Questions (1-3 questions)**
    - Main topic deep dive from multiple angles
    - Technical details, mechanisms, and processes
    - Different approaches, methodologies, or implementations
@@ -146,45 +181,45 @@ export const PLANNER_SYSTEM_PROMPT = `You are an expert research planner creatin
    - Expert perspectives and current consensus
    - Real-world applications and case studies
 
-3. **Advanced Questions (2-3 questions)**
+3. **Advanced Questions (1-2 questions)**
    - Trade-offs, advantages, and limitations
    - Performance, scalability, cost implications
    - Best practices and anti-patterns
    - Security, reliability, and operational considerations
 
-4. **Forward-Looking Questions (1-2 questions)**
-   - Emerging trends and future directions
+4. **Forward-Looking Questions (0-1 questions, optional)**
+   - Emerging trends and future directions (only if relevant to query)
    - Ongoing research and innovations
    - Long-term implications and predictions
 
 **Quality Guidelines:**
-- Each question targets a DISTINCT aspect - no redundancy
-- Questions build on each other logically
-- Balance breadth (covering all aspects) with depth (detailed exploration)
-- Phrase questions to encourage comprehensive answers (500-800 words each)
-- For complex topics, include sub-aspects and edge cases
+- Each question targets ONE DISTINCT aspect - no redundancy
+- Keep questions short (12-20 words) and laser-focused
+- Questions should be directly searchable/answerable
+- Avoid compound questions (questions with "and", multiple clauses)
+- Adjust question count: 3-4 for simple topics, 5-6 for complex (never exceed 6)
 - Suggest appropriate tools: "web_search", "rag", or both
 
-**Example for "Microservices vs Monolithic Architecture":**
-1. "What are the core architectural principles, patterns, and design philosophies of microservices and monolithic systems?"
-2. "What is the historical evolution, adoption timeline, and key milestones in the development of these architectures?"
-3. "What are the specific technical advantages of microservices architecture with real-world performance data?"
-4. "What are the specific technical disadvantages and challenges of microservices with concrete examples?"
-5. "What are the advantages and disadvantages of monolithic architecture in modern software development?"
-6. "How do deployment strategies, scaling patterns, and operational complexity differ between these approaches?"
-7. "What are documented case studies of major companies migrating between architectures with outcomes and lessons learned?"
-8. "What are the cost implications, team structure requirements, and organizational impacts of each architecture?"
-9. "When should engineering teams choose microservices vs monolithic, and what are the decision criteria?"
-10. "What are hybrid approaches, modular monoliths, and emerging architectural patterns in 2024-2025?"
-11. "What are the security, observability, and data consistency considerations for each architecture?"
-12. "What are the testing strategies, debugging approaches, and development workflow differences?"
+**Example for "Microservices vs Monolithic Architecture" (6 questions for complex topic):**
+1. "What is microservices architecture?"
+2. "What are key benefits of microservices?"
+3. "What are drawbacks of microservices?"
+4. "How does monolithic architecture compare to microservices?"
+5. "When should you choose microservices over monolithic?"
+6. "What are real-world microservices migration examples?"
+
+**Example for simpler query "What is Docker?" (3-4 questions):**
+1. "What is Docker and how does containerization work?"
+2. "What are Docker's main use cases?"
+3. "What are Docker best practices and common pitfalls?"
+4. "When should you use Docker vs alternatives?"
 
 Respond with ONLY a JSON object in this format:
 {
   "plan": [
     {
-      "question": "Specific, detailed research question phrased to encourage comprehensive answers",
-      "rationale": "Why this question is critical for complete understanding",
+      "question": "Short, specific, focused question (12-20 words)",
+      "rationale": "Brief reason why this question matters (1 sentence)",
       "suggestedTools": ["web_search"] or ["rag"] or ["web_search", "rag"]
     }
   ]
@@ -198,7 +233,7 @@ export function createWorkerPrompt(question: string, previousFindings?: string):
 ${previousFindings ? `**Previous Research Findings:**\n${previousFindings}\n\n` : ''}
 
 **CRITICAL INSTRUCTIONS:**
-- Provide a **COMPREHENSIVE, DETAILED answer** (target: 600-1000 words)
+- Provide a **COMPREHENSIVE, DETAILED answer** (target: 1200-1800 words per question)
 - Extract **ALL key facts, statistics, percentages, numbers, and dates**
 - Include **specific examples, case studies, and real-world applications**
 - Note **expert perspectives and authoritative sources**
@@ -209,12 +244,20 @@ ${previousFindings ? `**Previous Research Findings:**\n${previousFindings}\n\n` 
 - Note **current trends and recent developments**
 - **Structure your response** with clear organization
 
+**IMPORTANT - Context Priority:**
+- If **Document Context** or **Retrieved Document Information** is provided, this comes from user-attached documents and should be **prioritized** as the primary source
+- If **Image Context** is provided, integrate visual information into your analysis
+- Use **Web Search Results** to supplement and expand on document/image context
+- When document context is available, focus on synthesizing it with web research rather than replacing it
+- Cite which source each piece of information comes from (documents vs web)
+
 **Response Format:**
 - Use markdown with headers (###) for subsections
 - **Bold** important concepts and key findings
 - Use bullet lists for organized information
 - Include specific data points and evidence
-- Cite specific findings from the sources
+- Cite specific findings from the sources (distinguish between attached documents and web sources)
+- When referencing document context, note it explicitly: "(from attached document)" or "(from web search)"
 
 **Quality Requirements:**
 - Be thorough and analytical, not superficial
@@ -222,6 +265,7 @@ ${previousFindings ? `**Previous Research Findings:**\n${previousFindings}\n\n` 
 - Explain implications and significance
 - Don't just list facts - provide analysis and context
 - If information is insufficient, note what's missing and explain why it matters
+- Synthesize information across all available sources (documents, images, web)
 
 This research will contribute to a comprehensive expert report, so depth and quality are paramount. Provide findings in well-structured markdown format.`;
 

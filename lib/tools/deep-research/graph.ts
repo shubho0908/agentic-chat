@@ -13,6 +13,8 @@ export interface GraphConfig {
   onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string }) => void;
   forceDeepResearch?: boolean;
   abortSignal?: AbortSignal;
+  userId?: string;
+  conversationId?: string;
 }
 
 function shouldProceedAfterGate(state: ResearchState): string {

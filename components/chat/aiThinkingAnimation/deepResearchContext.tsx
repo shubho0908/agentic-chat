@@ -1,5 +1,3 @@
-import { Eye } from "lucide-react";
-import { ContextItem } from "./contextItem";
 import { DeepResearchTimeline } from "./deepResearchTimeline";
 import type { MemoryStatusProps } from "./types";
 
@@ -12,23 +10,12 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
     return null;
   }
 
-  const visionContextItem = memoryStatus.hasImages ? (
-    <ContextItem
-      icon={Eye}
-      label={
-        memoryStatus.imageCount > 0
-          ? `${memoryStatus.imageCount} ${memoryStatus.imageCount === 1 ? "image" : "images"}`
-          : "Vision analysis"
-      }
-      treeSymbol="├─"
-      iconClassName="text-cyan-600 dark:text-cyan-400"
-      labelClassName="text-cyan-700 dark:text-cyan-300"
-    />
-  ) : null;
-
   const timelineSteps = [];
   
-  const isAfterGate = progressStatus && !['gate_check', 'gate_skip'].includes(progressStatus);
+  const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'];
+  const isDocPrep = progressStatus && docPrepStatuses.includes(progressStatus);
+  
+  const isAfterGate = progressStatus && !['gate_check', 'gate_skip', ...docPrepStatuses].includes(progressStatus);
   timelineSteps.push({
     label: 'Query Analysis',
     status: (isAfterGate ? 'completed' : progressStatus === 'gate_check' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
@@ -36,7 +23,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   });
 
   const hasResearchPlan = details?.researchPlan && details.researchPlan.length > 0;
-  const isAfterPlanning = progressStatus && !['gate_check', 'planning'].includes(progressStatus);
+  const isAfterPlanning = progressStatus && !['gate_check', 'planning', ...docPrepStatuses].includes(progressStatus);
   const researchPlanLength = details?.researchPlan?.length ?? 0;
   timelineSteps.push({
     label: hasResearchPlan ? `Planning (${researchPlanLength} tasks)` : 'Planning',
@@ -49,7 +36,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   const currentTaskIndex = details?.currentTaskIndex ?? 0;
   const totalTasks = details?.totalTasks ?? details?.researchPlan?.length ?? 0;
   const completedTasks = details?.completedTasks || [];
-  const isAfterResearch = completedTasks.length > 0 && !isResearching;
+  const isAfterResearch = completedTasks.length > 0 && !isResearching && !isDocPrep;
   
   timelineSteps.push({
     label: isResearching 
@@ -62,7 +49,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
     data: { completedTasks },
   });
 
-  const isAfterAggregating = progressStatus && !['gate_check', 'planning', 'task_start', 'task_progress', 'task_complete', 'aggregating'].includes(progressStatus);
+  const isAfterAggregating = progressStatus && !['gate_check', 'planning', 'task_start', 'task_progress', 'task_complete', 'aggregating', ...docPrepStatuses].includes(progressStatus);
   timelineSteps.push({
     label: 'Synthesizing',
     status: (isAfterAggregating ? 'completed' : progressStatus === 'aggregating' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
@@ -70,7 +57,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   });
 
   const hasEvaluation = details?.evaluationResult;
-  const isAfterEvaluation = hasEvaluation && progressStatus !== 'evaluating' && progressStatus !== 'retrying';
+  const isAfterEvaluation = hasEvaluation && progressStatus !== 'evaluating' && progressStatus !== 'retrying' && !isDocPrep;
   const evaluationScore = details?.evaluationResult?.score;
   const evaluationMeetsStandards = details?.evaluationResult?.meetsStandards;
   timelineSteps.push({
@@ -107,14 +94,11 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   }
 
   return (
-    <>
-      {visionContextItem}
-      <DeepResearchTimeline 
-        steps={timelineSteps} 
-        currentTaskIndex={currentTaskIndex}
-        totalTasks={totalTasks}
-        currentTaskDetails={currentTaskDetails}
-      />
-    </>
+    <DeepResearchTimeline 
+      steps={timelineSteps} 
+      currentTaskIndex={currentTaskIndex}
+      totalTasks={totalTasks}
+      currentTaskDetails={currentTaskDetails}
+    />
   );
 }

@@ -32,10 +32,6 @@ export const ourFileRouter = {
       maxFileSize: "4MB",
       maxFileCount: MAX_FILE_ATTACHMENTS,
     },
-    "text/markdown": {
-      maxFileSize: "4MB",
-      maxFileCount: MAX_FILE_ATTACHMENTS,
-    },
   })
     .input(z.object({}))
     .middleware(async ({ files }) => {

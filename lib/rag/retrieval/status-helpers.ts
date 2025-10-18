@@ -16,7 +16,13 @@ export function extractIds<T extends { id: string }>(items: T[]): string[] {
 }
 
 export function isDocumentAttachment(fileType: string): boolean {
-  return !fileType.startsWith('image/');
+  return fileType.startsWith('text/') || 
+    fileType === 'application/pdf' ||
+    fileType.includes('wordprocessingml') ||
+    fileType.includes('spreadsheetml') ||
+    fileType.includes('msword') ||
+    fileType.includes('ms-excel') ||
+    fileType.includes('officedocument');
 }
 
 export function filterDocumentAttachments<T extends { fileType: string }>(
