@@ -113,6 +113,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 } catch {
                   console.error('[Stream Handler] Could not send limit error message (controller closed)');
                 }
+                try {
+                  controller.enqueue(encodeDone());
+                } catch {
+                  console.error('[Stream Handler] Could not enqueue done (controller closed)');
+                }
+                safeClose();
                 return;
               }
             } catch (usageCheckError) {
@@ -122,6 +128,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               } catch {
                 console.error('[Stream Handler] Could not send error message (controller closed)');
               }
+              try {
+                controller.enqueue(encodeDone());
+              } catch {
+                console.error('[Stream Handler] Could not enqueue done (controller closed)');
+              }
+              safeClose();
               return;
             }
             

@@ -66,8 +66,8 @@ async function hasDocumentAttachments(conversationId: string): Promise<boolean> 
     });
 
     const allAttachments = messages.flatMap(m => m.attachments);
-    const documentAttachments = allAttachments.filter(att => 
-      filterDocumentAttachments([att]).length > 0 || isSupportedDocumentExtension(att.fileName)
+    const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
+      att.fileName && isSupportedDocumentExtension(att.fileName)
     );
     
     return documentAttachments.length > 0;
