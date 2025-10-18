@@ -1,7 +1,7 @@
 import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
 import type { UpdateMessageResponse } from "@/types/chat";
-import { isSupportedForRAG } from "@/lib/rag/indexing/loader";
+import { isSupportedForRAG } from "@/lib/rag/utils";
 
 interface SavedMessageWithAttachments {
   id: string;

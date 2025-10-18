@@ -1,7 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { loadDocument, isSupportedForRAG } from './loader';
+import { loadDocument } from './loader';
+import { isSupportedForRAG } from '../utils';
 import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { getAuthorizedAttachment } from '../auth/attachment';

@@ -2,7 +2,6 @@ import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { CSVLoader } from '@langchain/community/document_loaders/fs/csv';
 import type { Document } from '@langchain/core/documents';
-import { RAG_CONFIG } from '../config';
 import { read, utils } from 'xlsx';
 import WordExtractor from 'word-extractor';
 
@@ -189,14 +188,4 @@ export async function loadDocument(
   } catch (error) {
     throw new Error(`Error loading document: ${error instanceof Error ? error.message : String(error)}`);
   }
-}
-
-export function getSupportedFileTypes(): string[] {
-  return RAG_CONFIG.supportedFileTypes;
-}
-
-export function isSupportedForRAG(fileType: string): boolean {
-  return RAG_CONFIG.supportedFileTypes.some(type => 
-    fileType.toLowerCase().includes(type.toLowerCase())
-  ) || fileType.startsWith('text/');
 }
