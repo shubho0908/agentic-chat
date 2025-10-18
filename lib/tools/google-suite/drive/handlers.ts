@@ -1,10 +1,11 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import { formatFileSize, formatMimeType, formatDate } from '../utils';
+import type { DriveSearchArgs, DriveListFolderArgs, DriveReadFileArgs, DriveCreateFileArgs, DriveCreateFolderArgs, DriveDeleteArgs, DriveMoveArgs, DriveCopyArgs, DriveShareArgs } from '../types/handler-types';
+import { formatFileSize, formatMimeType, formatDate } from '@/utils/google/formatters';
 
 export async function handleDriveSearch(
   context: ToolHandlerContext,
-  args: { query: string; maxResults?: number }
+  args: DriveSearchArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -30,14 +31,13 @@ export async function handleDriveSearch(
 
 export async function handleDriveListFolder(
   context: ToolHandlerContext,
-  args: { folderId?: string; folderName?: string; maxResults?: number }
+  args: DriveListFolderArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
   let targetFolderId = args.folderId;
   
   if (!targetFolderId && args.folderName) {
-    // Escape single quotes in folder name to prevent query syntax errors
     const escapedFolderName = args.folderName.replace(/'/g, "\\'");
     const searchResponse = await drive.files.list({
       q: `name='${escapedFolderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -109,7 +109,7 @@ export async function handleDriveListFolder(
 
 export async function handleDriveReadFile(
   context: ToolHandlerContext,
-  args: { fileId: string; mimeType?: string }
+  args: DriveReadFileArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -124,14 +124,12 @@ export async function handleDriveReadFile(
   const isGoogleDoc = fileMimeType.startsWith('application/vnd.google-apps.');
   
   if (isGoogleDoc) {
-    // Use export for Google Workspace documents (Docs, Sheets, Slides, etc.)
     const response = await drive.files.export({
       fileId: args.fileId,
       mimeType: args.mimeType || 'text/plain',
     }, { responseType: 'text' });
     return response.data as string;
   } else {
-    // Use get with alt=media for regular uploaded files (PDFs, images, etc.)
     const response = await drive.files.get({
       fileId: args.fileId,
       alt: 'media',
@@ -143,7 +141,7 @@ export async function handleDriveReadFile(
 
 export async function handleDriveCreateFile(
   context: ToolHandlerContext,
-  args: { name: string; content: string; mimeType?: string; folderId?: string }
+  args: DriveCreateFileArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -173,7 +171,7 @@ export async function handleDriveCreateFile(
 
 export async function handleDriveCreateFolder(
   context: ToolHandlerContext,
-  args: { name: string; parentFolderId?: string }
+  args: DriveCreateFolderArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -199,7 +197,7 @@ export async function handleDriveCreateFolder(
 
 export async function handleDriveDelete(
   context: ToolHandlerContext,
-  args: { fileIds: string[] }
+  args: DriveDeleteArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -217,7 +215,7 @@ export async function handleDriveDelete(
 
 export async function handleDriveMove(
   context: ToolHandlerContext,
-  args: { fileId: string; targetFolderId: string }
+  args: DriveMoveArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -251,7 +249,7 @@ export async function handleDriveMove(
 
 export async function handleDriveCopy(
   context: ToolHandlerContext,
-  args: { fileId: string; newName?: string; targetFolderId?: string }
+  args: DriveCopyArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
@@ -279,7 +277,7 @@ export async function handleDriveCopy(
 
 export async function handleDriveShare(
   context: ToolHandlerContext,
-  args: { fileId: string; email?: string; role?: string; sendNotification?: boolean }
+  args: DriveShareArgs
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   

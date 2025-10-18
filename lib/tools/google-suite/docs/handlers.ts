@@ -1,9 +1,10 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
+import type { DocsCreateArgs, DocsReadArgs, DocsAppendArgs, DocsReplaceArgs } from '../types/handler-types';
 
 export async function handleDocsCreate(
   context: ToolHandlerContext,
-  args: { title: string; content?: string }
+  args: DocsCreateArgs
 ): Promise<string> {
   const docs = google.docs({ version: 'v1', auth: context.oauth2Client });
   
@@ -37,7 +38,7 @@ export async function handleDocsCreate(
 
 export async function handleDocsRead(
   context: ToolHandlerContext,
-  args: { documentId: string }
+  args: DocsReadArgs
 ): Promise<string> {
   const docs = google.docs({ version: 'v1', auth: context.oauth2Client });
   
@@ -56,7 +57,7 @@ export async function handleDocsRead(
 
 export async function handleDocsAppend(
   context: ToolHandlerContext,
-  args: { documentId: string; text: string }
+  args: DocsAppendArgs
 ): Promise<string> {
   const docs = google.docs({ version: 'v1', auth: context.oauth2Client });
   
@@ -79,7 +80,7 @@ export async function handleDocsAppend(
 
 export async function handleDocsReplace(
   context: ToolHandlerContext,
-  args: { documentId: string; findText: string; replaceText: string }
+  args: DocsReplaceArgs
 ): Promise<string> {
   const docs = google.docs({ version: 'v1', auth: context.oauth2Client });
   

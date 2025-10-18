@@ -1,7 +1,8 @@
 import { LucideIcon } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 
 interface ContextItemProps {
-  icon: LucideIcon;
+  icon: LucideIcon | ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
   treeSymbol: "├─" | "└─";
   note?: string;

@@ -1,8 +1,11 @@
-import { Mail, Clock, Search, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt } from "lucide-react";
 import { GoogleSuiteStatus } from "@/types/tools";
+import { GoogleIcon } from "@/components/icons/google-icon";
+import { getToolDisplayName } from "@/utils/google/tool-names";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
+import type { ComponentType, SVGProps } from "react";
 
 const SERVICE_BADGE_CLASSES: Record<string, string> = {
   blue: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
@@ -38,23 +41,23 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     
     switch (status) {
       case GoogleSuiteStatus.INITIALIZING:
-        return `Connecting to ${serviceName}`;
+        return `Connecting to Google Workspace`;
       case GoogleSuiteStatus.ANALYZING:
-        return "Analyzing request";
+        return "Planning workspace operation";
       case GoogleSuiteStatus.EXECUTING:
         if (tool) {
-          return `${formatToolName(tool)}`;
+          return getToolDisplayName(tool);
         }
         if (operation) {
-          return `${formatOperation(operation)}`;
+          return formatOperation(operation);
         }
-        return "Executing operation";
+        return progress?.message || "Processing request";
       case GoogleSuiteStatus.COMPLETED:
-        return `${serviceName} operation completed`;
+        return `Workspace task completed`;
       case GoogleSuiteStatus.AUTH_REQUIRED:
-        return "Authorization required";
+        return "Google authorization required";
       default:
-        return progress?.message || `${serviceName} access`;
+        return progress?.message || `Accessing ${serviceName}`;
     }
   };
 
@@ -63,16 +66,6 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
       .split("_")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
-  };
-
-  const formatToolName = (toolName: string): string => {
-    const parts = toolName.split("_");
-    const service = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-    const action = parts.slice(1).map(word => 
-      word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(" ");
-    
-    return `${service}: ${action}`;
   };
 
   const getServiceIcon = (): LucideIcon => {
@@ -88,12 +81,12 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
     return Mail;
   };
 
-  const getStatusIcon = () => {
+  const getStatusIcon = (): LucideIcon | ComponentType<SVGProps<SVGSVGElement>> => {
     switch (status) {
       case GoogleSuiteStatus.INITIALIZING:
-        return Clock;
+        return GoogleIcon;
       case GoogleSuiteStatus.ANALYZING:
-        return Search;
+        return ChartGantt;
       case GoogleSuiteStatus.EXECUTING:
         return getServiceIcon();
       case GoogleSuiteStatus.COMPLETED:
@@ -101,18 +94,22 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
       case GoogleSuiteStatus.AUTH_REQUIRED:
         return AlertCircle;
       default:
-        return getServiceIcon();
+        return GoogleIcon;
     }
   };
 
   const getIconColorClass = (): string => {
     switch (status) {
+      case GoogleSuiteStatus.INITIALIZING:
+        return "text-foreground";
+      case GoogleSuiteStatus.ANALYZING:
+        return "text-foreground";
       case GoogleSuiteStatus.AUTH_REQUIRED:
         return "text-amber-600 dark:text-amber-400";
       case GoogleSuiteStatus.COMPLETED:
         return "text-green-600 dark:text-green-400";
       default:
-        return "text-blue-600 dark:text-blue-400";
+        return "text-foreground";
     }
   };
 
@@ -164,7 +161,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
             └─
           </span>
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${SERVICE_BADGE_CLASSES[serviceColor] || SERVICE_BADGE_CLASSES.blue}`}>
-            {tool ? formatToolName(tool) : operation ? formatOperation(operation) : "Processing"}
+            {tool ? getToolDisplayName(tool) : operation ? formatOperation(operation) : "Processing"}
           </span>
         </div>
       )}

@@ -31,13 +31,13 @@ export const DRIVE_TOOLS: ChatCompletionTool[] = [
     type: 'function',
     function: {
       name: 'drive_list_folder',
-      description: 'List all files and subfolders inside a specific Google Drive folder. Use this when user asks for folder contents.',
+      description: 'List all files and subfolders inside a specific Google Drive folder. Use this when user asks for folder contents. Either folderId OR folderName must be provided.',
       parameters: {
         type: 'object',
         properties: {
           folderId: {
             type: 'string',
-            description: 'The folder ID. Can be extracted from folder URL (e.g., from https://drive.google.com/drive/folders/FOLDER_ID). If not provided, folderName must be specified.',
+            description: 'The folder ID. Can be extracted from folder URL (e.g., from https://drive.google.com/drive/folders/FOLDER_ID). Preferred over folderName if both are available.',
             minLength: 1,
           },
           folderName: {
@@ -53,10 +53,6 @@ export const DRIVE_TOOLS: ChatCompletionTool[] = [
             maximum: 100,
           },
         },
-        oneOf: [
-          { required: ['folderId'] },
-          { required: ['folderName'] }
-        ],
         additionalProperties: false,
       },
     },

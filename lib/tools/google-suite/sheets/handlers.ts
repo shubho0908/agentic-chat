@@ -1,9 +1,10 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
+import type { SheetsCreateArgs, SheetsReadArgs, SheetsWriteArgs, SheetsAppendArgs, SheetsClearArgs } from '../types/handler-types';
 
 export async function handleSheetsCreate(
   context: ToolHandlerContext,
-  args: { title: string }
+  args: SheetsCreateArgs
 ): Promise<string> {
   const sheets = google.sheets({ version: 'v4', auth: context.oauth2Client });
   
@@ -21,7 +22,7 @@ export async function handleSheetsCreate(
 
 export async function handleSheetsRead(
   context: ToolHandlerContext,
-  args: { spreadsheetId: string; range: string }
+  args: SheetsReadArgs
 ): Promise<string> {
   const sheets = google.sheets({ version: 'v4', auth: context.oauth2Client });
   
@@ -40,7 +41,7 @@ export async function handleSheetsRead(
 
 export async function handleSheetsWrite(
   context: ToolHandlerContext,
-  args: { spreadsheetId: string; range: string; values: string[][] }
+  args: SheetsWriteArgs
 ): Promise<string> {
   const sheets = google.sheets({ version: 'v4', auth: context.oauth2Client });
   
@@ -56,7 +57,7 @@ export async function handleSheetsWrite(
 
 export async function handleSheetsAppend(
   context: ToolHandlerContext,
-  args: { spreadsheetId: string; range: string; values: string[][] }
+  args: SheetsAppendArgs
 ): Promise<string> {
   const sheets = google.sheets({ version: 'v4', auth: context.oauth2Client });
   
@@ -73,7 +74,7 @@ export async function handleSheetsAppend(
 
 export async function handleSheetsClear(
   context: ToolHandlerContext,
-  args: { spreadsheetId: string; range: string }
+  args: SheetsClearArgs
 ): Promise<string> {
   const sheets = google.sheets({ version: 'v4', auth: context.oauth2Client });
   

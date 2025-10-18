@@ -1,10 +1,11 @@
 import { google, type gmail_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import { parseEmailContent } from '../utils';
+import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
+import { parseEmailContent } from '@/utils/google/email';
 
 export async function handleGmailSearch(
   context: ToolHandlerContext,
-  args: { query: string; maxResults?: number }
+  args: GmailSearchArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -43,7 +44,7 @@ export async function handleGmailSearch(
 
 export async function handleGmailRead(
   context: ToolHandlerContext,
-  args: { messageId: string }
+  args: GmailReadArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -69,7 +70,7 @@ ${content.body}`;
 
 export async function handleGmailSend(
   context: ToolHandlerContext,
-  args: { to: string; subject: string; body: string; cc?: string; bcc?: string }
+  args: GmailSendArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -99,7 +100,7 @@ export async function handleGmailSend(
 
 export async function handleGmailReply(
   context: ToolHandlerContext,
-  args: { messageId: string; body: string; replyAll?: boolean }
+  args: GmailReplyArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -152,7 +153,7 @@ export async function handleGmailReply(
 
 export async function handleGmailDelete(
   context: ToolHandlerContext,
-  args: { messageIds: string[] }
+  args: GmailDeleteArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -167,7 +168,7 @@ export async function handleGmailDelete(
 
 export async function handleGmailModify(
   context: ToolHandlerContext,
-  args: { messageIds: string[]; addLabels?: string[]; removeLabels?: string[] }
+  args: GmailModifyArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
@@ -233,7 +234,7 @@ export async function handleGmailModify(
 
 export async function handleGmailGetAttachments(
   context: ToolHandlerContext,
-  args: { messageId: string }
+  args: GmailGetAttachmentsArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   

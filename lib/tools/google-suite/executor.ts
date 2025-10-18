@@ -2,7 +2,43 @@ import OpenAI from 'openai';
 import { GOOGLE_WORKSPACE_TOOLS } from '@/lib/tools/google-suite/definitions';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient } from '@/lib/tools/google-suite/client';
+import { getToolDisplayName } from '@/utils/google/tool-names';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
+import type {
+  HandlerArgs,
+  GmailSearchArgs,
+  GmailReadArgs,
+  GmailSendArgs,
+  GmailReplyArgs,
+  GmailDeleteArgs,
+  GmailModifyArgs,
+  GmailGetAttachmentsArgs,
+  DriveSearchArgs,
+  DriveListFolderArgs,
+  DriveReadFileArgs,
+  DriveCreateFileArgs,
+  DriveCreateFolderArgs,
+  DriveDeleteArgs,
+  DriveMoveArgs,
+  DriveCopyArgs,
+  DriveShareArgs,
+  DocsCreateArgs,
+  DocsReadArgs,
+  DocsAppendArgs,
+  DocsReplaceArgs,
+  CalendarListEventsArgs,
+  CalendarCreateEventArgs,
+  CalendarUpdateEventArgs,
+  CalendarDeleteEventArgs,
+  SheetsCreateArgs,
+  SheetsReadArgs,
+  SheetsWriteArgs,
+  SheetsAppendArgs,
+  SheetsClearArgs,
+  SlidesCreateArgs,
+  SlidesReadArgs,
+  SlidesAddSlideArgs,
+} from '@/lib/tools/google-suite/types/handler-types';
 import {
   handleGmailSearch,
   handleGmailRead,
@@ -61,15 +97,88 @@ export interface GoogleWorkspaceExecutorOptions {
   abortSignal?: AbortSignal;
 }
 
+async function executeToolCall(
+  context: ToolHandlerContext,
+  functionName: string,
+  args: HandlerArgs
+): Promise<string> {
+  switch (functionName) {
+    case 'gmail_search':
+      return await handleGmailSearch(context, args as GmailSearchArgs);
+    case 'gmail_read':
+      return await handleGmailRead(context, args as GmailReadArgs);
+    case 'gmail_send':
+      return await handleGmailSend(context, args as GmailSendArgs);
+    case 'gmail_reply':
+      return await handleGmailReply(context, args as GmailReplyArgs);
+    case 'gmail_delete':
+      return await handleGmailDelete(context, args as GmailDeleteArgs);
+    case 'gmail_modify':
+      return await handleGmailModify(context, args as GmailModifyArgs);
+    case 'gmail_get_attachments':
+      return await handleGmailGetAttachments(context, args as GmailGetAttachmentsArgs);
+    case 'drive_search':
+      return await handleDriveSearch(context, args as DriveSearchArgs);
+    case 'drive_list_folder':
+      return await handleDriveListFolder(context, args as DriveListFolderArgs);
+    case 'drive_read_file':
+      return await handleDriveReadFile(context, args as DriveReadFileArgs);
+    case 'drive_create_file':
+      return await handleDriveCreateFile(context, args as DriveCreateFileArgs);
+    case 'drive_create_folder':
+      return await handleDriveCreateFolder(context, args as DriveCreateFolderArgs);
+    case 'drive_delete':
+      return await handleDriveDelete(context, args as DriveDeleteArgs);
+    case 'drive_move':
+      return await handleDriveMove(context, args as DriveMoveArgs);
+    case 'drive_copy':
+      return await handleDriveCopy(context, args as DriveCopyArgs);
+    case 'drive_share':
+      return await handleDriveShare(context, args as DriveShareArgs);
+    case 'docs_create':
+      return await handleDocsCreate(context, args as DocsCreateArgs);
+    case 'docs_read':
+      return await handleDocsRead(context, args as DocsReadArgs);
+    case 'docs_append':
+      return await handleDocsAppend(context, args as DocsAppendArgs);
+    case 'docs_replace':
+      return await handleDocsReplace(context, args as DocsReplaceArgs);
+    case 'calendar_list_events':
+      return await handleCalendarListEvents(context, args as CalendarListEventsArgs);
+    case 'calendar_create_event':
+      return await handleCalendarCreateEvent(context, args as CalendarCreateEventArgs);
+    case 'calendar_update_event':
+      return await handleCalendarUpdateEvent(context, args as CalendarUpdateEventArgs);
+    case 'calendar_delete_event':
+      return await handleCalendarDeleteEvent(context, args as CalendarDeleteEventArgs);
+    case 'sheets_create':
+      return await handleSheetsCreate(context, args as SheetsCreateArgs);
+    case 'sheets_read':
+      return await handleSheetsRead(context, args as SheetsReadArgs);
+    case 'sheets_write':
+      return await handleSheetsWrite(context, args as SheetsWriteArgs);
+    case 'sheets_append':
+      return await handleSheetsAppend(context, args as SheetsAppendArgs);
+    case 'sheets_clear':
+      return await handleSheetsClear(context, args as SheetsClearArgs);
+    case 'slides_create':
+      return await handleSlidesCreate(context, args as SlidesCreateArgs);
+    case 'slides_read':
+      return await handleSlidesRead(context, args as SlidesReadArgs);
+    case 'slides_add_slide':
+      return await handleSlidesAddSlide(context, args as SlidesAddSlideArgs);
+    default:
+      throw new Error(`Unknown tool: ${functionName}`);
+  }
+}
+
 export async function executeGoogleWorkspace(
   options: GoogleWorkspaceExecutorOptions
 ): Promise<string> {
   const { query, userId, apiKey, model, onProgress, abortSignal } = options;
 
   try {
-    if (abortSignal?.aborted) {
-      throw new Error('Operation aborted by user');
-    }
+    if (abortSignal?.aborted) throw new Error('Operation aborted by user');
 
     onProgress?.({
       status: 'initializing',
@@ -78,167 +187,114 @@ export async function executeGoogleWorkspace(
 
     const { oauth2Client } = await createGoogleSuiteClient(userId);
     const context: ToolHandlerContext = { userId, oauth2Client };
-
-    if (abortSignal?.aborted) {
-      throw new Error('Operation aborted by user');
-    }
-
-    onProgress?.({
-      status: 'analyzing',
-      message: 'Analyzing your request...',
-    });
-
     const openai = new OpenAI({ apiKey });
 
-    const completion = await openai.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: GOOGLE_WORKSPACE_SYSTEM_PROMPT,
-        },
-        { role: 'user', content: query },
-      ],
-      tools: GOOGLE_WORKSPACE_TOOLS,
-      tool_choice: 'auto',
-    });
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
+      { role: 'user', content: query },
+    ];
 
-    const message = completion.choices[0]?.message;
-    if (!message?.tool_calls || message.tool_calls.length === 0) {
-      return message?.content || 'Unable to determine appropriate action for your request.';
+    const MAX_ITERATIONS = 20;
+    let consecutiveErrors = 0;
+    let finalResponse = '';
+    let taskCount = 0;
+
+    for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+      if (abortSignal?.aborted) throw new Error('Operation aborted by user');
+
+      const completion = await openai.chat.completions.create({
+        model,
+        messages,
+        tools: GOOGLE_WORKSPACE_TOOLS,
+        tool_choice: 'auto',
+      });
+
+      const message = completion.choices[0]?.message;
+      if (!message) throw new Error('No response from AI');
+
+      if (!message.tool_calls?.length) {
+        finalResponse = message.content || 'Task completed successfully.';
+        onProgress?.({
+          status: 'completed',
+          message: `Task completed (${taskCount} actions executed)`,
+        });
+        break;
+      }
+
+      messages.push({
+        role: 'assistant',
+        content: message.content,
+        tool_calls: message.tool_calls,
+      });
+
+      const toolResults = await Promise.all(
+        message.tool_calls.map(async (toolCall) => {
+          if (toolCall.type !== 'function') {
+            return { tool_call_id: toolCall.id, content: 'Invalid tool call type' };
+          }
+
+          const functionName = toolCall.function.name;
+          let args: HandlerArgs;
+          
+          try {
+            args = JSON.parse(toolCall.function.arguments) as HandlerArgs;
+          } catch {
+            return {
+              tool_call_id: toolCall.id,
+              content: 'Error: Invalid JSON arguments',
+            };
+          }
+
+          taskCount++;
+          onProgress?.({
+            status: 'executing',
+            message: `${getToolDisplayName(functionName)}...`,
+            details: { tool: functionName, iteration, step: taskCount },
+          });
+
+          try {
+            const result = await executeToolCall(context, functionName, args);
+            consecutiveErrors = 0;
+            return { tool_call_id: toolCall.id, content: result };
+          } catch (error) {
+            consecutiveErrors++;
+            return {
+              tool_call_id: toolCall.id,
+              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            };
+          }
+        })
+      );
+
+      if (consecutiveErrors >= 3) {
+        return 'Multiple consecutive errors occurred. Please check your request and try again.';
+      }
+
+      toolResults.forEach((result) => {
+        messages.push({
+          role: 'tool',
+          tool_call_id: result.tool_call_id,
+          content: result.content,
+        });
+      });
+
+      if (iteration >= 1) {
+        messages.push({
+          role: 'user',
+          content: `✓ Step ${taskCount} complete. VALIDATION: Analyze the result above and:\n1. Extract any IDs, links, or data needed for remaining steps\n2. Decide: Execute next step OR finish if task is complete\n\nReminder: Continue until ALL parts of the original request are satisfied.`,
+        });
+      }
+
+      if (messages.length > 40) {
+        const systemMsg = messages[0];
+        const userMsg = messages[1];
+        const recentMessages = messages.slice(-35);
+        messages.length = 0;
+        messages.push(systemMsg!, userMsg!, ...recentMessages);
+      }
     }
 
-    if (abortSignal?.aborted) {
-      throw new Error('Operation aborted by user');
-    }
-
-    const toolCall = message.tool_calls[0];
-    if (toolCall.type !== 'function') {
-      return 'Invalid tool call type';
-    }
-    const functionName = toolCall.function.name;
-    const args = JSON.parse(toolCall.function.arguments);
-
-    onProgress?.({
-      status: 'executing',
-      message: `Executing: ${functionName.replace(/_/g, ' ')}...`,
-      details: { tool: functionName },
-    });
-
-    let result: string;
-
-    switch (functionName) {
-      case 'gmail_search':
-        result = await handleGmailSearch(context, args);
-        break;
-      case 'gmail_read':
-        result = await handleGmailRead(context, args);
-        break;
-      case 'gmail_send':
-        result = await handleGmailSend(context, args);
-        break;
-      case 'gmail_reply':
-        result = await handleGmailReply(context, args);
-        break;
-      case 'gmail_delete':
-        result = await handleGmailDelete(context, args);
-        break;
-      case 'gmail_modify':
-        result = await handleGmailModify(context, args);
-        break;
-      case 'gmail_get_attachments':
-        result = await handleGmailGetAttachments(context, args);
-        break;
-      case 'drive_search':
-        result = await handleDriveSearch(context, args);
-        break;
-      case 'drive_list_folder':
-        result = await handleDriveListFolder(context, args);
-        break;
-      case 'drive_read_file':
-        result = await handleDriveReadFile(context, args);
-        break;
-      case 'drive_create_file':
-        result = await handleDriveCreateFile(context, args);
-        break;
-      case 'drive_create_folder':
-        result = await handleDriveCreateFolder(context, args);
-        break;
-      case 'drive_delete':
-        result = await handleDriveDelete(context, args);
-        break;
-      case 'drive_move':
-        result = await handleDriveMove(context, args);
-        break;
-      case 'drive_copy':
-        result = await handleDriveCopy(context, args);
-        break;
-      case 'drive_share':
-        result = await handleDriveShare(context, args);
-        break;
-      case 'docs_create':
-        result = await handleDocsCreate(context, args);
-        break;
-      case 'docs_read':
-        result = await handleDocsRead(context, args);
-        break;
-      case 'docs_append':
-        result = await handleDocsAppend(context, args);
-        break;
-      case 'docs_replace':
-        result = await handleDocsReplace(context, args);
-        break;
-      case 'calendar_list_events':
-        result = await handleCalendarListEvents(context, args);
-        break;
-      case 'calendar_create_event':
-        result = await handleCalendarCreateEvent(context, args);
-        break;
-      case 'calendar_update_event':
-        result = await handleCalendarUpdateEvent(context, args);
-        break;
-      case 'calendar_delete_event':
-        result = await handleCalendarDeleteEvent(context, args);
-        break;
-      case 'sheets_create':
-        result = await handleSheetsCreate(context, args);
-        break;
-      case 'sheets_read':
-        result = await handleSheetsRead(context, args);
-        break;
-      case 'sheets_write':
-        result = await handleSheetsWrite(context, args);
-        break;
-      case 'sheets_append':
-        result = await handleSheetsAppend(context, args);
-        break;
-      case 'sheets_clear':
-        result = await handleSheetsClear(context, args);
-        break;
-      case 'slides_create':
-        result = await handleSlidesCreate(context, args);
-        break;
-      case 'slides_read':
-        result = await handleSlidesRead(context, args);
-        break;
-      case 'slides_add_slide':
-        result = await handleSlidesAddSlide(context, args);
-        break;
-      default:
-        throw new Error(`Unknown tool: ${functionName}`);
-    }
-
-    if (abortSignal?.aborted) {
-      throw new Error('Operation aborted by user');
-    }
-
-    onProgress?.({
-      status: 'completed',
-      message: 'Operation completed successfully',
-      details: { tool: functionName },
-    });
-
-    return result;
+    return finalResponse || 'Task execution reached maximum iterations. Some steps may be incomplete.';
   } catch (error) {
     console.error('[Google Workspace] Error:', error);
 

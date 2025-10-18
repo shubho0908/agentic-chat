@@ -1,9 +1,10 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
+import type { SlidesCreateArgs, SlidesReadArgs, SlidesAddSlideArgs } from '../types/handler-types';
 
 export async function handleSlidesCreate(
   context: ToolHandlerContext,
-  args: { title: string }
+  args: SlidesCreateArgs
 ): Promise<string> {
   const slides = google.slides({ version: 'v1', auth: context.oauth2Client });
   
@@ -21,7 +22,7 @@ export async function handleSlidesCreate(
 
 export async function handleSlidesRead(
   context: ToolHandlerContext,
-  args: { presentationId: string }
+  args: SlidesReadArgs
 ): Promise<string> {
   const slides = google.slides({ version: 'v1', auth: context.oauth2Client });
   
@@ -60,7 +61,7 @@ export async function handleSlidesRead(
 
 export async function handleSlidesAddSlide(
   context: ToolHandlerContext,
-  args: { presentationId: string; title?: string; body?: string }
+  args: SlidesAddSlideArgs
 ): Promise<string> {
   const slides = google.slides({ version: 'v1', auth: context.oauth2Client });
   

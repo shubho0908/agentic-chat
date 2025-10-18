@@ -1,9 +1,10 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
+import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handler-types';
 
 export async function handleCalendarListEvents(
   context: ToolHandlerContext,
-  args: { calendarId?: string; timeMin?: string; timeMax?: string; maxResults?: number }
+  args: CalendarListEventsArgs
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
   
@@ -32,16 +33,7 @@ export async function handleCalendarListEvents(
 
 export async function handleCalendarCreateEvent(
   context: ToolHandlerContext,
-  args: {
-    summary: string;
-    startTime: string;
-    endTime: string;
-    description?: string;
-    location?: string;
-    attendees?: string[];
-    timeZone?: string;
-    calendarId?: string;
-  }
+  args: CalendarCreateEventArgs
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
   
@@ -93,15 +85,7 @@ export async function handleCalendarCreateEvent(
 
 export async function handleCalendarUpdateEvent(
   context: ToolHandlerContext,
-  args: {
-    eventId: string;
-    summary?: string;
-    startTime?: string;
-    endTime?: string;
-    description?: string;
-    location?: string;
-    calendarId?: string;
-  }
+  args: CalendarUpdateEventArgs
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
   
@@ -177,7 +161,7 @@ export async function handleCalendarUpdateEvent(
 
 export async function handleCalendarDeleteEvent(
   context: ToolHandlerContext,
-  args: { eventId: string; calendarId?: string }
+  args: CalendarDeleteEventArgs
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
   
