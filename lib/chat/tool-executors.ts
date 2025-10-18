@@ -2,20 +2,23 @@ import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
-import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
+import { YOUTUBE_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
 import type { DeepResearchProgress } from '@/types/tools';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
-import { executeWebSearch } from '@/lib/tools/web-search';
-import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube/youtube';
 import { executeDeepResearch } from '@/lib/tools/deep-research';
 import { executeGoogleWorkspace } from '@/lib/tools/google-suite/executor';
+import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/web-search.tools';
+import { getWebSearchInstructions } from '../tools/web-search/prompts';
+import { executeWebSearch } from '../tools/web-search';
+import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube';
 
 export async function executeWebSearchTool(
   textQuery: string,
   controller: ReadableStreamDefaultController,
   messages: Message[],
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  searchDepth: SearchDepth = 'basic'
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
@@ -29,12 +32,27 @@ export async function executeWebSearchTool(
     }
     const toolArgs = {
       query: textQuery,
-      maxResults: 5,
-      searchDepth: 'advanced' as const,
+      maxResults: getRecommendedMaxResults(searchDepth),
+      searchDepth: searchDepth,
       includeAnswer: false,
     };
     
     controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
+    
+    // Advanced Search: Emit agentic phase indicators
+    if (searchDepth === 'advanced') {
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'phase_1_analysis',
+          'Phase 1: Analyzing query and decomposing research questions',
+          { searchDepth, phase: 1, totalPhases: 5 }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+    }
     
     const searchResults = await executeWebSearch(
       toolArgs,
@@ -42,12 +60,46 @@ export async function executeWebSearchTool(
         if (streamClosed || abortSignal?.aborted) return;
         
         try {
-          controller.enqueue(encodeToolProgress(
-            TOOL_IDS.WEB_SEARCH,
-            progress.status,
-            progress.message,
-            progress.details
-          ));
+          // Map search statuses to phases for advanced mode
+          if (searchDepth === 'advanced') {
+            if (progress.status === 'searching') {
+              controller.enqueue(encodeToolProgress(
+                TOOL_IDS.WEB_SEARCH,
+                'phase_2_gathering',
+                'Phase 2: Gathering evidence from 10-15 comprehensive sources',
+                { ...progress.details, searchDepth, phase: 2, totalPhases: 5 }
+              ));
+            } else if (progress.status === 'found') {
+              controller.enqueue(encodeToolProgress(
+                TOOL_IDS.WEB_SEARCH,
+                'phase_3_verification',
+                'Phase 3: Cross-verifying information across multiple sources',
+                { ...progress.details, searchDepth, phase: 3, totalPhases: 5 }
+              ));
+            } else if (progress.status === 'processing_sources') {
+              controller.enqueue(encodeToolProgress(
+                TOOL_IDS.WEB_SEARCH,
+                'phase_3_verification',
+                `Phase 3: Verifying source ${progress.details?.processedCount || 0}/${progress.details?.resultsCount || 0}`,
+                { ...progress.details, searchDepth, phase: 3, totalPhases: 5 }
+              ));
+            } else if (progress.status === 'completed') {
+              controller.enqueue(encodeToolProgress(
+                TOOL_IDS.WEB_SEARCH,
+                'phase_4_synthesis',
+                'Phase 4: Synthesizing comprehensive analysis',
+                { ...progress.details, searchDepth, phase: 4, totalPhases: 5 }
+              ));
+            }
+          } else {
+            // Basic mode: Use standard progress
+            controller.enqueue(encodeToolProgress(
+              TOOL_IDS.WEB_SEARCH,
+              progress.status,
+              progress.message,
+              { ...progress.details, searchDepth }
+            ));
+          }
           setImmediate(() => {});
         } catch {
           console.error('[Web Search Tool] Failed to enqueue progress (controller closed)');
@@ -65,7 +117,23 @@ export async function executeWebSearchTool(
       }
     }
     
-    const searchContext = `\n\n## Web Search Context\n\n${searchResults}\n${WEB_SEARCH_ANALYSIS_INSTRUCTIONS}`;
+    // Advanced Search: Emit final phase indicator
+    if (searchDepth === 'advanced' && !streamClosed) {
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'phase_5_validation',
+          'Phase 5: Final validation and quality check complete',
+          { searchDepth, phase: 5, totalPhases: 5, resultsCount: toolArgs.maxResults }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+    }
+    
+    const webSearchInstructions = getWebSearchInstructions(searchDepth);
+    const searchContext = `\n\n## Web Search Context\n\n${searchResults}\n${webSearchInstructions}`;
     
     return injectContextToMessages(messages, searchContext);
   } catch (error) {

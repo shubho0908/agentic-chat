@@ -1,7 +1,7 @@
 import type { YouTubeVideo } from '@/types/tools';
-import { constructYouTubeUrl } from './youtube-urls';
-import { calculateRecencyScore } from './youtube-utils';
-import { youtubeClient, hasYouTubeAPIKey } from './youtube-client';
+import { constructYouTubeUrl } from './urls';
+import { calculateRecencyScore } from '@/utils/youtube';
+import { youtubeClient, hasYouTubeAPIKey } from './client';
 
 function parseDurationToSeconds(isoDuration: string): number {
   const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Brain, Paperclip, Info, Atom } from "lucide-react";
+import { Settings2, Brain, Paperclip, Info, UnplugIcon, Zap, Check } from "lucide-react";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { motion } from "framer-motion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,8 @@ interface ToolsMenuProps {
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
+  searchDepth?: SearchDepth;
+  onSearchDepthChange?: (depth: SearchDepth) => void;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
   onAuthRequired?: () => void;
@@ -50,6 +53,8 @@ export function ToolsMenu({
   activeTool = null,
   memoryEnabled = true,
   onMemoryToggle,
+  searchDepth = 'basic',
+  onSearchDepthChange,
   onFilesSelected,
   fileCount = 0,
   onAuthRequired,
@@ -273,12 +278,12 @@ export function ToolsMenu({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
                   <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                    <Atom className="size-4 text-purple-400 dark:text-purple-300" />
+                    <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
                   </div>
                   <div className="flex flex-col gap-0.5 flex-1">
-                    <span className="font-medium">AI Tools</span>
+                    <span className="font-medium">Connectors</span>
                     <span className="text-xs text-muted-foreground">
-                      {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Enhance AI capabilities'}
+                      {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
                     </span>
                   </div>
                 </DropdownMenuSubTrigger>
@@ -295,9 +300,101 @@ export function ToolsMenu({
                     const isActive = activeTool === tool.id;
                     const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
                     const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
+                    const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
                     const isNotAuthenticated = !session;
                     const isDisabled = isNotAuthenticated || (isDeepResearch && !deepResearchUsage.loading && deepResearchUsage.remaining === 0);
                     const needsAuth = isGoogleSuite && !googleSuiteLoading && !googleSuiteStatus?.authorized;
+
+                    if (isWebSearch) {
+                      return (
+                        <div key={tool.id}>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger
+                              className={cn(
+                                "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
+                                isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
+                              )}
+                            >
+                              <div 
+                                className="relative flex items-center justify-center size-9 rounded-lg transition-all group-hover:scale-110"
+                                style={{
+                                  background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
+                                }}
+                              >
+                                <ToolIcon
+                                  className={cn(
+                                    "size-4 transition-colors",
+                                    isActive ? tool.iconColorClass : 'text-muted-foreground group-hover:text-foreground'
+                                  )}
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium truncate">{tool.name}</span>
+                                  <Badge 
+                                    variant={searchDepth === 'advanced' ? 'default' : 'outline'} 
+                                    className={cn(
+                                      "text-[10px] py-0 px-1.5 h-4 shrink-0 hover:bg-secondary",
+                                      searchDepth === 'advanced' && "bg-primary/20 text-primary border-primary/30"
+                                    )}
+                                  >
+                                    {searchDepth === 'advanced' ? 'Advanced' : 'Basic'}
+                                  </Badge>
+                                </div>
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {tool.description}
+                                </span>
+                              </div>
+                              {isActive && (
+                                <motion.div
+                                  initial={{ scale: 0 }}
+                                  animate={{ scale: 1 }}
+                                  className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
+                                />
+                              )}
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent sideOffset={8} className="w-56 p-1">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  onSearchDepthChange?.('basic');
+                                  handleToolSelect(tool.id);
+                                }}
+                                className="gap-3 py-2.5 rounded-md cursor-pointer"
+                              >
+                                <div className="flex items-center justify-center size-8 rounded-md bg-muted/50">
+                                  <Zap className="size-4 text-muted-foreground" />
+                                </div>
+                                <div className="flex flex-col gap-0.5 flex-1">
+                                  <span className="font-medium text-sm">Basic Search</span>
+                                  <span className="text-xs text-muted-foreground">Quick results, faster response</span>
+                                </div>
+                                {searchDepth === 'basic' && (
+                                  <Check className="size-4 text-primary ml-auto" />
+                                )}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  onSearchDepthChange?.('advanced');
+                                  handleToolSelect(tool.id);
+                                }}
+                                className="gap-3 py-2.5 rounded-md cursor-pointer"
+                              >
+                                <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary/10 to-primary/5">
+                                  <Zap fill="yellow" className="size-4 text-primary" />
+                                </div>
+                                <div className="flex flex-col gap-0.5 flex-1">
+                                  <span className="font-medium text-sm">Advanced Search</span>
+                                  <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
+                                </div>
+                                {searchDepth === 'advanced' && (
+                                  <Check className="size-4 text-primary ml-auto" />
+                                )}
+                              </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div key={tool.id}>

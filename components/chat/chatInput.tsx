@@ -10,6 +10,7 @@ import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
 import type { MessageSendHandler } from "@/types/chat";
 import { useSession } from "@/lib/auth-client";
@@ -21,7 +22,9 @@ import {
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
   getDeepResearchEnabled as getStoredDeepResearchEnabled,
-  setDeepResearchEnabled as storeDeepResearchEnabled
+  setDeepResearchEnabled as storeDeepResearchEnabled,
+  getSearchDepth as getStoredSearchDepth,
+  setSearchDepth as storeSearchDepth
 } from "@/lib/storage";
 
 interface ChatInputProps {
@@ -54,6 +57,9 @@ export function ChatInput({
   const [deepResearchEnabled, setDeepResearchEnabled] = useState<boolean>(() => {
     return getStoredDeepResearchEnabled();
   });
+  const [searchDepth, setSearchDepth] = useState<SearchDepth>(() => {
+    return getStoredSearchDepth();
+  });
 
   const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage();
@@ -85,6 +91,10 @@ export function ChatInput({
   useEffect(() => {
     storeDeepResearchEnabled(deepResearchEnabled);
   }, [deepResearchEnabled]);
+
+  useEffect(() => {
+    storeSearchDepth(searchDepth);
+  }, [searchDepth]);
 
   useEffect(() => {
     if (usageData && usageData.remaining === 0) {
@@ -177,7 +187,7 @@ export function ChatInput({
       }
 
       const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);
-      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled, finalDeepResearchEnabled);
+      onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled, finalDeepResearchEnabled, searchDepth);
     } catch (error) {
       console.error("Error sending message:", error);
     } finally {
@@ -276,6 +286,16 @@ export function ChatInput({
     });
   }
 
+  function handleSearchDepthChange(depth: SearchDepth) {
+    setSearchDepth(depth);
+    toast.success(depth === 'advanced' ? 'Advanced search enabled' : 'Basic search enabled', {
+      description: depth === 'advanced' 
+        ? 'Enhanced search with deeper analysis'
+        : 'Quick search with faster results',
+      duration: 2500,
+    });
+  }
+
   const formState = {
     input,
     selectedFiles,
@@ -285,6 +305,7 @@ export function ChatInput({
     disabled,
     activeTool,
     memoryEnabled,
+    searchDepth,
   };
 
   const formHandlers = {
@@ -299,6 +320,7 @@ export function ChatInput({
     onRemoveFile: handleRemoveFile,
     onToolSelected: handleToolSelected,
     onMemoryToggle: handleMemoryToggle,
+    onSearchDepthChange: handleSearchDepthChange,
     onFilesSelected: handleFilesSelectedWithAuth,
     onStop,
     onAuthRequired,

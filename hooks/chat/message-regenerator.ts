@@ -1,5 +1,6 @@
 import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
@@ -15,7 +16,8 @@ export async function handleRegenerateResponse(
   context: RegenerateContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean
+  deepResearchEnabled?: boolean,
+  searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -181,6 +183,7 @@ export async function handleRegenerateResponse(
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
       deepResearchEnabled: deepResearchEnabled ?? false,
+      searchDepth: searchDepth ?? 'basic',
     });
 
     onMessagesUpdate((prev) =>

@@ -1,11 +1,11 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import type { z } from 'zod';
 import { youtubeParamsSchema } from '@/lib/schemas/youtube.tools';
-import { extractVideoId, detectYouTubeUrls, constructYouTubeUrl } from './youtube-urls';
-import { extractChapters, formatChapters } from './youtube-chapters';
-import { searchYouTubeVideos, searchResultToVideo, type YouTubeSearchResult } from './youtube-search';
-import { formatViewCount, formatTimestamp, createFallbackMetadata, formatDuration } from './youtube-utils';
-import { youtubeClient } from './youtube-client';
+import { extractVideoId, detectYouTubeUrls, constructYouTubeUrl } from './urls';
+import { extractChapters, formatChapters } from './chapters';
+import { searchYouTubeVideos, searchResultToVideo, type YouTubeSearchResult } from './search';
+import { formatViewCount, formatTimestamp, createFallbackMetadata, formatDuration } from '@/utils/youtube';
+import { youtubeClient } from './client';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { YouTubeProgress, YouTubeVideoContext, YouTubeVideo, YouTubeTranscriptSegment, YouTubeChapter } from '@/types/tools';
 

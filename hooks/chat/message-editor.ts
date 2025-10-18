@@ -1,5 +1,6 @@
 import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -19,7 +20,8 @@ export async function handleEditMessage(
   context: EditMessageContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean
+  deepResearchEnabled?: boolean,
+  searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -206,6 +208,7 @@ export async function handleEditMessage(
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
       deepResearchEnabled: deepResearchEnabled ?? false,
+      searchDepth: searchDepth ?? 'basic',
     });
 
     onMessagesUpdate((prev) =>

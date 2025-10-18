@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/message-utils";
-import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled } from "@/lib/storage";
+import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
 
 export default function ChatPage({
   params,
@@ -58,14 +58,16 @@ export default function ChatPage({
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
-    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled });
+    const searchDepth = getSearchDepth();
+    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleRegenerate = (messageId: string) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
-    return regenerateResponse({ messageId, activeTool, memoryEnabled, deepResearchEnabled });
+    const searchDepth = getSearchDepth();
+    return regenerateResponse({ messageId, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleToggleSharing = (id: string, isPublic: boolean) => {
@@ -91,7 +93,8 @@ export default function ChatPage({
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled });
+    const searchDepth = getSearchDepth();
+    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
@@ -101,12 +104,14 @@ export default function ChatPage({
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
+    const searchDepth = getSearchDepth();
     await sendMessage({ 
       content: question, 
       session, 
       activeTool, 
       memoryEnabled, 
-      deepResearchEnabled 
+      deepResearchEnabled,
+      searchDepth 
     });
   };
 

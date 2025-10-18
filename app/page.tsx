@@ -12,7 +12,7 @@ import { useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled } from "@/lib/storage";
+import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
 
 function HomeContent() {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
@@ -57,7 +57,8 @@ function HomeContent() {
       byokTriggerRef.current?.click();
       return;
     }
-    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled });
+    const searchDepth = getSearchDepth();
+    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
@@ -67,12 +68,14 @@ function HomeContent() {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
+    const searchDepth = getSearchDepth();
     await sendMessage({ 
       content: question, 
       session, 
       activeTool, 
       memoryEnabled, 
-      deepResearchEnabled 
+      deepResearchEnabled,
+      searchDepth 
     });
   };
 

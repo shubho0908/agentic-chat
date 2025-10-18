@@ -1,8 +1,11 @@
+import type { SearchDepth } from './schemas/web-search.tools';
+
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
   ACTIVE_TOOL: 'agentic-chat-active-tool',
   MEMORY_ENABLED: 'agentic-chat-memory-enabled',
   DEEP_RESEARCH_ENABLED: 'agentic-chat-deep-research-enabled',
+  SEARCH_DEPTH: 'agentic-chat-search-depth',
 } as const;
 
 function isLocalStorageAvailable(): boolean {
@@ -113,12 +116,33 @@ export function setDeepResearchEnabled(enabled: boolean): boolean {
   }
 }
 
+export function getSearchDepth(): SearchDepth {
+  if (!isLocalStorageAvailable()) return 'basic';
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_DEPTH);
+    return stored === 'advanced' ? 'advanced' : 'basic';
+  } catch {
+    return 'basic';
+  }
+}
+
+export function setSearchDepth(depth: SearchDepth): boolean {
+  if (!isLocalStorageAvailable()) return false;
+  try {
+    localStorage.setItem(STORAGE_KEYS.SEARCH_DEPTH, depth);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function clearUserStorage(): void {
   if (!isLocalStorageAvailable()) return;
   try {
     localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
     localStorage.removeItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED);
+    localStorage.removeItem(STORAGE_KEYS.SEARCH_DEPTH);
   } catch (error) {
     console.error('Error clearing user storage:', error);
   }

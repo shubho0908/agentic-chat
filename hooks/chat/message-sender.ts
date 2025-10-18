@@ -1,6 +1,7 @@
 import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import type { ConversationResult, MemoryStatus } from "@/types/chat";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { toast } from "sonner";
 import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
@@ -20,7 +21,8 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean
+  deepResearchEnabled?: boolean,
+  searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -282,6 +284,7 @@ export async function handleSendMessage(
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
       deepResearchEnabled: deepResearchEnabled ?? false,
+      searchDepth: searchDepth ?? 'basic',
     });
 
     assistantContent = responseContent;

@@ -6,6 +6,7 @@ import { ToolsMenu } from "./toolsMenu";
 import { FilePreview } from "./filePreview";
 import { DropZone } from "./dropZone";
 import type { ToolId } from "@/lib/tools/config";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import type { DragState } from "@/hooks/useDragAndDrop";
 
 interface FormState {
@@ -17,6 +18,7 @@ interface FormState {
   disabled: boolean;
   activeTool: ToolId | null;
   memoryEnabled: boolean;
+  searchDepth: SearchDepth;
 }
 
 interface FormHandlers {
@@ -28,6 +30,7 @@ interface FormHandlers {
   onRemoveFile: (index: number) => void;
   onToolSelected: (toolId: ToolId) => void;
   onMemoryToggle: (enabled: boolean) => void;
+  onSearchDepthChange: (depth: SearchDepth) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
   onAuthRequired?: () => void;
@@ -61,8 +64,8 @@ export function ChatInputForm({
   maxFilesReached,
   centered = false,
 }: ChatInputFormProps) {
-  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
+  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, searchDepth } = state;
+  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onSearchDepthChange, onFilesSelected, onStop, onAuthRequired } = handlers;
 
   const textareaClassName = centered
     ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
@@ -109,6 +112,8 @@ export function ChatInputForm({
                 activeTool={activeTool}
                 memoryEnabled={memoryEnabled}
                 onMemoryToggle={onMemoryToggle}
+                searchDepth={searchDepth}
+                onSearchDepthChange={onSearchDepthChange}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
                 onAuthRequired={onAuthRequired}

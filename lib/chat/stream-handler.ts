@@ -2,6 +2,7 @@ import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import type { Message } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
+import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { extractTextFromMessage } from './message-helpers';
@@ -32,6 +33,7 @@ export interface StreamHandlerOptions {
   abortSignal?: AbortSignal;
   userId?: string;
   conversationId?: string;
+  searchDepth?: SearchDepth;
 }
 
 function toOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
@@ -39,7 +41,7 @@ function toOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
 }
 
 export function createChatStreamHandler(options: StreamHandlerOptions) {
-  const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId } = options;
+  const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId, searchDepth = 'basic' } = options;
   let { enhancedMessages } = options;
 
   return {
@@ -75,7 +77,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         const textQuery = extractTextFromMessage(lastUserMessage);
         
         if (activeTool === TOOL_IDS.WEB_SEARCH) {
-          enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, abortSignal);
+          enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, abortSignal, searchDepth);
         }
         
         if (activeTool === TOOL_IDS.YOUTUBE) {

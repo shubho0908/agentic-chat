@@ -1,6 +1,7 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
 import type { WebSearchSource, YouTubeVideo, ResearchTask } from './tools';
 import type { GateDecision, EvaluationResult, Citation } from './deep-research';
+import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -38,6 +39,9 @@ export interface MemoryStatus {
       sources?: WebSearchSource[];
       currentSource?: WebSearchSource;
       processedCount?: number;
+      searchDepth?: SearchDepth;
+      phase?: number;
+      totalPhases?: number;
       
       // YouTube fields
       videoCount?: number;
@@ -96,6 +100,7 @@ export interface SendMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
 }
 
 export type MessageSendHandler = (
@@ -103,7 +108,8 @@ export type MessageSendHandler = (
   attachments?: Attachment[],
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean
+  deepResearchEnabled?: boolean,
+  searchDepth?: SearchDepth
 ) => Promise<void> | void;
 
 export interface EditMessageOptions {
@@ -113,6 +119,7 @@ export interface EditMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
 }
 
 export interface RegenerateMessageOptions {
@@ -120,6 +127,7 @@ export interface RegenerateMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
 }
 
 export interface UseChatReturn {
@@ -195,4 +203,5 @@ export interface StreamConfig {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
 }

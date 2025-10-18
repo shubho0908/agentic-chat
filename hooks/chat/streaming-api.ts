@@ -1,7 +1,7 @@
 import type { StreamConfig } from "@/types/chat";
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = config;
   
   const requestPayload = {
     model,
@@ -11,7 +11,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
     activeTool: activeTool || null,
     memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : true,
     deepResearchEnabled: deepResearchEnabled !== undefined ? deepResearchEnabled : false,
-
+    searchDepth: searchDepth || 'basic',
   };
   
   const response = await fetch('/api/chat/completions', {

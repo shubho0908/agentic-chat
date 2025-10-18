@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
+import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import type { UseChatOptions, UseChatReturn, MemoryStatus } from "@/types/chat";
@@ -37,7 +38,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
       if (!content.trim() || isLoading) return;
 
       setIsLoading(true);
@@ -64,7 +65,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         session,
         activeTool,
         memoryEnabled,
-        deepResearchEnabled
+        deepResearchEnabled,
+        searchDepth
       );
 
       setIsLoading(false);
@@ -74,7 +76,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
+    async ({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -96,7 +98,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         },
         activeTool,
         memoryEnabled,
-        deepResearchEnabled
+        deepResearchEnabled,
+        searchDepth
       );
 
       setIsLoading(false);
@@ -106,7 +109,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, activeTool, memoryEnabled, deepResearchEnabled }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean }) => {
+    async ({ messageId, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -126,7 +129,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         },
         activeTool,
         memoryEnabled,
-        deepResearchEnabled
+        deepResearchEnabled,
+        searchDepth
       );
 
       setIsLoading(false);

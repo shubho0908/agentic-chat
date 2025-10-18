@@ -69,7 +69,7 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
   [TOOL_IDS.GOOGLE_SUITE]: {
     id: TOOL_IDS.GOOGLE_SUITE,
     name: 'Google Suite',
-    description: 'Access Gmail and Google services',
+    description: 'Smart agent for Google Suite',
     icon: GoogleIcon,
     inputPrefix: 'Gmail request: ',
     gradientColors: {

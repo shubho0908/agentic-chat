@@ -95,7 +95,6 @@ export async function workerNode(
       }
     }
 
-    // Execute web search if requested
     if (currentTask.tools.includes('web_search')) {
       config.onProgress?.(currentTaskIndex, {
         toolName: 'web_search',
