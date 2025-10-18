@@ -18,7 +18,20 @@ export enum GoogleAuthCallbackStatus {
 
 export interface GoogleAuthCallbackError {
   gsuite_auth: GoogleAuthCallbackStatus.ERROR;
-  reason: 'access_denied' | 'missing_params' | 'no_tokens' | 'no_user_info' | 'account_mismatch' | 'processing_failed';
+  reason: 
+    | 'access_denied'
+    | 'missing_params'
+    | 'no_access_token'
+    | 'no_refresh_token'
+    | 'no_tokens'
+    | 'no_user_info'
+    | 'account_mismatch'
+    | 'processing_failed'
+    | 'invalid_state'
+    | 'missing_state'
+    | 'state_mismatch'
+    | 'not_authenticated'
+    | 'user_mismatch';
 }
 
 export interface GoogleAuthCallbackSuccess {

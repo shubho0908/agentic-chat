@@ -69,6 +69,8 @@ export function useGoogleSuiteAuth() {
       const errorMessages: Record<string, string> = {
         account_mismatch: 'Please use the same Google account you signed in with',
         missing_params: 'Authorization request is invalid',
+        no_access_token: 'Failed to obtain access token from Google',
+        no_refresh_token: 'Failed to obtain refresh token - please revoke access in Google settings and try again',
         no_tokens: 'Failed to obtain access tokens',
         no_user_info: 'Failed to retrieve user information',
         processing_failed: 'An error occurred during authorization',

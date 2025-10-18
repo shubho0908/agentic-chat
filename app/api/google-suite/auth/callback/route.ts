@@ -79,9 +79,9 @@ export async function GET(request: NextRequest) {
 
     const { tokens } = await oauth2Client.getToken(code);
 
-    if (!tokens.access_token || !tokens.refresh_token) {
+    if (!tokens.access_token) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=no_tokens`
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=no_access_token`
       );
     }
 
@@ -114,6 +114,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check for existing account to preserve refresh token on re-consent
+    const existing = await prisma.account.findUnique({
+      where: {
+        providerId_accountId: {
+          providerId: GOOGLE_SUITE_PROVIDER_ID,
+          accountId: userInfo.id,
+        },
+      },
+      select: { refreshToken: true },
+    });
+
+    // Only require refresh_token on first-time link; otherwise retain existing
+    if (!existing && !tokens.refresh_token) {
+      console.error('[Google Suite Callback] No refresh token provided on first authorization');
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=no_refresh_token`
+      );
+    }
+
     await prisma.account.upsert({
       where: {
         providerId_accountId: {
@@ -123,7 +142,7 @@ export async function GET(request: NextRequest) {
       },
       update: {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || undefined,
+        refreshToken: tokens.refresh_token ?? existing?.refreshToken ?? undefined,
         accessTokenExpiresAt: expiresAt,
         scope: tokens.scope,
       },
@@ -132,7 +151,7 @@ export async function GET(request: NextRequest) {
         accountId: userInfo.id,
         userId,
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token || undefined,
+        refreshToken: tokens.refresh_token ?? undefined,
         accessTokenExpiresAt: expiresAt,
         scope: tokens.scope,
       },
