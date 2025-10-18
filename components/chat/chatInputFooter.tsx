@@ -1,29 +1,31 @@
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 
 interface ChatInputFooterProps {
   centered?: boolean;
 }
 
 export function ChatInputFooter({ centered = false }: ChatInputFooterProps) {
-  if (centered) {
-    return (
-      <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <Sparkles className="size-4" />
-          Press <kbd className="rounded-md bg-muted px-2 py-1 text-xs font-semibold">Enter</kbd> to send
-        </span>
-      </div>
-    );
-  }
-
   return (
-    <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+    <div className={`${centered ? 'mt-4' : 'mt-2'} flex items-center justify-center text-${centered ? 'sm' : 'xs'} text-muted-foreground`}>
       <span className="flex items-center gap-1">
-        <Sparkles className="size-3" />
-        AI-powered responses
+        Built by{' '}
+        <Link
+          href="https://shubhojeet.com" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-black dark:text-white font-semibold hover:opacity-80 transition-opacity underline flex items-center gap-1.5"
+        >
+          <Image 
+            src="/me.jpg" 
+            alt="Shubhojeet" 
+            width={16} 
+            height={16} 
+            className="rounded-full ml-1"
+          />
+          Shubhojeet
+        </Link>
       </span>
-      <span>•</span>
-      <span>Press <kbd className="rounded bg-muted px-1.5 py-0.5">Enter</kbd> to send</span>
     </div>
   );
 }

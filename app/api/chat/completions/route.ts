@@ -15,6 +15,7 @@ import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes for deep research & google suite tools
 
 export async function POST(request: NextRequest) {
   try {

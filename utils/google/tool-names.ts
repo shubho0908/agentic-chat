@@ -1,11 +1,11 @@
 export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   // Gmail
-  gmail_search: 'Searching emails',
-  gmail_read: 'Reading email',
+  gmail_search: 'Searching mails',
+  gmail_read: 'Reading mail',
   gmail_send: 'Sending email',
-  gmail_reply: 'Replying to email',
-  gmail_delete: 'Deleting emails',
-  gmail_modify: 'Updating email labels',
+  gmail_reply: 'Replying to mail',
+  gmail_delete: 'Deleting mails',
+  gmail_modify: 'Updating mail labels',
   gmail_get_attachments: 'Getting attachments',
   
   // Drive
