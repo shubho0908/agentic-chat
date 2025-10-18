@@ -171,14 +171,50 @@ export async function handleGmailModify(
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
   
+  const labelsResponse = await gmail.users.labels.list({ userId: 'me' });
+  const allLabels = labelsResponse.data.labels || [];
+  
+  const labelMap = new Map<string, string>();
+  allLabels.forEach(label => {
+    if (label.name && label.id) {
+      labelMap.set(label.name.toLowerCase(), label.id);
+      labelMap.set(label.id.toLowerCase(), label.id); // Allow ID passthrough
+    }
+  });
+  
+  const translateLabels = (labels: string[] | undefined): string[] => {
+    if (!labels || labels.length === 0) return [];
+    
+    const translatedIds: string[] = [];
+    const notFound: string[] = [];
+    
+    labels.forEach(label => {
+      const labelId = labelMap.get(label.toLowerCase());
+      if (labelId) {
+        translatedIds.push(labelId);
+      } else {
+        notFound.push(label);
+      }
+    });
+    
+    if (notFound.length > 0) {
+      console.warn(`[Gmail] Labels not found and will be skipped: ${notFound.join(', ')}`);
+    }
+    
+    return translatedIds;
+  };
+  
+  const addLabelIds = translateLabels(args.addLabels);
+  const removeLabelIds = translateLabels(args.removeLabels);
+  
   await Promise.all(
     args.messageIds.map(id => 
       gmail.users.messages.modify({
         userId: 'me',
         id,
         requestBody: {
-          addLabelIds: args.addLabels,
-          removeLabelIds: args.removeLabels,
+          addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+          removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
         },
       })
     )

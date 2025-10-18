@@ -12,9 +12,11 @@ export const SLIDES_TOOLS: ChatCompletionTool[] = [
           title: {
             type: 'string',
             description: 'Presentation title',
+            minLength: 1,
           },
         },
         required: ['title'],
+        additionalProperties: false,
       },
     },
   },
@@ -29,9 +31,11 @@ export const SLIDES_TOOLS: ChatCompletionTool[] = [
           presentationId: {
             type: 'string',
             description: 'The presentation ID',
+            minLength: 1,
           },
         },
         required: ['presentationId'],
+        additionalProperties: false,
       },
     },
   },
@@ -46,6 +50,7 @@ export const SLIDES_TOOLS: ChatCompletionTool[] = [
           presentationId: {
             type: 'string',
             description: 'The presentation ID',
+            minLength: 1,
           },
           title: {
             type: 'string',
@@ -57,6 +62,7 @@ export const SLIDES_TOOLS: ChatCompletionTool[] = [
           },
         },
         required: ['presentationId'],
+        additionalProperties: false,
       },
     },
   },
