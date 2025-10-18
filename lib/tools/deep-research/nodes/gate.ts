@@ -16,10 +16,24 @@ export async function gateNode(
   });
 
   try {
+    let gateQuery = state.originalQuery;
+    
+    if (state.hasDocuments || state.hasImages) {
+      const attachmentInfo: string[] = [];
+      if (state.hasDocuments) {
+        attachmentInfo.push(`${state.attachmentIds?.length || 0} document(s) attached`);
+      }
+      if (state.hasImages) {
+        attachmentInfo.push('image(s) attached');
+      }
+      
+      gateQuery = `${state.originalQuery}\n\n[NOTE: User has ${attachmentInfo.join(' and ')}. Consider that referential queries about attached content may benefit from research for comprehensive analysis.]`;
+    }
+    
     const response = await llm.invoke(
       [
         { role: 'system', content: RESEARCH_GATE_PROMPT },
-        { role: 'user', content: state.originalQuery },
+        { role: 'user', content: gateQuery },
       ],
       { signal: config.abortSignal }
     );
@@ -62,10 +76,24 @@ export async function gateNode(
 
     const gateDecision: GateDecision = JSON.parse(rawContent);
     if (!gateDecision.shouldResearch) {
+      let enrichedQuery = state.originalQuery;
+      
+      if (state.documentContextForPlanning || state.imageContext) {
+        enrichedQuery = `${state.originalQuery}\n\n`;
+        
+        if (state.documentContextForPlanning) {
+          enrichedQuery += `**Document Context (from attached files):**\n${state.documentContextForPlanning}\n\n`;
+        }
+        
+        if (state.imageContext) {
+          enrichedQuery += `**Image Context (from attached images):**\n${state.imageContext}\n\n`;
+        }
+      }
+      
       const directResponse = await llm.invoke(
         [
           { role: 'system', content: DIRECT_LLM_PROMPT },
-          { role: 'user', content: state.originalQuery },
+          { role: 'user', content: enrichedQuery },
         ],
         { signal: config.abortSignal }
       );

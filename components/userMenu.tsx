@@ -13,13 +13,16 @@ import { signOut, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
+import { clearUserStorage } from "@/lib/storage";
 
 export function UserMenu() {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setMounted(true);
@@ -27,7 +30,9 @@ export function UserMenu() {
 
   const handleLogout = async () => {
     try {
+      clearUserStorage();
       await signOut();
+      router.push("/");
       toast.success(TOAST_SUCCESS_MESSAGES.LOGGED_OUT);
     } catch (error) {
       console.error("Logout error:", error);

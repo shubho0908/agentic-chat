@@ -6,6 +6,7 @@ import type { Message } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
+import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 
 export interface ContextRoutingResult {
@@ -58,15 +59,41 @@ async function hasDocumentAttachments(conversationId: string): Promise<boolean> 
         attachments: {
           select: {
             fileType: true,
+            fileName: true,
           },
         },
       },
     });
 
     const allAttachments = messages.flatMap(m => m.attachments);
-    const documentAttachments = filterDocumentAttachments(allAttachments);
+    const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
+      att.fileName && isSupportedDocumentExtension(att.fileName)
+    );
     
     return documentAttachments.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function hasAnyAttachments(conversationId: string): Promise<boolean> {
+  try {
+    const messages = await prisma.message.findMany({
+      where: {
+        conversationId,
+        isDeleted: false,
+      },
+      include: {
+        attachments: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    const allAttachments = messages.flatMap(m => m.attachments);
+    return allAttachments.length > 0;
   } catch {
     return false;
   }
@@ -114,6 +141,14 @@ export async function routeContext(
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
     metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
+    
+    if (conversationId) {
+      const hasAttachments = await hasDocumentAttachments(conversationId);
+      if (hasAttachments) {
+        metadata.hasDocuments = true;
+      }
+    }
+    
     return { context: '', metadata };
   }
 
@@ -149,7 +184,19 @@ export async function routeContext(
     if (ragResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = ragResult.documentCount;
+      
+      if (hasImages) {
+        metadata.routingDecision = RoutingDecision.Hybrid;
+        return { context: ragResult.context, metadata };
+      }
+      
       return { context: ragResult.context, metadata };
+    }
+
+    // If no RAG results but has images, treat as VisionOnly
+    if (hasImages) {
+      metadata.routingDecision = RoutingDecision.VisionOnly;
+      return { context: '', metadata };
     }
 
     return { context: '', metadata };
@@ -174,6 +221,7 @@ export async function routeContext(
   if (hasAttachments) {
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
     return { context: '', metadata };
   }
 
@@ -183,7 +231,15 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  if (!memoryEnabled) {
+  // Skip memory search if conversation has any attachments
+  if (conversationId) {
+    const hasAnyAttachment = await hasAnyAttachments(conversationId);
+    if (hasAnyAttachment) {
+      metadata.skippedMemory = true;
+    }
+  }
+
+  if (!memoryEnabled || metadata.skippedMemory) {
     return { context: '', metadata };
   }
 

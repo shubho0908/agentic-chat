@@ -19,11 +19,46 @@ export async function executeWebSearch(
   onProgress?: (progress: WebSearchProgress) => void,
   abortSignal?: AbortSignal
 ): Promise<string> {
-    const { query, maxResults = 5, searchDepth = 'advanced', includeAnswer = false } = input;
-
     if (!client) {
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.NOT_CONFIGURED;
     }
+
+    let validatedInput;
+    try {
+      validatedInput = webSearchParamsSchema.parse(input);
+    } catch (error) {
+      console.error('[Web Search] Validation error:', error);
+      return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search parameters');
+    }
+
+    const { query: rawQuery, maxResults, searchDepth, includeAnswer } = validatedInput;
+
+    if (!rawQuery || rawQuery.trim().length === 0) {
+      console.error('[Web Search] Invalid query: empty');
+      return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Query is empty or invalid');
+    }
+
+    // Tavily has a query length limit (typically ~400 chars)
+    // Truncate long queries while preserving meaning
+    const MAX_QUERY_LENGTH = 400;
+    let query = rawQuery.trim();
+    
+    if (query.length > MAX_QUERY_LENGTH) {
+      console.warn(`[Web Search] Query too long (${query.length} chars), truncating to ${MAX_QUERY_LENGTH}`);
+      query = query.substring(0, MAX_QUERY_LENGTH);
+      const lastPeriod = query.lastIndexOf('.');
+      const lastSpace = query.lastIndexOf(' ');
+      
+      if (lastPeriod > MAX_QUERY_LENGTH * 0.7) {
+        query = query.substring(0, lastPeriod + 1).trim();
+      } else if (lastSpace > MAX_QUERY_LENGTH * 0.7) {
+        query = query.substring(0, lastSpace).trim();
+      }
+      
+      query = query.trim();
+    }
+
+    const clampedMaxResults = Math.min(Math.max(maxResults, 1), 20);
 
     try {
       if (abortSignal?.aborted) {
@@ -40,8 +75,8 @@ export async function executeWebSearch(
 
       const response = await client.search({
         query,
-        max_results: Math.max(maxResults, 1),
-        search_depth: searchDepth as 'basic' | 'advanced',
+        max_results: clampedMaxResults,
+        search_depth: searchDepth,
         include_answer: includeAnswer,
         include_images: false,
         include_raw_content: false,
@@ -148,9 +183,27 @@ ${result.position}. ${result.title}
 
       return formattedOutput;
     } catch (error) {
-      console.error('[Web Search] Error:', error);
+      console.error('[Web Search] Error:', error instanceof Error ? error.message : String(error));
+      
+      if (error && typeof error === 'object') {
+        const errorObj = error as Record<string, unknown>;
+        if ('response' in errorObj) {
+          const response = errorObj.response as Record<string, unknown> | undefined;
+          console.error('[Web Search] API Response Status:', response?.status);
+        }
+        if ('request' in errorObj) {
+          const request = errorObj.request as Record<string, unknown> | undefined;
+          console.error('[Web Search] Request method:', request?.method);
+        }
+      }
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+        const safePreview = typeof rawQuery === 'string' ? rawQuery.slice(0, 50) + '...' : '';
+        console.warn('[Web Search] 400 Bad Request. Query preview (truncated):', safePreview);
+        return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search query. The query may be too complex or contain unsupported characters.');
+      }
 
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED(errorMessage);
     }

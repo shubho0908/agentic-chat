@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const apiKey = decryptApiKey(user.encryptedApiKey);
     const body = await request.json();
     
-    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = false, deepResearchEnabled = false } = body;
+    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = true, deepResearchEnabled = false } = body;
     
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
         deepResearchEnabled,
         abortSignal: abortController.signal,
         userId: authUser.id,
+        conversationId,
       });
       const readableStream = new ReadableStream({
         ...streamHandler,

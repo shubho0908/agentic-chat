@@ -27,7 +27,7 @@ export function filterImageAttachments(attachments?: Attachment[]): Attachment[]
   }
   
   return attachments.filter(att => 
-    !isSupportedDocumentExtension(att.fileName) && att.fileType.startsWith('image/')
+    att.fileName && !isSupportedDocumentExtension(att.fileName) && att.fileType.startsWith('image/')
   );
 }
 
@@ -37,6 +37,6 @@ export function filterDocumentAttachments(attachments?: Attachment[]): Attachmen
   }
   
   return attachments.filter(att => 
-    isSupportedDocumentExtension(att.fileName) || !att.fileType.startsWith('image/')
+    (att.fileName && isSupportedDocumentExtension(att.fileName)) || !att.fileType.startsWith('image/')
   );
 }

@@ -45,6 +45,11 @@ export interface MemoryStatus {
       failedCount?: number;
       currentVideo?: YouTubeVideo;
       
+      // Google Suite fields
+      operation?: string;
+      tool?: string;
+      error?: string;
+      
       // Deep research fields
       status?: string; // Deep research status
       gateDecision?: GateDecision;

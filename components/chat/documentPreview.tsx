@@ -24,14 +24,13 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
 
   const isPDF = fileType === "application/pdf" || fileName.endsWith(".pdf");
   const isCSV = fileType === "text/csv" || fileName.endsWith(".csv");
-  const isMarkdown = fileType === "text/markdown" || fileName.endsWith(".md");
-  const isTextFile = ((fileType.startsWith("text/") || fileName.endsWith(".txt")) && !isCSV) || isMarkdown;
+  const isTextFile = (fileType.startsWith("text/") || fileName.endsWith(".txt")) && !isCSV;
   const isOfficeDoc = fileType.includes("wordprocessingml") ||
     fileType.includes("spreadsheetml") ||
     fileName.match(/\.(docx?|xlsx?|pptx?)$/);
 
   useEffect(() => {
-    if (open && fileUrl && (isTextFile || isCSV || isMarkdown)) {
+    if (open && fileUrl && (isTextFile || isCSV)) {
       setIsLoading(true);
       fetch(fileUrl)
         .then(res => res.text())
@@ -44,7 +43,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
           setIsLoading(false);
         });
     }
-  }, [fileUrl, isTextFile, isCSV, isMarkdown, open]);
+  }, [fileUrl, isTextFile, isCSV, open]);
 
   const renderCSV = (content: string) => {
     const rows = content.split('\n').map(row => row.split(','));

@@ -144,3 +144,21 @@ export interface DeepResearchProgress {
     wordCount?: number;
   };
 }
+
+export enum GoogleSuiteStatus {
+  INITIALIZING = 'initializing',
+  ANALYZING = 'analyzing',
+  EXECUTING = 'executing',
+  COMPLETED = 'completed',
+  AUTH_REQUIRED = 'auth_required',
+}
+
+export interface GoogleSuiteProgress {
+  status: GoogleSuiteStatus;
+  message: string;
+  details?: {
+    query?: string;
+    operation?: string;
+    error?: string;
+  };
+}

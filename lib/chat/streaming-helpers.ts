@@ -83,5 +83,9 @@ export function shouldSendMemoryStatus(memoryStatusInfo: MemoryStatus): boolean 
   return memoryStatusInfo.hasMemories || 
     memoryStatusInfo.hasDocuments || 
     memoryStatusInfo.hasImages ||
-    memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly;
+    memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ||
+    memoryStatusInfo.routingDecision === RoutingDecision.MemoryOnly ||
+    memoryStatusInfo.routingDecision === RoutingDecision.VisionOnly ||
+    memoryStatusInfo.routingDecision === RoutingDecision.DocumentsOnly ||
+    memoryStatusInfo.routingDecision === RoutingDecision.Hybrid;
 }

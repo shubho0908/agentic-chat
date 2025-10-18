@@ -48,11 +48,12 @@ export function removeModel(): void {
 }
 
 export function getMemoryEnabled(): boolean {
-  if (!isLocalStorageAvailable()) return false;
+  if (!isLocalStorageAvailable()) return true;
   try {
-    return localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED) === 'true';
+    const stored = localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED);
+    return stored === null ? true : stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -109,6 +110,17 @@ export function setDeepResearchEnabled(enabled: boolean): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+export function clearUserStorage(): void {
+  if (!isLocalStorageAvailable()) return;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
+    localStorage.removeItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED);
+  } catch (error) {
+    console.error('Error clearing user storage:', error);
   }
 }
 

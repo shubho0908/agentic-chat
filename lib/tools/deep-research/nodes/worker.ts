@@ -3,6 +3,7 @@ import type { ResearchState } from '../state';
 import type { ResearchTask, WebSearchProgress, WebSearchSource } from '@/types/tools';
 import { createWorkerPrompt } from '../prompts';
 import { executeWebSearch } from '../../web-search';
+import { getRAGContext } from '@/lib/rag/retrieval/context';
 
 const MAX_RETRIES = 2;
 
@@ -13,6 +14,9 @@ export async function workerNode(
     model: string;
     onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string }) => void;
     abortSignal?: AbortSignal;
+    userId?: string;
+    conversationId?: string;
+    attachmentIds?: string[];
   }
 ): Promise<Partial<ResearchState>> {
   const { taskQueue, completedTasks = [], currentTaskIndex = 0 } = state;
@@ -45,7 +49,53 @@ export async function workerNode(
 
     let searchResults = '';
     const sources: WebSearchSource[] = [];
+    let ragResults = '';
 
+    if (currentTask.tools.includes('rag') && config.userId && state.attachmentIds && state.attachmentIds.length > 0) {
+      config.onProgress?.(currentTaskIndex, {
+        toolName: 'rag',
+        status: 'retrieving',
+        message: 'Retrieving from attached documents...',
+      });
+
+      try {
+        const ragContext = await getRAGContext(
+          currentTask.question,
+          config.userId,
+          {
+            conversationId: config.conversationId,
+            attachmentIds: state.attachmentIds,
+            limit: 8,
+            scoreThreshold: 0.6,
+            waitForProcessing: false,
+          }
+        );
+
+        if (ragContext) {
+          ragResults = ragContext.context;
+          config.onProgress?.(currentTaskIndex, {
+            toolName: 'rag',
+            status: 'completed',
+            message: `Retrieved context from ${ragContext.documentCount} document(s)`,
+          });
+        } else {
+          config.onProgress?.(currentTaskIndex, {
+            toolName: 'rag',
+            status: 'completed',
+            message: 'No relevant document context found',
+          });
+        }
+      } catch (error) {
+        console.error('[Worker Node] RAG retrieval error:', error);
+        config.onProgress?.(currentTaskIndex, {
+          toolName: 'rag',
+          status: 'failed',
+          message: 'Document retrieval failed, continuing with other sources',
+        });
+      }
+    }
+
+    // Execute web search if requested
     if (currentTask.tools.includes('web_search')) {
       config.onProgress?.(currentTaskIndex, {
         toolName: 'web_search',
@@ -99,15 +149,32 @@ export async function workerNode(
     const llm = new ChatOpenAI({
       model: config.model,
       apiKey: config.openaiApiKey,
-      maxTokens: 4000,
     });
+
+    const contextParts = [];
+    
+    if (state.imageContext) {
+      contextParts.push(`## Image Context\n${state.imageContext}`);
+    }
+    
+    if (ragResults) {
+      contextParts.push(`## Document Context\n${ragResults}`);
+    }
+    
+    if (searchResults) {
+      contextParts.push(`## Web Search Results\n${searchResults}`);
+    }
+    
+    const combinedContext = contextParts.length > 0 
+      ? contextParts.join('\n\n---\n\n')
+      : 'Please answer based on your knowledge.';
 
     const workerPrompt = createWorkerPrompt(currentTask.question, previousFindings);
     
     const response = await llm.invoke(
       [
         { role: 'system', content: workerPrompt },
-        { role: 'user', content: searchResults || 'Please answer based on your knowledge.' },
+        { role: 'user', content: combinedContext },
       ],
       { signal: config.abortSignal }
     );

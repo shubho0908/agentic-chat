@@ -136,6 +136,55 @@ export async function incrementDeepResearchUsage(userId: string): Promise<DeepRe
   };
 }
 
+export async function decrementDeepResearchUsage(userId: string): Promise<DeepResearchUsageInfo> {
+  const { year, month } = getCurrentMonthYear();
+
+  const result = await prisma.deepResearchUsage.updateMany({
+    where: {
+      userId,
+      year,
+      month,
+      usageCount: {
+        gt: 0,
+      },
+    },
+    data: {
+      usageCount: {
+        decrement: 1,
+      },
+    },
+  });
+
+  if (result.count === 0) {
+    console.warn('[Deep Research Usage] Attempted to decrement usage when count is already 0 or record does not exist');
+    return checkDeepResearchUsage(userId);
+  }
+
+  const updated = await prisma.deepResearchUsage.findUnique({
+    where: {
+      userId_year_month: {
+        userId,
+        year,
+        month,
+      },
+    },
+  });
+
+  if (!updated) {
+    throw new Error('Failed to retrieve updated usage information after decrement');
+  }
+
+  const remaining = Math.max(0, MONTHLY_LIMIT - updated.usageCount);
+
+  return {
+    usageCount: updated.usageCount,
+    limit: MONTHLY_LIMIT,
+    remaining,
+    canUse: remaining > 0,
+    resetDate: getResetDate(),
+  };
+}
+
 export async function resetAllUsage(): Promise<void> {
   const { year, month } = getCurrentMonthYear();
   

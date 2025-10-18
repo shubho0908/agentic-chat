@@ -2,9 +2,14 @@ import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
-import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
+import { YOUTUBE_ANALYSIS_INSTRUCTIONS, WEB_SEARCH_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
 import type { DeepResearchProgress } from '@/types/tools';
-import { mapYouTubeStatus, mapDeepResearchStatus } from '@/lib/tools/status-mapping';
+import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
+import { executeWebSearch } from '@/lib/tools/web-search';
+import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube/youtube';
+import { executeDeepResearch } from '@/lib/tools/deep-research';
+import { executeGoogleWorkspace } from '@/lib/tools/google-suite/executor';
 
 export async function executeWebSearchTool(
   textQuery: string,
@@ -18,7 +23,7 @@ export async function executeWebSearchTool(
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('Search was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
       } catch {}
       return messages;
     }
@@ -30,8 +35,6 @@ export async function executeWebSearchTool(
     };
     
     controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
-    
-    const { executeWebSearch } = await import('@/lib/tools/web-search');
     
     const searchResults = await executeWebSearch(
       toolArgs,
@@ -70,7 +73,7 @@ export async function executeWebSearchTool(
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('Search was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
       } catch {}
       return messages;
     }
@@ -79,7 +82,7 @@ export async function executeWebSearchTool(
       controller.enqueue(encodeToolProgress(
         TOOL_IDS.WEB_SEARCH,
         'completed',
-        'Search failed, continuing without web results...'
+        TOOL_ERROR_MESSAGES.WEB_SEARCH.FAILED_FALLBACK
       ));
     } catch {}
     
@@ -94,11 +97,12 @@ export async function executeYouTubeTool(
   abortSignal?: AbortSignal
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  let streamClosed = false;
   
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('YouTube analysis was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
       } catch {}
       return messages;
     }
@@ -109,18 +113,24 @@ export async function executeYouTubeTool(
       language: 'en',
     };
     
-    controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
-    
-    const { executeYouTubeTool } = await import('@/lib/tools/youtube/youtube');
+    try {
+      controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
+    } catch {
+      console.error('[YouTube Tool] Failed to enqueue tool call (controller closed)');
+      streamClosed = true;
+      return messages;
+    }
     
     let totalVideos = 0;
     let processedCount = 0;
     
-    const youtubeResults = await executeYouTubeTool(
+    const youtubeResults = await executeYouTubeToolCore(
       toolArgs,
       textQuery,
       abortSignal,
       (progress) => {
+        if (streamClosed || abortSignal?.aborted) return;
+        
         if (progress.details?.videoCount) {
           totalVideos = progress.details.videoCount;
         }
@@ -128,27 +138,35 @@ export async function executeYouTubeTool(
           processedCount = progress.details.processedCount;
         }
         
-        const mappedStatus = mapYouTubeStatus(progress.status, {
-          step: progress.details?.step,
-          processedCount,
-          videoCount: totalVideos,
-        });
+        const mappedStatus = mapYouTubeStatus(progress.status);
         
-        controller.enqueue(encodeToolProgress(
-          TOOL_IDS.YOUTUBE,
-          mappedStatus,
-          progress.message,
-          {
-            ...progress.details,
-            processedCount,
-            videoCount: totalVideos
-          }
-        ));
-        setImmediate(() => {});
+        try {
+          controller.enqueue(encodeToolProgress(
+            TOOL_IDS.YOUTUBE,
+            mappedStatus,
+            progress.message,
+            {
+              ...progress.details,
+              processedCount,
+              videoCount: totalVideos
+            }
+          ));
+          setImmediate(() => {});
+        } catch {
+          console.error('[YouTube Tool] Failed to enqueue progress (controller closed)');
+          streamClosed = true;
+        }
       }
     );
     
-    controller.enqueue(encodeToolResult(TOOL_IDS.YOUTUBE, toolCallId, youtubeResults));
+    if (!streamClosed && !abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeToolResult(TOOL_IDS.YOUTUBE, toolCallId, youtubeResults));
+      } catch {
+        console.error('[YouTube Tool] Failed to enqueue result (controller closed)');
+        streamClosed = true;
+      }
+    }
     
     const youtubeContext = `\n\n## YouTube Video Context\n\n${youtubeResults}\n${YOUTUBE_ANALYSIS_INSTRUCTIONS}`;
     
@@ -158,16 +176,20 @@ export async function executeYouTubeTool(
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('YouTube analysis was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
       } catch {}
       return messages;
     }
     
-    controller.enqueue(encodeToolProgress(
-      TOOL_IDS.YOUTUBE,
-      'completed',
-      'YouTube processing failed, continuing without video data...'
-    ));
+    try {
+      controller.enqueue(encodeToolProgress(
+        TOOL_IDS.YOUTUBE,
+        'completed',
+        TOOL_ERROR_MESSAGES.YOUTUBE.FAILED_FALLBACK
+      ));
+    } catch {
+      console.error('[YouTube Tool] Failed to send error progress (controller closed)');
+    }
     return messages;
   }
 }
@@ -179,23 +201,26 @@ export async function executeDeepResearchTool(
   apiKey: string,
   model: string,
   forceDeepResearch: boolean = true,
-  abortSignal?: AbortSignal
-): Promise<{ messages: Message[]; failed: boolean }> {
+  abortSignal?: AbortSignal,
+  userId?: string,
+  conversationId?: string,
+  imageContext?: string,
+  attachmentIds?: string[],
+  documentContextForPlanning?: string
+): Promise<{ messages: Message[]; failed: boolean; skipped?: boolean }> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
   
   try {
     if (abortSignal?.aborted) {
       try {
-        controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: false };
     }
     
     controller.enqueue(encodeToolCall(TOOL_IDS.DEEP_RESEARCH, toolCallId, { query: textQuery }));
     setImmediate(() => {});
-    
-    const { executeDeepResearch } = await import('@/lib/tools/deep-research');
     
     const progressCallback = (progress: DeepResearchProgress) => {
       if (streamClosed || abortSignal?.aborted) {
@@ -231,15 +256,20 @@ export async function executeDeepResearchTool(
       onProgress: progressCallback,
       forceDeepResearch: forceDeepResearch,
       abortSignal,
+      userId,
+      conversationId,
+      imageContext,
+      attachmentIds,
+      documentContextForPlanning,
     });
     
     if (streamClosed || abortSignal?.aborted) {
       if (abortSignal?.aborted) {
         try {
-          controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+          controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
         } catch {}
       }
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: result.skipped };
     }
     
     try {
@@ -278,33 +308,114 @@ export async function executeDeepResearchTool(
     
     const researchContext = `\n\n## Deep Research Results\n\n${formattedResult}`;
     
-    return { messages: injectContextToMessages(messages, researchContext), failed: false };
+    return { messages: injectContextToMessages(messages, researchContext), failed: false, skipped: result.skipped };
   } catch (error) {
     console.error('[Chat API] Deep research error:', error);
     streamClosed = true;
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
-        controller.enqueue(encodeChatChunk('Research was aborted, please try again later.'));
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
       } catch {}
-      return { messages, failed: false };
+      return { messages, failed: false, skipped: false };
     }
     
     try {
       controller.enqueue(encodeToolProgress(
         TOOL_IDS.DEEP_RESEARCH,
         'completed',
-        'Research failed'
+        TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED
       ));
       
       controller.enqueue(encodeToolResult(
         TOOL_IDS.DEEP_RESEARCH, 
         toolCallId, 
-        'Deep research encountered an error and could not be completed. Please try again or rephrase your query.'
+        TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_DETAILED
       ));
     } catch {
       console.error('[Tool Executor] Failed to send error to UI (controller closed)');
     }
-    return { messages, failed: true };
+    return { messages, failed: true, skipped: false };
+  }
+}
+
+export async function executeGoogleSuiteTool(
+  textQuery: string,
+  controller: ReadableStreamDefaultController,
+  messages: Message[],
+  userId: string,
+  apiKey: string,
+  model: string,
+  abortSignal?: AbortSignal
+): Promise<Message[]> {
+  const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  let streamClosed = false;
+
+  try {
+    if (abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
+      } catch {}
+      return messages;
+    }
+
+    controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
+
+    const workspaceResults = await executeGoogleWorkspace({
+      query: textQuery,
+      userId,
+      apiKey,
+      model,
+      onProgress: (progress) => {
+        if (streamClosed || abortSignal?.aborted) return;
+
+        const mappedStatus = mapGoogleSuiteStatus(progress.status);
+
+        try {
+          controller.enqueue(encodeToolProgress(
+            TOOL_IDS.GOOGLE_SUITE,
+            mappedStatus,
+            progress.message,
+            progress.details
+          ));
+          setImmediate(() => {});
+        } catch {
+          console.error('[Google Workspace] Failed to enqueue progress (controller closed)');
+          streamClosed = true;
+        }
+      },
+      abortSignal,
+    });
+
+    if (!streamClosed && !abortSignal?.aborted) {
+      try {
+        controller.enqueue(encodeToolResult(TOOL_IDS.GOOGLE_SUITE, toolCallId, workspaceResults));
+      } catch {
+        streamClosed = true;
+      }
+    }
+
+    const workspaceContext = `\n\n## Google Workspace Context\n\n${workspaceResults}\n${GMAIL_ANALYSIS_INSTRUCTIONS}`;
+
+    return injectContextToMessages(messages, workspaceContext);
+  } catch (error) {
+    console.error('[Chat API] Google Workspace error:', error);
+
+    if (error instanceof Error && error.message.includes('aborted')) {
+      try {
+        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
+      } catch {}
+      return messages;
+    }
+
+    try {
+      controller.enqueue(encodeToolProgress(
+        TOOL_IDS.GOOGLE_SUITE,
+        'completed',
+        TOOL_ERROR_MESSAGES.GOOGLE_SUITE.FAILED_FALLBACK
+      ));
+    } catch {}
+
+    return messages;
   }
 }

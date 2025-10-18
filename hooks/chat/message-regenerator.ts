@@ -179,7 +179,7 @@ export async function handleRegenerateResponse(
         queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
       },
       activeTool,
-      memoryEnabled,
+      memoryEnabled: memoryEnabled ?? true,
       deepResearchEnabled: deepResearchEnabled ?? false,
     });
 

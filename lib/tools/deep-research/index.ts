@@ -10,6 +10,11 @@ export interface DeepResearchInput {
   onProgress?: (progress: DeepResearchProgress) => void;
   forceDeepResearch?: boolean;
   abortSignal?: AbortSignal;
+  userId?: string;
+  conversationId?: string;
+  attachmentIds?: string[];
+  imageContext?: string;
+  documentContextForPlanning?: string;
 }
 
 export interface DeepResearchResult {
@@ -25,7 +30,7 @@ export interface DeepResearchResult {
 export async function executeDeepResearch(
   input: DeepResearchInput
 ): Promise<DeepResearchResult> {
-  const { query, openaiApiKey, model, onProgress, forceDeepResearch = false, abortSignal } = input;
+  const { query, openaiApiKey, model, onProgress, forceDeepResearch = false, abortSignal, userId, conversationId, attachmentIds, imageContext, documentContextForPlanning } = input;
 
   onProgress?.({
     status: 'gate_check',
@@ -55,6 +60,8 @@ export async function executeDeepResearch(
     onProgress: progressCallback,
     forceDeepResearch,
     abortSignal,
+    userId,
+    conversationId,
   });
 
   const initialState: Partial<ResearchState> = {
@@ -75,6 +82,12 @@ export async function executeDeepResearch(
     citations: [],
     followUpQuestions: [],
     finalResponse: '',
+    // Context flags
+    hasDocuments: !!(attachmentIds && attachmentIds.length > 0),
+    attachmentIds: attachmentIds || [],
+    imageContext: imageContext || '',
+    hasImages: !!imageContext,
+    documentContextForPlanning: documentContextForPlanning || '',
   };
 
   let finalState = null as ResearchState | null;

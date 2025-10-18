@@ -204,7 +204,7 @@ export async function handleEditMessage(
         queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
       },
       activeTool,
-      memoryEnabled: memoryEnabled ?? false,
+      memoryEnabled: memoryEnabled ?? true,
       deepResearchEnabled: deepResearchEnabled ?? false,
     });
 

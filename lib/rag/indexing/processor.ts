@@ -1,9 +1,10 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { loadDocument, isSupportedForRAG } from './loader';
+import { loadDocument } from './loader';
+import { isSupportedForRAG } from '../utils';
 import { chunkDocuments, getOptimalChunkSize } from './chunker';
-import { deleteDocumentChunks } from './store';
+import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { getAuthorizedAttachment } from '../auth/attachment';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@/lib/generated/prisma';
@@ -102,16 +103,8 @@ export async function processDocument(
       pageContent: chunk.content,
       metadata: chunk.metadata ?? {},
     }));
-
-    const storeModule = await import('./store');
-    if (typeof storeModule.addDocumentsToPgVector !== 'function') {
-      throw new RAGError(
-        'addDocumentsToPgVector export is missing or not a function',
-        RAGErrorCode.DATABASE_INIT_ERROR
-      );
-    }
     
-    await storeModule.addDocumentsToPgVector(
+    await addDocumentsToPgVector(
       langchainDocs,
       attachmentId,
       userId,

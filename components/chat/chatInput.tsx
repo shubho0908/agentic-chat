@@ -1,4 +1,4 @@
-import { ClipboardEvent, useState, useEffect } from "react";
+import { ClipboardEvent, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
@@ -31,6 +31,7 @@ interface ChatInputProps {
   placeholder?: string;
   disabled?: boolean;
   centered?: boolean;
+  onAuthRequired?: () => void;
 }
 
 export function ChatInput({
@@ -40,6 +41,7 @@ export function ChatInput({
   placeholder = "Ask me anything...",
   disabled = false,
   centered = false,
+  onAuthRequired,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
@@ -53,8 +55,20 @@ export function ChatInput({
     return getStoredDeepResearchEnabled();
   });
 
-  const { data: session } = useSession();
+  const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage();
+  const prevSessionRef = useRef<typeof session | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isPending && prevSessionRef.current !== undefined) {
+      if (prevSessionRef.current && !session) {
+        setActiveTool(null);
+        setMemoryEnabled(false);
+        setDeepResearchEnabled(false);
+      }
+    }
+    prevSessionRef.current = session;
+  }, [session, isPending]);
 
   useEffect(() => {
     if (activeTool) {
@@ -198,6 +212,15 @@ export function ChatInput({
   }
 
   function handleToolSelected(toolId: ToolId) {
+    if (!session) {
+      onAuthRequired?.();
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: 'Please sign in to use tools',
+        duration: 3000,
+      });
+      return;
+    }
+
     if (activeTool === toolId) {
       handleToolDeactivated();
       return;
@@ -238,6 +261,15 @@ export function ChatInput({
   }
 
   function handleMemoryToggle(enabled: boolean) {
+    if (enabled && !session) {
+      onAuthRequired?.();
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: 'Please sign in to use memory features',
+        duration: 3000,
+      });
+      return;
+    }
+    
     setMemoryEnabled(enabled);
     toast.success(enabled ? 'Memory enabled' : 'Memory disabled', {
       duration: 2500,
@@ -269,6 +301,7 @@ export function ChatInput({
     onMemoryToggle: handleMemoryToggle,
     onFilesSelected: handleFilesSelectedWithAuth,
     onStop,
+    onAuthRequired,
   };
 
   if (centered) {

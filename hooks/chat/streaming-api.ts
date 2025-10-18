@@ -9,7 +9,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
     stream: true,
     conversationId,
     activeTool: activeTool || null,
-    memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : false,
+    memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : true,
     deepResearchEnabled: deepResearchEnabled !== undefined ? deepResearchEnabled : false,
 
   };
