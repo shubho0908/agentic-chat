@@ -228,12 +228,22 @@ export async function handleDriveMove(
 
   const previousParents = file.data.parents?.join(',') || '';
 
-  const response = await drive.files.update({
+  const updateParams: {
+    fileId: string;
+    addParents: string;
+    removeParents?: string;
+    fields: string;
+  } = {
     fileId: args.fileId,
     addParents: args.targetFolderId,
-    removeParents: previousParents,
     fields: 'id, name, webViewLink',
-  });
+  };
+
+  if (previousParents) {
+    updateParams.removeParents = previousParents;
+  }
+
+  const response = await drive.files.update(updateParams);
 
   return `Successfully moved "${response.data.name}"
 **Link:** ${response.data.webViewLink}`;
