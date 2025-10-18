@@ -16,10 +16,8 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationUrl | { err
       return error;
     }
 
-    // Generate cryptographic nonce for CSRF protection
     const nonce = randomBytes(32).toString('hex');
     
-    // Combine nonce and user ID for state parameter
     const state = `${nonce}:${user.id}`;
 
     const oauth2Client = createOAuth2Client();
@@ -28,17 +26,17 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationUrl | { err
       access_type: 'offline',
       scope: ALL_GOOGLE_SUITE_SCOPES,
       prompt: 'consent',
+      include_granted_scopes: true,
       state,
     });
 
     const response = NextResponse.json<GoogleAuthorizationUrl>({ authUrl });
     
-    // Store nonce in secure, HttpOnly cookie with short TTL (10 minutes)
     response.cookies.set('gsuite_oauth_state', nonce, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 600, // 10 minutes
+      maxAge: 600,
       path: '/api/google-suite/auth/callback',
     });
 

@@ -80,6 +80,9 @@ export function useGoogleSuiteAuth() {
         state_mismatch: 'Authorization state mismatch - possible security issue',
         not_authenticated: 'Please sign in to authorize Google Suite',
         user_mismatch: 'User session mismatch - please try again',
+        permissions_needed: 'Additional Google Workspace permissions required',
+        insufficient_permissions: 'Not all required permissions were granted - please accept all requested permissions',
+        token_invalid: 'Your Google authorization has expired or been revoked - please re-authorize',
       };
       setError(errorMessages[reason] || `Authorization failed: ${reason}`);
       window.history.replaceState({}, '', window.location.pathname);

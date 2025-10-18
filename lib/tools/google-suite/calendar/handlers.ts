@@ -39,15 +39,17 @@ export async function handleCalendarCreateEvent(
   
   const startDate = new Date(args.startTime);
   if (isNaN(startDate.getTime())) {
+    console.error('[Calendar Handler] Invalid startTime:', args.startTime);
     throw new Error(`Invalid startTime format: "${args.startTime}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`);
   }
-  
   const endDate = new Date(args.endTime);
   if (isNaN(endDate.getTime())) {
+    console.error('[Calendar Handler] Invalid endTime:', args.endTime);
     throw new Error(`Invalid endTime format: "${args.endTime}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`);
   }
   
   if (endDate.getTime() <= startDate.getTime()) {
+    console.error('[Calendar Handler] endTime must be after startTime');
     throw new Error(`endTime (${args.endTime}) must be after startTime (${args.startTime})`);
   }
   
@@ -66,21 +68,33 @@ export async function handleCalendarCreateEvent(
     end: { dateTime: args.endTime, timeZone },
   };
 
-  if (args.description) event.description = args.description;
-  if (args.location) event.location = args.location;
+  if (args.description) {
+    event.description = args.description;
+  }
+  if (args.location) {
+    event.location = args.location;
+  }
   if (args.attendees) {
     event.attendees = args.attendees.map(email => ({ email }));
   }
 
-  const response = await calendar.events.insert({
-    calendarId: args.calendarId || 'primary',
-    requestBody: event,
-  });
+  const calendarId = args.calendarId || 'primary';
+  try {
+    const response = await calendar.events.insert({
+      calendarId,
+      requestBody: event,
+    });
 
-  return `Event created successfully!
+    return `Event created successfully!
 **Title:** ${args.summary}
 **Start:** ${args.startTime}
-**Link:** ${response.data.htmlLink}`;
+**End:** ${args.endTime}
+${args.attendees ? `**Attendees:** ${args.attendees.join(', ')}\n` : ''}**Link:** ${response.data.htmlLink}`;
+  } catch (error) {
+    console.error('[Calendar Handler] ✗ Failed to create event');
+    console.error('[Calendar Handler] Error:', error);
+    throw error;
+  }
 }
 
 export async function handleCalendarUpdateEvent(

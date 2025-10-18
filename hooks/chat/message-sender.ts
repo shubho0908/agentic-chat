@@ -332,7 +332,9 @@ export async function handleSendMessage(
 
       if (session?.user?.id && memoryEnabled === true && !deepResearchEnabled) {
         const textContent = extractTextFromContent(messageContent);
-        await storeConversationMemory(textContent, assistantContent, session.user.id);
+        storeConversationMemory(textContent, assistantContent, session.user.id).catch((err) => {
+          console.error('[Memory] Failed to store conversation memory:', err);
+        });
       }
     }
 

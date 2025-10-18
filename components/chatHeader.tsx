@@ -3,7 +3,7 @@
 import { type RefObject } from "react";
 import { LogIn, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTriggerWithShortcut } from "@/components/sidebarTriggerWithShortcut";
 import { BYOK } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
@@ -36,7 +36,7 @@ export function ChatHeader({
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white/80 dark:bg-black/40 backdrop-blur-md p-4 shadow-sm dark:shadow-xl border-b border-border/40 dark:border-white/20 md:left-auto md:top-4 md:right-4 md:bg-transparent md:backdrop-blur-none md:p-0 md:shadow-none md:border-0">
       {session && (
-        <SidebarTrigger className="md:hidden" />
+        <SidebarTriggerWithShortcut className="md:hidden" showTooltip={false} />
       )}
       <div className="flex items-center gap-2 md:ml-0 ml-auto">
       {isPending ? (

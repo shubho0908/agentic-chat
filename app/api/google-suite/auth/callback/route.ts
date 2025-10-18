@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { google } from 'googleapis';
 import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUser } from '@/lib/api-utils';
-import { GOOGLE_SUITE_PROVIDER_ID } from '@/lib/tools/google-suite/scopes';
+import { GOOGLE_PROVIDER_ID, ALL_GOOGLE_SUITE_SCOPES } from '@/lib/tools/google-suite/scopes';
 import { createOAuth2Client } from '@/lib/tools/google-suite/client';
 
 export const runtime = 'nodejs';
@@ -28,7 +28,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Parse state parameter (format: nonce:userId)
     const stateParts = state.split(':');
     if (stateParts.length !== 2) {
       console.error('[Google Suite Callback] Invalid state format');
@@ -39,7 +38,6 @@ export async function GET(request: NextRequest) {
 
     const [receivedNonce, stateUserId] = stateParts;
 
-    // Retrieve stored nonce from cookie
     const storedNonce = request.cookies.get('gsuite_oauth_state')?.value;
 
     if (!storedNonce) {
@@ -49,7 +47,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate nonce matches (CSRF protection)
     if (receivedNonce !== storedNonce) {
       console.error('[Google Suite Callback] OAuth state mismatch - possible CSRF attack');
       return NextResponse.redirect(
@@ -57,7 +54,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify user is still authenticated and matches state
     const { user, error: authError } = await getAuthenticatedUser(await headers());
     if (authError || !user) {
       console.error('[Google Suite Callback] User not authenticated');
@@ -100,64 +96,64 @@ export async function GET(request: NextRequest) {
       ? new Date(tokens.expiry_date)
       : new Date(Date.now() + 3600 * 1000);
 
-    const primaryAccount = await prisma.account.findFirst({
-      where: { userId, providerId: 'google' },
-      select: { accountId: true },
+    const existing = await prisma.account.findFirst({
+      where: { userId, providerId: GOOGLE_PROVIDER_ID },
+      select: { accountId: true, refreshToken: true },
     });
 
-    if (primaryAccount && primaryAccount.accountId !== userInfo.id) {
-      console.warn(
-        `[Google Suite Callback] Account mismatch for user ${userId}: expected ${primaryAccount.accountId}, got ${userInfo.id}`
-      );
+    if (existing?.accountId && existing.accountId !== userInfo.id) {
+      console.warn(`[Google Suite Callback] Account mismatch: expected ${existing.accountId}, got ${userInfo.id}`);
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=account_mismatch`
       );
     }
 
-    // Check for existing account to preserve refresh token on re-consent
-    const existing = await prisma.account.findUnique({
-      where: {
-        providerId_accountId: {
-          providerId: GOOGLE_SUITE_PROVIDER_ID,
-          accountId: userInfo.id,
-        },
-      },
-      select: { refreshToken: true },
-    });
-
-    // Only require refresh_token on first-time link; otherwise retain existing
     if (!existing && !tokens.refresh_token) {
-      console.error('[Google Suite Callback] No refresh token provided on first authorization');
+      console.error('[Google Suite Callback] No refresh token on first authorization');
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=no_refresh_token`
+      );
+    }
+
+    const grantedScopes = new Set(tokens.scope?.split(' ') || []);
+    const missingScopes = ALL_GOOGLE_SUITE_SCOPES.filter(scope => !grantedScopes.has(scope));
+    
+    if (missingScopes.length > 0) {
+      console.warn('[Google Suite Callback] Not all required scopes were granted by Google:', {
+        userId,
+        granted: grantedScopes.size,
+        missing: missingScopes.length,
+        missingScopes,
+      });
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=error&reason=insufficient_permissions`
       );
     }
 
     await prisma.account.upsert({
       where: {
         providerId_accountId: {
-          providerId: GOOGLE_SUITE_PROVIDER_ID,
+          providerId: GOOGLE_PROVIDER_ID,
           accountId: userInfo.id,
         },
       },
       update: {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? existing?.refreshToken ?? undefined,
+        refreshToken: tokens.refresh_token ?? existing?.refreshToken,
         accessTokenExpiresAt: expiresAt,
         scope: tokens.scope,
       },
       create: {
-        providerId: GOOGLE_SUITE_PROVIDER_ID,
+        providerId: GOOGLE_PROVIDER_ID,
         accountId: userInfo.id,
         userId,
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? undefined,
+        refreshToken: tokens.refresh_token,
         accessTokenExpiresAt: expiresAt,
         scope: tokens.scope,
       },
     });
 
-    // Clear OAuth state cookie after successful validation and processing
     const response = NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=success`
     );

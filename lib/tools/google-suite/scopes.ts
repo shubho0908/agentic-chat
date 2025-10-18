@@ -11,11 +11,9 @@ export const GOOGLE_SCOPES = {
   
   // Google Drive scopes
   DRIVE: 'https://www.googleapis.com/auth/drive',
-  DRIVE_FILE: 'https://www.googleapis.com/auth/drive.file',
   
   // Google Calendar scopes
   CALENDAR: 'https://www.googleapis.com/auth/calendar',
-  CALENDAR_EVENTS: 'https://www.googleapis.com/auth/calendar.events',
   
   // Google Docs scopes
   DOCS: 'https://www.googleapis.com/auth/documents',
@@ -43,4 +41,4 @@ export const ALL_GOOGLE_SUITE_SCOPES = [
   ...SCOPE_GROUPS.WORKSPACE,
 ];
 
-export const GOOGLE_SUITE_PROVIDER_ID = 'google-suite';
+export const GOOGLE_PROVIDER_ID = 'google-workspace';

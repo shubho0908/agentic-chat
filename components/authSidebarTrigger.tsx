@@ -1,6 +1,6 @@
 "use client";
 
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTriggerWithShortcut } from "@/components/sidebarTriggerWithShortcut";
 import { useSession } from "@/lib/auth-client";
 
 export function AuthSidebarTrigger() {
@@ -11,6 +11,6 @@ export function AuthSidebarTrigger() {
   }
 
   return (
-    <SidebarTrigger className="hidden md:flex fixed left-2 top-4 z-50 transition-[left] duration-200 ease-linear md:left-[13.5rem] md:peer-data-[state=collapsed]:left-2" />
+    <SidebarTriggerWithShortcut className="hidden md:flex fixed left-2 top-4 z-50 transition-[left] duration-200 ease-linear md:left-[13.5rem] md:peer-data-[state=collapsed]:left-2" />
   );
 }

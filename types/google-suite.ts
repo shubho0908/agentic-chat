@@ -2,7 +2,7 @@ export interface GoogleAuthorizationStatus {
   authorized: boolean;
   needsRefresh?: boolean;
   expiresAt?: string | null;
-  reason?: 'no_google_account' | 'no_tokens' | 'missing_scopes';
+  reason?: 'no_google_account' | 'permissions_needed' | 'no_tokens' | 'missing_scopes' | 'insufficient_permissions' | 'token_invalid';
   message?: string;
   missingScopes?: string[];
 }

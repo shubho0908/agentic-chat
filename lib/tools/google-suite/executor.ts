@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { GOOGLE_WORKSPACE_TOOLS } from '@/lib/tools/google-suite/definitions';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
-import { createGoogleSuiteClient } from '@/lib/tools/google-suite/client';
+import { createGoogleSuiteClient, GOOGLE_AUTH_REVOKED_ERROR } from '@/lib/tools/google-suite/client';
 import { getToolDisplayName } from '@/utils/google/tool-names';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
 import type {
@@ -213,6 +213,18 @@ export async function executeGoogleWorkspace(
       if (!message) throw new Error('No response from AI');
 
       if (!message.tool_calls?.length) {
+        if (iteration === 1 && taskCount === 0) {
+          messages.push({
+            role: 'assistant',
+            content: message.content,
+          });
+          messages.push({
+            role: 'user',
+            content: `You MUST execute the requested actions using the available tools. Break down the user's request into specific tool calls and execute them now. Do not just respond with text - use the tools provided.`,
+          });
+          continue;
+        }
+        
         finalResponse = message.content || 'Task completed successfully.';
         onProgress?.({
           status: 'completed',
@@ -230,6 +242,7 @@ export async function executeGoogleWorkspace(
       const toolResults = await Promise.all(
         message.tool_calls.map(async (toolCall) => {
           if (toolCall.type !== 'function') {
+            console.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
             return { tool_call_id: toolCall.id, content: 'Invalid tool call type' };
           }
 
@@ -239,6 +252,7 @@ export async function executeGoogleWorkspace(
           try {
             args = JSON.parse(toolCall.function.arguments) as HandlerArgs;
           } catch {
+            console.error('[Google Workspace Executor] Failed to parse arguments:', toolCall.function.arguments);
             return {
               tool_call_id: toolCall.id,
               content: 'Error: Invalid JSON arguments',
@@ -257,16 +271,32 @@ export async function executeGoogleWorkspace(
             consecutiveErrors = 0;
             return { tool_call_id: toolCall.id, content: result };
           } catch (error) {
+            if (error instanceof Error && error.message === GOOGLE_AUTH_REVOKED_ERROR) {
+              console.error(`[Google Workspace Executor] ✗ Authorization revoked for ${functionName}`);
+              onProgress?.({
+                status: 'auth_required',
+                message: 'Google Workspace authorization has been revoked or expired',
+              });
+              return {
+                tool_call_id: toolCall.id,
+                content: 'Error: Your Google Workspace authorization has been revoked or expired. Please click the "Authorize Google Suite" button in the Tools menu to re-authenticate and grant the necessary permissions.',
+              };
+            }
+
             consecutiveErrors++;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`[Google Workspace Executor] ✗ ${functionName} failed:`, errorMessage);
+            console.error('[Google Workspace Executor] Error details:', error);
             return {
               tool_call_id: toolCall.id,
-              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              content: `Error: ${errorMessage}`,
             };
           }
         })
       );
 
       if (consecutiveErrors >= 3) {
+        console.error('[Google Workspace Executor] Too many consecutive errors, aborting');
         return 'Multiple consecutive errors occurred. Please check your request and try again.';
       }
 
@@ -298,8 +328,17 @@ export async function executeGoogleWorkspace(
   } catch (error) {
     console.error('[Google Workspace] Error:', error);
 
+    if (error instanceof Error && error.message === GOOGLE_AUTH_REVOKED_ERROR) {
+      onProgress?.({
+        status: 'auth_required',
+        message: 'Google Workspace authorization has been revoked or expired',
+      });
+      return 'Your Google Workspace authorization has been revoked or expired. Please click the "Authorize Google Suite" button in the Tools menu to re-authenticate and grant the necessary permissions.';
+    }
+
     if (error instanceof Error) {
-      if (error.message.includes('No valid Google account tokens')) {
+      if (error.message.includes('No valid Google account tokens') || 
+          error.message.includes('not authorized')) {
         onProgress?.({
           status: 'auth_required',
           message: 'Google Workspace authorization required',
