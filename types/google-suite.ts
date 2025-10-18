@@ -1,7 +1,7 @@
 export interface GoogleAuthorizationStatus {
   authorized: boolean;
   needsRefresh?: boolean;
-  expiresAt?: Date | null;
+  expiresAt?: string | null;
   reason?: 'no_google_account' | 'no_tokens' | 'missing_scopes';
   message?: string;
   missingScopes?: string[];

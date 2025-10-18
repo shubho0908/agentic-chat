@@ -32,7 +32,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         reason: 'no_google_account',
-        message: 'No Google account connected. Please authorize Gmail access.',
+        message: 'No Google account connected. Please authorize Google Workspace access.',
       });
     }
 
@@ -59,7 +59,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
     return NextResponse.json<GoogleAuthorizationStatus>({
       authorized: true,
       needsRefresh: isExpired,
-      expiresAt: account.accessTokenExpiresAt,
+      expiresAt: account.accessTokenExpiresAt?.toISOString() ?? null,
     });
   } catch (error) {
     console.error('[Google Suite Auth Status] Error:', error);
