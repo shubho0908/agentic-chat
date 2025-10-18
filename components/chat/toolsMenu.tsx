@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Brain, Paperclip, Info, UnplugIcon, Zap, Check } from "lucide-react";
+import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { motion } from "framer-motion";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -18,15 +18,14 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { useSession } from "@/lib/auth-client";
-import { GOOGLE_SUITE_SERVICES } from "@/components/icons/google-suite-icons";
+import { ToolMenuItem } from "./toolMenuItem";
+import { MemoryToggle } from "./memoryToggle";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -61,11 +60,9 @@ export function ToolsMenu({
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
   const { data: session } = useSession();
   const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage();
   const { status: googleSuiteStatus, isLoading: googleSuiteLoading, authorize: authorizeGoogleSuite } = useGoogleSuiteAuth();
-  
   const deepResearchUsage = {
     remaining: usageData?.remaining ?? 3,
     limit: usageData?.limit ?? 3,
@@ -78,12 +75,10 @@ export function ToolsMenu({
       setIsOpen(false);
       return;
     }
-    
     if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
       authorizeGoogleSuite();
       return;
     }
-    
     onToolSelected?.(toolId);
     setIsOpen(false);
   };
@@ -104,7 +99,6 @@ export function ToolsMenu({
 
   const handleButtonClick = (e: React.MouseEvent) => {
     if (disabled) return;
-    
     if (showToolIcon && activeTool) {
       e.preventDefault();
       e.stopPropagation();
@@ -114,7 +108,6 @@ export function ToolsMenu({
 
   if (showToolIcon) {
     const toolConfig = activeTool ? AVAILABLE_TOOLS[activeTool] : null;
-    
     if (!toolConfig) return null;
     const ActiveToolIcon = toolConfig.icon;
 
@@ -249,29 +242,7 @@ export function ToolsMenu({
                 </>
               )}
 
-              <div className="px-2 py-2 space-y-3">
-                <div className="flex items-center justify-between space-x-3">
-                  <div className="flex items-center gap-2">
-                    <Brain className={`size-4 ${memoryEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <Label
-                      htmlFor="memory-toggle"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Memory
-                    </Label>
-                  </div>
-                  <Switch
-                    id="memory-toggle"
-                    checked={memoryEnabled}
-                    onCheckedChange={onMemoryToggle}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {memoryEnabled
-                    ? "AI will remember context from past conversations"
-                    : "AI will not access conversation history"}
-                </p>
-              </div>
+              <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
 
               <DropdownMenuSeparator />
 
@@ -295,226 +266,23 @@ export function ToolsMenu({
                   </div>
                   {Object.values(AVAILABLE_TOOLS)
                     .filter((tool): tool is ToolConfig => tool !== undefined)
-                    .map((tool) => {
-                    const ToolIcon = tool.icon;
-                    const isActive = activeTool === tool.id;
-                    const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
-                    const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
-                    const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-                    const isNotAuthenticated = !session;
-                    const isDisabled = isNotAuthenticated || (isDeepResearch && !deepResearchUsage.loading && deepResearchUsage.remaining === 0);
-                    const needsAuth = isGoogleSuite && !googleSuiteLoading && !googleSuiteStatus?.authorized;
-
-                    if (isWebSearch) {
-                      return (
-                        <div key={tool.id}>
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger
-                              className={cn(
-                                "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
-                                isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
-                              )}
-                            >
-                              <div 
-                                className="relative flex items-center justify-center size-9 rounded-lg transition-all group-hover:scale-110"
-                                style={{
-                                  background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
-                                }}
-                              >
-                                <ToolIcon
-                                  className={cn(
-                                    "size-4 transition-colors",
-                                    isActive ? tool.iconColorClass : 'text-muted-foreground group-hover:text-foreground'
-                                  )}
-                                />
-                              </div>
-                              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-medium truncate">{tool.name}</span>
-                                  <Badge 
-                                    variant={searchDepth === 'advanced' ? 'default' : 'outline'} 
-                                    className={cn(
-                                      "text-[10px] py-0 px-1.5 h-4 shrink-0 hover:bg-secondary",
-                                      searchDepth === 'advanced' && "bg-primary/20 text-primary border-primary/30"
-                                    )}
-                                  >
-                                    {searchDepth === 'advanced' ? 'Advanced' : 'Basic'}
-                                  </Badge>
-                                </div>
-                                <span className="text-xs text-muted-foreground truncate">
-                                  {tool.description}
-                                </span>
-                              </div>
-                              {isActive && (
-                                <motion.div
-                                  initial={{ scale: 0 }}
-                                  animate={{ scale: 1 }}
-                                  className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-                                />
-                              )}
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent sideOffset={8} className="w-56 p-1">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  onSearchDepthChange?.('basic');
-                                  handleToolSelect(tool.id);
-                                }}
-                                className="gap-3 py-2.5 rounded-md cursor-pointer"
-                              >
-                                <div className="flex items-center justify-center size-8 rounded-md bg-muted/50">
-                                  <Zap className="size-4 text-muted-foreground" />
-                                </div>
-                                <div className="flex flex-col gap-0.5 flex-1">
-                                  <span className="font-medium text-sm">Basic Search</span>
-                                  <span className="text-xs text-muted-foreground">Quick results, faster response</span>
-                                </div>
-                                {searchDepth === 'basic' && (
-                                  <Check className="size-4 text-primary ml-auto" />
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  onSearchDepthChange?.('advanced');
-                                  handleToolSelect(tool.id);
-                                }}
-                                className="gap-3 py-2.5 rounded-md cursor-pointer"
-                              >
-                                <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary/10 to-primary/5">
-                                  <Zap fill="yellow" className="size-4 text-primary" />
-                                </div>
-                                <div className="flex flex-col gap-0.5 flex-1">
-                                  <span className="font-medium text-sm">Advanced Search</span>
-                                  <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
-                                </div>
-                                {searchDepth === 'advanced' && (
-                                  <Check className="size-4 text-primary ml-auto" />
-                                )}
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        </div>
-                      );
-                    }
-
-                    return (
+                    .map((tool) => (
                       <div key={tool.id}>
-                        <DropdownMenuItem
-                          onClick={() => !isDisabled && handleToolSelect(tool.id)}
-                          disabled={isDisabled}
-                          className={cn(
-                            "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
-                            isDisabled && "opacity-50 cursor-not-allowed",
-                            isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
-                          )}
-                        >
-                          <div 
-                            className="relative flex items-center justify-center size-9 rounded-lg transition-all group-hover:scale-110"
-                            style={{
-                              background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
-                            }}
-                          >
-                            <ToolIcon
-                              className={cn(
-                                "size-4 transition-colors",
-                                isActive ? tool.iconColorClass : 'text-muted-foreground group-hover:text-foreground'
-                              )}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-medium truncate">{tool.name}</span>
-                              {!isNotAuthenticated && needsAuth && (
-                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-                                  Auth Required
-                                </Badge>
-                              )}
-                              {isDeepResearch && (
-                                <TooltipProvider>
-                                  <Tooltip delayDuration={200}>
-                                    <TooltipTrigger asChild>
-                                      <Info 
-                                        className="size-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help shrink-0" 
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs">
-                                      <div className="space-y-1">
-                                        <p className="font-medium">
-                                          {deepResearchUsage.loading ? (
-                                            "Loading usage..."
-                                          ) : deepResearchUsage.remaining === 0 ? (
-                                            "Limit Reached"
-                                          ) : (
-                                            "Usage Information"
-                                          )}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {isNotAuthenticated ? (
-                                            "Please login to use this tool. Deep Research performs comprehensive research across multiple sources to provide in-depth analysis."
-                                          ) : deepResearchUsage.loading ? (
-                                            "Please wait..."
-                                          ) : deepResearchUsage.remaining === 0 ? (
-                                            `You've used all ${deepResearchUsage.limit} deep research queries this month. Resets next month.`
-                                          ) : (
-                                            `${deepResearchUsage.remaining} of ${deepResearchUsage.limit} deep research queries remaining this month.`
-                                          )}
-                                        </p>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                              {isGoogleSuite && (
-                                <TooltipProvider>
-                                  <Tooltip delayDuration={200}>
-                                    <TooltipTrigger asChild>
-                                      <Info 
-                                        className="size-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help shrink-0" 
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-xs p-3">
-                                      <div className="space-y-2">
-                                        <p className="font-medium text-sm">Available Tools</p>
-                                        <div className="grid grid-cols-3 gap-2">
-                                          {GOOGLE_SUITE_SERVICES.map((service) => {
-                                            const ServiceIcon = service.icon;
-                                            return (
-                                              <div
-                                                key={service.name}
-                                                className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-accent/20 transition-colors cursor-pointer"
-                                              >
-                                                <div className="size-8 flex items-center justify-center">
-                                                  <ServiceIcon className="size-7" />
-                                                </div>
-                                                <span className="text-[10px] font-medium text-center">
-                                                  {service.name}
-                                                </span>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                            <span className="text-xs text-muted-foreground truncate">
-                              {isNotAuthenticated ? 'Login required to access this tool' : isGoogleSuite && needsAuth ? 'Click to authorize Gmail access' : tool.description}
-                            </span>
-                          </div>
-                          {isActive && (
-                            <motion.div
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-                            />
-                          )}
-                        </DropdownMenuItem>
+                        <ToolMenuItem
+                          tool={tool}
+                          isActive={activeTool === tool.id}
+                          isAuthenticated={!!session}
+                          searchDepth={searchDepth}
+                          deepResearchUsage={deepResearchUsage}
+                          googleSuiteStatus={{
+                            authorized: googleSuiteStatus?.authorized ?? false,
+                            loading: googleSuiteLoading,
+                          }}
+                          onToolSelect={handleToolSelect}
+                          onSearchDepthChange={onSearchDepthChange}
+                        />
                       </div>
-                    );
-                  })}
+                    ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             </div>
