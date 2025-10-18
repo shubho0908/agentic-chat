@@ -37,8 +37,10 @@ export async function handleDriveListFolder(
   let targetFolderId = args.folderId;
   
   if (!targetFolderId && args.folderName) {
+    // Escape single quotes in folder name to prevent query syntax errors
+    const escapedFolderName = args.folderName.replace(/'/g, "\\'");
     const searchResponse = await drive.files.list({
-      q: `name='${args.folderName}' and mimeType='application/vnd.google-apps.folder'`,
+      q: `name='${escapedFolderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       pageSize: 5,
       fields: 'files(id, name, webViewLink)',
     });
@@ -111,12 +113,32 @@ export async function handleDriveReadFile(
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
-  const response = await drive.files.export({
-    fileId: args.fileId,
-    mimeType: args.mimeType || 'text/plain',
-  }, { responseType: 'text' });
-
-  return response.data as string;
+  // Get file metadata to detect if it's a Google Workspace document
+  const meta = await drive.files.get({ 
+    fileId: args.fileId, 
+    fields: 'mimeType', 
+    supportsAllDrives: true 
+  });
+  
+  const fileMimeType = meta.data.mimeType || '';
+  const isGoogleDoc = fileMimeType.startsWith('application/vnd.google-apps.');
+  
+  if (isGoogleDoc) {
+    // Use export for Google Workspace documents (Docs, Sheets, Slides, etc.)
+    const response = await drive.files.export({
+      fileId: args.fileId,
+      mimeType: args.mimeType || 'text/plain',
+    }, { responseType: 'text' });
+    return response.data as string;
+  } else {
+    // Use get with alt=media for regular uploaded files (PDFs, images, etc.)
+    const response = await drive.files.get({
+      fileId: args.fileId,
+      alt: 'media',
+      supportsAllDrives: true,
+    }, { responseType: 'text' });
+    return response.data as string;
+  }
 }
 
 export async function handleDriveCreateFile(

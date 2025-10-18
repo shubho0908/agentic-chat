@@ -60,15 +60,14 @@ export async function handleDocsAppend(
 ): Promise<string> {
   const docs = google.docs({ version: 'v1', auth: context.oauth2Client });
   
-  const doc = await docs.documents.get({ documentId: args.documentId });
-  const endIndex = doc.data.body?.content?.[doc.data.body.content.length - 1]?.endIndex || 1;
-
   await docs.documents.batchUpdate({
     documentId: args.documentId,
     requestBody: {
       requests: [{
         insertText: {
-          location: { index: endIndex - 1 },
+          endOfSegmentLocation: {
+            segmentId: '',
+          },
           text: args.text,
         },
       }],
