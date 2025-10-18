@@ -65,6 +65,11 @@ export const CALENDAR_TOOLS: ChatCompletionTool[] = [
             items: { type: 'string' },
             description: 'List of attendee email addresses (optional)',
           },
+          calendarId: {
+            type: 'string',
+            description: 'Calendar ID (default: primary)',
+            default: 'primary',
+          },
         },
         required: ['summary', 'startTime', 'endTime'],
       },
@@ -101,6 +106,11 @@ export const CALENDAR_TOOLS: ChatCompletionTool[] = [
           location: {
             type: 'string',
             description: 'Updated event location (optional)',
+          },
+          calendarId: {
+            type: 'string',
+            description: 'Calendar ID (default: primary)',
+            default: 'primary',
           },
         },
         required: ['eventId'],

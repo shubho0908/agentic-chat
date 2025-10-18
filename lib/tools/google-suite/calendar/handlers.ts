@@ -40,9 +40,24 @@ export async function handleCalendarCreateEvent(
     location?: string;
     attendees?: string[];
     timeZone?: string;
+    calendarId?: string;
   }
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
+  
+  const startDate = new Date(args.startTime);
+  if (isNaN(startDate.getTime())) {
+    throw new Error(`Invalid startTime format: "${args.startTime}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`);
+  }
+  
+  const endDate = new Date(args.endTime);
+  if (isNaN(endDate.getTime())) {
+    throw new Error(`Invalid endTime format: "${args.endTime}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`);
+  }
+  
+  if (endDate.getTime() <= startDate.getTime()) {
+    throw new Error(`endTime (${args.endTime}) must be after startTime (${args.startTime})`);
+  }
   
   const timeZone = args.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   
@@ -66,7 +81,7 @@ export async function handleCalendarCreateEvent(
   }
 
   const response = await calendar.events.insert({
-    calendarId: 'primary',
+    calendarId: args.calendarId || 'primary',
     requestBody: event,
   });
 
@@ -85,27 +100,72 @@ export async function handleCalendarUpdateEvent(
     endTime?: string;
     description?: string;
     location?: string;
+    calendarId?: string;
   }
 ): Promise<string> {
   const calendar = google.calendar({ version: 'v3', auth: context.oauth2Client });
   
+  const calendarId = args.calendarId || 'primary';
+  
   const event = await calendar.events.get({
-    calendarId: 'primary',
+    calendarId,
     eventId: args.eventId,
   });
 
-  const updatedEvent: Record<string, unknown> = { ...event.data };
-
   const timeZone = (event.data.start?.timeZone as string | undefined) || Intl.DateTimeFormat().resolvedOptions().timeZone;
   
-  if (args.summary) updatedEvent.summary = args.summary;
-  if (args.startTime) updatedEvent.start = { dateTime: args.startTime, timeZone };
-  if (args.endTime) updatedEvent.end = { dateTime: args.endTime, timeZone };
+  const updatedEvent: {
+    summary?: string;
+    start?: { dateTime: string; timeZone: string };
+    end?: { dateTime: string; timeZone: string };
+    description?: string;
+    location?: string;
+    attendees?: Array<{ email: string }>;
+  } = {};
+  
+  if (args.summary !== undefined) {
+    updatedEvent.summary = args.summary;
+  } else if (event.data.summary) {
+    updatedEvent.summary = event.data.summary;
+  }
+  
+  if (args.startTime !== undefined) {
+    const startDate = new Date(args.startTime);
+    if (isNaN(startDate.getTime())) {
+      throw new Error(`Invalid startTime format: "${args.startTime}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`);
+    }
+    updatedEvent.start = { dateTime: args.startTime, timeZone };
+  } else if (event.data.start?.dateTime) {
+    updatedEvent.start = { dateTime: event.data.start.dateTime, timeZone };
+  }
+  
+  if (args.endTime !== undefined) {
+    const endDate = new Date(args.endTime);
+    if (isNaN(endDate.getTime())) {
+      throw new Error(`Invalid endTime format: "${args.endTime}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`);
+    }
+    updatedEvent.end = { dateTime: args.endTime, timeZone };
+  } else if (event.data.end?.dateTime) {
+    updatedEvent.end = { dateTime: event.data.end.dateTime, timeZone };
+  }
+  
+  if (updatedEvent.start?.dateTime && updatedEvent.end?.dateTime) {
+    const startTimestamp = new Date(updatedEvent.start.dateTime).getTime();
+    const endTimestamp = new Date(updatedEvent.end.dateTime).getTime();
+    if (endTimestamp <= startTimestamp) {
+      throw new Error(`endTime must be after startTime`);
+    }
+  }
+  
   if (args.description !== undefined) updatedEvent.description = args.description;
   if (args.location !== undefined) updatedEvent.location = args.location;
+  
+  if (event.data.attendees) {
+    updatedEvent.attendees = event.data.attendees as Array<{ email: string }>;
+  }
 
   const response = await calendar.events.update({
-    calendarId: 'primary',
+    calendarId,
     eventId: args.eventId,
     requestBody: updatedEvent,
   });

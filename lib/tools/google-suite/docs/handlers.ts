@@ -45,11 +45,11 @@ export async function handleDocsRead(
     documentId: args.documentId,
   });
 
-  const content = response.data.body?.content
-    ?.map(element => element.paragraph?.elements
-      ?.map(e => e.textRun?.content)
+  const content = (response.data.body?.content ?? [])
+    .map(element => (element.paragraph?.elements ?? [])
+      .map(e => e.textRun?.content ?? '')
       .join(''))
-    .join('') || '';
+    .join('');
 
   return `**Document:** ${response.data.title}\n\n${content}`;
 }

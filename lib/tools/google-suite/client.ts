@@ -8,10 +8,26 @@ export interface GoogleSuiteClientContext {
 }
 
 export function createOAuth2Client(): Auth.OAuth2Client {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  
+  const missing: string[] = [];
+  if (!clientId) missing.push('GOOGLE_CLIENT_ID');
+  if (!clientSecret) missing.push('GOOGLE_CLIENT_SECRET');
+  if (!appUrl) missing.push('NEXT_PUBLIC_APP_URL');
+  
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variable(s): ${missing.join(', ')}. ` +
+      `Expected redirect URL: ${appUrl || '[MISSING]'}/api/google-suite/auth/callback`
+    );
+  }
+  
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.NEXT_PUBLIC_APP_URL}/api/google-suite/auth/callback`
+    clientId,
+    clientSecret,
+    `${appUrl}/api/google-suite/auth/callback`
   );
 }
 
