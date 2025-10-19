@@ -201,6 +201,29 @@ export async function executeGoogleWorkspace(
 
     for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       if (abortSignal?.aborted) throw new Error('Operation aborted by user');
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        if (msg?.role === 'tool') {
+          let foundToolCalls = false;
+          for (let j = i - 1; j >= 0; j--) {
+            const prevMsg = messages[j];
+            if (prevMsg?.role === 'assistant' && 'tool_calls' in prevMsg && prevMsg.tool_calls) {
+              foundToolCalls = true;
+              break;
+            }
+            if (prevMsg?.role !== 'tool') {
+              break;
+            }
+          }
+          if (!foundToolCalls) {
+            console.error('[Google Workspace Executor] Invalid message structure at iteration', iteration, ':', {
+              index: i,
+              messageRoles: messages.map((m, idx) => ({ idx, role: m?.role, hasToolCalls: m?.role === 'assistant' && 'tool_calls' in m })),
+            });
+            throw new Error(`Invalid message structure: tool message at index ${i} without preceding tool_calls`);
+          }
+        }
+      }
 
       const completion = await openai.chat.completions.create({
         model,
@@ -318,7 +341,25 @@ export async function executeGoogleWorkspace(
       if (messages.length > 40) {
         const systemMsg = messages[0];
         const userMsg = messages[1];
-        const recentMessages = messages.slice(-35);
+        let sliceStart = messages.length - 35;
+        
+        while (sliceStart > 2) {
+          const msgAtStart = messages[sliceStart];
+          const prevMsg = messages[sliceStart - 1];
+          
+          if (msgAtStart?.role === 'tool') {
+            sliceStart--;
+            continue;
+          }
+          
+          if (prevMsg?.role === 'assistant' && 'tool_calls' in prevMsg && prevMsg.tool_calls) {
+            sliceStart--;
+            continue;
+          }
+          break;
+        }
+        
+        const recentMessages = messages.slice(sliceStart);
         messages.length = 0;
         messages.push(systemMsg!, userMsg!, ...recentMessages);
       }
