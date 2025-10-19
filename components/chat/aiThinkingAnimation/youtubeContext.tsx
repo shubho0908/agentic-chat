@@ -39,7 +39,7 @@ function getStepLabel(step: string | undefined, details: YouTubeDetails | undefi
     case 'chapters': return 'Extracting chapters...';
     case 'analysis_start': return 'Analyzing video content...';
     case 'video_complete': return 'Video complete';
-    case 'complete': return 'All videos analyzed';
+    case 'complete': return 'Anlysis completed!';
     default: return fallbackMessage || 'YouTube analysis';
   }
 }

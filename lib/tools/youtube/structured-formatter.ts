@@ -2,14 +2,15 @@ import type { YouTubeVideo, YouTubeChapter } from '@/types/tools';
 import type { VideoAnalysis } from './analyzer';
 
 function formatHeader(video: YouTubeVideo): string {
-    let output = `# 📺 ${video.title}\n\n`;
-    output += `**Video URL:** ${video.url}\n`;
+    let output = `# 📺 [${video.title}](${video.url})\n\n`;
     
     if (video.channelName) {
-      output += `**Channel:** ${video.channelName}\n`;
-    }
-    
-    if (video.duration) {
+      output += `**Channel:** ${video.channelName}`;
+      if (video.duration) {
+        output += ` • **Duration:** ${video.duration}`;
+      }
+      output += '\n';
+    } else if (video.duration) {
       output += `**Duration:** ${video.duration}\n`;
     }
     
@@ -205,16 +206,23 @@ export function formatVideoForLLM(
 }
 
 export function formatVideoError(video: YouTubeVideo, error: string): string {
-    let output = `# 📺 ${video.title}\n\n`;
-    output += `**Video URL:** ${video.url}\n\n`;
-    output += `## ⚠️ Processing Error\n\n`;
+    let output = `# ⚠️ [${video.title}](${video.url})\n\n`;
+    output += `## Unable to Extract Transcript\n\n`;
     output += `${error}\n\n`;
-    output += `The video metadata was retrieved, but transcript analysis failed. `;
-    output += `This may be because:\n`;
-    output += `- The video doesn't have captions/subtitles available\n`;
-    output += `- The video is age-restricted or private\n`;
-    output += `- Temporary API issues\n\n`;
-    output += `You can still watch the video directly at: ${video.url}\n`;
+    
+    output += `### [▶️ Watch on YouTube](${video.url})\n\n`;
+    
+    if (error.toLowerCase().includes('caption') || error.toLowerCase().includes('subtitle') || error.toLowerCase().includes('transcript')) {
+      output += `**Why this might happen:**\n`;
+      output += `- Video creator disabled captions/subtitles\n`;
+      output += `- Age-restricted, private, or members-only content\n`;
+      output += `- Live streams or upcoming premieres\n`;
+      output += `- Very new videos (captions not generated yet)\n\n`;
+    } else {
+      output += `The video metadata was retrieved, but transcript extraction failed. `;
+      output += `This may be due to temporary API issues or network problems.\n\n`;
+    }
+    
     return output;
   }
 
@@ -240,12 +248,12 @@ export function formatSearchResults(
       output += `## 📊 Analyzed Videos (${successful.length})\n\n`;
       
       successful.forEach((item, idx) => {
-        output += `### ${idx + 1}. [${item.video.title}](${item.video.url})\n`;
+        output += `### ${idx + 1}. [${item.video.title}](${item.video.url})\n\n`;
         
         if (item.video.channelName) {
           output += `**Channel:** ${item.video.channelName}`;
           if (item.video.duration) {
-            output += ` | **Duration:** ${item.video.duration}`;
+            output += ` • **Duration:** ${item.video.duration}`;
           }
           output += '\n\n';
         }
@@ -269,7 +277,7 @@ export function formatSearchResults(
     if (failed.length > 0) {
       output += `## ⚠️ Unable to Analyze (${failed.length})\n\n`;
       failed.forEach((item) => {
-        output += `- **${item.video.title}**: ${item.error}\n`;
+        output += `- [**${item.video.title}**](${item.video.url}): ${item.error}\n`;
       });
       output += '\n';
     }
