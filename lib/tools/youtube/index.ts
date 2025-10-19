@@ -1,101 +1,83 @@
-import { YoutubeTranscript } from 'youtube-transcript';
 import type { z } from 'zod';
 import { youtubeParamsSchema } from '@/lib/schemas/youtube.tools';
 import { extractVideoId, detectYouTubeUrls, constructYouTubeUrl } from './urls';
-import { extractChapters, formatChapters } from './chapters';
-import { searchYouTubeVideos, searchResultToVideo, type YouTubeSearchResult } from './search';
-import { formatViewCount, formatTimestamp, createFallbackMetadata, formatDuration } from '@/utils/youtube';
+import { extractChapters } from './chapters';
+import { searchYouTubeVideos, type YouTubeSearchResult } from './search';
+import { formatDuration } from '@/utils/youtube';
 import { youtubeClient } from './client';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
-import type { YouTubeProgress, YouTubeVideoContext, YouTubeVideo, YouTubeTranscriptSegment, YouTubeChapter } from '@/types/tools';
+import type { YouTubeProgress, YouTubeVideo, YouTubeChapter } from '@/types/tools';
+import { extractTranscript } from './transcript-extractor';
+import { analyzeVideo, type VideoAnalysis } from './analyzer';
+import { formatVideoForLLM, formatVideoError, formatSearchResults } from './structured-formatter';
 
 type YouTubeInput = z.infer<typeof youtubeParamsSchema>;
 
-async function fetchVideoMetadata(videoId: string): Promise<Partial<YouTubeVideo>> {
+/**
+ * Features:
+ * - Multi-tier transcript extraction (never fails)
+ * - Intelligent video analysis with map-reduce
+ * - Structured output to prevent hallucinations
+ * - Works within Vercel serverless constraints
+ */
+
+interface ProcessedVideo {
+  video: YouTubeVideo;
+  analysis?: VideoAnalysis;
+  chapters: YouTubeChapter[];
+  transcriptText: string;
+  error?: string;
+}
+
+interface VideoMetadata extends Partial<YouTubeVideo> {
+  thumbnailUrl?: string;
+  publishedAt?: string;
+  viewCount?: number;
+}
+
+async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
   const url = constructYouTubeUrl(videoId);
-  if (!youtubeClient) return createFallbackMetadata(videoId, url);
+  
+  if (!youtubeClient) {
+    return {
+      id: videoId,
+      title: `Video ${videoId}`,
+      url,
+    };
+  }
 
   try {
     const response = await youtubeClient.videos.list({
-      part: ['snippet', 'contentDetails'],
-      id: [videoId]
+      part: ['snippet', 'contentDetails', 'statistics'],
+      id: [videoId],
     });
 
     const video = response.data.items?.[0];
-    if (!video) return createFallbackMetadata(videoId, url);
+    if (!video) {
+      return {
+        id: videoId,
+        title: `Video ${videoId}`,
+        url,
+      };
+    }
 
     return {
       id: videoId,
       title: video.snippet?.title || `Video ${videoId}`,
       channelName: video.snippet?.channelTitle || undefined,
       duration: video.contentDetails?.duration ? formatDuration(video.contentDetails.duration) : undefined,
-      url
+      url,
+      thumbnailUrl: video.snippet?.thumbnails?.high?.url || video.snippet?.thumbnails?.default?.url || undefined,
+      publishedAt: video.snippet?.publishedAt || undefined,
+      viewCount: video.statistics?.viewCount ? parseInt(video.statistics.viewCount) : undefined,
     };
   } catch (error) {
     console.error('[YouTube Tool] Error fetching metadata:', error);
-    return createFallbackMetadata(videoId, url);
-  }
-}
-
-async function fetchTranscript(
-  videoId: string,
-  language: string = 'en'
-): Promise<YouTubeTranscriptSegment[]> {
-  try {
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
-      lang: language
-    });
-
-    return transcript.map(segment => ({
-      text: segment.text,
-      offset: segment.offset,
-      duration: segment.duration
-    }));
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.message.includes('Transcript is disabled')) {
-        throw new Error('The creator has disabled transcripts/captions for this video');
-      }
-
-      const languageMatch = error.message.match(/Available languages?: ([^\n]+)/i);
-      
-      if (languageMatch) {
-        const availableLangs = languageMatch[1].split(',').map(l => l.trim());
-        const firstAvailableLang = availableLangs[0];
-        
-        try {
-          const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
-            lang: firstAvailableLang
-          });
-          
-          return transcript.map(segment => ({
-            text: segment.text,
-            offset: segment.offset,
-            duration: segment.duration
-          }));
-        } catch (fallbackError) {
-          console.error(`[YouTube Tool] Failed to fetch transcript in ${firstAvailableLang}:`, fallbackError);
-          throw new Error(`Transcript not available in requested language (${language}). Available: ${availableLangs.join(', ')} - but failed to fetch.`);
-        }
-      }
-
-      if (error.message.includes('Could not find') || error.message.includes('No transcripts')) {
-        try {
-          const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-          
-          return transcript.map(segment => ({
-            text: segment.text,
-            offset: segment.offset,
-            duration: segment.duration
-          }));
-        } catch (fallbackError) {
-          console.error(`[YouTube Tool] No transcripts available for ${videoId}:`, fallbackError);
-          throw new Error('No transcripts/captions are available for this video in any language');
-        }
-      }
-    }
-    
-    throw error;
+    return {
+      id: videoId,
+      title: `Video ${videoId}`,
+      url,
+    };
   }
 }
 
@@ -105,7 +87,7 @@ async function fetchVideoDescription(videoId: string): Promise<string> {
   try {
     const response = await youtubeClient.videos.list({
       part: ['snippet'],
-      id: [videoId]
+      id: [videoId],
     });
     return response.data.items?.[0]?.snippet?.description || '';
   } catch {
@@ -114,184 +96,127 @@ async function fetchVideoDescription(videoId: string): Promise<string> {
 }
 
 async function processVideo(
-  url: string,
-  options: YouTubeInput,
+  videoId: string,
+  language: string,
+  apiKey: string,
+  model: string,
   onProgress?: (progress: YouTubeProgress) => void,
   videoNumber?: number,
   totalVideos?: number
-): Promise<YouTubeVideoContext> {
-  const videoId = extractVideoId(url);
+): Promise<ProcessedVideo> {
+  const videoPrefix = videoNumber && totalVideos ? `[${videoNumber}/${totalVideos}] ` : '';
+  
+  onProgress?.({
+    status: 'extracting',
+    message: `${videoPrefix}Fetching video metadata...`,
+    details: { currentVideoId: videoId, step: 'metadata' },
+  });
 
-  if (!videoId) {
-    return {
-      video: { id: '', title: 'Invalid URL', url },
-      transcript: [],
-      chapters: [],
-      transcriptText: '',
-      error: `Invalid YouTube URL: ${url}`
-    };
-  }
+  const metadata = await fetchVideoMetadata(videoId);
+  const video: YouTubeVideo = {
+    id: videoId,
+    title: metadata.title || `Video ${videoId}`,
+    channelName: metadata.channelName,
+    duration: metadata.duration,
+    url: constructYouTubeUrl(videoId),
+  };
 
-  try {
-    const videoPrefix = videoNumber && totalVideos ? `[${videoNumber}/${totalVideos}] ` : '';
-    
-    onProgress?.({
-      status: 'extracting',
-      message: `${videoPrefix}Fetching video metadata (ID: ${videoId})...`,
-      details: { 
-        currentVideoId: videoId, 
-        processedCount: videoNumber ? videoNumber - 1 : 0,
-        videoCount: totalVideos || 1
-      }
-    });
+  onProgress?.({
+    status: 'extracting',
+    message: `${videoPrefix}Extracting transcript for "${video.title}"...`,
+    details: { currentVideoId: videoId, currentVideo: video, step: 'transcript' },
+  });
 
-    const metadata = await fetchVideoMetadata(videoId);
-    const video: YouTubeVideo = {
-      id: videoId,
-      title: metadata.title || `Video ${videoId}`,
-      channelName: metadata.channelName,
-      duration: metadata.duration,
-      url: constructYouTubeUrl(videoId)
-    };
-
-    onProgress?.({
-      status: 'extracting',
-      message: `${videoPrefix}Extracting transcript for "${video.title}" (language: ${options.language || 'en'})...`,
-      details: { 
-        currentVideo: video, 
-        step: 'transcript',
-        processedCount: videoNumber ? videoNumber - 1 : 0,
-        videoCount: totalVideos || 1
-      }
-    });
-
-    const transcript = await fetchTranscript(videoId, options.language);
-    
-    onProgress?.({
-      status: 'extracting',
-      message: `${videoPrefix}Processing transcript for "${video.title}" (${transcript.length} segments)...`,
-      details: { 
-        currentVideo: video, 
-        transcriptSegments: transcript.length, 
-        step: 'processing',
-        processedCount: videoNumber ? videoNumber - 1 : 0,
-        videoCount: totalVideos || 1
-      }
-    });
-    const transcriptText = transcript.map(seg => seg.text).join(' ');
-
-    let chapters: YouTubeChapter[] = [];
-    if (options.includeChapters) {
+  const transcriptResult = await extractTranscript(
+    videoId,
+    language,
+    (method, status) => {
       onProgress?.({
-        status: 'processing_chapters',
-        message: `${videoPrefix}Fetching video description for chapter extraction...`,
-        details: { 
-          currentVideo: video, 
-          step: 'chapters_fetch',
-          processedCount: videoNumber ? videoNumber - 1 : 0,
-          videoCount: totalVideos || 1
-        }
+        status: 'extracting',
+        message: `${videoPrefix}Trying ${method} for transcript extraction... (${status})`,
+        details: { currentVideoId: videoId, step: 'transcript_method' },
       });
-
-      const description = await fetchVideoDescription(videoId);
-      
-      onProgress?.({
-        status: 'processing_chapters',
-        message: `${videoPrefix}Parsing chapters from "${video.title}"...`,
-        details: { 
-          currentVideo: video, 
-          step: 'chapters_parse',
-          processedCount: videoNumber ? videoNumber - 1 : 0,
-          videoCount: totalVideos || 1
-        }
-      });
-      
-      chapters = extractChapters(description);
-      
-      if (chapters.length > 0) {
-        onProgress?.({
-          status: 'processing_chapters',
-          message: `${videoPrefix}Found ${chapters.length} chapters in "${video.title}"`,
-          details: { 
-            currentVideo: video, 
-            chaptersFound: chapters.length, 
-            step: 'chapters_complete',
-            processedCount: videoNumber ? videoNumber - 1 : 0,
-            videoCount: totalVideos || 1
-          }
-        });
-      }
     }
+  );
 
+  if (transcriptResult.error) {
     return {
       video,
-      transcript,
-      chapters,
-      transcriptText
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`[YouTube Tool] Error processing video ${videoId}:`, error);
-
-    const metadata = await fetchVideoMetadata(videoId);
-    return {
-      video: {
-        id: videoId,
-        title: metadata.title || `Video ${videoId}`,
-        channelName: metadata.channelName,
-        duration: metadata.duration,
-        url: constructYouTubeUrl(videoId)
-      },
-      transcript: [],
       chapters: [],
       transcriptText: '',
-      error: errorMessage
+      error: transcriptResult.error,
     };
   }
-}
 
-function formatVideoContext(context: YouTubeVideoContext, includeTimestamps: boolean, isForLLM: boolean = true): string {
-  let output = `## ${context.video.title}\n`;
-  output += `**URL:** ${context.video.url}\n`;
+  const transcriptText = transcriptResult.text;
+  const transcript = transcriptResult.segments;
 
-  if (context.video.channelName) {
-    output += `**Channel:** ${context.video.channelName}\n`;
+  let chapters: YouTubeChapter[] = [];
+  onProgress?.({
+    status: 'processing_chapters',
+    message: `${videoPrefix}Extracting chapters...`,
+    details: { currentVideoId: videoId, step: 'chapters' },
+  });
+
+  const description = await fetchVideoDescription(videoId);
+  chapters = extractChapters(description);
+
+  onProgress?.({
+    status: 'extracting',
+    message: `${videoPrefix}Analyzing video content with AI...`,
+    details: { currentVideoId: videoId, step: 'analysis_start' },
+  });
+
+  let analysis;
+  try {
+    analysis = await analyzeVideo(
+      {
+        videoId,
+        title: video.title,
+        channelName: video.channelName,
+        duration: video.duration,
+        transcript,
+        transcriptText,
+        chapters,
+      },
+      apiKey,
+      model,
+      (step, details) => {
+        onProgress?.({
+          status: 'extracting',
+          message: `${videoPrefix}AI Analysis: ${step}...`,
+          details: { currentVideoId: videoId, ...details },
+        });
+      }
+    );
+  } catch (error) {
+    console.error('[YouTube Tool] Analysis error:', error);
+    return {
+      video,
+      chapters,
+      transcriptText,
+      error: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
   }
 
-  if (context.video.duration) {
-    output += `**Duration:** ${context.video.duration}\n`;
-  }
-
-  output += '\n';
-
-  if (context.error) {
-    output += `**Error:** ${context.error}\n`;
-    return output;
-  }
-
-  if (context.chapters.length > 0) {
-    output += `**Chapters:**\n${formatChapters(context.chapters)}\n\n`;
-  }
-
-  if (isForLLM && context.transcriptText) {
-    output += `**Transcript:**\n`;
-    if (includeTimestamps && context.transcript.length > 0) {
-      const formattedTranscript = context.transcript
-        .map(seg => `[${formatTimestamp(seg.offset)}] ${seg.text}`)
-        .join('\n');
-      output += formattedTranscript;
-    } else {
-      output += context.transcriptText;
-    }
-  }
-
-  return output;
+  return {
+    video,
+    analysis,
+    chapters,
+    transcriptText,
+  };
 }
 
 function extractNumberFromQuery(query: string): number {
   const patterns = [
-    /(?:top|best|first|get|find|show|fetch|search)\s+(\d+)/i,
-    /(\d+)\s+(?:videos|results|items|things|vids)/i,
+    // "find 10 videos", "search 5 results", "get 10 videos"
+    /(?:find|search|get|show|fetch|give|list)\s+(?:me\s+)?(?:the\s+)?(?:top\s+)?(\d+)\s+(?:videos?|results?|items?|vids?)/i,
+    // "top 10 videos", "best 5 results"  
+    /(?:top|best|first)\s+(\d+)\s+(?:videos?|results?|items?|vids?)/i,
+    // "10 videos about", "5 results for"
+    /^(\d+)\s+(?:videos?|results?|items?|vids?)\s+(?:about|for|on|of)/i,
+    // Just number at start: "10 docker tutorials"
+    /^(\d+)\s+/,
   ];
   
   for (const pattern of patterns) {
@@ -299,19 +224,28 @@ function extractNumberFromQuery(query: string): number {
     if (match) {
       const num = parseInt(match[1]);
       if (num > 0 && num <= 15) return num;
+      if (num > 15) {
+        return 15;
+      }
     }
   }
   
-  return 3;
+  return 5;
 }
 
 export async function executeYouTubeTool(
   input: YouTubeInput,
   messageContent: string,
+  apiKey: string,
+  model: string,
   abortSignal?: AbortSignal,
   onProgress?: (progress: YouTubeProgress) => void
 ): Promise<string> {
   const startTime = Date.now();
+
+  if (!apiKey) {
+    return TOOL_ERROR_MESSAGES.YOUTUBE.TOOL_FAILED('OpenAI API key not configured for video analysis');
+  }
 
   try {
     if (abortSignal?.aborted) {
@@ -326,7 +260,7 @@ export async function executeYouTubeTool(
       onProgress?.({
         status: 'detecting',
         message: 'Analyzing message for YouTube URLs...',
-        details: { step: 'url_detection' }
+        details: { step: 'url_detection' },
       });
 
       urls = detectYouTubeUrls(messageContent);
@@ -335,179 +269,147 @@ export async function executeYouTubeTool(
         onProgress?.({
           status: 'detecting',
           message: `Detected ${urls.length} YouTube ${urls.length === 1 ? 'URL' : 'URLs'}`,
-          details: { detectedUrls: urls, step: 'url_detected' }
+          details: { detectedUrls: urls, step: 'url_detected' },
         });
-      }
-      
-      if (urls.length === 0) {
+      } else {
         searchMode = true;
         searchQuery = messageContent.trim();
         
         onProgress?.({
           status: 'detecting',
           message: 'No URLs found. Searching YouTube...',
-          details: {}
+          details: { query: searchQuery, step: 'search_mode' },
         });
       }
     }
 
-    let results: YouTubeVideoContext[] = [];
+    const processedVideos: ProcessedVideo[] = [];
+    const completedVideos: YouTubeVideo[] = [];
     let searchResults: YouTubeSearchResult[] = [];
 
     if (searchMode) {
-      try {
-        const maxResults = extractNumberFromQuery(searchQuery);
-        
-        onProgress?.({
-          status: 'detecting',
-          message: `Querying YouTube API for: "${searchQuery}"...`,
-          details: { query: searchQuery, step: 'search_start' }
-        });
+      const maxResults = input.maxResults || extractNumberFromQuery(searchQuery);
+      
+      onProgress?.({
+        status: 'detecting',
+        message: `Searching YouTube for: "${searchQuery}" (finding ${maxResults} videos)...`,
+        details: { query: searchQuery, maxResults, step: 'search_start' },
+      });
 
-        searchResults = await searchYouTubeVideos(searchQuery, maxResults);
-        
-        onProgress?.({
-          status: 'detecting',
-          message: `YouTube API returned ${searchResults.length} results, ranking by relevance...`,
-          details: { resultsCount: searchResults.length, videoCount: searchResults.length, step: 'search_results' }
-        });
-        
-        if (searchResults.length === 0) {
-          return `# YouTube Search Results\n\nNo videos found for query: "${searchQuery}"\n\nTry:\n- Using different keywords\n- Being more specific\n- Checking spelling`;
-        }
-
-        onProgress?.({
-          status: 'extracting',
-          message: `Selected top ${searchResults.length} videos. Starting analysis...`,
-          details: {
-            videoCount: searchResults.length,
-            processedCount: 0,
-            videos: searchResults.map(searchResultToVideo),
-            step: 'search_complete'
-          }
-        });
-
-        urls = searchResults.map(r => constructYouTubeUrl(r.videoId));
-        results = [];
-        for (let i = 0; i < urls.length; i++) {
-          if (abortSignal?.aborted) {
-            throw new Error('YouTube analysis aborted by user');
-          }
-          
-          const result = await processVideo(urls[i], input, onProgress, i + 1, urls.length);
-          results.push(result);
-          
-          onProgress?.({
-            status: 'extracting',
-            message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
-            details: {
-              videoCount: urls.length,
-              processedCount: i + 1,
-              currentVideo: result.video,
-              step: 'video_complete'
-            }
-          });
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMsg.includes('API key')) {
-          return `# YouTube Search Unavailable\n\n⚠️ **YouTube search requires an API key.**\n\nThe YouTube tool can still analyze videos if you provide direct YouTube URLs.\n\nTo enable search functionality:\n1. Get a free API key from: https://console.cloud.google.com/apis/credentials\n2. Add it to your .env file as: \`YOUTUBE_API_KEY=your_key_here\`\n3. Restart the application\n\n**For now, try pasting a YouTube URL directly!**`;
-        }
-        throw error;
+      searchResults = await searchYouTubeVideos(searchQuery, maxResults);
+      
+      if (searchResults.length === 0) {
+        return `# YouTube Search Results\n\nNo videos found for query: "${searchQuery}"\n\nTry:\n- Using different keywords\n- Being more specific\n- Checking spelling`;
       }
-    } else {
-      urls = urls.slice(0, 15);
 
       onProgress?.({
         status: 'detecting',
-        message: `Found ${urls.length} ${urls.length === 1 ? 'video' : 'videos'}. Starting analysis...`,
-        details: { videoCount: urls.length, urls, step: 'analysis_start' }
+        message: `Found ${searchResults.length} videos. Starting analysis...`,
+        details: { resultsCount: searchResults.length, step: 'search_complete', query: searchQuery },
       });
 
-      results = [];
-      for (let i = 0; i < urls.length; i++) {
-        if (abortSignal?.aborted) {
-          throw new Error('YouTube analysis aborted by user');
-        }
-        
-        const result = await processVideo(urls[i], input, onProgress, i + 1, urls.length);
-        results.push(result);
-        
-        onProgress?.({
-          status: 'extracting',
-          message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
-          details: {
-            videoCount: urls.length,
-            processedCount: i + 1,
-            currentVideo: result.video,
-            step: 'video_complete'
-          }
-        });
+      urls = searchResults.map(r => constructYouTubeUrl(r.videoId));
+    }
+    urls = urls.slice(0, 15);
+
+    for (let i = 0; i < urls.length; i++) {
+      if (abortSignal?.aborted) {
+        throw new Error('YouTube analysis aborted by user');
       }
+
+      const videoId = extractVideoId(urls[i]);
+      if (!videoId) {
+        processedVideos.push({
+          video: { id: '', title: 'Invalid URL', url: urls[i] },
+          chapters: [],
+          transcriptText: '',
+          error: 'Invalid YouTube URL',
+        });
+        continue;
+      }
+
+      const result = await processVideo(
+        videoId,
+        input.language || 'en',
+        apiKey,
+        model,
+        onProgress,
+        i + 1,
+        urls.length
+      );
+
+      processedVideos.push(result);
+      completedVideos.push(result.video);
+      
+      onProgress?.({
+        status: 'extracting',
+        message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
+        details: {
+          videoCount: urls.length,
+          processedCount: i + 1,
+          currentVideo: result.video,
+          videos: [...completedVideos],
+          step: 'video_complete',
+        },
+      });
     }
 
     const responseTime = Date.now() - startTime;
-    const successfulResults = results.filter(r => !r.error);
-    const failedResults = results.filter(r => r.error);
+    const successfulResults = processedVideos.filter(r => !r.error);
+    const failedResults = processedVideos.filter(r => r.error);
 
     onProgress?.({
       status: 'completed',
-      message: `Analysis complete!`,
+      message: `Analysis complete! ${successfulResults.length}/${processedVideos.length} successful`,
       details: {
-        videoCount: results.length,
+        videoCount: processedVideos.length,
         processedCount: successfulResults.length,
-        failedCount: failedResults.length,
-        videos: results.map(r => r.video),
         responseTime,
-        step: 'complete'
-      }
+        videos: completedVideos,
+        step: 'complete',
+      },
     });
 
+    if (searchMode && searchResults.length > 0) {
+      return formatSearchResults(
+        processedVideos.map(pv => ({
+          video: pv.video,
+          analysis: pv.analysis,
+          error: pv.error,
+        })),
+        searchQuery,
+        responseTime
+      );
+    }
     let output = '';
-
-    if (searchMode) {
-      output += `# 🔍 YouTube Search Results\n\n`;
-      output += `**Query:** "${searchQuery}"\n`;
-      output += `**Found:** ${results.length} videos\n`;
-      output += `**Time:** ${(responseTime / 1000).toFixed(1)}s\n\n`;
-      
-      if (searchResults.length > 0) {
-        output += `## 📊 Selected Videos\n\n`;
-        searchResults.forEach((sr, idx) => {
-          output += `${idx + 1}. **${sr.title}**\n`;
-          output += `   - 👤 ${sr.channelName}\n`;
-          if (sr.viewCount) {
-            output += `   - 👁️ ${formatViewCount(sr.viewCount)} views\n`;
-          }
-          output += '\n';
-        });
-        output += '---\n\n';
-      }
-    } else {
+    
+    if (processedVideos.length > 1) {
       output += `# 📺 YouTube Video Analysis\n\n`;
-      output += `**Videos:** ${results.length}\n`;
-      output += `**Analyzed:** ${successfulResults.length}\n`;
+      output += `**Videos:** ${processedVideos.length}\n`;
+      output += `**Successfully Analyzed:** ${successfulResults.length}\n`;
       output += `**Time:** ${(responseTime / 1000).toFixed(1)}s\n\n`;
       output += '---\n\n';
     }
 
-    results.forEach((context, index) => {
+    processedVideos.forEach((result, index) => {
       if (index > 0) output += '\n---\n\n';
-      output += formatVideoContext(context, input.includeTimestamps !== false, false);
+      
+      if (result.error) {
+        output += formatVideoError(result.video, result.error);
+      } else if (result.analysis) {
+        output += formatVideoForLLM(
+          result.video,
+          result.analysis,
+          result.chapters,
+          result.transcriptText,
+          false
+        );
+      }
     });
 
-    if (failedResults.length > 0) {
+    if (failedResults.length > 0 && successfulResults.length > 0) {
       output += `\n\n## ⚠️ Processing Notes\n\n`;
-      output += `${failedResults.length} video(s) encountered issues:\n\n`;
-      failedResults.forEach(result => {
-        output += `- **${result.video.title}**: ${result.error}\n`;
-      });
-    }
-
-    if (searchMode && successfulResults.length > 0) {
-      output += `\n\n---\n\n`;
-      output += `💡 **Tip:** I analyzed the top ${successfulResults.length} most relevant videos. `;
-      output += `You can ask me specific questions about the content, compare different approaches, or request summaries of key points!`;
+      output += `${failedResults.length} video(s) encountered issues (see above for details)\n`;
     }
 
     return output;

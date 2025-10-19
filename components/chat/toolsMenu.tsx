@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { motion } from "framer-motion";
@@ -64,14 +64,8 @@ export function ToolsMenu({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
   const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage();
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading, authorize: authorizeGoogleSuite, refetch: refetchGoogleSuiteStatus } = useGoogleSuiteAuth();
+  const { status: googleSuiteStatus, isLoading: googleSuiteLoading, authorize: authorizeGoogleSuite } = useGoogleSuiteAuth();
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    if (isOpen && session) {
-      refetchGoogleSuiteStatus();
-    }
-  }, [isOpen, session, refetchGoogleSuiteStatus]);
   const deepResearchUsage = {
     remaining: usageData?.remaining ?? 3,
     limit: usageData?.limit ?? 3,

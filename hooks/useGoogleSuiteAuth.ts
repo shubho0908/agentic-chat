@@ -1,32 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { GoogleAuthorizationStatus } from '@/types/google-suite';
 
+async function fetchAuthStatus(): Promise<GoogleAuthorizationStatus> {
+  const response = await fetch('/api/google-suite/auth/status');
+  
+  if (!response.ok) {
+    throw new Error('Failed to check authorization status');
+  }
+
+  return response.json();
+}
+
 export function useGoogleSuiteAuth() {
-  const [status, setStatus] = useState<GoogleAuthorizationStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const checkStatus = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await fetch('/api/google-suite/auth/status');
-      
-      if (!response.ok) {
-        throw new Error('Failed to check authorization status');
-      }
-
-      const data: GoogleAuthorizationStatus = await response.json();
-      setStatus(data);
-    } catch (err) {
-      console.error('[Google Suite Auth] Status check error:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setStatus(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const { data: status, isLoading, refetch } = useQuery({
+    queryKey: ['google-suite-auth-status'],
+    queryFn: fetchAuthStatus,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
 
   const authorize = useCallback(async () => {
     try {
@@ -56,14 +55,12 @@ export function useGoogleSuiteAuth() {
   }, []);
 
   useEffect(() => {
-    checkStatus();
-
     const params = new URLSearchParams(window.location.search);
     const gsuiteAuth = params.get('gsuite_auth');
     
     if (gsuiteAuth === 'success') {
       window.history.replaceState({}, '', window.location.pathname);
-      checkStatus();
+      queryClient.invalidateQueries({ queryKey: ['google-suite-auth-status'] });
     } else if (gsuiteAuth === 'error') {
       const reason = params.get('reason') || 'unknown';
       const errorMessages: Record<string, string> = {
@@ -87,14 +84,14 @@ export function useGoogleSuiteAuth() {
       setError(errorMessages[reason] || `Authorization failed: ${reason}`);
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [checkStatus]);
+  }, [queryClient]);
 
   return {
-    status,
+    status: status ?? null,
     isLoading,
     isAuthorizing,
     error,
     authorize,
-    refetch: checkStatus,
+    refetch,
   };
 }

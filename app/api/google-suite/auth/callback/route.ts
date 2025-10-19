@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getAuthenticatedUser } from '@/lib/api-utils';
 import { GOOGLE_PROVIDER_ID, ALL_GOOGLE_SUITE_SCOPES } from '@/lib/tools/google-suite/scopes';
 import { createOAuth2Client } from '@/lib/tools/google-suite/client';
+import { clearCachedValidation } from '@/lib/tools/google-suite/token-cache';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -153,6 +154,8 @@ export async function GET(request: NextRequest) {
         scope: tokens.scope,
       },
     });
+
+    clearCachedValidation(userId);
 
     const response = NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}?gsuite_auth=success`

@@ -162,6 +162,8 @@ export async function executeYouTubeTool(
   textQuery: string,
   controller: ReadableStreamDefaultController,
   messages: Message[],
+  apiKey: string,
+  model: string,
   abortSignal?: AbortSignal
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -195,6 +197,8 @@ export async function executeYouTubeTool(
     const youtubeResults = await executeYouTubeToolCore(
       toolArgs,
       textQuery,
+      apiKey,
+      model,
       abortSignal,
       (progress) => {
         if (streamClosed || abortSignal?.aborted) return;

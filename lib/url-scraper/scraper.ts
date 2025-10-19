@@ -116,6 +116,7 @@ function extractWithCheerio(html: string, url: string): ScrapedContent {
 }
 
 async function scrapeUrlCore(url: string): Promise<ScrapedContent> {
+  console.log(`[URL Scraper] Fetching: ${url}`);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
 
@@ -144,19 +145,25 @@ async function scrapeUrlCore(url: string): Promise<ScrapedContent> {
 
     const readabilityResult = extractWithReadability(html, url);
     if (readabilityResult && readabilityResult.textContent.length > 500) {
+      console.log(`[URL Scraper] Successfully scraped: ${url} (${readabilityResult.textContent.length} chars)`);
       return readabilityResult;
     }
 
-    return extractWithCheerio(html, url);
+    const cheerioResult = extractWithCheerio(html, url);
+    console.log(`[URL Scraper] Successfully scraped: ${url} (${cheerioResult.textContent.length} chars)`);
+    return cheerioResult;
   } catch (error) {
     clearTimeout(timeoutId);
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
+        console.error(`[URL Scraper] Timeout for: ${url}`);
         throw new Error("Request timeout - the website took too long to respond");
       }
+      console.error(`[URL Scraper] Failed to scrape ${url}:`, error.message);
       throw new Error(`Failed to scrape URL: ${error.message}`);
     }
+    console.error(`[URL Scraper] Failed to scrape ${url}: Unknown error`);
     throw new Error("Failed to scrape URL: Unknown error");
   }
 }
@@ -209,14 +216,41 @@ export function extractUrlsFromMessage(message: string | Array<{ type: string; t
   return Array.from(new Set(validUrls));
 }
 
+const MAX_URLS_TO_SCRAPE = 5;
+
 export async function scrapeMultipleUrls(urls: string[]): Promise<ScrapedContent[]> {
+  const urlsToProcess = urls.slice(0, MAX_URLS_TO_SCRAPE);
+  
+  console.log(`[URL Scraper] Detected ${urls.length} URL(s), processing ${urlsToProcess.length}`);
+  if (urls.length > MAX_URLS_TO_SCRAPE) {
+    console.log(`[URL Scraper] Skipping ${urls.length - MAX_URLS_TO_SCRAPE} URL(s) due to limit`);
+  }
+  
+  urlsToProcess.forEach((url, index) => {
+    console.log(`[URL Scraper] ${index + 1}. ${url}`);
+  });
+
   const results = await Promise.allSettled(
-    urls.map(url => scrapeUrl(url))
+    urlsToProcess.map(url => scrapeUrl(url))
   );
 
-  return results
-    .filter((result): result is PromiseFulfilledResult<ScrapedContent> => result.status === 'fulfilled')
-    .map(result => result.value);
+  const successful = results.filter(
+    (result): result is PromiseFulfilledResult<ScrapedContent> => result.status === 'fulfilled'
+  );
+  
+  const failed = results.filter(result => result.status === 'rejected');
+  
+  console.log(`[URL Scraper] Successfully scraped ${successful.length}/${urlsToProcess.length} URL(s)`);
+  if (failed.length > 0) {
+    console.log(`[URL Scraper] Failed to scrape ${failed.length} URL(s)`);
+    failed.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`[URL Scraper] Failed URL ${index + 1}:`, result.reason);
+      }
+    });
+  }
+
+  return successful.map(result => result.value);
 }
 
 export function formatScrapedContentForContext(scrapedContent: ScrapedContent[]): string {

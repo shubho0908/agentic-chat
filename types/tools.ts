@@ -66,6 +66,7 @@ export interface YouTubeProgress {
     urls?: string[];
     query?: string;
     resultsCount?: number;
+    maxResults?: number;
   };
 }
 

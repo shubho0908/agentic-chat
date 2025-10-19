@@ -2,6 +2,7 @@ import { google, type Auth } from 'googleapis';
 import { GaxiosError } from 'gaxios';
 import { prisma } from '@/lib/prisma';
 import { GOOGLE_PROVIDER_ID } from './scopes';
+import { getCachedValidation, setCachedValidation, clearCachedValidation } from './token-cache';
 
 export interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
@@ -17,6 +18,8 @@ export interface TokenValidationResult {
 }
 
 export const GOOGLE_AUTH_REVOKED_ERROR = 'GOOGLE_AUTH_REVOKED';
+
+const pendingValidations = new Map<string, Promise<TokenValidationResult>>();
 
 export function createOAuth2Client(): Auth.OAuth2Client {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXT_PUBLIC_APP_URL } = process.env;
@@ -47,6 +50,7 @@ async function refreshAccessToken(userId: string, oauth2Client: Auth.OAuth2Clien
     });
 
     oauth2Client.setCredentials(credentials);
+    clearCachedValidation(userId);
   } catch (error) {
     const isAuthRevoked = 
       (error as GaxiosError).response?.status === 400 ||
@@ -63,6 +67,7 @@ async function refreshAccessToken(userId: string, oauth2Client: Auth.OAuth2Clien
         errorCode: (error as GaxiosError).response?.data?.error,
       });
 
+      clearCachedValidation(userId);
       throw new Error(GOOGLE_AUTH_REVOKED_ERROR);
     }
 
@@ -71,90 +76,117 @@ async function refreshAccessToken(userId: string, oauth2Client: Auth.OAuth2Clien
 }
 
 export async function validateGoogleToken(userId: string): Promise<TokenValidationResult> {
-  try {
-    const account = await prisma.account.findFirst({
-      where: { userId, providerId: GOOGLE_PROVIDER_ID },
-      select: {
-        accessToken: true,
-        refreshToken: true,
-      },
-    });
+  const cached = getCachedValidation(userId);
+  if (cached) {
+    return cached;
+  }
 
-    if (!account?.accessToken || !account?.refreshToken) {
-      return {
-        isValid: false,
-        error: 'No tokens found',
-      };
-    }
+  const pending = pendingValidations.get(userId);
+  if (pending) {
+    return pending;
+  }
 
-    const oauth2Client = createOAuth2Client();
-    oauth2Client.setCredentials({
-      access_token: account.accessToken,
-      refresh_token: account.refreshToken,
-    });
-
+  const validationPromise = (async () => {
     try {
-      const tokenInfo = await oauth2Client.getTokenInfo(account.accessToken);
-      
-      const grantedScopes = tokenInfo.scopes || [];
-      
-      if (!grantedScopes || grantedScopes.length === 0) {
-        console.warn('[Google OAuth] Token has NO scopes granted', { userId });
-        return {
-          isValid: false,
-          error: 'No scopes granted',
-          scopes: [],
-        };
-      }
-
-      const expiresAt = tokenInfo.expiry_date ? new Date(tokenInfo.expiry_date) : undefined;
-      const needsRefresh = tokenInfo.expiry_date ? tokenInfo.expiry_date < Date.now() : false;
-
-      await prisma.account.updateMany({
+      const account = await prisma.account.findFirst({
         where: { userId, providerId: GOOGLE_PROVIDER_ID },
-        data: {
-          scope: grantedScopes.join(' '),
-          accessTokenExpiresAt: expiresAt,
+        select: {
+          accessToken: true,
+          refreshToken: true,
         },
       });
 
-      return {
-        isValid: true,
-        needsRefresh,
-        scopes: grantedScopes,
-        expiresAt,
-      };
-    } catch (error) {
-      const isRevoked = 
-        (error as GaxiosError).response?.status === 400 ||
-        (error as GaxiosError).response?.status === 401 ||
-        (error as GaxiosError).response?.data?.error === 'invalid_token' ||
-        (error as Error).message?.includes('invalid');
-
-      if (isRevoked) {
-        console.error('[Google OAuth] ✗ Token REJECTED by Google API', {
-          userId,
-          status: (error as GaxiosError).response?.status,
-          errorData: (error as GaxiosError).response?.data,
-        });
-
-        return {
+      if (!account?.accessToken || !account?.refreshToken) {
+        const result = {
           isValid: false,
-          error: 'Token revoked or invalid',
-          scopes: [],
+          error: 'No tokens found',
         };
+        setCachedValidation(userId, result);
+        return result;
       }
 
-      throw error;
+      const oauth2Client = createOAuth2Client();
+      oauth2Client.setCredentials({
+        access_token: account.accessToken,
+        refresh_token: account.refreshToken,
+      });
+
+      try {
+        const tokenInfo = await oauth2Client.getTokenInfo(account.accessToken);
+        
+        const grantedScopes = tokenInfo.scopes || [];
+        
+        if (!grantedScopes || grantedScopes.length === 0) {
+          console.warn('[Google OAuth] Token has NO scopes granted', { userId });
+          const result = {
+            isValid: false,
+            error: 'No scopes granted',
+            scopes: [],
+          };
+          setCachedValidation(userId, result);
+          return result;
+        }
+
+        const expiresAt = tokenInfo.expiry_date ? new Date(tokenInfo.expiry_date) : undefined;
+        const needsRefresh = tokenInfo.expiry_date ? tokenInfo.expiry_date < Date.now() : false;
+
+        await prisma.account.updateMany({
+          where: { userId, providerId: GOOGLE_PROVIDER_ID },
+          data: {
+            scope: grantedScopes.join(' '),
+            accessTokenExpiresAt: expiresAt,
+          },
+        });
+
+        const result = {
+          isValid: true,
+          needsRefresh,
+          scopes: grantedScopes,
+          expiresAt,
+        };
+        setCachedValidation(userId, result);
+        return result;
+      } catch (error) {
+        const isRevoked = 
+          (error as GaxiosError).response?.status === 400 ||
+          (error as GaxiosError).response?.status === 401 ||
+          (error as GaxiosError).response?.data?.error === 'invalid_token' ||
+          (error as Error).message?.includes('invalid');
+
+        if (isRevoked) {
+          console.error('[Google OAuth] ✗ Token REJECTED by Google API', {
+            userId,
+            status: (error as GaxiosError).response?.status,
+            errorData: (error as GaxiosError).response?.data,
+          });
+
+          const result = {
+            isValid: false,
+            error: 'Token revoked or invalid',
+            scopes: [],
+          };
+          setCachedValidation(userId, result);
+          return result;
+        }
+
+        throw error;
+      }
+    } catch (error) {
+      console.error('[Google OAuth] Token validation error:', error);
+      const result = {
+        isValid: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        scopes: [],
+      };
+      setCachedValidation(userId, result);
+      return result;
+    } finally {
+      pendingValidations.delete(userId);
     }
-  } catch (error) {
-    console.error('[Google OAuth] Token validation error:', error);
-    return {
-      isValid: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      scopes: [],
-    };
-  }
+  })();
+
+  pendingValidations.set(userId, validationPromise);
+  return validationPromise;
 }
 
 export async function createGoogleSuiteClient(userId: string): Promise<GoogleSuiteClientContext> {

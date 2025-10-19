@@ -82,7 +82,7 @@ const extractMetadata = (html: string, url: string): LinkMetadata => {
 const getCachedLinkMetadata = unstable_cache(
   async (url: string) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const response = await fetch(url, {
@@ -130,8 +130,7 @@ export async function GET(request: NextRequest) {
         "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
       },
     });
-  } catch (error) {
-    console.error("[Link Preview API] Error:", error);
+  } catch {
     return NextResponse.json(
       { url: validation.url?.href || url || '', domain: extractDomain(validation.url?.href || url || '') },
       { status: 200 }

@@ -144,32 +144,6 @@ export async function routeContext(
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
 
-  const detectedUrls = extractUrlsFromMessage(query);
-  
-  if (detectedUrls.length > 0) {
-    try {
-      const scrapedContent = await scrapeMultipleUrls(detectedUrls);
-      
-      if (scrapedContent.length > 0) {
-        metadata.hasUrls = true;
-        metadata.urlCount = scrapedContent.length;
-        metadata.routingDecision = RoutingDecision.UrlContent;
-        metadata.skippedMemory = true;
-        
-        const urlContext = formatScrapedContentForContext(scrapedContent);
-        
-        if (hasImages) {
-          metadata.routingDecision = RoutingDecision.Hybrid;
-        }
-        
-        return { context: urlContext, metadata };
-      }
-    } catch (error) {
-      console.error('[Context Router] URL scraping failed:', error);
-      // Continue with normal flow if URL scraping fails
-    }
-  }
-
   if (deepResearchEnabled) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
@@ -190,6 +164,36 @@ export async function routeContext(
     metadata.skippedMemory = true;
     metadata.activeToolName = activeTool;
     return { context: '', metadata };
+  }
+
+  const detectedUrls = extractUrlsFromMessage(query);
+  
+  if (detectedUrls.length > 0) {
+    console.log(`[Context Router] Detected ${detectedUrls.length} URL(s) in message`);
+    try {
+      const scrapedContent = await scrapeMultipleUrls(detectedUrls);
+      
+      if (scrapedContent.length > 0) {
+        console.log(`[Context Router] Using scraped content from ${scrapedContent.length} URL(s) as context`);
+        metadata.hasUrls = true;
+        metadata.urlCount = scrapedContent.length;
+        metadata.routingDecision = RoutingDecision.UrlContent;
+        metadata.skippedMemory = true;
+        
+        const urlContext = formatScrapedContentForContext(scrapedContent);
+        
+        if (hasImages) {
+          metadata.routingDecision = RoutingDecision.Hybrid;
+        }
+        
+        return { context: urlContext, metadata };
+      } else {
+        console.log('[Context Router] All URL scraping attempts failed, continuing with normal flow');
+      }
+    } catch (error) {
+      console.error('[Context Router] URL scraping failed:', error);
+      // Continue with normal flow if URL scraping fails
+    }
   }
 
   const hasAttachmentsPromise = conversationId 

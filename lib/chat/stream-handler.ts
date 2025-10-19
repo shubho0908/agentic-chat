@@ -81,7 +81,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         }
         
         if (activeTool === TOOL_IDS.YOUTUBE) {
-          enhancedMessages = await executeYouTubeTool(textQuery, controller, enhancedMessages, abortSignal);
+          enhancedMessages = await executeYouTubeTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal);
         }
 
         if (activeTool === TOOL_IDS.GOOGLE_SUITE) {
@@ -272,7 +272,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     }
                     
                     const visionResponse = await openai.chat.completions.create({
-                      model: model.includes('vision') || model.includes('gpt-4') ? model : 'gpt-4o',
+                      model,
                       messages: visionMessages,
                       max_tokens: 2000,
                     });

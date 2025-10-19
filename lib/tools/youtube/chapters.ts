@@ -46,12 +46,4 @@ export function extractChapters(description: string): YouTubeChapter[] {
   return uniqueChapters;
 }
 
-export function formatChapters(chapters: YouTubeChapter[]): string {
-  if (chapters.length === 0) {
-    return 'No chapters available';
-  }
-  
-  return chapters
-    .map(chapter => `${chapter.timestamp} - ${chapter.title}`)
-    .join('\n');
-}
+

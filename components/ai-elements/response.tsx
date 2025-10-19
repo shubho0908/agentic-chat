@@ -20,8 +20,8 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})(?:[^\s)]*)?/gi;
-const URL_REGEX = /(?<![`\[])https?:\/\/[^\s<>\[\]`]+(?![`\]])/gi;
+const YOUTUBE_REGEX = /(?<!\]\()(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})(?:[^\s)]*)?/gi;
+const URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+(?![`\]])/gi;
 const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
 
 const isYouTubeUrl = (url: string) => /(?:youtube\.com|youtu\.be)/.test(url);
@@ -31,10 +31,26 @@ type ProcessedLink =
   | { type: 'youtube'; url: string; videoId: string; placeholder: string }
   | { type: 'regular'; url: string; placeholder: string };
 
+function isInsideMarkdownLink(text: string, matchIndex: number): boolean {
+  const before = text.substring(Math.max(0, matchIndex - 100), matchIndex);
+  const lastOpenParen = before.lastIndexOf('](');
+  
+  if (lastOpenParen === -1) return false;
+  
+  const after = text.substring(matchIndex, Math.min(text.length, matchIndex + 200));
+  const firstCloseParen = after.indexOf(')');
+  
+  return firstCloseParen !== -1;
+}
+
 function processLinks(text: string): { text: string; links: ProcessedLink[] } {
   const links: ProcessedLink[] = [];
   
-  let processed = text.replace(YOUTUBE_REGEX, (match) => {
+  let processed = text.replace(YOUTUBE_REGEX, (match, _videoId, offset) => {
+    if (isInsideMarkdownLink(text, offset)) {
+      return match;
+    }
+    
     const videoId = extractYouTubeId(match);
     if (!videoId) return match;
     
@@ -43,8 +59,12 @@ function processLinks(text: string): { text: string; links: ProcessedLink[] } {
     return placeholder;
   });
   
-  processed = processed.replace(URL_REGEX, (match) => {
+  processed = processed.replace(URL_REGEX, (match, offset) => {
     if (match.startsWith('__LINK_') || isImageUrl(match) || isYouTubeUrl(match)) {
+      return match;
+    }
+    
+    if (isInsideMarkdownLink(processed, offset)) {
       return match;
     }
     

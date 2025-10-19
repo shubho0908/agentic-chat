@@ -1,18 +1,5 @@
-import type { YouTubeVideo } from '@/types/tools';
-import { constructYouTubeUrl } from './urls';
-import { calculateRecencyScore } from '@/utils/youtube';
+import { calculateRecencyScore, parseDurationToSeconds } from '@/utils/youtube';
 import { youtubeClient, hasYouTubeAPIKey } from './client';
-
-function parseDurationToSeconds(isoDuration: string): number {
-  const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-  
-  const hours = parseInt(match[1] || '0');
-  const minutes = parseInt(match[2] || '0');
-  const seconds = parseInt(match[3] || '0');
-  
-  return hours * 3600 + minutes * 60 + seconds;
-}
 
 function calculateDurationScore(durationSeconds: number): number {
   if (durationSeconds < 60) return 0.3;
@@ -67,12 +54,15 @@ export async function searchYouTubeVideos(
     throw new Error('YouTube API key is required for search functionality. Please set YOUTUBE_API_KEY environment variable.');
   }
 
+  const validMaxResults = Math.max(1, Math.min(maxResults, 15));
   try {
+    const fetchCount = Math.min(validMaxResults * 3, 50);
+    
     const searchResponse = await youtubeClient.search.list({
       part: ['snippet'],
       q: query,
       type: ['video'],
-      maxResults: Math.min(maxResults * 3, 50),
+      maxResults: fetchCount,
       order: 'relevance',
       relevanceLanguage: 'en',
       safeSearch: 'moderate',
@@ -140,18 +130,10 @@ export async function searchYouTubeVideos(
       };
     });
 
-    return results.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, maxResults);
+    const sortedResults = results.sort((a, b) => b.relevanceScore - a.relevanceScore).slice(0, validMaxResults);
+    return sortedResults;
   } catch (error) {
     console.error('[YouTube Search] Error:', error);
     throw new Error(`YouTube search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
-
-export function searchResultToVideo(result: YouTubeSearchResult): YouTubeVideo {
-  return {
-    id: result.videoId,
-    title: result.title,
-    channelName: result.channelName,
-    url: constructYouTubeUrl(result.videoId),
-  };
 }
