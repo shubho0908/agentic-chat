@@ -17,11 +17,13 @@ export function AIThinkingAnimation({ memoryStatus, isLoading }: AIThinkingAnima
     (memoryStatus.hasMemories ||
       memoryStatus.hasDocuments ||
       memoryStatus.hasImages ||
+      memoryStatus.hasUrls ||
       memoryStatus.routingDecision === RoutingDecision.ToolOnly ||
       memoryStatus.routingDecision === RoutingDecision.MemoryOnly ||
       memoryStatus.routingDecision === RoutingDecision.VisionOnly ||
       memoryStatus.routingDecision === RoutingDecision.DocumentsOnly ||
-      memoryStatus.routingDecision === RoutingDecision.Hybrid);
+      memoryStatus.routingDecision === RoutingDecision.Hybrid ||
+      memoryStatus.routingDecision === RoutingDecision.UrlContent);
 
   const contextualMessage = useMemo(
     () => getContextualMessage(memoryStatus, !!hasContext),

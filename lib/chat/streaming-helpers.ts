@@ -18,6 +18,8 @@ export function encodeMemoryStatus(
     documentCount: memoryStatusInfo.documentCount,
     hasImages: memoryStatusInfo.hasImages,
     imageCount: memoryStatusInfo.imageCount,
+    hasUrls: memoryStatusInfo.hasUrls,
+    urlCount: memoryStatusInfo.urlCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
     activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly 
@@ -83,9 +85,11 @@ export function shouldSendMemoryStatus(memoryStatusInfo: MemoryStatus): boolean 
   return memoryStatusInfo.hasMemories || 
     memoryStatusInfo.hasDocuments || 
     memoryStatusInfo.hasImages ||
+    memoryStatusInfo.hasUrls ||
     memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ||
     memoryStatusInfo.routingDecision === RoutingDecision.MemoryOnly ||
     memoryStatusInfo.routingDecision === RoutingDecision.VisionOnly ||
     memoryStatusInfo.routingDecision === RoutingDecision.DocumentsOnly ||
-    memoryStatusInfo.routingDecision === RoutingDecision.Hybrid;
+    memoryStatusInfo.routingDecision === RoutingDecision.Hybrid ||
+    memoryStatusInfo.routingDecision === RoutingDecision.UrlContent;
 }

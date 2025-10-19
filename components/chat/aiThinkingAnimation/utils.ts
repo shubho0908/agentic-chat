@@ -1,4 +1,4 @@
-import { Brain, Eye, Zap, Focus, LucideIcon, Atom } from "lucide-react";
+import { Brain, Eye, Zap, Focus, LucideIcon, Atom, Globe } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
@@ -42,6 +42,12 @@ export function getContextualMessage(
     const docCount = memoryStatus?.documentCount ?? 0;
     const docText = docCount !== 1 ? "docs" : "doc";
     return `Analyzing ${docCount} attached ${docText} with focused context...`;
+  }
+
+  if (routing === RoutingDecision.UrlContent) {
+    const urlCount = memoryStatus?.urlCount ?? 0;
+    const urlText = urlCount !== 1 ? "URLs" : "URL";
+    return `Processing content from ${urlCount} ${urlText}...`;
   }
 
   if (routing === RoutingDecision.MemoryOnly) {
@@ -99,6 +105,8 @@ export function getRoutingIconConfig(routingDecision?: RoutingDecision): Routing
       return { icon: Brain, className: "w-3.5 h-3.5 text-indigo-500" };
     case RoutingDecision.ToolOnly:
       return { icon: Atom, className: "w-3.5 h-3.5 text-blue-500" };
+    case RoutingDecision.UrlContent:
+      return { icon: Globe, className: "w-3.5 h-3.5 text-blue-500" };
     default:
       return { icon: Zap, className: "w-3.5 h-3.5 text-gray-500" };
   }
@@ -116,6 +124,8 @@ export function getRoutingLabel(routingDecision?: RoutingDecision): string {
       return "Memory Context";
     case RoutingDecision.ToolOnly:
       return "Tool Active";
+    case RoutingDecision.UrlContent:
+      return "Web Content";
     default:
       return "Standard";
   }

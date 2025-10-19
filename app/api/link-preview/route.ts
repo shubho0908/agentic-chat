@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from 'next/headers';
+import { unstable_cache } from 'next/cache';
 import * as cheerio from "cheerio";
+import { getAuthenticatedUser } from '@/lib/api-utils';
+import { validateUrl } from '@/lib/url-scraper/scraper';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 interface LinkMetadata {
   url: string;
@@ -72,24 +79,13 @@ const extractMetadata = (html: string, url: string): LinkMetadata => {
   };
 };
 
-export async function GET(request: NextRequest) {
-  const url = request.nextUrl.searchParams.get("url");
-
-  if (!url) {
-    return NextResponse.json({ error: "URL parameter is required" }, { status: 400 });
-  }
-
-  try {
-    const validUrl = new URL(url);
-    if (!["http:", "https:"].includes(validUrl.protocol)) {
-      return NextResponse.json({ error: "Invalid URL protocol" }, { status: 400 });
-    }
-
+const getCachedLinkMetadata = unstable_cache(
+  async (url: string) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
-      const response = await fetch(validUrl.href, {
+      const response = await fetch(url, {
         signal: controller.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; LinkPreviewBot/1.0)",
@@ -103,20 +99,41 @@ export async function GET(request: NextRequest) {
       }
 
       const html = await response.text();
-      const metadata = extractMetadata(html, url);
-
-      return NextResponse.json(metadata, {
-        headers: {
-          "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
-        },
-      });
+      return extractMetadata(html, url);
     } finally {
       clearTimeout(timeoutId);
     }
+  },
+  ['link-preview'],
+  {
+    revalidate: 86400,
+    tags: ['link-preview'],
+  }
+);
+
+export async function GET(request: NextRequest) {
+  const { error } = await getAuthenticatedUser(await headers());
+  if (error) return error;
+
+  const url = request.nextUrl.searchParams.get("url");
+
+  const validation = validateUrl(url || '');
+  if (!validation.isValid) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  try {
+    const metadata = await getCachedLinkMetadata(validation.url!.href);
+
+    return NextResponse.json(metadata, {
+      headers: {
+        "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+      },
+    });
   } catch (error) {
-    console.error("Link preview error:", error);
+    console.error("[Link Preview API] Error:", error);
     return NextResponse.json(
-      { url, domain: extractDomain(url) },
+      { url: validation.url?.href || url || '', domain: extractDomain(validation.url?.href || url || '') },
       { status: 200 }
     );
   }

@@ -76,7 +76,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
     return (
       <div className={cn("inline-block w-full max-w-2xl", className)}>
         <Card className="group relative overflow-hidden border border-border/40 bg-gradient-to-br from-card/90 via-card/80 to-card/90 backdrop-blur-xl shadow-sm">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-100 transition-opacity duration-500" />
           <CardContent className="relative p-4">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -140,7 +140,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
       <div className={cn("inline-block w-full max-w-2xl", className)}>
         <Link href={url} target="_blank" rel="noopener noreferrer" className="group block no-underline">
           <Card className="relative overflow-hidden border border-border/40 bg-gradient-to-br from-card/95 via-card/85 to-card/95 backdrop-blur-xl shadow-sm transition-all duration-300 hover:border-primary/40 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/0 via-primary/5 to-primary/0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 opacity-100 transition-opacity duration-500 group-hover:opacity-100" />
             <div className="absolute -right-8 -top-8 size-24 rounded-full bg-primary/5 blur-2xl transition-all duration-500 group-hover:scale-150 group-hover:bg-primary/10" />
             <CardContent className="relative p-3.5">
               <div className="flex items-center gap-3.5">
@@ -162,7 +162,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
                       <Globe className="size-7 text-primary/70 transition-transform duration-500 group-hover:scale-110" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-100" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-bold text-foreground transition-colors duration-300 group-hover:text-primary line-clamp-1">
@@ -209,7 +209,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
                 }
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-transparent opacity-60 transition-opacity duration-500 group-hover:opacity-100" />
               <div className="absolute top-3 right-3 flex items-center justify-center size-10 rounded-xl bg-black/20 backdrop-blur-md border border-white/10 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:scale-110">
                 <ExternalLink className="size-5 text-white" />
               </div>

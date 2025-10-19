@@ -54,6 +54,8 @@ export async function POST(request: NextRequest) {
       documentCount: 0,
       hasImages: false,
       imageCount: 0,
+      hasUrls: false,
+      urlCount: 0,
       routingDecision: RoutingDecision.MemoryOnly,
       skippedMemory: false,
     };

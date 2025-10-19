@@ -8,6 +8,7 @@ import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
 import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
+import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 
 export interface ContextRoutingResult {
   context: string;
@@ -15,9 +16,11 @@ export interface ContextRoutingResult {
     hasMemories: boolean;
     hasDocuments: boolean;
     hasImages: boolean;
+    hasUrls: boolean;
     memoryCount: number;
     documentCount: number;
     imageCount: number;
+    urlCount: number;
     routingDecision: RoutingDecision;
     skippedMemory: boolean;
     activeToolName?: string;
@@ -116,9 +119,11 @@ export async function routeContext(
     hasMemories: boolean;
     hasDocuments: boolean;
     hasImages: boolean;
+    hasUrls: boolean;
     memoryCount: number;
     documentCount: number;
     imageCount: number;
+    urlCount: number;
     routingDecision: RoutingDecision;
     skippedMemory: boolean;
     activeToolName?: string;
@@ -126,9 +131,11 @@ export async function routeContext(
     hasMemories: false,
     hasDocuments: false,
     hasImages,
+    hasUrls: false,
     memoryCount: 0,
     documentCount: 0,
     imageCount,
+    urlCount: 0,
     routingDecision: RoutingDecision.MemoryOnly,
     skippedMemory: !memoryEnabled,
   };
@@ -136,6 +143,32 @@ export async function routeContext(
   const textQuery = typeof query === 'string' 
     ? query 
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+
+  const detectedUrls = extractUrlsFromMessage(query);
+  
+  if (detectedUrls.length > 0) {
+    try {
+      const scrapedContent = await scrapeMultipleUrls(detectedUrls);
+      
+      if (scrapedContent.length > 0) {
+        metadata.hasUrls = true;
+        metadata.urlCount = scrapedContent.length;
+        metadata.routingDecision = RoutingDecision.UrlContent;
+        metadata.skippedMemory = true;
+        
+        const urlContext = formatScrapedContentForContext(scrapedContent);
+        
+        if (hasImages) {
+          metadata.routingDecision = RoutingDecision.Hybrid;
+        }
+        
+        return { context: urlContext, metadata };
+      }
+    } catch (error) {
+      console.error('[Context Router] URL scraping failed:', error);
+      // Continue with normal flow if URL scraping fails
+    }
+  }
 
   if (deepResearchEnabled) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
