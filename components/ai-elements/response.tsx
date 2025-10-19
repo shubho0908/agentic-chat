@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { type ComponentProps, memo } from "react";
 import { Streamdown } from "streamdown";
 import { YouTubeLink } from "./youtubeLink";
+import { RichLink } from "./richLink";
 
 type ResponseProps = ComponentProps<typeof Streamdown>;
 
@@ -19,22 +20,40 @@ function extractYouTubeId(url: string): string | null {
   return null;
 }
 
-function processYouTubeLinks(text: string): { text: string; links: Array<{ url: string; videoId: string; placeholder: string }> } {
-  const youtubeLinks: Array<{ url: string; videoId: string; placeholder: string }> = [];
+const YOUTUBE_REGEX = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})(?:[^\s)]*)?/gi;
+const URL_REGEX = /(?<![`\[])https?:\/\/[^\s<>\[\]`]+(?![`\]])/gi;
+const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i;
+
+const isYouTubeUrl = (url: string) => /(?:youtube\.com|youtu\.be)/.test(url);
+const isImageUrl = (url: string) => IMAGE_EXTENSIONS.test(url);
+
+type ProcessedLink = 
+  | { type: 'youtube'; url: string; videoId: string; placeholder: string }
+  | { type: 'regular'; url: string; placeholder: string };
+
+function processLinks(text: string): { text: string; links: ProcessedLink[] } {
+  const links: ProcessedLink[] = [];
   
-  const urlRegex = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})(?:[^\s]*)?/gi;
-  
-  const processed = text.replace(urlRegex, (match) => {
+  let processed = text.replace(YOUTUBE_REGEX, (match) => {
     const videoId = extractYouTubeId(match);
-    if (videoId) {
-      const placeholder = `__YOUTUBE_LINK_${youtubeLinks.length}__`;
-      youtubeLinks.push({ url: match, videoId, placeholder });
-      return placeholder;
-    }
-    return match;
+    if (!videoId) return match;
+    
+    const placeholder = `__LINK_${links.length}__`;
+    links.push({ type: 'youtube', url: match, videoId, placeholder });
+    return placeholder;
   });
   
-  return { text: processed, links: youtubeLinks };
+  processed = processed.replace(URL_REGEX, (match) => {
+    if (match.startsWith('__LINK_') || isImageUrl(match) || isYouTubeUrl(match)) {
+      return match;
+    }
+    
+    const placeholder = `__LINK_${links.length}__`;
+    links.push({ type: 'regular', url: match, placeholder });
+    return placeholder;
+  });
+  
+  return { text: processed, links };
 }
 
 function fixMathDelimiters(text: string): string {
@@ -68,84 +87,77 @@ function fixMathDelimiters(text: string): string {
 }
 
 const ResponseComponent = ({ className, children, ...props }: ResponseProps) => {
-  let processedChildren = children;
-  let youtubeLinks: Array<{ url: string; videoId: string; placeholder: string }> = [];
-
-  if (typeof children === 'string') {
-    const { text, links } = processYouTubeLinks(children);
-    processedChildren = fixMathDelimiters(text);
-    youtubeLinks = links;
+  if (typeof children !== 'string') {
+    return (
+      <Streamdown
+        className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+        {...props}
+      >
+        {children}
+      </Streamdown>
+    );
   }
-  
-  const renderContent = () => {
-    if (typeof processedChildren !== 'string' || youtubeLinks.length === 0) {
-      return (
-        <Streamdown
-          className={cn(
-            "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-            className
-          )}
-          {...props}
-        >
-          {processedChildren}
-        </Streamdown>
-      );
-    }
 
-    const contentSections: React.ReactNode[] = [];
-    let lastIndex = 0;
-    const currentText = processedChildren as string;
+  const { text: processedText, links } = processLinks(children);
+  const finalText = fixMathDelimiters(processedText);
 
-    youtubeLinks.forEach((link, index) => {
-      const placeholderIndex = currentText.indexOf(link.placeholder, lastIndex);
-      
-      if (placeholderIndex !== -1) {
-        if (placeholderIndex > lastIndex) {
-          const textBefore = currentText.substring(lastIndex, placeholderIndex);
-          contentSections.push(
-            <Streamdown
-              key={`text-${index}`}
-              className={cn(
-                "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-                className
-              )}
-              {...props}
-            >
-              {textBefore}
-            </Streamdown>
-          );
-        }
-        
-        contentSections.push(
-          <div key={`youtube-${index}`} className="my-4">
-            <YouTubeLink url={link.url} videoId={link.videoId} showThumbnail={true} />
-          </div>
+  if (links.length === 0) {
+    return (
+      <Streamdown
+        className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+        {...props}
+      >
+        {finalText}
+      </Streamdown>
+    );
+  }
+
+  const sections: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  links
+    .map((link) => ({ ...link, index: finalText.indexOf(link.placeholder) }))
+    .filter(({ index }) => index !== -1)
+    .sort((a, b) => a.index - b.index)
+    .forEach((link, idx) => {
+      if (link.index > lastIndex) {
+        sections.push(
+          <Streamdown
+            key={`text-${idx}`}
+            className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+            {...props}
+          >
+            {finalText.substring(lastIndex, link.index)}
+          </Streamdown>
         );
-        
-        lastIndex = placeholderIndex + link.placeholder.length;
       }
+
+      sections.push(
+        <div key={`link-${idx}`} className="my-4">
+          {link.type === 'youtube' ? (
+            <YouTubeLink url={link.url} videoId={link.videoId} showThumbnail={true} />
+          ) : (
+            <RichLink url={link.url} variant="compact" />
+          )}
+        </div>
+      );
+
+      lastIndex = link.index + link.placeholder.length;
     });
 
-    if (lastIndex < currentText.length) {
-      const textAfter = currentText.substring(lastIndex);
-      contentSections.push(
-        <Streamdown
-          key="text-end"
-          className={cn(
-            "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-            className
-          )}
-          {...props}
-        >
-          {textAfter}
-        </Streamdown>
-      );
-    }
+  if (lastIndex < finalText.length) {
+    sections.push(
+      <Streamdown
+        key="text-end"
+        className={cn("size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0", className)}
+        {...props}
+      >
+        {finalText.substring(lastIndex)}
+      </Streamdown>
+    );
+  }
 
-    return contentSections;
-  };
-  
-  return renderContent();
+  return <>{sections}</>;
 };
 
 ResponseComponent.displayName = "Response";

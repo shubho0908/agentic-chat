@@ -33,16 +33,16 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
   const { data: session } = useSession();
-  
+
   const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
   const totalVersions = versions.length + 1;
   const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
-  
+
   const displayedMessage = useMemo<Message>(() => {
     const msg = versionIndex === -1 ? message : (versions[versionIndex] || message);
     return msg;
   }, [versionIndex, message, versions]);
-  
+
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
 
@@ -51,17 +51,17 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
   const userImage = session?.user?.image;
   const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
-  
+
   const handleEditStart = useCallback(() => {
     setEditText(textContent);
     setIsEditing(true);
   }, [textContent]);
-  
+
   const handleEditCancel = useCallback(() => {
     setIsEditing(false);
     setEditText("");
   }, []);
-  
+
   const handleEditSubmit = useCallback(() => {
     if (!editText.trim() || !message.id || !onEditMessage) return;
     onEditMessage(message.id, editText, message.attachments);
@@ -69,7 +69,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     setEditText("");
     setVersionIndex(-1);
   }, [editText, message.id, message.attachments, onEditMessage]);
-  
+
   const handlePreviousVersion = useCallback(() => {
     if (versionIndex === -1) {
       if (versions.length > 0) {
@@ -79,28 +79,28 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       setVersionIndex(versionIndex + 1);
     }
   }, [versionIndex, versions.length]);
-  
+
   const handleNextVersion = useCallback(() => {
     if (versionIndex === -1) return;
-    
+
     if (versionIndex > 0) {
       setVersionIndex(versionIndex - 1);
     } else {
       setVersionIndex(-1);
     }
   }, [versionIndex]);
-  
+
   const isThinking = !textContent && !displayedMessage.content;
-  
+
   const citations = useMemo(() => {
     if (isUser) return [];
-    
+
     const allCitations = [];
-    
+
     if (displayedMessage.metadata?.citations && displayedMessage.metadata.citations.length > 0) {
       allCitations.push(...displayedMessage.metadata.citations);
     }
-    
+
     if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
       const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
         id: `source-${index + 1}`,
@@ -112,11 +112,11 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       }));
       allCitations.push(...sourcesAsCitations);
     }
-    
+
     if (isLastMessage && memoryStatus?.toolProgress?.details?.citations) {
       allCitations.push(...memoryStatus.toolProgress.details.citations);
     }
-    
+
     const uniqueCitations = allCitations.reduce((acc, citation) => {
       const existing = acc.find((c) => c.url && citation.url && c.url === citation.url);
       if (!existing) {
@@ -124,22 +124,22 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       }
       return acc;
     }, [] as typeof allCitations);
-    
+
     return uniqueCitations;
   }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);
-  
+
   const followUpQuestions = useMemo(() => {
     if (isUser) return [];
-    
+
     if (displayedMessage.metadata?.followUpQuestions && displayedMessage.metadata.followUpQuestions.length > 0 && !isLoading) {
       if (isLastMessage) {
         return displayedMessage.metadata.followUpQuestions;
       }
     }
-    
+
     return [];
   }, [isUser, isLastMessage, isLoading, displayedMessage.metadata?.followUpQuestions]);
-  
+
   if (message.role === "system") return null;
 
   return (
@@ -160,8 +160,11 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                 </AvatarFallback>
               </Avatar>
             ) : (
-              <div className="flex size-8 items-center justify-center rounded-full bg-secondary text-secondary-foreground transition-all">
-                <OpenAIIcon className="size-4" />
+              <div className="relative flex size-8 items-center justify-center rounded-lg overflow-hidden border border-primary/10 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10">
+                <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent"></div>
+                <div className="relative z-10">
+                  <OpenAIIcon className="size-4 text-primary" />
+                </div>
               </div>
             )}
           </div>
@@ -195,21 +198,21 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                   ) : message.content ? (
                     <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
-                    <AIThinkingAnimation 
+                    <AIThinkingAnimation
                       memoryStatus={memoryStatus}
                       isLoading={isLoading}
                     />
                   )}
                 </div>
-                
+
                 {!isUser && followUpQuestions.length > 0 && (
-                  <FollowUpQuestions 
+                  <FollowUpQuestions
                     questions={followUpQuestions}
                     onQuestionClick={onSendMessage}
                     disabled={isSharePage}
                   />
                 )}
-                
+
                 {isUser && totalVersions > 0 && (
                   <VersionNavigator
                     currentVersion={currentVersion}
@@ -220,7 +223,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     onNext={handleNextVersion}
                   />
                 )}
-                
+
                 {!isSharePage && (
                   <div className="mt-2">
                     <MessageActions
@@ -256,7 +259,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
 
   const prevMetadata = prevProps.message.metadata;
   const nextMetadata = nextProps.message.metadata;
-  
+
   if (
     prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
@@ -268,27 +271,27 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   if (prevProps.isLastMessage && nextProps.isLastMessage) {
     const prevStatus = prevProps.memoryStatus;
     const nextStatus = nextProps.memoryStatus;
-    
+
     if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
-        prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
-        prevStatus?.hasImages !== nextStatus?.hasImages ||
-        prevStatus?.memoryCount !== nextStatus?.memoryCount ||
-        prevStatus?.documentCount !== nextStatus?.documentCount ||
-        prevStatus?.imageCount !== nextStatus?.imageCount ||
-        prevStatus?.routingDecision !== nextStatus?.routingDecision) {
+      prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
+      prevStatus?.hasImages !== nextStatus?.hasImages ||
+      prevStatus?.memoryCount !== nextStatus?.memoryCount ||
+      prevStatus?.documentCount !== nextStatus?.documentCount ||
+      prevStatus?.imageCount !== nextStatus?.imageCount ||
+      prevStatus?.routingDecision !== nextStatus?.routingDecision) {
       return false;
     }
-    
+
     const prevProgress = prevStatus?.toolProgress;
     const nextProgress = nextStatus?.toolProgress;
-    
+
     if (prevProgress?.status !== nextProgress?.status ||
-        prevProgress?.message !== nextProgress?.message ||
-        prevProgress?.details?.status !== nextProgress?.details?.status ||
-        prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
-        prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
-        prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
-        prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
+      prevProgress?.message !== nextProgress?.message ||
+      prevProgress?.details?.status !== nextProgress?.details?.status ||
+      prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
+      prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
+      prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
+      prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
       return false;
     }
   }
