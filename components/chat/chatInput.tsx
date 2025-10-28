@@ -201,9 +201,6 @@ export function ChatInput({
     }
 
     if (activeTool === toolId) {
-      if (toolId === TOOL_IDS.WEB_SEARCH) {
-        return;
-      }
       handleToolDeactivated();
       return;
     }
