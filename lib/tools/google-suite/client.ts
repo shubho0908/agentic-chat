@@ -1,7 +1,7 @@
 import { google, type Auth } from 'googleapis';
 import { GaxiosError } from 'gaxios';
 import { prisma } from '@/lib/prisma';
-import { GOOGLE_PROVIDER_ID } from './scopes';
+import { GOOGLE_PROVIDER_ID, SCOPE_GROUPS } from './scopes';
 import { getCachedValidation, setCachedValidation, clearCachedValidation } from './token-cache';
 
 export interface GoogleSuiteClientContext {
@@ -31,7 +31,7 @@ export function createOAuth2Client(): Auth.OAuth2Client {
   return new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
-    `${NEXT_PUBLIC_APP_URL}/api/google-suite/auth/callback`
+    `${NEXT_PUBLIC_APP_URL}/api/auth/callback/google`
   );
 }
 
@@ -213,6 +213,26 @@ export async function createGoogleSuiteClient(userId: string): Promise<GoogleSui
   const isExpired = !account.accessTokenExpiresAt || new Date(account.accessTokenExpiresAt) < new Date();
   if (isExpired) {
     await refreshAccessToken(userId, oauth2Client);
+  }
+
+  const validationResult = await validateGoogleToken(userId);
+  
+  if (!validationResult.isValid) {
+    throw new Error(GOOGLE_AUTH_REVOKED_ERROR);
+  }
+
+  const grantedScopes = new Set(validationResult.scopes || []);
+  const requiredScopes = SCOPE_GROUPS.WORKSPACE;
+  const missingScopes = requiredScopes.filter(scope => !grantedScopes.has(scope));
+
+  if (missingScopes.length > 0) {
+    console.error('[Google Suite Client] Missing required scopes:', {
+      userId,
+      grantedCount: grantedScopes.size,
+      missingCount: missingScopes.length,
+      missing: missingScopes,
+    });
+    throw new Error('Missing required Google Workspace permissions. Please sign out and sign in again to grant full access.');
   }
 
   return { oauth2Client, userId };

@@ -50,12 +50,14 @@ export function ToolMenuItemDrawer({
       <div className="space-y-1">
         <Button
           variant="ghost"
+          disabled={isDisabled}
           className={cn(
             "w-full flex items-center justify-start gap-3 py-3 px-3 h-auto rounded-lg transition-all",
             isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
-            "hover:bg-accent"
+            "hover:bg-accent",
+            isDisabled && "opacity-50 cursor-not-allowed"
           )}
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={() => !isDisabled && setIsExpanded(!isExpanded)}
         >
           <div
             className="relative flex items-center justify-center size-9 rounded-lg transition-all"
@@ -114,11 +116,14 @@ export function ToolMenuItemDrawer({
               <div className="space-y-1 py-1">
                 <Button
                   variant="ghost"
+                  disabled={isDisabled}
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
-                    onSearchDepthChange?.('basic');
-                    onToolSelect(tool.id);
-                    setIsExpanded(false);
+                    if (!isDisabled) {
+                      onSearchDepthChange?.('basic');
+                      onToolSelect(tool.id);
+                      setIsExpanded(false);
+                    }
                   }}
                 >
                   <div className="flex items-center justify-center size-8 rounded-md bg-muted/50">
@@ -134,11 +139,14 @@ export function ToolMenuItemDrawer({
                 </Button>
                 <Button
                   variant="ghost"
+                  disabled={isDisabled}
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
-                    onSearchDepthChange?.('advanced');
-                    onToolSelect(tool.id);
-                    setIsExpanded(false);
+                    if (!isDisabled) {
+                      onSearchDepthChange?.('advanced');
+                      onToolSelect(tool.id);
+                      setIsExpanded(false);
+                    }
                   }}
                 >
                   <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary/10 to-primary/5">

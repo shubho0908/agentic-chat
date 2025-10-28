@@ -41,4 +41,5 @@ export const ALL_GOOGLE_SUITE_SCOPES = [
   ...SCOPE_GROUPS.WORKSPACE,
 ];
 
-export const GOOGLE_PROVIDER_ID = 'google-workspace';
+// Better Auth uses 'google' as the provider ID for Google OAuth
+export const GOOGLE_PROVIDER_ID = 'google';

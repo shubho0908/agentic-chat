@@ -1,4 +1,4 @@
-import { ClipboardEvent, useState, useEffect, useRef } from "react";
+import { ClipboardEvent, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
@@ -47,74 +47,43 @@ export function ChatInput({
   onAuthRequired,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
-  const [activeTool, setActiveTool] = useState<ToolId | null>(() => {
-    const stored = getStoredActiveTool();
-    return stored && isValidToolId(stored) ? (stored as ToolId) : null;
-  });
-  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(() => {
-    return getStoredMemoryEnabled();
-  });
-  const [deepResearchEnabled, setDeepResearchEnabled] = useState<boolean>(() => {
-    return getStoredDeepResearchEnabled();
-  });
-  const [searchDepth, setSearchDepth] = useState<SearchDepth>(() => {
-    return getStoredSearchDepth();
-  });
+  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
+  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(false);
+  const [deepResearchEnabled, setDeepResearchEnabled] = useState<boolean>(false);
+  const [searchDepth, setSearchDepth] = useState<SearchDepth>('basic');
 
   const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage();
-  const prevSessionRef = useRef<typeof session | undefined>(undefined);
 
   useEffect(() => {
-    if (!isPending && prevSessionRef.current !== undefined) {
-      if (prevSessionRef.current && !session) {
+    if (!isPending) {
+      if (session) {
+        const stored = getStoredActiveTool();
+        setActiveTool(stored && isValidToolId(stored) ? (stored as ToolId) : null);
+        setMemoryEnabled(getStoredMemoryEnabled());
+        setDeepResearchEnabled(getStoredDeepResearchEnabled());
+        setSearchDepth(getStoredSearchDepth());
+      } else {
         setActiveTool(null);
         setMemoryEnabled(false);
         setDeepResearchEnabled(false);
       }
     }
-    prevSessionRef.current = session;
   }, [session, isPending]);
 
   useEffect(() => {
-    if (activeTool) {
-      storeActiveTool(activeTool);
-    } else {
-      removeActiveTool();
-    }
-  }, [activeTool]);
-
-  useEffect(() => {
-    storeMemoryEnabled(memoryEnabled);
-  }, [memoryEnabled]);
-
-  useEffect(() => {
-    storeDeepResearchEnabled(deepResearchEnabled);
-  }, [deepResearchEnabled]);
-
-  useEffect(() => {
-    storeSearchDepth(searchDepth);
-  }, [searchDepth]);
-
-  useEffect(() => {
-    if (usageData && usageData.remaining === 0) {
-      const needsDeactivation = deepResearchEnabled || activeTool === TOOL_IDS.DEEP_RESEARCH;
-
-      if (needsDeactivation) {
-        setDeepResearchEnabled(false);
-        if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
-          setActiveTool(null);
-        }
-
-        if (deepResearchEnabled) {
-          toast.info('Deep Research deactivated', {
-            description: 'You have reached your monthly usage limit.',
-            duration: 5000,
-          });
-        }
+    if (usageData?.remaining === 0 && (deepResearchEnabled || activeTool === TOOL_IDS.DEEP_RESEARCH)) {
+      setDeepResearchEnabled(false);
+      if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
+        setActiveTool(null);
+        removeActiveTool();
       }
+      toast.info('Deep Research deactivated', {
+        description: 'You have reached your monthly usage limit.',
+        duration: 5000,
+      });
     }
-  }, [deepResearchEnabled, activeTool, usageData]);
+  }, [usageData, deepResearchEnabled, activeTool]);
 
   const {
     selectedFiles,
@@ -232,6 +201,9 @@ export function ChatInput({
     }
 
     if (activeTool === toolId) {
+      if (toolId === TOOL_IDS.WEB_SEARCH) {
+        return;
+      }
       handleToolDeactivated();
       return;
     }
@@ -245,24 +217,30 @@ export function ChatInput({
     }
 
     setActiveTool(toolId);
+    storeActiveTool(toolId);
 
     if (toolId === TOOL_IDS.DEEP_RESEARCH) {
       setDeepResearchEnabled(true);
+      storeDeepResearchEnabled(true);
     } else {
       setDeepResearchEnabled(false);
+      storeDeepResearchEnabled(false);
     }
 
+    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? 'Web Search' : toolId.replace('_', ' ');
     toast.success('Tool activated', {
-      description: `${toolId.replace('_', ' ')} is now enabled for your next query`,
+      description: `${toolName} is now enabled for your next query`,
       duration: 2500,
     });
   }
 
   function handleToolDeactivated() {
     setActiveTool(null);
+    removeActiveTool();
 
     if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
       setDeepResearchEnabled(false);
+      storeDeepResearchEnabled(false);
     }
 
     toast.info('Tool deactivated', {
@@ -281,6 +259,7 @@ export function ChatInput({
     }
     
     setMemoryEnabled(enabled);
+    storeMemoryEnabled(enabled);
     toast.success(enabled ? 'Memory enabled' : 'Memory disabled', {
       duration: 2500,
     });
@@ -288,6 +267,7 @@ export function ChatInput({
 
   function handleSearchDepthChange(depth: SearchDepth) {
     setSearchDepth(depth);
+    storeSearchDepth(depth);
     toast.success(depth === 'advanced' ? 'Advanced search enabled' : 'Basic search enabled', {
       description: depth === 'advanced' 
         ? 'Enhanced search with deeper analysis'

@@ -47,16 +47,20 @@ export function ToolMenuItem({
   const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const isDisabled = !isAuthenticated || (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0);
+  const isDisabled = !isAuthenticated || 
+    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
+    (isGoogleSuite && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized);
   const needsPermissions = isGoogleSuite && isAuthenticated && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized;
 
   if (isWebSearch) {
     return (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger
+          disabled={isDisabled}
           className={cn(
             "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
-            isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
+            isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
+            isDisabled && "opacity-50 cursor-not-allowed"
           )}
         >
           <div
@@ -100,9 +104,12 @@ export function ToolMenuItem({
         <DropdownMenuSubContent sideOffset={8} className="w-56 p-1">
           <DropdownMenuItem
             onClick={() => {
-              onSearchDepthChange?.('basic');
-              onToolSelect(tool.id);
+              if (!isDisabled) {
+                onSearchDepthChange?.('basic');
+                onToolSelect(tool.id);
+              }
             }}
+            disabled={isDisabled}
             className="gap-3 py-2.5 rounded-md cursor-pointer"
           >
             <div className="flex items-center justify-center size-8 rounded-md bg-muted/50">
@@ -118,9 +125,12 @@ export function ToolMenuItem({
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
-              onSearchDepthChange?.('advanced');
-              onToolSelect(tool.id);
+              if (!isDisabled) {
+                onSearchDepthChange?.('advanced');
+                onToolSelect(tool.id);
+              }
             }}
+            disabled={isDisabled}
             className="gap-3 py-2.5 rounded-md cursor-pointer"
           >
             <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary/10 to-primary/5">
@@ -167,7 +177,7 @@ export function ToolMenuItem({
           <span className="font-medium truncate">{tool.name}</span>
           {needsPermissions && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Auth needed
+              Sign in required
             </Badge>
           )}
           {isDeepResearch && (
@@ -243,7 +253,7 @@ export function ToolMenuItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Click to grant Google Workspace permissions' : tool.description}
+          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Sign in with Google to access Workspace tools' : tool.description}
         </span>
       </div>
       {isActive && (

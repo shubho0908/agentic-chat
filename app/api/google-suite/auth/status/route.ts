@@ -26,7 +26,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         reason: 'no_google_account',
-        message: 'Please sign in with Google first.',
+        message: 'Please sign in with Google to use Google Workspace tools.',
       });
     }
 
@@ -34,7 +34,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         reason: 'no_tokens',
-        message: 'Please re-authorize to refresh your Google credentials.',
+        message: 'Please sign out and sign in again with Google to refresh your credentials.',
       });
     }
 
@@ -45,7 +45,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         reason: 'token_invalid',
-        message: validationResult.error || 'Your Google authorization has expired or been revoked. Please re-authorize.',
+        message: validationResult.error || 'Your Google authorization has expired or been revoked. Please sign out and sign in again.',
       });
     }
 
@@ -63,7 +63,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         reason: 'permissions_needed',
-        message: 'Additional Google Workspace permissions required. Click to grant access to Gmail, Drive, Calendar, Docs, Sheets, and Slides.',
+        message: 'Missing Google Workspace permissions. Please sign out and sign in again to grant full access to Gmail, Drive, Calendar, Docs, Sheets, and Slides.',
         missingScopes,
       });
     }

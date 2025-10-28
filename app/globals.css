@@ -165,18 +165,25 @@
   /* Prevent default browser drag styles */
   * {
     -webkit-user-drag: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
   }
 
-  textarea,
-  input,
-  [contenteditable] {
+  /* Allow text selection by default */
+  * {
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
     user-select: text;
+  }
+
+  /* Disable selection for interactive elements */
+  button,
+  [role="button"],
+  svg,
+  img {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
 
   /* Remove all drag-over styling */

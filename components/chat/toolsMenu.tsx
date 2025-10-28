@@ -64,7 +64,7 @@ export function ToolsMenu({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
   const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage();
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading, authorize: authorizeGoogleSuite } = useGoogleSuiteAuth();
+  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth();
   const isMobile = useIsMobile();
   const deepResearchUsage = {
     remaining: usageData?.remaining ?? 3,
@@ -78,8 +78,9 @@ export function ToolsMenu({
       setIsOpen(false);
       return;
     }
+    // Google Suite tool requires Google sign-in with proper scopes
+    // If not authorized, the tool will be disabled in the menu
     if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
-      authorizeGoogleSuite();
       return;
     }
     onToolSelected?.(toolId);
