@@ -82,7 +82,7 @@ export function ChatInputForm({
         dropZoneRef={dropZoneRef}
         handlers={dragHandlers}
       >
-        <div className="relative rounded-2xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
+        <div className="relative rounded-3xl bg-muted/50 border border-border/50 shadow-sm transition-all focus-within:border-border focus-within:shadow-md overflow-hidden">
           <FilePreview files={selectedFiles} onRemove={onRemoveFile} disabled={isSending} />
           <Textarea
             ref={textareaRef}
