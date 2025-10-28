@@ -21,11 +21,41 @@ export interface ContextRoutingResult {
     documentCount: number;
     imageCount: number;
     urlCount: number;
-    routingDecision: RoutingDecision;
+    routingDecision?: RoutingDecision;
     skippedMemory: boolean;
     activeToolName?: string;
   };
 }
+
+function extractTextQuery(query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): string {
+  return typeof query === 'string' 
+    ? query 
+    : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+}
+
+const MEMORY_PATTERNS = [
+  /\b(remember|recall|you\s+(said|told|mentioned)|we\s+(discussed|talked|spoke|built|created|made|worked\s+on))/i,
+  /\b(last\s+time|previous(ly)?|earlier|before|ago)\b/i,
+  /\b(based\s+on\s+(our|my|the)\s+previous|continue\s+(from|where)|as\s+(we|you|i)\s+(discussed|mentioned))/i,
+  /\b(what\s+did\s+(i|we)|did\s+(i|we)\s+(say|mention|discuss|talk))/i,
+  /^(tell\s+me\s+more|what\s+else|anything\s+else|more\s+(about|on)\s+that)/i,
+] as const;
+
+const NO_MEMORY_PATTERNS = [
+  /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening))/i,
+  /^(what('s|\s+is)\s+(the\s+)?(meaning|definition)\s+of|define|explain\s+what\s+is)/i,
+  /^(calculate|solve|what('s|\s+is)\s+\d+|how\s+much\s+is\s+\d+)/i,
+  /^(write\s+(a|an|me)|create\s+(a|an)|generate\s+(a|an)|make\s+(a|an))\s+(poem|story|essay|song|code|script)/i,
+  /^(translate|convert)\s+(this|the\s+following)/i,
+  /^(who\s+is|what\s+is|where\s+is|when\s+was|why\s+did|how\s+does)\s+.+\?$/i,
+] as const;
+
+const REFERENTIAL_PATTERNS = [
+  /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
+  /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
+  /\b(summarize|explain|analyze|describe)\s+(this|that|the|it)/i,
+  /^(summarize|summary|explain|analyze|describe)$/i,
+] as const;
 
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
   if (!Array.isArray(content)) return 0;
@@ -34,21 +64,31 @@ function detectImages(content: string | Array<{ type: string; text?: string; ima
   ).length;
 }
 
-function isReferentialQuery(query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): boolean {
-  const textQuery = typeof query === 'string' 
-    ? query 
-    : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
+function isReferentialQuery(normalized: string): boolean {
+  return REFERENTIAL_PATTERNS.some(p => p.test(normalized));
+}
 
-  const normalized = textQuery.toLowerCase().trim();
+function shouldQueryMemory(normalized: string): boolean {
+  const wordCount = normalized.split(/\s+/).length;
 
-  const patterns = [
-    /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
-    /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
-    /\b(summarize|explain|analyze|describe)\s+(this|that|the|it)/i,
-    /^(summarize|summary|explain|analyze|describe)$/i,
-  ];
+  if (wordCount < 3) {
+    return MEMORY_PATTERNS[0].test(normalized) || MEMORY_PATTERNS[1].test(normalized);
+  }
 
-  return patterns.some(p => p.test(normalized));
+  if (MEMORY_PATTERNS.some(p => p.test(normalized))) {
+    return true;
+  }
+
+  if (NO_MEMORY_PATTERNS.some(p => p.test(normalized))) {
+    return false;
+  }
+
+  if (/\b(that|it|this|those|these)\b(?!\s+(is|was|are|were|means|refers|stands\s+for))/i.test(normalized)) {
+    return /\b(what|how|why|when|where|who|which)\b/i.test(normalized) ||
+           /\b(about|regarding|concerning)\s+(that|it|this)/i.test(normalized);
+  }
+
+  return wordCount > 10;
 }
 
 async function hasDocumentAttachments(conversationId: string): Promise<boolean> {
@@ -111,9 +151,11 @@ export async function routeContext(
   memoryEnabled: boolean = false,
   deepResearchEnabled: boolean = false
 ): Promise<ContextRoutingResult> {
+  const textQuery = extractTextQuery(query);
+  const normalized = textQuery.toLowerCase().trim();
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
-  const isReferential = isReferentialQuery(query);
+  const isReferential = isReferentialQuery(normalized);
 
   const metadata: {
     hasMemories: boolean;
@@ -124,7 +166,7 @@ export async function routeContext(
     documentCount: number;
     imageCount: number;
     urlCount: number;
-    routingDecision: RoutingDecision;
+    routingDecision?: RoutingDecision;
     skippedMemory: boolean;
     activeToolName?: string;
   } = {
@@ -136,13 +178,9 @@ export async function routeContext(
     documentCount: 0,
     imageCount,
     urlCount: 0,
-    routingDecision: RoutingDecision.MemoryOnly,
     skippedMemory: !memoryEnabled,
   };
 
-  const textQuery = typeof query === 'string' 
-    ? query 
-    : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
 
   if (deepResearchEnabled) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
@@ -169,12 +207,10 @@ export async function routeContext(
   const detectedUrls = extractUrlsFromMessage(query);
   
   if (detectedUrls.length > 0) {
-    console.log(`[Context Router] Detected ${detectedUrls.length} URL(s) in message`);
     try {
       const scrapedContent = await scrapeMultipleUrls(detectedUrls);
       
       if (scrapedContent.length > 0) {
-        console.log(`[Context Router] Using scraped content from ${scrapedContent.length} URL(s) as context`);
         metadata.hasUrls = true;
         metadata.urlCount = scrapedContent.length;
         metadata.routingDecision = RoutingDecision.UrlContent;
@@ -277,6 +313,10 @@ export async function routeContext(
   }
 
   if (!memoryEnabled || metadata.skippedMemory) {
+    return { context: '', metadata };
+  }
+
+  if (!shouldQueryMemory(normalized)) {
     return { context: '', metadata };
   }
 
