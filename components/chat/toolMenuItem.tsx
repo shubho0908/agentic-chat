@@ -119,7 +119,7 @@ export function ToolMenuItem({
               <span className="font-medium text-sm">Basic Search</span>
               <span className="text-xs text-muted-foreground">Quick results, faster response</span>
             </div>
-            {searchDepth === 'basic' && (
+            {isActive && searchDepth === 'basic' && (
               <Check className="size-4 text-primary ml-auto" />
             )}
           </DropdownMenuItem>
@@ -140,7 +140,7 @@ export function ToolMenuItem({
               <span className="font-medium text-sm">Advanced Search</span>
               <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
             </div>
-            {searchDepth === 'advanced' && (
+            {isActive && searchDepth === 'advanced' && (
               <Check className="size-4 text-primary ml-auto" />
             )}
           </DropdownMenuItem>

@@ -1,4 +1,4 @@
-import { Search, Brain, Globe, GitCompare, Sparkles, Zap } from "lucide-react";
+import { Search, Target, Network, ShieldCheck, Boxes, BadgeCheck } from "lucide-react";
 import { ToolProgressStatus } from "@/types/chat";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
@@ -13,7 +13,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
     const phases = [
       {
         number: 1,
-        icon: Brain,
+        icon: Target,
         label: 'Query Analysis',
         description: 'Analyzing query and decomposing research questions',
         color: 'text-purple-600 dark:text-purple-400',
@@ -21,7 +21,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
       },
       {
         number: 2,
-        icon: Globe,
+        icon: Network,
         label: 'Web Crawling',
         description: 'Searching 10-15 comprehensive web sources',
         color: 'text-blue-600 dark:text-blue-400',
@@ -29,7 +29,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
       },
       {
         number: 3,
-        icon: GitCompare,
+        icon: ShieldCheck,
         label: 'Cross-Verification',
         description: 'Comparing and verifying information across sources',
         color: 'text-cyan-600 dark:text-cyan-400',
@@ -37,7 +37,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
       },
       {
         number: 4,
-        icon: Zap,
+        icon: Boxes,
         label: 'Synthesis',
         description: 'Synthesizing comprehensive analysis',
         color: 'text-amber-600 dark:text-amber-400',
@@ -45,7 +45,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
       },
       {
         number: 5,
-        icon: Sparkles,
+        icon: BadgeCheck,
         label: 'Validation',
         description: 'Final quality check and polish',
         color: 'text-green-600 dark:text-green-400',

@@ -22,6 +22,8 @@ export async function executeWebSearchTool(
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
+  let currentPhase = 0;
+  const totalPhases = 5;
   
   try {
     if (abortSignal?.aborted) {
@@ -39,14 +41,14 @@ export async function executeWebSearchTool(
     
     controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
     
-    // Advanced Search: Emit agentic phase indicators
     if (searchDepth === 'advanced') {
+      currentPhase = 1;
       try {
         controller.enqueue(encodeToolProgress(
           TOOL_IDS.WEB_SEARCH,
           'phase_1_analysis',
-          'Phase 1: Analyzing query and decomposing research questions',
-          { searchDepth, phase: 1, totalPhases: 5 }
+          'Analyzing query and decomposing research questions',
+          { searchDepth, phase: currentPhase, totalPhases }
         ));
         setImmediate(() => {});
       } catch {
@@ -63,33 +65,45 @@ export async function executeWebSearchTool(
           // Map search statuses to phases for advanced mode
           if (searchDepth === 'advanced') {
             if (progress.status === 'searching') {
-              controller.enqueue(encodeToolProgress(
-                TOOL_IDS.WEB_SEARCH,
-                'phase_2_gathering',
-                'Phase 2: Gathering evidence from 10-15 comprehensive sources',
-                { ...progress.details, searchDepth, phase: 2, totalPhases: 5 }
-              ));
+              if (currentPhase < 2) {
+                currentPhase = 2;
+                controller.enqueue(encodeToolProgress(
+                  TOOL_IDS.WEB_SEARCH,
+                  'phase_2_gathering',
+                  'Gathering evidence from 10-15 comprehensive sources',
+                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                ));
+              }
             } else if (progress.status === 'found') {
-              controller.enqueue(encodeToolProgress(
-                TOOL_IDS.WEB_SEARCH,
-                'phase_3_verification',
-                'Phase 3: Cross-verifying information across multiple sources',
-                { ...progress.details, searchDepth, phase: 3, totalPhases: 5 }
-              ));
+              if (currentPhase < 3) {
+                currentPhase = 3;
+                controller.enqueue(encodeToolProgress(
+                  TOOL_IDS.WEB_SEARCH,
+                  'phase_3_verification',
+                  'Cross-verifying information across multiple sources',
+                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                ));
+              }
             } else if (progress.status === 'processing_sources') {
+              if (currentPhase < 3) {
+                currentPhase = 3;
+              }
               controller.enqueue(encodeToolProgress(
                 TOOL_IDS.WEB_SEARCH,
                 'phase_3_verification',
-                `Phase 3: Verifying source ${progress.details?.processedCount || 0}/${progress.details?.resultsCount || 0}`,
-                { ...progress.details, searchDepth, phase: 3, totalPhases: 5 }
+                `Verifying source ${progress.details?.processedCount || 0}/${progress.details?.resultsCount || 0}`,
+                { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
               ));
             } else if (progress.status === 'completed') {
-              controller.enqueue(encodeToolProgress(
-                TOOL_IDS.WEB_SEARCH,
-                'phase_4_synthesis',
-                'Phase 4: Synthesizing comprehensive analysis',
-                { ...progress.details, searchDepth, phase: 4, totalPhases: 5 }
-              ));
+              if (currentPhase < 4) {
+                currentPhase = 4;
+                controller.enqueue(encodeToolProgress(
+                  TOOL_IDS.WEB_SEARCH,
+                  'phase_4_synthesis',
+                  'Synthesizing comprehensive analysis',
+                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                ));
+              }
             }
           } else {
             // Basic mode: Use standard progress
@@ -117,14 +131,15 @@ export async function executeWebSearchTool(
       }
     }
     
-    // Advanced Search: Emit final phase indicator
+    // Advanced Search: Emit Phase 5 - Final Validation
     if (searchDepth === 'advanced' && !streamClosed) {
+      currentPhase = 5;
       try {
         controller.enqueue(encodeToolProgress(
           TOOL_IDS.WEB_SEARCH,
           'phase_5_validation',
-          'Phase 5: Final validation and quality check complete',
-          { searchDepth, phase: 5, totalPhases: 5, resultsCount: toolArgs.maxResults }
+          'Final validation and quality check complete',
+          { searchDepth, phase: currentPhase, totalPhases, resultsCount: toolArgs.maxResults }
         ));
         setImmediate(() => {});
       } catch {
