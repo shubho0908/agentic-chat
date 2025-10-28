@@ -29,8 +29,7 @@ interface ToolMenuItemProps {
     authorized: boolean;
     loading: boolean;
   };
-  onToolSelect: (toolId: ToolId) => void;
-  onSearchDepthChange?: (depth: SearchDepth) => void;
+  onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
 export function ToolMenuItem({
@@ -41,7 +40,6 @@ export function ToolMenuItem({
   deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
-  onSearchDepthChange,
 }: ToolMenuItemProps) {
   const ToolIcon = tool.icon;
   const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
@@ -105,8 +103,7 @@ export function ToolMenuItem({
           <DropdownMenuItem
             onClick={() => {
               if (!isDisabled) {
-                onSearchDepthChange?.('basic');
-                onToolSelect(tool.id);
+                onToolSelect(tool.id, 'basic');
               }
             }}
             disabled={isDisabled}
@@ -126,8 +123,7 @@ export function ToolMenuItem({
           <DropdownMenuItem
             onClick={() => {
               if (!isDisabled) {
-                onSearchDepthChange?.('advanced');
-                onToolSelect(tool.id);
+                onToolSelect(tool.id, 'advanced');
               }
             }}
             disabled={isDisabled}

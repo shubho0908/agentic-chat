@@ -190,7 +190,7 @@ export function ChatInput({
     }
   }
 
-  function handleToolSelected(toolId: ToolId) {
+  function handleToolSelected(toolId: ToolId, selectedDepth?: SearchDepth) {
     if (!session) {
       onAuthRequired?.();
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
@@ -224,9 +224,19 @@ export function ChatInput({
       storeDeepResearchEnabled(false);
     }
 
+    // If selectedDepth is provided (for web search), update the depth
+    if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
+      setSearchDepth(selectedDepth);
+      storeSearchDepth(selectedDepth);
+    }
+
     const toolName = toolId === TOOL_IDS.WEB_SEARCH ? 'Web Search' : toolId.replace('_', ' ');
+    const currentDepth = selectedDepth || searchDepth;
+    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH 
+      ? ` (${currentDepth === 'advanced' ? 'Advanced' : 'Basic'})`
+      : '';
     toast.success('Tool activated', {
-      description: `${toolName} is now enabled for your next query`,
+      description: `${toolName}${searchModeText} is now enabled for your next query`,
       duration: 2500,
     });
   }
@@ -262,16 +272,7 @@ export function ChatInput({
     });
   }
 
-  function handleSearchDepthChange(depth: SearchDepth) {
-    setSearchDepth(depth);
-    storeSearchDepth(depth);
-    toast.success(depth === 'advanced' ? 'Advanced search enabled' : 'Basic search enabled', {
-      description: depth === 'advanced' 
-        ? 'Enhanced search with deeper analysis'
-        : 'Quick search with faster results',
-      duration: 2500,
-    });
-  }
+
 
   const formState = {
     input,
@@ -297,7 +298,6 @@ export function ChatInput({
     onRemoveFile: handleRemoveFile,
     onToolSelected: handleToolSelected,
     onMemoryToggle: handleMemoryToggle,
-    onSearchDepthChange: handleSearchDepthChange,
     onFilesSelected: handleFilesSelectedWithAuth,
     onStop,
     onAuthRequired,

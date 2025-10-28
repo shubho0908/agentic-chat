@@ -40,8 +40,7 @@ interface ToolsDrawerProps {
     authorized: boolean;
     loading: boolean;
   };
-  onToolSelect: (toolId: ToolId) => void;
-  onSearchDepthChange?: (depth: SearchDepth) => void;
+  onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
 export function ToolsDrawer({
@@ -60,7 +59,6 @@ export function ToolsDrawer({
   deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
-  onSearchDepthChange,
 }: ToolsDrawerProps) {
   const triggerButton = (
     <Button
@@ -167,7 +165,6 @@ export function ToolsDrawer({
                       deepResearchUsage={deepResearchUsage}
                       googleSuiteStatus={googleSuiteStatus}
                       onToolSelect={onToolSelect}
-                      onSearchDepthChange={onSearchDepthChange}
                     />
                   ))}
               </div>

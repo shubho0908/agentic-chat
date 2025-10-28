@@ -28,9 +28,8 @@ interface FormHandlers {
   onInput: (e: React.FormEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (index: number) => void;
-  onToolSelected: (toolId: ToolId) => void;
+  onToolSelected: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
   onMemoryToggle: (enabled: boolean) => void;
-  onSearchDepthChange: (depth: SearchDepth) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
   onAuthRequired?: () => void;
@@ -65,7 +64,7 @@ export function ChatInputForm({
   centered = false,
 }: ChatInputFormProps) {
   const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, searchDepth } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onSearchDepthChange, onFilesSelected, onStop, onAuthRequired } = handlers;
+  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
 
   const textareaClassName = centered
     ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
@@ -113,7 +112,6 @@ export function ChatInputForm({
                 memoryEnabled={memoryEnabled}
                 onMemoryToggle={onMemoryToggle}
                 searchDepth={searchDepth}
-                onSearchDepthChange={onSearchDepthChange}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
                 onAuthRequired={onAuthRequired}

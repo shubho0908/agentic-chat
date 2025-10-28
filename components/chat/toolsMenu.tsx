@@ -36,13 +36,12 @@ const ACCEPTED_FILE_TYPES = [
 ].join(',');
 
 interface ToolsMenuProps {
-  onToolSelected?: (toolId: ToolId) => void;
+  onToolSelected?: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
   disabled?: boolean;
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
   searchDepth?: SearchDepth;
-  onSearchDepthChange?: (depth: SearchDepth) => void;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
   onAuthRequired?: () => void;
@@ -55,7 +54,6 @@ export function ToolsMenu({
   memoryEnabled = true,
   onMemoryToggle,
   searchDepth = 'basic',
-  onSearchDepthChange,
   onFilesSelected,
   fileCount = 0,
   onAuthRequired,
@@ -72,18 +70,16 @@ export function ToolsMenu({
     loading: usageLoading,
   };
 
-  const handleToolSelect = (toolId: ToolId) => {
+  const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
     if (!session) {
       onAuthRequired?.();
       setIsOpen(false);
       return;
     }
-    // Google Suite tool requires Google sign-in with proper scopes
-    // If not authorized, the tool will be disabled in the menu
     if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
       return;
     }
-    onToolSelected?.(toolId);
+    onToolSelected?.(toolId, selectedDepth);
     setIsOpen(false);
   };
 
@@ -119,7 +115,6 @@ export function ToolsMenu({
       loading: googleSuiteLoading,
     },
     onToolSelect: handleToolSelect,
-    onSearchDepthChange,
   };
 
   if (showToolIcon) {
@@ -157,7 +152,12 @@ export function ToolsMenu({
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
-            <p>{toolConfig.name}</p>
+            <p>
+              {toolConfig.name}
+              {activeTool === TOOL_IDS.WEB_SEARCH && (
+                <span className="text-muted-foreground"> ({searchDepth === 'advanced' ? 'Advanced' : 'Basic'})</span>
+              )}
+            </p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

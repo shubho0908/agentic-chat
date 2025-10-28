@@ -23,8 +23,7 @@ interface ToolMenuItemDrawerProps {
     authorized: boolean;
     loading: boolean;
   };
-  onToolSelect: (toolId: ToolId) => void;
-  onSearchDepthChange?: (depth: SearchDepth) => void;
+  onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
 export function ToolMenuItemDrawer({
@@ -35,7 +34,6 @@ export function ToolMenuItemDrawer({
   deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
-  onSearchDepthChange,
 }: ToolMenuItemDrawerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const ToolIcon = tool.icon;
@@ -120,8 +118,7 @@ export function ToolMenuItemDrawer({
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
                     if (!isDisabled) {
-                      onSearchDepthChange?.('basic');
-                      onToolSelect(tool.id);
+                      onToolSelect(tool.id, 'basic');
                       setIsExpanded(false);
                     }
                   }}
@@ -133,7 +130,7 @@ export function ToolMenuItemDrawer({
                     <span className="font-medium text-sm">Basic Search</span>
                     <span className="text-xs text-muted-foreground">Quick results, faster response</span>
                   </div>
-                  {searchDepth === 'basic' && (
+                  {isActive && searchDepth === 'basic' && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
@@ -143,8 +140,7 @@ export function ToolMenuItemDrawer({
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
                     if (!isDisabled) {
-                      onSearchDepthChange?.('advanced');
-                      onToolSelect(tool.id);
+                      onToolSelect(tool.id, 'advanced');
                       setIsExpanded(false);
                     }
                   }}
@@ -156,7 +152,7 @@ export function ToolMenuItemDrawer({
                     <span className="font-medium text-sm">Advanced Search</span>
                     <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
                   </div>
-                  {searchDepth === 'advanced' && (
+                  {isActive && searchDepth === 'advanced' && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
