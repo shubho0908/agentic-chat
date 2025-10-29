@@ -1,9 +1,10 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
-import type { ResearchTask, WebSearchProgress, WebSearchSource } from '@/types/tools';
+import type { ResearchTask, WebSearchProgress, WebSearchSource, SearchResultWithSources } from '@/types/tools';
 import { createWorkerPrompt } from '../prompts';
 import { executeWebSearch } from '../../web-search';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
+import { createSearchPlan, executeMultiSearch } from '../../web-search/search-planner';
 
 const MAX_RETRIES = 2;
 
@@ -98,45 +99,67 @@ export async function workerNode(
     if (currentTask.tools.includes('web_search')) {
       config.onProgress?.(currentTaskIndex, {
         toolName: 'web_search',
-        status: 'searching',
-        message: 'Searching the web...',
+        status: 'planning',
+        message: 'Analyzing question and planning intelligent search strategy...',
       });
 
-      const progressCallback = (progress: WebSearchProgress) => {
-        config.onProgress?.(currentTaskIndex, {
-          toolName: 'web_search',
-          status: progress.status,
-          message: progress.message,
-        });
-      };
-
-      searchResults = await executeWebSearch(
-        {
-          query: currentTask.question,
-          maxResults: 15,
-          searchDepth: 'advanced',
-          includeAnswer: false,
-        },
-        progressCallback,
-        config.abortSignal
+      const searchPlan = await createSearchPlan(
+        currentTask.question,
+        'advanced',
+        config.openaiApiKey,
+        config.model
       );
 
-      const sourcePattern = /(\d+)\.\s+(.+?)\n\s+URL:\s+(.+?)\n\s+Content:\s+(.+?)\n\s+Relevance Score:\s+([\d.]+)%/g;
-      let match;
-      let position = 1;
-      
-      while ((match = sourcePattern.exec(searchResults)) !== null) {
-        const [, , title, url, snippet, score] = match;
-        sources.push({
-          position,
-          title: title.trim(),
-          url: url.trim(),
-          domain: new URL(url.trim()).hostname.replace('www.', ''),
-          snippet: snippet.trim().substring(0, 150),
-          score: parseFloat(score) / 100,
-        });
-        position++;
-      }
+      config.onProgress?.(currentTaskIndex, {
+        toolName: 'web_search',
+        status: 'searching',
+        message: `Executing ${searchPlan.recommendedSearches.length} targeted searches (${searchPlan.totalResultsNeeded} results)...`,
+      });
+
+      const multiSearchResult = await executeMultiSearch(
+        searchPlan,
+        async (query: string, maxResults: number): Promise<SearchResultWithSources> => {
+          let capturedSources: WebSearchSource[] = [];
+          
+          const output = await executeWebSearch(
+            {
+              query,
+              maxResults,
+              searchDepth: 'advanced',
+              includeAnswer: false,
+            },
+            (progress: WebSearchProgress) => {
+              if (progress.details?.sources) {
+                capturedSources = progress.details.sources;
+              }
+              config.onProgress?.(currentTaskIndex, {
+                toolName: 'web_search',
+                status: progress.status,
+                message: progress.message,
+              });
+            },
+            config.abortSignal
+          );
+          
+          return { output, sources: capturedSources };
+        },
+        (searchIndex, total, query) => {
+          config.onProgress?.(currentTaskIndex, {
+            toolName: 'web_search',
+            status: 'searching',
+            message: `Search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`,
+          });
+        }
+      );
+
+      searchResults = multiSearchResult.formattedOutput;
+      sources.push(...multiSearchResult.allSources);
+
+      config.onProgress?.(currentTaskIndex, {
+        toolName: 'web_search',
+        status: 'completed',
+        message: `Found ${sources.length} sources from ${searchPlan.recommendedSearches.length} targeted searches`,
+      });
     }
 
     config.onProgress?.(currentTaskIndex, {

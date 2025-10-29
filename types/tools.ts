@@ -7,6 +7,11 @@ export interface WebSearchSource {
   position: number;
 }
 
+export interface SearchResultWithSources {
+  output: string;
+  sources: WebSearchSource[];
+}
+
 export interface WebSearchProgress {
   status: 'searching' | 'found' | 'processing_sources' | 'completed';
   message: string;

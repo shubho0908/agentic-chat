@@ -77,7 +77,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         const textQuery = extractTextFromMessage(lastUserMessage);
         
         if (activeTool === TOOL_IDS.WEB_SEARCH) {
-          enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, abortSignal, searchDepth);
+          enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal, searchDepth);
         }
         
         if (activeTool === TOOL_IDS.YOUTUBE) {

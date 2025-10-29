@@ -103,7 +103,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
     if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
       const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
-        id: `source-${index + 1}`,
+        id: `source-${source.position || index + 1}`,
         source: source.title,
         url: source.url,
         relevance: source.snippet || `Source from ${source.domain}`,
@@ -117,13 +117,13 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       allCitations.push(...memoryStatus.toolProgress.details.citations);
     }
 
-    const uniqueCitations = allCitations.reduce((acc, citation) => {
-      const existing = acc.find((c) => c.url && citation.url && c.url === citation.url);
-      if (!existing) {
-        acc.push(citation);
-      }
-      return acc;
-    }, [] as typeof allCitations);
+    const seenUrls = new Set<string>();
+    const uniqueCitations = allCitations.filter(citation => {
+      if (!citation.url) return true;
+      if (seenUrls.has(citation.url)) return false;
+      seenUrls.add(citation.url);
+      return true;
+    });
 
     return uniqueCitations;
   }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);

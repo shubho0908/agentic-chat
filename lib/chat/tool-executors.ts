@@ -3,7 +3,7 @@ import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk }
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { YOUTUBE_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
-import type { DeepResearchProgress } from '@/types/tools';
+import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource } from '@/types/tools';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { executeDeepResearch } from '@/lib/tools/deep-research';
@@ -12,11 +12,14 @@ import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/web-se
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
 import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube';
+import { createSearchPlan, executeMultiSearch } from '../tools/web-search/search-planner';
 
 export async function executeWebSearchTool(
   textQuery: string,
   controller: ReadableStreamDefaultController,
   messages: Message[],
+  apiKey?: string,
+  model?: string,
   abortSignal?: AbortSignal,
   searchDepth: SearchDepth = 'basic'
 ): Promise<Message[]> {
@@ -32,32 +35,150 @@ export async function executeWebSearchTool(
       } catch {}
       return messages;
     }
-    const toolArgs = {
-      query: textQuery,
-      maxResults: getRecommendedMaxResults(searchDepth),
-      searchDepth: searchDepth,
-      includeAnswer: false,
-    };
+    const useIntelligentPlanning = searchDepth === 'advanced' && apiKey && model;
     
-    controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
+    let searchResults: string;
     
-    if (searchDepth === 'advanced') {
+    if (useIntelligentPlanning) {
       currentPhase = 1;
       try {
         controller.enqueue(encodeToolProgress(
           TOOL_IDS.WEB_SEARCH,
           'phase_1_analysis',
-          'Analyzing query and decomposing research questions',
-          { searchDepth, phase: currentPhase, totalPhases }
+          'Analyzing query complexity and planning optimal search strategy...',
+          { searchDepth, phase: currentPhase, totalPhases, intelligent: true }
         ));
         setImmediate(() => {});
       } catch {
         streamClosed = true;
       }
-    }
-    
-    const searchResults = await executeWebSearch(
-      toolArgs,
+
+      const searchPlan = await createSearchPlan(textQuery, searchDepth, apiKey!, model!);
+      
+      const toolArgs = {
+        query: textQuery,
+        maxResults: searchPlan.totalResultsNeeded,
+        searchDepth: searchDepth,
+        includeAnswer: false,
+        searchPlan: {
+          type: searchPlan.queryType,
+          complexity: searchPlan.complexity,
+          searches: searchPlan.recommendedSearches.length,
+        },
+      };
+      
+      controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
+      
+      currentPhase = 2;
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'phase_2_planning',
+          `Query analyzed: ${searchPlan.queryType} (${searchPlan.complexity}). Executing ${searchPlan.recommendedSearches.length} targeted searches with ${searchPlan.totalResultsNeeded} total results.`,
+          { searchDepth, phase: currentPhase, totalPhases, searchPlan, intelligent: true }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+
+      const multiSearchResult = await executeMultiSearch(
+        searchPlan,
+        async (query: string, maxResults: number): Promise<SearchResultWithSources> => {
+          let capturedSources: WebSearchSource[] = [];
+          
+          const output = await executeWebSearch(
+            { query, maxResults, searchDepth, includeAnswer: false },
+            (progress) => {
+              if (progress.details?.sources) {
+                capturedSources = progress.details.sources;
+              }
+            },
+            abortSignal
+          );
+          
+          return { output, sources: capturedSources };
+        },
+        (searchIndex, total, query) => {
+          if (streamClosed || abortSignal?.aborted) return;
+          currentPhase = 3;
+          try {
+            controller.enqueue(encodeToolProgress(
+              TOOL_IDS.WEB_SEARCH,
+              'phase_3_execution',
+              `Executing search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`,
+              { searchDepth, phase: currentPhase, totalPhases, searchIndex, total, intelligent: true }
+            ));
+            setImmediate(() => {});
+          } catch {
+            streamClosed = true;
+          }
+        }
+      );
+      
+      searchResults = multiSearchResult.formattedOutput;
+      
+      currentPhase = 4;
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'phase_4_synthesis',
+          'Synthesizing results from multiple targeted searches...',
+          { searchDepth, phase: currentPhase, totalPhases, intelligent: true, sources: multiSearchResult.allSources }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+      
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'completed',
+          `Intelligent search complete: ${multiSearchResult.allSources.length} sources from ${searchPlan.recommendedSearches.length} targeted searches`,
+          { 
+            searchDepth, 
+            intelligent: true,
+            sources: multiSearchResult.allSources,
+            resultsCount: multiSearchResult.allSources.length,
+            searchPlan: {
+              type: searchPlan.queryType,
+              complexity: searchPlan.complexity,
+              searches: searchPlan.recommendedSearches.length,
+            }
+          }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+    } else {
+      const toolArgs = {
+        query: textQuery,
+        maxResults: getRecommendedMaxResults(searchDepth),
+        searchDepth: searchDepth,
+        includeAnswer: false,
+      };
+      
+      controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
+      
+      if (searchDepth === 'advanced') {
+        currentPhase = 1;
+        try {
+          controller.enqueue(encodeToolProgress(
+            TOOL_IDS.WEB_SEARCH,
+            'phase_1_analysis',
+            'Analyzing query and gathering comprehensive sources...',
+            { searchDepth, phase: currentPhase, totalPhases }
+          ));
+          setImmediate(() => {});
+        } catch {
+          streamClosed = true;
+        }
+      }
+      
+      searchResults = await executeWebSearch(
+        toolArgs,
       (progress) => {
         if (streamClosed || abortSignal?.aborted) return;
         
@@ -121,7 +242,8 @@ export async function executeWebSearchTool(
         }
       },
       abortSignal
-    );
+      );
+    }
     
     if (!streamClosed && !abortSignal?.aborted) {
       try {
@@ -139,7 +261,7 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'phase_5_validation',
           'Final validation and quality check complete',
-          { searchDepth, phase: currentPhase, totalPhases, resultsCount: toolArgs.maxResults }
+          { searchDepth, phase: currentPhase, totalPhases }
         ));
         setImmediate(() => {});
       } catch {
@@ -365,6 +487,7 @@ export async function executeDeepResearchTool(
         'completed',
         'Deep research completed',
         {
+          sources: result.sources || [],
           citations: result.citations || [],
           followUpQuestions: result.followUpQuestions || [],
           skipped: result.skipped,
