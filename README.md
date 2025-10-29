@@ -6,6 +6,8 @@ Multi-modal AI chat platform with intelligent query routing, semantic caching, R
 
 Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Features dynamic query classification, specialized tool routing, multi-agent orchestration, and comprehensive document processing with OCR support.
 
+📖 **[Setup Guide](./SETUP.md)** - Installation and configuration instructions
+
 ## Core Features
 
 ### 🔐 Authentication & Security
@@ -25,13 +27,22 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 
 #### Web Search
 - Real-time internet search via Tavily API
+- Intelligent multi-search planning in advanced mode
+- Search depth modes: Basic (6 results) and Advanced (10-25 results with AI planning)
+- Image results with gallery view
+- Source deduplication
 
 #### YouTube Analysis
 - Transcript extraction with multi-language support
 - Automatic chapter parsing from video descriptions
-- YouTube video search (with API key)
-- Batch video processing
-- Timestamp-aware transcript formatting
+- Video search and batch processing
+- Metadata enrichment via YouTube Data API
+
+#### URL Scraping & Context Injection
+- Automatic URL detection and content extraction (up to 5 URLs)
+- Smart content extraction with Readability + Cheerio
+- Rich metadata and link previews with Open Graph
+- 1-hour content caching for performance
 
 #### Google Suite Integration
 - **Gmail**: Search, read, send, reply, delete emails, modify labels, get attachments
@@ -49,7 +60,7 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - Iterative quality evaluation with adjustable strictness
 
 ### 📚 Document Intelligence (RAG)
-- **Multi-format Support**: PDF, DOCX, DOC, TXT, XLS, XLSX, CSV, MD
+- **Multi-format Support**: PDF, DOCX, DOC, TXT, XLS, XLSX, CSV
 - **Image Processing**: JPG, PNG, GIF, WEBP, BMP, SVG, TIFF, ICO
 - **Semantic Search** - pgvector-powered embeddings
 - **Re-ranking** - Cohere reranker for improved relevance
@@ -65,7 +76,8 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
   - **VisionOnly**: Image-only analysis
   - **Hybrid**: Combined vision + document context
   - **ToolOnly**: Direct tool execution without context
-- **Automatic Context Selection** - Smart detection of referential queries
+- **Smart Query Detection** - Pattern-based detection of memory, referential, and standalone queries
+- **URL Context Injection** - Automatically scrapes and includes web page content
 
 ### 📤 Export & Sharing
 - **Export Formats**: JSON, Markdown, PDF
@@ -78,14 +90,16 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **Real-time Streaming** - Progressive response generation with abort support
 - **File Attachments** - Up to 5 files per message (documents + images)
 - **Clipboard Image Paste** - Direct image paste from clipboard with auto-naming
-- **Processing Status Tracking** - Real-time document processing progress (PENDING → PROCESSING → COMPLETED/FAILED)
+- **Processing Status Tracking** - Real-time document processing progress with chunk/token counts
 - **Citations Display** - Source tracking for RAG responses with relevance scores
+- **Search Image Gallery** - Grid display of search images with expandable view and mobile optimization
 - **Follow-up Questions** - AI-generated conversation prompts
 - **Message Actions** - Edit, regenerate, copy, delete after point
 - **Version Navigation** - Navigate between message versions with visual indicators
 - **Image Lightbox** - Full-screen image viewing with keyboard shortcuts
 - **Dark/Light Theme** - System-aware theme switching
 - **Tool Selection UI** - Visual tool picker with gradient indicators
+- **Link Previews** - Rich metadata cards for URLs in messages
 
 ## Tech Stack
 
@@ -121,26 +135,38 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **xlsx** - Spreadsheet parsing
 - **canvas** - Image manipulation
 - **youtube-transcript** - YouTube caption extraction
+- **@mozilla/readability** - Article content extraction
+- **cheerio** - HTML parsing and manipulation
+- **linkedom** - DOM manipulation for server-side rendering
 
 ## Architecture
 
 **Intelligent Context Router**  
-Incoming queries are analyzed for images, document attachments, and intent to determine the optimal routing strategy (Memory, Documents, Vision, Hybrid, or Tool-specific). Supports referential query detection for automatic document retrieval.
+Analyzes queries for images, documents, URLs, and intent to determine optimal routing strategy (Memory, Documents, Vision, Hybrid, or Tool-specific) with pattern-based detection.
+
+**URL Scraping Pipeline**  
+Detects URLs in messages, extracts content using Readability/Cheerio, caches for 1 hour, and injects as context. Supports Open Graph link previews.
+
+**Intelligent Search Planning**  
+Advanced mode uses LLM planning to analyze query complexity, decompose into targeted sub-queries, execute parallel searches, and synthesize results.
 
 **Semantic Caching Layer**  
-Implements pgvector-based similarity caching to reduce redundant API calls and improve response times for semantically similar queries.
+pgvector-based similarity caching reduces redundant API calls for semantically similar queries.
 
 **RAG Pipeline**  
-Documents are processed through format-specific loaders, chunked with token-aware splitting, embedded, stored in pgvector, and retrieved with semantic search + Cohere reranking during inference. Supports processing status tracking and batch operations.
+Documents processed through format-specific loaders, chunked, embedded, stored in pgvector, and retrieved with semantic search + Cohere reranking. Real-time status tracking and batch operations supported.
 
 **Multi-Agent Orchestration**  
-LangGraph-powered agent workflows enable autonomous task execution with access to tools (RAG, web search, YouTube, Google Suite) while maintaining conversation state. Deep research uses a multi-phase workflow with quality evaluation.
+LangGraph-powered workflows with access to RAG, web search, YouTube, Google Suite, and URL scraping tools. Deep research uses multi-phase workflow with quality evaluation (3/month limit).
 
 **Vision Processing**  
-Multimodal support across all GPT models enables image analysis, OCR, and hybrid vision+document workflows through the context router.
+Multimodal support across all models for image analysis, OCR, and hybrid vision+document workflows. Search results include image galleries.
 
 **Google Suite Integration**  
-OAuth 2.0-authenticated access to Gmail, Calendar, Drive, Docs, Sheets, and Slides with automatic token refresh and scope-based permissions.
+OAuth 2.0 access to Gmail, Calendar, Drive, Docs, Sheets, and Slides with automatic token refresh.
+
+**YouTube Processing**  
+Extracts captions with multi-language support and chapter metadata from descriptions.
 
 **Message Versioning System**  
 Tree-based message storage with parent-child relationships and sibling indexing enables conversation branching, version navigation, and soft deletion.
