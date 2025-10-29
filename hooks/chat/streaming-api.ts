@@ -3,16 +3,27 @@ import type { StreamConfig } from "@/types/chat";
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
   const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = config;
   
-  const requestPayload = {
+  const requestPayload: Record<string, unknown> = {
     model,
     messages,
     stream: true,
-    conversationId,
-    activeTool: activeTool || null,
-    memoryEnabled: memoryEnabled !== undefined ? memoryEnabled : true,
-    deepResearchEnabled: deepResearchEnabled !== undefined ? deepResearchEnabled : false,
-    searchDepth: searchDepth || 'basic',
   };
+  
+  if (conversationId) {
+    requestPayload.conversationId = conversationId;
+  }
+  if (activeTool) {
+    requestPayload.activeTool = activeTool;
+  }
+  if (memoryEnabled !== undefined && memoryEnabled !== true) {
+    requestPayload.memoryEnabled = memoryEnabled;
+  }
+  if (deepResearchEnabled === true) {
+    requestPayload.deepResearchEnabled = true;
+  }
+  if (searchDepth && searchDepth !== 'basic') {
+    requestPayload.searchDepth = searchDepth;
+  }
   
   const response = await fetch('/api/chat/completions', {
     method: 'POST',
