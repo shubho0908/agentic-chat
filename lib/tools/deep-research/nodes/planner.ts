@@ -76,6 +76,17 @@ export async function plannerNode(
       });
     }
 
+    const webSearchCount = researchPlan.filter(q => q.suggestedTools.includes('web_search')).length;
+    if (webSearchCount < 2 && researchPlan.length >= 2) {
+      let added = 0;
+      for (let i = 0; i < researchPlan.length && added < 2 - webSearchCount; i++) {
+        if (!researchPlan[i].suggestedTools.includes('web_search')) {
+          researchPlan[i].suggestedTools = [...researchPlan[i].suggestedTools, 'web_search'];
+          added++;
+        }
+      }
+    }
+
     const taskQueue: ResearchTask[] = researchPlan.map((q, index) => ({
       id: `task_${index + 1}`,
       question: q.question,
