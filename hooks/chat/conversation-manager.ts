@@ -144,7 +144,8 @@ function updateQueryCache(
   userMessageId: string,
   assistantMessageId: string,
   userTimestamp: number,
-  attachments?: Attachment[]
+  attachments?: Attachment[],
+  metadata?: MessageMetadata
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
@@ -171,6 +172,7 @@ function updateQueryCache(
             role: "assistant" as const,
             content: assistantContent,
             createdAt: new Date().toISOString(),
+            ...(metadata && { metadata }),
           },
         ],
       },
@@ -206,7 +208,8 @@ export async function handleConversationSaving(
           result.userMessageId,
           result.assistantMessageId,
           userTimestamp,
-          attachments
+          attachments,
+          metadata
         );
       }
       onConversationCreated(result);

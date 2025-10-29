@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Image from "next/image";
+import { ImageOff, AlertCircle, Loader } from "lucide-react";
 import { ImageLightbox } from "./imageLightbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
@@ -27,25 +28,78 @@ interface ImageCardProps {
 }
 
 function ImageCard({ image, index, onClick, showOverlay, showDescription = true, sizes = "(max-width: 640px) 50vw, 25vw" }: ImageCardProps) {
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const handleImageError = useCallback(() => {
+    setHasError(true);
+    setIsLoading(false);
+  }, []);
+
+  const handleImageLoad = useCallback(() => {
+    setIsLoading(false);
+  }, []);
+
+  const handleClick = useCallback(() => {
+    if (!isLoading && !hasError) {
+      onClick();
+    }
+  }, [isLoading, hasError, onClick]);
+
   return (
     <div
-      className="group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 cursor-pointer transition-all duration-200 hover:border-primary/40 hover:shadow-md"
-      onClick={onClick}
+      className={`group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 transition-all duration-200 ${
+        !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-md' : 'cursor-default'
+      }`}
+      onClick={handleClick}
     >
-      <Image
-        src={image.url}
-        alt={image.description || `Search result ${index + 1}`}
-        fill
-        className="object-cover transition-transform duration-300 group-hover:scale-105"
-        sizes={sizes}
-        unoptimized
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      {!hasError ? (
+        <>
+          <Image
+            src={image.url}
+            alt={image.description || `Search result ${index + 1}`}
+            fill
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            sizes={sizes}
+            unoptimized
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+          />
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-linear-to-br from-muted/50 to-muted/80 backdrop-blur-sm">
+              <Loader className="size-5 text-primary animate-spin" />
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-linear-to-br from-muted via-muted/90 to-muted/70 p-4">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="relative">
+              <ImageOff className="size-8 text-muted-foreground/40" />
+              <AlertCircle className="absolute -top-1 -right-1 size-4 text-destructive/60" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                Image unavailable
+              </p>
+              {image.description && (
+                <p className="text-[10px] text-muted-foreground/70 line-clamp-2 max-w-[180px]">
+                  {image.description}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {!hasError && !isLoading && (
+        <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      )}
       
       {showOverlay}
       
-      {showDescription && image.description && (
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+      {!hasError && !isLoading && showDescription && image.description && (
+        <div className="absolute bottom-0 left-0 right-0 p-2 bg-linear-to-t from-black/80 to-transparent">
           <p className="text-white text-xs line-clamp-2">
             {image.description}
           </p>
@@ -67,10 +121,6 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
   const handleShowAll = useCallback(() => {
     setShowAllImages(true);
   }, []);
-
-  const handleImageClickFromSheet = useCallback((url: string, description?: string) => {
-    handleImageSelect(url, description);
-  }, [handleImageSelect]);
 
   const handleCloseLightbox = useCallback(() => {
     setSelectedImage(null);
@@ -131,7 +181,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                     key={`sheet-${image.url}-${index}`}
                     image={image}
                     index={index}
-                    onClick={() => handleImageClickFromSheet(image.url, image.description)}
+                    onClick={() => handleImageSelect(image.url, image.description)}
                     sizes="50vw"
                   />
                 ))}
@@ -150,7 +200,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                     key={`dialog-${image.url}-${index}`}
                     image={image}
                     index={index}
-                    onClick={() => handleImageClickFromSheet(image.url, image.description)}
+                    onClick={() => handleImageSelect(image.url, image.description)}
                     sizes="(max-width: 1024px) 33vw, 25vw"
                   />
                 ))}

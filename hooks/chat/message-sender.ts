@@ -359,11 +359,12 @@ export async function handleSendMessage(
           },
           messages: {
             items: [
-              {
+                {
                 id: assistantMessageId,
                 role: "assistant" as const,
                 content: assistantContent,
                 createdAt: new Date().toISOString(),
+                ...(messageMetadata && { metadata: messageMetadata }),
               },
               {
                 id: savedUserMessageId,
