@@ -1,6 +1,6 @@
 import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
-import { injectContextToMessages } from './message-helpers';
+import { injectContextToMessages, extractConversationHistory } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { YOUTUBE_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
 import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource, WebSearchImage } from '@/types/tools';
@@ -578,11 +578,18 @@ export async function executeGoogleSuiteTool(
 
     controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
 
+    const conversationHistory = extractConversationHistory(messages, {
+      maxExchanges: 15,
+      excludeLastMessage: true,
+      includeAllForShortConversations: true,
+    });
+
     const workspaceResults = await executeGoogleWorkspace({
       query: textQuery,
       userId,
       apiKey,
       model,
+      conversationHistory,
       onProgress: (progress) => {
         if (streamClosed || abortSignal?.aborted) return;
 

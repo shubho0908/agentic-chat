@@ -89,6 +89,7 @@ export interface GoogleWorkspaceExecutorOptions {
   userId: string;
   apiKey: string;
   model: string;
+  conversationHistory?: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   onProgress?: (progress: {
     status: string;
     message: string;
@@ -175,7 +176,7 @@ async function executeToolCall(
 export async function executeGoogleWorkspace(
   options: GoogleWorkspaceExecutorOptions
 ): Promise<string> {
-  const { query, userId, apiKey, model, onProgress, abortSignal } = options;
+  const { query, userId, apiKey, model, conversationHistory, onProgress, abortSignal } = options;
 
   try {
     if (abortSignal?.aborted) throw new Error('Operation aborted by user');
@@ -191,8 +192,13 @@ export async function executeGoogleWorkspace(
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
-      { role: 'user', content: query },
     ];
+
+    if (conversationHistory && conversationHistory.length > 0) {
+      messages.push(...conversationHistory);
+    }
+
+    messages.push({ role: 'user', content: query });
 
     const MAX_ITERATIONS = 20;
     let consecutiveErrors = 0;
