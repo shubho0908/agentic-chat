@@ -496,7 +496,12 @@ Return TRUE (needsMemory: true) when query:
    - "my preferred", "as I told you", "my usual", "my favorite"
    - "based on my...", "using my previous..."
    
-6. Uses pronouns referencing past interactions:
+6. Asks about personal information or relationship:
+   - "do you know me", "what do you know about me", "who am I"
+   - "tell me about myself", "what have I shared", "my background"
+   - "what's my name", "what do I do", "where am I from"
+   
+7. Uses pronouns referencing past interactions:
    - "that project", "the feature", "the code" (WITHOUT "this"/"attached" or current document)
    - "it" or "that" clearly referring to prior conversation topic
 
@@ -565,5 +570,14 @@ Response: { "needsMemory": true, "reason": "Continuity request referring to prio
 
 Query: "What's in this image?"
 Response: { "needsMemory": false, "reason": "References current attachment, not past conversation" }
+
+Query: "Do you know me?"
+Response: { "needsMemory": true, "reason": "Asks about personal information stored about the user in conversation history" }
+
+Query: "What do you know about me?"
+Response: { "needsMemory": true, "reason": "Direct question about stored user-specific information and context" }
+
+Query: "Who am I?"
+Response: { "needsMemory": true, "reason": "Asks about user identity/information from past conversations" }
 
 ANALYZE CAREFULLY. Consider the specific language and context clues.`;
