@@ -9,6 +9,8 @@ import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
 import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
+import { MEMORY_CLASSIFICATION_PROMPT } from './prompts';
+import OpenAI from 'openai';
 
 export interface ContextRoutingResult {
   context: string;
@@ -33,23 +35,6 @@ function extractTextQuery(query: string | Array<{ type: string; text?: string; i
     : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
 }
 
-const MEMORY_PATTERNS = [
-  /\b(remember|recall|you\s+(said|told|mentioned)|we\s+(discussed|talked|spoke|built|created|made|worked\s+on))/i,
-  /\b(last\s+time|previous(ly)?|earlier|before|ago)\b/i,
-  /\b(based\s+on\s+(our|my|the)\s+previous|continue\s+(from|where)|as\s+(we|you|i)\s+(discussed|mentioned))/i,
-  /\b(what\s+did\s+(i|we)|did\s+(i|we)\s+(say|mention|discuss|talk))/i,
-  /^(tell\s+me\s+more|what\s+else|anything\s+else|more\s+(about|on)\s+that)/i,
-] as const;
-
-const NO_MEMORY_PATTERNS = [
-  /^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening))/i,
-  /^(what('s|\s+is)\s+(the\s+)?(meaning|definition)\s+of|define|explain\s+what\s+is)/i,
-  /^(calculate|solve|what('s|\s+is)\s+\d+|how\s+much\s+is\s+\d+)/i,
-  /^(write\s+(a|an|me)|create\s+(a|an)|generate\s+(a|an)|make\s+(a|an))\s+(poem|story|essay|song|code|script)/i,
-  /^(translate|convert)\s+(this|the\s+following)/i,
-  /^(who\s+is|what\s+is|where\s+is|when\s+was|why\s+did|how\s+does)\s+.+\?$/i,
-] as const;
-
 const REFERENTIAL_PATTERNS = [
   /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
   /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
@@ -68,27 +53,48 @@ function isReferentialQuery(normalized: string): boolean {
   return REFERENTIAL_PATTERNS.some(p => p.test(normalized));
 }
 
-function shouldQueryMemory(normalized: string): boolean {
-  const wordCount = normalized.split(/\s+/).length;
+const memoryDecisionCache = new Map<string, { decision: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
 
-  if (wordCount < 3) {
-    return MEMORY_PATTERNS[0].test(normalized) || MEMORY_PATTERNS[1].test(normalized);
+async function shouldQueryMemory(query: string, apiKey: string, model: string): Promise<boolean> {
+  const cacheKey = query.toLowerCase().trim();
+  
+  const cached = memoryDecisionCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.decision;
   }
-
-  if (MEMORY_PATTERNS.some(p => p.test(normalized))) {
+  if (query.trim().length < 3) return false;
+  
+  try {
+    const openai = new OpenAI({ apiKey });
+    
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: MEMORY_CLASSIFICATION_PROMPT },
+        { role: "user", content: query }
+      ],
+      response_format: { type: "json_object" },
+    });
+    
+    const result = JSON.parse(response.choices[0].message.content || '{"needsMemory": false}');
+    const decision = result.needsMemory === true;
+    memoryDecisionCache.set(cacheKey, { decision, timestamp: Date.now() });
+    
+    if (memoryDecisionCache.size > 100) {
+      const now = Date.now();
+      for (const [key, value] of memoryDecisionCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+          memoryDecisionCache.delete(key);
+        }
+      }
+    }
+    
+    return decision;
+  } catch (error) {
+    console.error('[Memory Classification] Error:', error);
     return true;
   }
-
-  if (NO_MEMORY_PATTERNS.some(p => p.test(normalized))) {
-    return false;
-  }
-
-  if (/\b(that|it|this|those|these)\b(?!\s+(is|was|are|were|means|refers|stands\s+for))/i.test(normalized)) {
-    return /\b(what|how|why|when|where|who|which)\b/i.test(normalized) ||
-           /\b(about|regarding|concerning)\s+(that|it|this)/i.test(normalized);
-  }
-
-  return wordCount > 10;
 }
 
 async function hasDocumentAttachments(conversationId: string): Promise<boolean> {
@@ -149,7 +155,9 @@ export async function routeContext(
   conversationId?: string,
   activeTool?: string | null,
   memoryEnabled: boolean = false,
-  deepResearchEnabled: boolean = false
+  deepResearchEnabled: boolean = false,
+  apiKey?: string,
+  model?: string
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
   const normalized = textQuery.toLowerCase().trim();
@@ -316,7 +324,12 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  if (!shouldQueryMemory(normalized)) {
+  if (!apiKey || !model) {
+    return { context: '', metadata };
+  }
+
+  const needsMemory = await shouldQueryMemory(normalized, apiKey, model);
+  if (!needsMemory) {
     return { context: '', metadata };
   }
 

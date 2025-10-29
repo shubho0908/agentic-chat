@@ -469,3 +469,101 @@ INCORRECT ✗ (Generic suggestions):
 • Never suggest manual checking when you've already checked
 
 Now analyze the Gmail data above and respond to the user's query with specific findings.`;
+
+export const MEMORY_CLASSIFICATION_PROMPT = `You are a memory classifier. Determine if this query requires conversation history/memory to answer accurately.
+
+Return JSON: { "needsMemory": boolean, "reason": string }
+
+Return TRUE (needsMemory: true) when query:
+1. Has explicit temporal references to past conversations:
+   - "yesterday", "last time", "earlier", "before", "previously", "ago"
+   - "the other day", "last week", "when we talked"
+   
+2. Has direct memory/recall language:
+   - "remember", "recall", "you said", "you mentioned", "you told me"
+   - "we discussed", "we talked about", "we built", "we worked on"
+   
+3. Requests continuity from previous context:
+   - "continue", "keep going", "more on that", "elaborate on that"
+   - "build on", "expand on", "keep working on", "finish that"
+   - ONLY if referring to past work, NOT standalone creative tasks
+   
+4. Has follow-up question markers:
+   - "what about..." (when no current context), "how about..." (follow-up)
+   - "what else...", "anything else about...", "more about..."
+   
+5. References user-specific preferences/context:
+   - "my preferred", "as I told you", "my usual", "my favorite"
+   - "based on my...", "using my previous..."
+   
+6. Uses pronouns referencing past interactions:
+   - "that project", "the feature", "the code" (WITHOUT "this"/"attached" or current document)
+   - "it" or "that" clearly referring to prior conversation topic
+
+Return FALSE (needsMemory: false) when query:
+1. References current attachments/documents:
+   - "this document", "this PDF", "this file", "the attached", "this image"
+   - "summarize this", "analyze this", "what's in this", "explain this"
+   - ANY query about "this", "that", "the" when referring to visible attachments
+   
+2. General knowledge questions (no personal history needed):
+   - "What is...", "How does... work", "Explain...", "Define..."
+   - "Who is...", "Where is...", "When was...", "Why does..."
+   
+3. Simple greetings/pleasantries:
+   - "hi", "hello", "hey", "good morning", "how are you"
+   
+4. Standalone creative/generation requests:
+   - "write a...", "create a...", "generate a...", "make a..."
+   - "compose", "draft", "design" (without referencing prior work)
+   
+5. Calculations/logic problems:
+   - "calculate", "solve", "what's 2+2", "compute"
+   
+6. Standalone instructions (not continuing prior work):
+   - "continue writing" with no prior context indicator
+   - "tell me more" alone without reference to past topic
+   - "explain more" about general topic (not "explain more about what you said")
+
+CRITICAL EDGE CASES:
+- "continue the X we started" = TRUE (references past)
+- "continue writing" alone = FALSE (generic instruction)
+- "tell me more about that feature" = TRUE if "that" implies history, FALSE if referring to current document
+- "what's this" with image = FALSE (current context)
+- "what did we discuss about this" = TRUE (past conversation)
+- "as you mentioned" = TRUE (past conversation)
+- "like you said" = TRUE (past conversation)
+
+EXAMPLES:
+
+Query: "What did we discuss yesterday?"
+Response: { "needsMemory": true, "reason": "Explicit reference to past conversation with temporal marker 'yesterday'" }
+
+Query: "Continue building the feature we worked on"
+Response: { "needsMemory": true, "reason": "Requests continuity from previous work with clear past reference 'we worked on'" }
+
+Query: "What is React?"
+Response: { "needsMemory": false, "reason": "General knowledge question requiring no personal history" }
+
+Query: "Summarize this PDF"
+Response: { "needsMemory": false, "reason": "References current document with 'this', not past conversation" }
+
+Query: "As you mentioned, can you explain more?"
+Response: { "needsMemory": true, "reason": "Explicit reference to prior conversation with 'as you mentioned'" }
+
+Query: "Write a poem about nature"
+Response: { "needsMemory": false, "reason": "Standalone creative task with no reference to past context" }
+
+Query: "Remember when you told me about that API?"
+Response: { "needsMemory": true, "reason": "Direct memory recall language 'remember' and 'you told me'" }
+
+Query: "hi"
+Response: { "needsMemory": false, "reason": "Simple greeting requiring no conversation history" }
+
+Query: "Keep working on it"
+Response: { "needsMemory": true, "reason": "Continuity request referring to prior work context" }
+
+Query: "What's in this image?"
+Response: { "needsMemory": false, "reason": "References current attachment, not past conversation" }
+
+ANALYZE CAREFULLY. Consider the specific language and context clues.`;

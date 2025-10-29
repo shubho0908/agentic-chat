@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
         conversationId,
         activeTool,
         memoryEnabled,
-        deepResearchEnabled
+        deepResearchEnabled,
+        apiKey,
+        model
       );
 
       memoryStatusInfo = metadata;
