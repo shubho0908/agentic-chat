@@ -133,11 +133,9 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **mammoth** - DOCX processing
 - **word-extractor** - DOC files
 - **xlsx** - Spreadsheet parsing
-- **canvas** - Image manipulation
 - **youtube-transcript** - YouTube caption extraction
 - **@mozilla/readability** - Article content extraction
 - **cheerio** - HTML parsing and manipulation
-- **linkedom** - DOM manipulation for server-side rendering
 
 ## Architecture
 
