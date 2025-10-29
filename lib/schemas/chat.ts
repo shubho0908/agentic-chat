@@ -72,6 +72,10 @@ const messageMetadataBaseSchema = z.object({
     snippet: z.string().optional(),
     score: z.number().optional(),
   })).optional(),
+  images: z.array(z.object({
+    url: z.string(),
+    description: z.string().optional(),
+  })).optional(),
   researchTask: z.object({
     gateDecision: z.object({
       shouldResearch: z.boolean(),

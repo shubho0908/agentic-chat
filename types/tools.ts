@@ -1,3 +1,13 @@
+export interface WebSearchImage {
+  url: string;
+  description?: string;
+}
+
+export interface MultiSearchImage extends WebSearchImage {
+  searchIndex: number;
+  searchQuery: string;
+}
+
 export interface WebSearchSource {
   title: string;
   url: string;
@@ -10,6 +20,7 @@ export interface WebSearchSource {
 export interface SearchResultWithSources {
   output: string;
   sources: WebSearchSource[];
+  images?: WebSearchImage[];
 }
 
 export interface WebSearchProgress {
@@ -22,6 +33,8 @@ export interface WebSearchProgress {
     sources?: WebSearchSource[];
     currentSource?: WebSearchSource;
     processedCount?: number;
+    images?: WebSearchImage[];
+    imageCount?: number;
   };
 }
 

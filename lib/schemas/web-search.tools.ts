@@ -42,6 +42,11 @@ export const webSearchParamsSchema = z.object({
     .optional()
     .default(false)
     .describe('Whether to include an AI-generated answer summary'),
+  includeImages: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe('Whether to include relevant images in the search results. When enabled, returns image URLs that visually complement the text results. Useful for visual research, product searches, diagrams, infographics, and any query that benefits from visual context.'),
 });
 
 export function getRecommendedMaxResults(searchDepth: SearchDepth, customMax?: number): number {

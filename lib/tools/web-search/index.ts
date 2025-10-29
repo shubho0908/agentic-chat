@@ -2,7 +2,7 @@ import { TavilyClient } from 'tavily';
 import { z } from 'zod';
 import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
-import type { WebSearchSource, WebSearchProgress } from '@/types/tools';
+import type { WebSearchSource, WebSearchProgress, WebSearchImage } from '@/types/tools';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
@@ -31,7 +31,7 @@ export async function executeWebSearch(
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search parameters');
     }
 
-    const { query: rawQuery, maxResults, searchDepth, includeAnswer } = validatedInput;
+    const { query: rawQuery, maxResults, searchDepth, includeAnswer, includeImages } = validatedInput;
 
     if (!rawQuery || rawQuery.trim().length === 0) {
       console.error('[Web Search] Invalid query: empty');
@@ -78,7 +78,7 @@ export async function executeWebSearch(
         max_results: clampedMaxResults,
         search_depth: searchDepth,
         include_answer: includeAnswer,
-        include_images: false,
+        include_images: includeImages ?? true,
         include_raw_content: false,
       });
 
@@ -115,14 +115,27 @@ export async function executeWebSearch(
         score: parseFloat(result.score),
       }));
 
+      const images: WebSearchImage[] = response.images 
+        ? (Array.isArray(response.images) 
+            ? response.images.map((img: string | { url: string; description?: string }) => 
+                typeof img === 'string' 
+                  ? { url: img } 
+                  : { url: img.url, description: img.description }
+              )
+            : []
+          )
+        : [];
+
       onProgress?.({
         status: 'found',
-        message: `Found ${response.results.length} sources`,
+        message: `Found ${response.results.length} sources${images.length > 0 ? ` and ${images.length} images` : ''}`,
         details: { 
           query, 
           resultsCount: response.results.length, 
           responseTime,
-          sources 
+          sources,
+          images,
+          imageCount: images.length,
         },
       });
 
@@ -152,11 +165,15 @@ export async function executeWebSearch(
         score: parseFloat(result.score),
       }));
 
+      const imagesSection = images.length > 0 
+        ? `\n\nRelevant Images (${images.length} total):\n${images.slice(0, 10).map((img, idx) => `${idx + 1}. ${img.url}${img.description ? ` - ${img.description}` : ''}`).join('\n')}${images.length > 10 ? `\n... and ${images.length - 10} more images` : ''}`
+        : '';
+
       const formattedOutput = `
 Web Search Results for: "${query}"
 
 ${includeAnswer && response.answer ? `Quick Answer:\n${response.answer}\n\n` : ''}
-Found ${formattedResults.length} results:
+Found ${formattedResults.length} results${images.length > 0 ? ` and ${images.length} images` : ''}:
 
 ${formattedResults
           .map(
@@ -167,7 +184,7 @@ ${result.position}. ${result.title}
    Relevance Score: ${(result.score * 100).toFixed(1)}%
 `
           )
-          .join('\n')}
+          .join('\n')}${imagesSection}
 `.trim();
 
       onProgress?.({
@@ -177,7 +194,9 @@ ${result.position}. ${result.title}
           query, 
           resultsCount: formattedResults.length, 
           responseTime,
-          sources 
+          sources,
+          images,
+          imageCount: images.length,
         },
       });
 

@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
-import type { ResearchTask, WebSearchProgress, WebSearchSource, SearchResultWithSources } from '@/types/tools';
+import type { ResearchTask, WebSearchProgress, WebSearchSource, SearchResultWithSources, WebSearchImage } from '@/types/tools';
 import { createWorkerPrompt } from '../prompts';
 import { executeWebSearch } from '../../web-search';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
@@ -120,6 +120,7 @@ export async function workerNode(
         searchPlan,
         async (query: string, maxResults: number): Promise<SearchResultWithSources> => {
           let capturedSources: WebSearchSource[] = [];
+          let capturedImages: WebSearchImage[] = [];
           
           const output = await executeWebSearch(
             {
@@ -127,10 +128,14 @@ export async function workerNode(
               maxResults,
               searchDepth: 'advanced',
               includeAnswer: false,
+              includeImages: true,
             },
             (progress: WebSearchProgress) => {
               if (progress.details?.sources) {
                 capturedSources = progress.details.sources;
+              }
+              if (progress.details?.images) {
+                capturedImages = progress.details.images;
               }
               config.onProgress?.(currentTaskIndex, {
                 toolName: 'web_search',
@@ -141,7 +146,7 @@ export async function workerNode(
             config.abortSignal
           );
           
-          return { output, sources: capturedSources };
+          return { output, sources: capturedSources, images: capturedImages };
         },
         (searchIndex, total, query) => {
           config.onProgress?.(currentTaskIndex, {
@@ -158,7 +163,7 @@ export async function workerNode(
       config.onProgress?.(currentTaskIndex, {
         toolName: 'web_search',
         status: 'completed',
-        message: `Found ${sources.length} sources from ${searchPlan.recommendedSearches.length} targeted searches`,
+        message: `Found ${sources.length} sources${multiSearchResult.allImages.length > 0 ? ` and ${multiSearchResult.allImages.length} images` : ''} from ${searchPlan.recommendedSearches.length} targeted searches`,
       });
     }
 

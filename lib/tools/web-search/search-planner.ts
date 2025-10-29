@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { SearchDepth } from '@/lib/schemas/web-search.tools';
-import type { SearchResultWithSources } from '@/types/tools';
+import type { SearchResultWithSources, MultiSearchImage } from '@/types/tools';
 
 export interface PlannedSearch {
   query: string;
@@ -32,6 +32,7 @@ export interface MultiSearchSource {
 export interface MultiSearchResult {
   formattedOutput: string;
   allSources: MultiSearchSource[];
+  allImages: MultiSearchImage[];
 }
 
 const SEARCH_PLANNER_PROMPT = `You are an expert search strategist that analyzes queries and creates optimal search plans.
@@ -343,6 +344,7 @@ export async function executeMultiSearch(
 ): Promise<MultiSearchResult> {
   const results: string[] = [];
   const allSources: MultiSearchSource[] = [];
+  const allImages: MultiSearchImage[] = [];
 
   for (let i = 0; i < searchPlan.recommendedSearches.length; i++) {
     const plannedSearch = searchPlan.recommendedSearches[i];
@@ -366,6 +368,20 @@ export async function executeMultiSearch(
           });
         }
       });
+
+      if (searchResult.images && searchResult.images.length > 0) {
+        searchResult.images.forEach(image => {
+          const existingImage = allImages.find(img => img.url === image.url);
+          if (!existingImage) {
+            allImages.push({
+              url: image.url,
+              description: image.description,
+              searchIndex: i + 1,
+              searchQuery: plannedSearch.query,
+            });
+          }
+        });
+      }
       
       results.push(
         `\n## Search ${i + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Purpose:** ${plannedSearch.rationale}\n\n${searchResult.output}`
@@ -382,10 +398,15 @@ export async function executeMultiSearch(
     source.position = index + 1;
   });
 
-  const formattedOutput = `# Intelligent Multi-Search Results\n\n**Original Query:** ${searchPlan.originalQuery}\n**Query Type:** ${searchPlan.queryType}\n**Complexity:** ${searchPlan.complexity}\n**Search Strategy:** ${searchPlan.reasoning}\n**Total Searches:** ${searchPlan.recommendedSearches.length}\n**Unique Sources Found:** ${allSources.length}\n\n${results.join('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n')}`;
+  const imagesSummary = allImages.length > 0 
+    ? `\n**Unique Images Found:** ${allImages.length}\n`
+    : '';
+
+  const formattedOutput = `# Intelligent Multi-Search Results\n\n**Original Query:** ${searchPlan.originalQuery}\n**Query Type:** ${searchPlan.queryType}\n**Complexity:** ${searchPlan.complexity}\n**Search Strategy:** ${searchPlan.reasoning}\n**Total Searches:** ${searchPlan.recommendedSearches.length}\n**Unique Sources Found:** ${allSources.length}${imagesSummary}\n${results.join('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n')}`;
 
   return {
     formattedOutput,
     allSources,
+    allImages,
   };
 }

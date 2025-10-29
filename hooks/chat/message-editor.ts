@@ -183,6 +183,14 @@ export async function handleEditMessage(
                 ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
               };
             }
+
+            if ('images' in progress.details && Array.isArray(progress.details.images)) {
+              const details = progress.details as { images?: MessageMetadata['images'] };
+              messageMetadata = {
+                ...(messageMetadata || {}),
+                ...(details.images && details.images.length > 0 && { images: details.images }),
+              };
+            }
             
             const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
             

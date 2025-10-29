@@ -3,7 +3,7 @@ import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk }
 import { injectContextToMessages } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { YOUTUBE_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
-import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource } from '@/types/tools';
+import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource, WebSearchImage } from '@/types/tools';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { executeDeepResearch } from '@/lib/tools/deep-research';
@@ -86,18 +86,22 @@ export async function executeWebSearchTool(
         searchPlan,
         async (query: string, maxResults: number): Promise<SearchResultWithSources> => {
           let capturedSources: WebSearchSource[] = [];
+          let capturedImages: WebSearchImage[] = [];
           
           const output = await executeWebSearch(
-            { query, maxResults, searchDepth, includeAnswer: false },
+            { query, maxResults, searchDepth, includeAnswer: false, includeImages: true },
             (progress) => {
               if (progress.details?.sources) {
                 capturedSources = progress.details.sources;
+              }
+              if (progress.details?.images) {
+                capturedImages = progress.details.images;
               }
             },
             abortSignal
           );
           
-          return { output, sources: capturedSources };
+          return { output, sources: capturedSources, images: capturedImages };
         },
         (searchIndex, total, query) => {
           if (streamClosed || abortSignal?.aborted) return;
@@ -135,12 +139,14 @@ export async function executeWebSearchTool(
         controller.enqueue(encodeToolProgress(
           TOOL_IDS.WEB_SEARCH,
           'completed',
-          `Intelligent search complete: ${multiSearchResult.allSources.length} sources from ${searchPlan.recommendedSearches.length} targeted searches`,
+          `Intelligent search complete: ${multiSearchResult.allSources.length} sources${multiSearchResult.allImages.length > 0 ? ` and ${multiSearchResult.allImages.length} images` : ''} from ${searchPlan.recommendedSearches.length} targeted searches`,
           { 
             searchDepth, 
             intelligent: true,
             sources: multiSearchResult.allSources,
+            images: multiSearchResult.allImages,
             resultsCount: multiSearchResult.allSources.length,
+            imageCount: multiSearchResult.allImages.length,
             searchPlan: {
               type: searchPlan.queryType,
               complexity: searchPlan.complexity,
@@ -158,6 +164,7 @@ export async function executeWebSearchTool(
         maxResults: getRecommendedMaxResults(searchDepth),
         searchDepth: searchDepth,
         includeAnswer: false,
+        includeImages: true,
       };
       
       controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));

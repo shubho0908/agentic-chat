@@ -11,6 +11,7 @@ import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { FollowUpQuestions } from "./followUpQuestions";
+import { SearchImages } from "./searchImages";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "@/lib/auth-client";
 import type { MemoryStatus } from "@/types/chat";
@@ -128,6 +129,25 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     return uniqueCitations;
   }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);
 
+  const images = useMemo(() => {
+    if (isUser) return [];
+
+    const allImages = [];
+
+    if (displayedMessage.metadata?.images && displayedMessage.metadata.images.length > 0) {
+      allImages.push(...displayedMessage.metadata.images);
+    }
+
+    const seenUrls = new Set<string>();
+    const uniqueImages = allImages.filter(image => {
+      if (seenUrls.has(image.url)) return false;
+      seenUrls.add(image.url);
+      return true;
+    });
+
+    return uniqueImages;
+  }, [isUser, displayedMessage.metadata?.images]);
+
   const followUpQuestions = useMemo(() => {
     if (isUser) return [];
 
@@ -182,6 +202,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
               attachments={displayedAttachments}
               messageId={message.id}
             />
+
+            {!isUser && images.length > 0 && (
+              <SearchImages images={images} />
+            )}
 
             {isEditing ? (
               <MessageEditForm
@@ -263,6 +287,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   if (
     prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
+    prevMetadata?.images?.length !== nextMetadata?.images?.length ||
     prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length
   ) {
     return false;
