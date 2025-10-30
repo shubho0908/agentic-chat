@@ -123,7 +123,7 @@ async function processVideo(
 
   onProgress?.({
     status: 'extracting',
-    message: `${videoPrefix}Extracting transcript for "${video.title}"...`,
+    message: `${videoPrefix}Extracting transcript...`,
     details: { currentVideoId: videoId, currentVideo: video, step: 'transcript' },
   });
 
@@ -163,8 +163,8 @@ async function processVideo(
 
   onProgress?.({
     status: 'extracting',
-    message: `${videoPrefix}Analyzing video content with AI...`,
-    details: { currentVideoId: videoId, step: 'analysis_start' },
+    message: `${videoPrefix}Analyzing content with AI...`,
+    details: { currentVideoId: videoId, currentVideo: video, step: 'analysis_start' },
   });
 
   let analysis;
@@ -209,10 +209,10 @@ async function processVideo(
 
 function extractNumberFromQuery(query: string): number {
   const patterns = [
-    // "find 10 videos", "search 5 results", "get 10 videos"
-    /(?:find|search|get|show|fetch|give|list)\s+(?:me\s+)?(?:the\s+)?(?:top\s+)?(\d+)\s+(?:videos?|results?|items?|vids?)/i,
-    // "top 10 videos", "best 5 results"  
-    /(?:top|best|first)\s+(\d+)\s+(?:videos?|results?|items?|vids?)/i,
+    // "find 10 videos", "search 5 results", "get 10 videos" (with optional words in between)
+    /(?:find|search|get|show|fetch|give|list)\s+(?:me\s+)?(?:the\s+)?(?:top\s+)?(\d+)(?:\s+\w+)*\s+(?:videos?|results?|items?|vids?)/i,
+    // "top 10 videos", "best 5 results" (with optional words in between)
+    /(?:top|best|first)\s+(\d+)(?:\s+\w+)*\s+(?:videos?|results?|items?|vids?)/i,
     // "10 videos about", "5 results for"
     /^(\d+)\s+(?:videos?|results?|items?|vids?)\s+(?:about|for|on|of)/i,
     // Just number at start: "10 docker tutorials"
@@ -328,6 +328,17 @@ export async function executeYouTubeTool(
         continue;
       }
 
+      onProgress?.({
+        status: 'extracting',
+        message: `Starting video ${i + 1}/${urls.length}...`,
+        details: {
+          videoCount: urls.length,
+          processedCount: i,
+          videos: [...completedVideos],
+          step: 'video_start',
+        },
+      });
+
       const result = await processVideo(
         videoId,
         input.language || 'en',
@@ -347,7 +358,6 @@ export async function executeYouTubeTool(
         details: {
           videoCount: urls.length,
           processedCount: i + 1,
-          currentVideo: result.video,
           videos: [...completedVideos],
           step: 'video_complete',
         },

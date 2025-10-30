@@ -87,7 +87,7 @@ import {
   handleSlidesAddSlide,
 } from '@/lib/tools/google-suite/slides/handlers';
 
-export interface GoogleWorkspaceExecutorOptions {
+interface GoogleWorkspaceExecutorOptions {
   query: string;
   userId: string;
   apiKey: string;

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { GOOGLE_PROVIDER_ID } from './scopes';
 
-export interface GoogleSuiteClientContext {
+interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
   userId: string;
 }

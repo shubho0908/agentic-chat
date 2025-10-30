@@ -33,13 +33,14 @@ function getStepLabel(step: string | undefined, details: YouTubeDetails | undefi
     case 'search_mode': return `Searching: "${truncateText(details.query || '', 30)}"`;
     case 'search_start': return 'Searching YouTube...';
     case 'search_complete': return `Found ${details.resultsCount || 0} video(s)`;
+    case 'video_start': return 'Starting video analysis...';
     case 'metadata': return 'Fetching metadata...';
     case 'transcript': return 'Extracting transcript...';
     case 'transcript_method': return 'Extracting transcript...';
     case 'chapters': return 'Extracting chapters...';
     case 'analysis_start': return 'Analyzing video content...';
     case 'video_complete': return 'Video complete';
-    case 'complete': return 'Anlysis completed!';
+    case 'complete': return 'Analysis completed!';
     default: return fallbackMessage || 'YouTube analysis';
   }
 }
@@ -56,11 +57,11 @@ export function YouTubeContext({ memoryStatus }: MemoryStatusProps) {
   const currentVideo = details?.currentVideo;
   const videos = details?.videos || [];
   
-  const hasMultipleVideos = videoCount > 1;
-  const showProgress = hasMultipleVideos && processedCount > 0;
-  const showCurrentVideo = Boolean(currentVideo?.title);
-  const showVideosList = videos.length > 0;
   const isCompleteStep = step === 'complete' || step === 'video_complete';
+  const hasMultipleVideos = videoCount > 1;
+  const showProgress = hasMultipleVideos && (processedCount > 0 || step === 'video_start');
+  const showCurrentVideo = Boolean(currentVideo?.title) && !isCompleteStep;
+  const showVideosList = videos.length > 0;
 
   const label = getStepLabel(step, details, memoryStatus.toolProgress?.message);
   const StatusIcon = isCompleteStep ? CheckCircle2 : Youtube;

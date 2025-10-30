@@ -22,12 +22,13 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   const details = progress?.details as Record<string, unknown>;
   const tool = details?.tool as string;
   const operation = details?.operation as string;
-  const iteration = details?.iteration as number;
   const currentTask = details?.currentTask as GoogleSuiteTask | undefined;
   const allTasks = details?.allTasks as GoogleSuiteTask[] | undefined;
   const completedTasks = details?.completedTasks as GoogleSuiteTask[] | undefined;
   const thinking = details?.thinking as string | undefined;
   const planning = details?.planning as { toolsToUse: string[]; estimatedSteps: number } | undefined;
+  const totalCompleted = details?.totalCompleted as number | undefined;
+  const completedInIteration = details?.completedInIteration as number | undefined;
 
   const getServiceName = (): string => {
     if (!tool) return "Google Workspace";
@@ -56,7 +57,10 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         }
         return "Planning workspace operations";
       case GoogleSuiteStatus.THINKING:
-        return `Analyzing results (iteration ${iteration || 1})`;
+        if (thinking) {
+          return thinking.length > 80 ? thinking.substring(0, 80) + '...' : thinking;
+        }
+        return "Analyzing results and planning next steps";
       case GoogleSuiteStatus.TASK_START:
         if (currentTask) {
           return `Starting: ${currentTask.description}`;
@@ -79,7 +83,13 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         }
         return "Task completed";
       case GoogleSuiteStatus.VALIDATING:
-        return `Validating results (iteration ${iteration || 1})`;
+        if (completedInIteration !== undefined && completedInIteration > 0) {
+          return `Validating ${completedInIteration} completed task${completedInIteration !== 1 ? 's' : ''}`;
+        }
+        if (totalCompleted !== undefined && totalCompleted > 0) {
+          return `Validating ${totalCompleted} completed task${totalCompleted !== 1 ? 's' : ''}`;
+        }
+        return "Validating task completion";
       case GoogleSuiteStatus.COMPLETED:
         const taskCount = completedTasks?.length || allTasks?.filter(t => t.status === 'completed').length || 0;
         return `Workspace task completed (${taskCount} action${taskCount !== 1 ? 's' : ''})`;
@@ -203,7 +213,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         </div>
       )}
 
-      {showThinkingDetails && thinking && (
+      {showThinkingDetails && thinking && thinking.length > 80 && (
         <div className="flex items-center gap-2 ml-4">
           <span className="text-foreground/40 font-mono text-[10px] select-none">
             └─

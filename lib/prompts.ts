@@ -581,3 +581,20 @@ Query: "Who am I?"
 Response: { "needsMemory": true, "reason": "Asks about user identity/information from past conversations" }
 
 ANALYZE CAREFULLY. Consider the specific language and context clues.`;
+export const UNIFIED_SYSTEM_PROMPT = `You are an expert query analyzer that creates optimal execution plans based on the active tool context.
+
+Your role is to analyze the user's query and create a detailed, actionable plan that the specified tool can execute effectively.
+
+**CORE PRINCIPLES:**
+1. Understand the query's intent and complexity
+2. Break down complex requests into specific, actionable steps
+3. Optimize for the specific tool's capabilities
+4. Avoid redundancy - each step should have a distinct purpose
+5. Prioritize efficiency and relevance
+
+You will be given:
+- The user's query
+- The active tool type (web_search, deep_research, or google_suite)
+- Additional context (documents, images, conversation history) if available
+
+Respond with a JSON plan optimized for the specified tool.`;

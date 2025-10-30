@@ -3,7 +3,7 @@ import type { ResearchState } from './state';
 import type { DeepResearchProgress, WebSearchSource } from '@/types/tools';
 import type { Citation, GateDecision } from '@/types/deep-research';
 
-export interface DeepResearchInput {
+interface DeepResearchInput {
   query: string;
   openaiApiKey: string;
   model: string;
@@ -17,7 +17,7 @@ export interface DeepResearchInput {
   documentContextForPlanning?: string;
 }
 
-export interface DeepResearchResult {
+interface DeepResearchResult {
   response: string;
   sources: WebSearchSource[];
   citations?: Citation[];

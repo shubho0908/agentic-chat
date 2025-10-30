@@ -1,7 +1,7 @@
 import { Innertube } from 'youtubei.js';
 import type { YouTubeTranscriptSegment } from '@/types/tools';
 
-export interface TranscriptExtractionResult {
+interface TranscriptExtractionResult {
   segments: YouTubeTranscriptSegment[];
   text: string;
   method: 'innertube' | 'none';
@@ -62,9 +62,22 @@ async function tryInnertubeTranscript(videoId: string, targetLanguage: string): 
       language: detectedLanguage 
     };
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message.includes('Type mismatch') || error.message.includes('Parser') || error.message.includes('[Parser]')) {
+        console.warn('[YouTube Transcript] Parser error for video:', videoId, '- Video has unsupported metadata format');
+        return { 
+          success: false, 
+          error: 'Video metadata parsing failed (YouTube API format issue). This video may have an unsupported description format.' 
+        };
+      }
+      return { 
+        success: false, 
+        error: error.message 
+      };
+    }
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to extract transcript via Innertube API' 
+      error: 'Failed to extract transcript via Innertube API' 
     };
   }
 }

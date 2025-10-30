@@ -4,7 +4,8 @@ import type { ResearchTask, WebSearchProgress, WebSearchSource, SearchResultWith
 import { createWorkerPrompt } from '../prompts';
 import { executeWebSearch } from '../../web-search';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
-import { createSearchPlan, executeMultiSearch } from '../../web-search/search-planner';
+import { executeMultiSearch } from '../../web-search/search-planner';
+import { createUnifiedPlan, type WebSearchPlan } from '../../unified-planner';
 
 const MAX_RETRIES = 2;
 
@@ -103,12 +104,14 @@ export async function workerNode(
         message: 'Analyzing question and planning intelligent search strategy...',
       });
 
-      const searchPlan = await createSearchPlan(
-        currentTask.question,
-        'advanced',
-        config.openaiApiKey,
-        config.model
-      );
+      const searchPlan = await createUnifiedPlan({
+        query: currentTask.question,
+        toolType: 'web_search',
+        apiKey: config.openaiApiKey,
+        model: config.model,
+        searchDepth: 'advanced',
+        abortSignal: config.abortSignal,
+      }) as WebSearchPlan;
 
       config.onProgress?.(currentTaskIndex, {
         toolName: 'web_search',

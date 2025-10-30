@@ -212,7 +212,17 @@ export function formatVideoError(video: YouTubeVideo, error: string): string {
     
     output += `### [▶️ Watch on YouTube](${video.url})\n\n`;
     
-    if (error.toLowerCase().includes('caption') || error.toLowerCase().includes('subtitle') || error.toLowerCase().includes('transcript')) {
+    if (error.includes('parsing failed') || error.includes('metadata parsing') || error.includes('format issue')) {
+      output += `**This video has a special description format that our parser doesn't support yet.**\n\n`;
+      output += `**Possible reasons:**\n`;
+      output += `- Video has complex structured metadata (courses, music, shopping sections)\n`;
+      output += `- New YouTube feature not yet supported by the transcript library\n`;
+      output += `- Custom video description formatting\n\n`;
+      output += `**What you can do:**\n`;
+      output += `- Watch the video directly on YouTube using the link above\n`;
+      output += `- Try again later (library updates may fix this)\n`;
+      output += `- Use YouTube's built-in transcript feature (click "..." → "Show transcript")\n\n`;
+    } else if (error.toLowerCase().includes('caption') || error.toLowerCase().includes('subtitle') || error.toLowerCase().includes('transcript')) {
       output += `**Why this might happen:**\n`;
       output += `- Video creator disabled captions/subtitles\n`;
       output += `- Age-restricted, private, or members-only content\n`;

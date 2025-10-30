@@ -12,7 +12,8 @@ import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/web-se
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
 import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube';
-import { createSearchPlan, executeMultiSearch } from '../tools/web-search/search-planner';
+import { executeMultiSearch } from '../tools/web-search/search-planner';
+import { createUnifiedPlan, type WebSearchPlan, type YouTubePlan } from '../tools/unified-planner';
 
 export async function executeWebSearchTool(
   textQuery: string,
@@ -53,7 +54,14 @@ export async function executeWebSearchTool(
         streamClosed = true;
       }
 
-      const searchPlan = await createSearchPlan(textQuery, searchDepth, apiKey!, model!);
+      const searchPlan = await createUnifiedPlan({
+        query: textQuery,
+        toolType: 'web_search',
+        apiKey: apiKey!,
+        model: model!,
+        searchDepth,
+        abortSignal,
+      }) as WebSearchPlan;
       
       const toolArgs = {
         query: textQuery,
@@ -320,11 +328,39 @@ export async function executeYouTubeTool(
       } catch {}
       return messages;
     }
+
+    try {
+      controller.enqueue(encodeToolProgress(
+        TOOL_IDS.YOUTUBE,
+        'planning',
+        'Analyzing request and planning video analysis...',
+        {}
+      ));
+    } catch {
+      streamClosed = true;
+    }
+
+    const conversationHistory = extractConversationHistory(messages, {
+      maxExchanges: 10,
+      excludeLastMessage: true,
+      includeAllForShortConversations: true,
+    });
+
+    const youtubePlan = await createUnifiedPlan({
+      query: textQuery,
+      toolType: 'youtube',
+      apiKey,
+      model,
+      abortSignal,
+      conversationHistory,
+    }) as YouTubePlan;
     
     const toolArgs = {
+      urls: youtubePlan.urls || [],
+      maxResults: youtubePlan.maxResults,
       includeChapters: true,
       includeTimestamps: true,
-      language: 'en',
+      language: youtubePlan.language,
     };
     
     try {

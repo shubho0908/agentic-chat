@@ -7,7 +7,7 @@ import { aggregatorNode } from './nodes/aggregator';
 import { evaluatorNode } from './nodes/evaluator';
 import { formatterNode } from './nodes/formatter';
 
-export interface GraphConfig {
+interface GraphConfig {
   openaiApiKey: string;
   model: string;
   onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string }) => void;
