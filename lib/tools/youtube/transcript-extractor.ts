@@ -1,11 +1,10 @@
-import { YoutubeTranscript } from 'youtube-transcript';
-import youtubedl from 'youtube-dl-exec';
+import { Innertube } from 'youtubei.js';
 import type { YouTubeTranscriptSegment } from '@/types/tools';
 
 export interface TranscriptExtractionResult {
   segments: YouTubeTranscriptSegment[];
   text: string;
-  method: 'youtube-transcript' | 'yt-dlp' | 'none';
+  method: 'innertube' | 'none';
   language: string;
   error?: string;
 }
@@ -18,112 +17,55 @@ interface ExtractionAttempt {
   error?: string;
 }
 
-async function tryYoutubeTranscript(videoId: string, language: string): Promise<ExtractionAttempt> {
+async function tryInnertubeTranscript(videoId: string, targetLanguage: string): Promise<ExtractionAttempt> {
   try {
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId, { lang: language });
-    const segments = transcript.map(seg => ({
-      text: seg.text,
-      offset: seg.offset,
-      duration: seg.duration,
-    }));
-    const text = segments.map(seg => seg.text).join(' ');
-    return { success: true, segments, text, language };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('language')) {
-      try {
-        const transcript = await YoutubeTranscript.fetchTranscript(videoId);
-        const segments = transcript.map(seg => ({
-          text: seg.text,
-          offset: seg.offset,
-          duration: seg.duration,
-        }));
-        const text = segments.map(seg => seg.text).join(' ');
-        return { success: true, segments, text, language: 'auto' };
-      } catch {}
+    const youtube = await Innertube.create();
+    const info = await youtube.getInfo(videoId);
+    
+    const transcriptData = await info.getTranscript();
+    if (!transcriptData) {
+      return { success: false, error: 'No transcript available for this video' };
     }
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-  }
-}
-
-interface YtDlpResult {
-  subtitles?: Record<string, Array<{ ext: string; url?: string }>>;
-  automatic_captions?: Record<string, Array<{ ext: string; url?: string }>>;
-}
-
-interface SubtitleEvent {
-  tStartMs?: number;
-  dDurationMs?: number;
-  segs?: Array<{ utf8: string }>;
-}
-
-interface SubtitleData {
-  events?: SubtitleEvent[];
-}
-
-interface SubtitleSegment {
-  utf8: string;
-}
-
-interface SubtitleFormat {
-  ext: string;
-  url?: string;
-}
-
-async function tryYtDlpSubtitles(videoId: string, language: string): Promise<ExtractionAttempt> {
-  try {
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
     
-    const result = await youtubedl(url, {
-      dumpSingleJson: true,
-      skipDownload: true,
-      writeAutoSub: true,
-      subLang: language,
-      noWarnings: true,
-      noCheckCertificates: true,
-      preferFreeFormats: true,
-      youtubeSkipDashManifest: true,
-      simulate: true,
-    }) as YtDlpResult;
-
-    const subtitles = result.subtitles || result.automatic_captions;
-    if (!subtitles) return { success: false, error: 'No subtitles available' };
-
-    const availableLangs = Object.keys(subtitles);
-    const selectedLang = availableLangs.includes(language) ? language : availableLangs[0];
-    if (!selectedLang) return { success: false, error: 'No subtitle languages' };
-
-    const subFormats = subtitles[selectedLang] as SubtitleFormat[];
-    const jsonFormat = subFormats.find((f) => f.ext === 'json3' || f.ext === 'srv3');
-    if (!jsonFormat?.url) return { success: false, error: 'No suitable subtitle format' };
-
-    const response = await fetch(jsonFormat.url);
-    if (!response.ok) return { success: false, error: `HTTP ${response.status}` };
-    
-    const data = await response.json();
-    const segments: YouTubeTranscriptSegment[] = [];
-    
-    const subtitleData = data as SubtitleData;
-    if (subtitleData.events) {
-      for (const event of subtitleData.events) {
-        if (event.segs) {
-          const text = event.segs.map((s: SubtitleSegment) => s.utf8).join('').trim();
-          if (text) {
-            segments.push({
-              text,
-              offset: event.tStartMs || 0,
-              duration: event.dDurationMs || 0,
-            });
-          }
-        }
-      }
+    const transcriptContent = transcriptData.transcript;
+    if (!transcriptContent || !transcriptContent.content || !transcriptContent.content.body) {
+      return { success: false, error: 'Transcript data structure invalid' };
     }
-
-    if (segments.length === 0) return { success: false, error: 'Empty subtitles' };
-
+    
+    const body = transcriptContent.content.body;
+    if (!body.initial_segments || body.initial_segments.length === 0) {
+      return { success: false, error: 'No transcript segments found' };
+    }
+    
+    const segments: YouTubeTranscriptSegment[] = body.initial_segments.map((segment) => {
+      const startMs = typeof segment.start_ms === 'string' ? parseFloat(segment.start_ms) : (segment.start_ms || 0);
+      const endMs = segment.end_ms ? (typeof segment.end_ms === 'string' ? parseFloat(segment.end_ms) : segment.end_ms) : 0;
+      
+      return {
+        text: segment.snippet.text || '',
+        offset: startMs,
+        duration: endMs > 0 ? endMs - startMs : 0,
+      };
+    }).filter((seg) => seg.text.trim().length > 0);
+    
+    if (segments.length === 0) {
+      return { success: false, error: 'All transcript segments were empty' };
+    }
+    
     const text = segments.map(seg => seg.text).join(' ');
-    return { success: true, segments, text, language: selectedLang };
+    const detectedLanguage = targetLanguage;
+    
+    return { 
+      success: true, 
+      segments, 
+      text, 
+      language: detectedLanguage 
+    };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'yt-dlp failed' };
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to extract transcript via Innertube API' 
+    };
   }
 }
 
@@ -132,36 +74,24 @@ export async function extractTranscript(
   language: string = 'en',
   onProgress?: (method: string, status: string) => void
 ): Promise<TranscriptExtractionResult> {
-  onProgress?.('youtube-transcript', 'attempting');
-  const tier1 = await tryYoutubeTranscript(videoId, language);
-  if (tier1.success) {
-    onProgress?.('youtube-transcript', 'success');
+  onProgress?.('innertube', 'attempting');
+  const result = await tryInnertubeTranscript(videoId, language);
+  
+  if (result.success) {
+    onProgress?.('innertube', 'success');
     return {
-      segments: tier1.segments!,
-      text: tier1.text!,
-      method: 'youtube-transcript',
-      language: tier1.language || language,
+      segments: result.segments!,
+      text: result.text!,
+      method: 'innertube',
+      language: result.language || language,
     };
   }
   
-  onProgress?.('yt-dlp', 'attempting');
-  const tier2 = await tryYtDlpSubtitles(videoId, language);
-  if (tier2.success) {
-    onProgress?.('yt-dlp', 'success');
-    return {
-      segments: tier2.segments!,
-      text: tier2.text!,
-      method: 'yt-dlp',
-      language: tier2.language || language,
-    };
-  }
-  
-  const errors = [tier1.error, tier2.error].filter(Boolean).join(' | ');
   return {
     segments: [],
     text: '',
     method: 'none',
     language,
-    error: `All methods failed. ${errors}. Video may not have captions.`,
+    error: `Transcript extraction failed. ${result.error}.`,
   };
 }

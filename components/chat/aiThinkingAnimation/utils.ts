@@ -69,7 +69,7 @@ export function getContextualMessage(
         'completed': 'Analysis complete',
       };
       
-      return statusMessages[status] || 'Analyzing YouTube videos...';
+      return statusMessages[status] || `Analyzing YouTube ${videoCount > 1 ? "videos" : "video"}...`;
     }
     
     if (memoryStatus?.toolProgress?.message) {
