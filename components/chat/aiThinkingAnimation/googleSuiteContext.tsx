@@ -180,7 +180,6 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         icon={StatusIcon}
         label={getStatusLabel()}
         treeSymbol={hasSubItems ? "├─" : "└─"}
-        note="(memory skipped)"
         iconClassName={getIconColorClass()}
         labelClassName={getLabelColorClass()}
       />

@@ -79,7 +79,6 @@ export function YouTubeContext({ memoryStatus }: MemoryStatusProps) {
         <span className={`font-medium text-[11px] ${YOUTUBE_TEXT_CLASS}`}>
           {label}
         </span>
-        <span className="text-foreground/40 text-[10px] ml-auto">(memory skipped)</span>
       </div>
 
       {showProgress && (

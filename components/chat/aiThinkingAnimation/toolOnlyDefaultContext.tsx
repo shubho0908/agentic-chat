@@ -17,7 +17,6 @@ export function ToolOnlyDefaultContext({ memoryStatus }: MemoryStatusProps) {
             : "Tool active"
         }
         treeSymbol="└─"
-        note="(memory skipped)"
         iconClassName="text-blue-600 dark:text-blue-400"
         labelClassName="text-blue-700 dark:text-blue-300"
       />
