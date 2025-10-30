@@ -70,6 +70,11 @@ export async function analyzeVideo(
   model: string,
   onProgress?: (step: string, details?: Record<string, unknown>) => void
 ): Promise<VideoAnalysis> {
+  if (!apiKey || apiKey.trim().length === 0) {
+    console.error('[YouTube Analyzer] API key validation failed at entry point');
+    throw new Error('OpenAI API key is required but was not provided');
+  }
+
   if (video.transcriptText.length < 8000) {
     onProgress?.('direct_analysis', { reason: 'short_video' });
     return await analyzeDirectly(video, apiKey, model);
@@ -90,6 +95,10 @@ async function analyzeDirectly(
   apiKey: string,
   model: string
 ): Promise<VideoAnalysis> {
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error('OpenAI API key is required but was not provided');
+  }
+
   const llm = new ChatOpenAI({
     openAIApiKey: apiKey,
     modelName: model,
@@ -171,6 +180,10 @@ async function analyzeChunksInParallel(
   apiKey: string,
   model: string
 ): Promise<ChunkAnalysis[]> {
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error('OpenAI API key is required but was not provided');
+  }
+
   const llm = new ChatOpenAI({
     openAIApiKey: apiKey,
     modelName: model,
@@ -235,6 +248,10 @@ async function synthesizeAnalyses(
   apiKey: string,
   model: string
 ): Promise<VideoAnalysis> {
+  if (!apiKey || apiKey.trim().length === 0) {
+    throw new Error('OpenAI API key is required but was not provided');
+  }
+
   const llm = new ChatOpenAI({
     openAIApiKey: apiKey,
     modelName: model,

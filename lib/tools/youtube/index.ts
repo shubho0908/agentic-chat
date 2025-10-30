@@ -243,7 +243,12 @@ export async function executeYouTubeTool(
 ): Promise<string> {
   const startTime = Date.now();
 
-  if (!apiKey) {
+  if (!apiKey || apiKey.trim().length === 0) {
+    console.error('[YouTube Tool] API key validation failed:', { 
+      apiKeyExists: !!apiKey, 
+      apiKeyLength: apiKey?.length,
+      apiKeyType: typeof apiKey 
+    });
     return TOOL_ERROR_MESSAGES.YOUTUBE.TOOL_FAILED('OpenAI API key not configured for video analysis');
   }
 
