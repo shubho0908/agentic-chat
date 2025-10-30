@@ -11,22 +11,16 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { signOut, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import { clearUserStorage } from "@/lib/storage";
+import { useThemeToggle } from "@/hooks/useThemeToggle";
 
 export function UserMenu() {
   const { data: session } = useSession();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { theme, mounted, toggleTheme } = useThemeToggle();
   const router = useRouter();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -40,10 +34,6 @@ export function UserMenu() {
         description: TOAST_ERROR_MESSAGES.AUTH.FAILED_LOGOUT_DESCRIPTION,
       });
     }
-  };
-
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
   };
 
   if (!session?.user) return null;

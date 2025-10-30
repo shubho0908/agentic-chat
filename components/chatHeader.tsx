@@ -8,6 +8,7 @@ import { BYOK } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
 import { ShareDialog } from "@/components/shareDialog";
+import { ThemeToggle } from "@/components/themeToggle";
 import { useSession } from "@/lib/auth-client";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -73,16 +74,19 @@ export function ChatHeader({
               <UserMenu />
             </>
           ) : (
-            <AuthModal>
-              <Button
-                variant="default"
-                size="sm"
-                className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
-              >
-                <LogIn className="size-4" />
-                <span className="hidden sm:inline">Login</span>
-              </Button>
-            </AuthModal>
+            <>
+              <ThemeToggle />
+              <AuthModal>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="gap-2 rounded-xl shadow-md hover:shadow-lg transition-all"
+                >
+                  <LogIn className="size-4" />
+                  <span className="hidden sm:inline">Login</span>
+                </Button>
+              </AuthModal>
+            </>
           )}
         </>
       )}

@@ -56,13 +56,17 @@ export function ToolMenuItem({
         <DropdownMenuSubTrigger
           disabled={isDisabled}
           className={cn(
-            "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
+            "gap-3 py-3 rounded-lg transition-all",
+            !isDisabled && "cursor-pointer group",
             isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
-            isDisabled && "opacity-50 cursor-not-allowed"
+            isDisabled && "opacity-50"
           )}
         >
           <div
-            className="relative flex items-center justify-center size-9 rounded-lg transition-all group-hover:scale-110"
+            className={cn(
+              "relative flex items-center justify-center size-9 rounded-lg transition-all",
+              !isDisabled && "group-hover:scale-110"
+            )}
             style={{
               background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
             }}
@@ -70,7 +74,8 @@ export function ToolMenuItem({
             <ToolIcon
               className={cn(
                 "size-4 transition-colors",
-                isActive ? tool.iconColorClass : 'text-muted-foreground group-hover:text-foreground'
+                isActive ? tool.iconColorClass : 'text-muted-foreground',
+                !isDisabled && "group-hover:text-foreground"
               )}
             />
           </div>
@@ -107,7 +112,10 @@ export function ToolMenuItem({
               }
             }}
             disabled={isDisabled}
-            className="gap-3 py-2.5 rounded-md cursor-pointer"
+            className={cn(
+              "gap-3 py-2.5 rounded-md",
+              !isDisabled && "cursor-pointer"
+            )}
           >
             <div className="flex items-center justify-center size-8 rounded-md bg-muted/50">
               <Zap className="size-4 text-muted-foreground" />
@@ -127,7 +135,10 @@ export function ToolMenuItem({
               }
             }}
             disabled={isDisabled}
-            className="gap-3 py-2.5 rounded-md cursor-pointer"
+            className={cn(
+              "gap-3 py-2.5 rounded-md",
+              !isDisabled && "cursor-pointer"
+            )}
           >
             <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-primary/10 to-primary/5">
               <Zap fill="yellow" className="size-4 text-primary" />
@@ -150,13 +161,17 @@ export function ToolMenuItem({
       onClick={() => !isDisabled && onToolSelect(tool.id)}
       disabled={isDisabled}
       className={cn(
-        "gap-3 py-3 rounded-lg cursor-pointer group transition-all",
-        isDisabled && "opacity-50 cursor-not-allowed",
+        "gap-3 py-3 rounded-lg transition-all",
+        !isDisabled && "cursor-pointer group",
+        isDisabled && "opacity-50",
         isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
       )}
     >
       <div
-        className="relative flex items-center justify-center size-9 rounded-lg transition-all group-hover:scale-110"
+        className={cn(
+          "relative flex items-center justify-center size-9 rounded-lg transition-all",
+          !isDisabled && "group-hover:scale-110"
+        )}
         style={{
           background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
         }}
@@ -164,7 +179,8 @@ export function ToolMenuItem({
         <ToolIcon
           className={cn(
             "size-4 transition-colors",
-            isActive ? tool.iconColorClass : 'text-muted-foreground group-hover:text-foreground'
+            isActive ? tool.iconColorClass : 'text-muted-foreground',
+            !isDisabled && "group-hover:text-foreground"
           )}
         />
       </div>
