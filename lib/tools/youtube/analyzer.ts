@@ -100,8 +100,8 @@ async function analyzeDirectly(
   }
 
   const llm = new ChatOpenAI({
-    openAIApiKey: apiKey,
-    modelName: model,
+    apiKey: apiKey,
+    model: model,
   });
 
   const prompt = PromptTemplate.fromTemplate(`
@@ -185,8 +185,8 @@ async function analyzeChunksInParallel(
   }
 
   const llm = new ChatOpenAI({
-    openAIApiKey: apiKey,
-    modelName: model,
+    apiKey: apiKey,
+    model: model,
   });
 
   const prompt = PromptTemplate.fromTemplate(`
@@ -253,8 +253,8 @@ async function synthesizeAnalyses(
   }
 
   const llm = new ChatOpenAI({
-    openAIApiKey: apiKey,
-    modelName: model,
+    apiKey: apiKey,
+    model: model,
   });
 
   const combinedSummaries = chunkAnalyses.map(a => `[${a.timeRange}] ${a.summary}`).join('\n');
