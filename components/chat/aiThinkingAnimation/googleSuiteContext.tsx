@@ -1,5 +1,5 @@
-import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt } from "lucide-react";
-import { GoogleSuiteStatus } from "@/types/tools";
+import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt, Lightbulb, CheckCheck, ListChecks, ListTodo } from "lucide-react";
+import { GoogleSuiteStatus, type GoogleSuiteTask } from "@/types/tools";
 import { GoogleIcon } from "@/components/icons/google-icon";
 import { getToolDisplayName } from "@/utils/google/tool-names";
 import { ContextItem } from "./contextItem";
@@ -22,29 +22,50 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   const details = progress?.details as Record<string, unknown>;
   const tool = details?.tool as string;
   const operation = details?.operation as string;
+  const iteration = details?.iteration as number;
+  const currentTask = details?.currentTask as GoogleSuiteTask | undefined;
+  const allTasks = details?.allTasks as GoogleSuiteTask[] | undefined;
+  const completedTasks = details?.completedTasks as GoogleSuiteTask[] | undefined;
+  const thinking = details?.thinking as string | undefined;
+  const planning = details?.planning as { toolsToUse: string[]; estimatedSteps: number } | undefined;
 
   const getServiceName = (): string => {
     if (!tool) return "Google Workspace";
-    
+
     if (tool.startsWith('gmail_')) return "Gmail";
     if (tool.startsWith('drive_')) return "Drive";
     if (tool.startsWith('docs_')) return "Docs";
     if (tool.startsWith('calendar_')) return "Calendar";
     if (tool.startsWith('sheets_')) return "Sheets";
     if (tool.startsWith('slides_')) return "Slides";
-    
+
     return "Google Workspace";
   };
 
   const getStatusLabel = (): string => {
     const serviceName = getServiceName();
-    
+
     switch (status) {
       case GoogleSuiteStatus.INITIALIZING:
         return `Connecting to Google Workspace`;
       case GoogleSuiteStatus.ANALYZING:
-        return "Planning workspace operation";
+        return "Analyzing request and planning actions";
+      case GoogleSuiteStatus.PLANNING:
+        if (planning) {
+          return `Planning complete: ${planning.estimatedSteps} action(s) to execute`;
+        }
+        return "Planning workspace operations";
+      case GoogleSuiteStatus.THINKING:
+        return `Analyzing results (iteration ${iteration || 1})`;
+      case GoogleSuiteStatus.TASK_START:
+        if (currentTask) {
+          return `Starting: ${currentTask.description}`;
+        }
+        return "Starting task";
       case GoogleSuiteStatus.EXECUTING:
+        if (currentTask) {
+          return `${currentTask.description}`;
+        }
         if (tool) {
           return getToolDisplayName(tool);
         }
@@ -52,8 +73,16 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
           return formatOperation(operation);
         }
         return progress?.message || "Processing request";
+      case GoogleSuiteStatus.TASK_COMPLETE:
+        if (currentTask) {
+          return `✓ Completed: ${currentTask.description}`;
+        }
+        return "Task completed";
+      case GoogleSuiteStatus.VALIDATING:
+        return `Validating results (iteration ${iteration || 1})`;
       case GoogleSuiteStatus.COMPLETED:
-        return `Workspace task completed`;
+        const taskCount = completedTasks?.length || allTasks?.filter(t => t.status === 'completed').length || 0;
+        return `Workspace task completed (${taskCount} action${taskCount !== 1 ? 's' : ''})`;
       case GoogleSuiteStatus.AUTH_REQUIRED:
         return "Google authorization required";
       default:
@@ -70,14 +99,14 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
 
   const getServiceIcon = (): LucideIcon => {
     if (!tool) return Mail;
-    
+
     if (tool.startsWith('gmail_')) return Mail;
     if (tool.startsWith('drive_')) return HardDrive;
     if (tool.startsWith('docs_')) return FileText;
     if (tool.startsWith('calendar_')) return Calendar;
     if (tool.startsWith('sheets_')) return Sheet;
     if (tool.startsWith('slides_')) return Presentation;
-    
+
     return Mail;
   };
 
@@ -87,8 +116,18 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         return GoogleIcon;
       case GoogleSuiteStatus.ANALYZING:
         return ChartGantt;
+      case GoogleSuiteStatus.PLANNING:
+        return ListTodo;
+      case GoogleSuiteStatus.THINKING:
+        return Lightbulb;
+      case GoogleSuiteStatus.TASK_START:
+        return ListChecks;
       case GoogleSuiteStatus.EXECUTING:
         return getServiceIcon();
+      case GoogleSuiteStatus.TASK_COMPLETE:
+        return CheckCheck;
+      case GoogleSuiteStatus.VALIDATING:
+        return ChartGantt;
       case GoogleSuiteStatus.COMPLETED:
         return CheckCircle;
       case GoogleSuiteStatus.AUTH_REQUIRED:
@@ -118,6 +157,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
       case GoogleSuiteStatus.AUTH_REQUIRED:
         return "text-amber-700 dark:text-amber-300";
       case GoogleSuiteStatus.COMPLETED:
+      case GoogleSuiteStatus.TASK_COMPLETE:
         return "text-green-700 dark:text-green-300";
       default:
         return "text-blue-700 dark:text-blue-300";
@@ -125,22 +165,11 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   };
 
   const StatusIcon = getStatusIcon();
-  const hasDetails = (tool || operation) && status === GoogleSuiteStatus.EXECUTING;
-
-  const getServiceColor = (): string => {
-    if (!tool) return "blue";
-    
-    if (tool.startsWith('gmail_')) return "blue";
-    if (tool.startsWith('drive_')) return "green";
-    if (tool.startsWith('docs_')) return "indigo";
-    if (tool.startsWith('calendar_')) return "purple";
-    if (tool.startsWith('sheets_')) return "emerald";
-    if (tool.startsWith('slides_')) return "amber";
-    
-    return "blue";
-  };
-
-  const serviceColor = getServiceColor();
+  const showTaskDetails = allTasks && allTasks.length > 0 &&
+    [GoogleSuiteStatus.EXECUTING, GoogleSuiteStatus.TASK_START, GoogleSuiteStatus.TASK_COMPLETE, GoogleSuiteStatus.VALIDATING, GoogleSuiteStatus.COMPLETED].includes(status);
+  const showPlanningDetails = planning && status === GoogleSuiteStatus.PLANNING;
+  const showThinkingDetails = thinking && status === GoogleSuiteStatus.THINKING;
+  const hasSubItems = showTaskDetails || showPlanningDetails || showThinkingDetails;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -150,21 +179,81 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
       <ContextItem
         icon={StatusIcon}
         label={getStatusLabel()}
-        treeSymbol={hasDetails ? "├─" : "└─"}
+        treeSymbol={hasSubItems ? "├─" : "└─"}
         note="(memory skipped)"
         iconClassName={getIconColorClass()}
         labelClassName={getLabelColorClass()}
       />
-      {hasDetails && (
-        <div className="flex items-center gap-2">
+
+      {showPlanningDetails && planning && (
+        <div className="flex flex-col gap-1 ml-4">
+          {planning.toolsToUse.map((toolName, index) => {
+            const isLast = index === planning.toolsToUse.length - 1;
+            const serviceColor = getServiceColorForTool(toolName);
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <span className="text-foreground/40 font-mono text-[10px] select-none">
+                  {isLast ? "└─" : "├─"}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${SERVICE_BADGE_CLASSES[serviceColor] || SERVICE_BADGE_CLASSES.blue}`}>
+                  {getToolDisplayName(toolName)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showThinkingDetails && thinking && (
+        <div className="flex items-center gap-2 ml-4">
           <span className="text-foreground/40 font-mono text-[10px] select-none">
             └─
           </span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${SERVICE_BADGE_CLASSES[serviceColor] || SERVICE_BADGE_CLASSES.blue}`}>
-            {tool ? getToolDisplayName(tool) : operation ? formatOperation(operation) : "Processing"}
+          <span className="text-[10px] text-foreground/60 italic">
+            {thinking}
           </span>
+        </div>
+      )}
+
+      {showTaskDetails && allTasks && (
+        <div className="flex flex-col gap-1 ml-4">
+          {allTasks.map((task, index) => {
+            const isLast = index === allTasks.length - 1;
+            const serviceColor = getServiceColorForTool(task.tool);
+            const taskStatusIcon = task.status === 'completed' ? '✓' :
+              task.status === 'failed' ? '✗' :
+                task.status === 'in_progress' ? '▸' : '○';
+            const taskStatusColor = task.status === 'completed' ? 'text-green-600 dark:text-green-400' :
+              task.status === 'failed' ? 'text-red-600 dark:text-red-400' :
+                task.status === 'in_progress' ? 'text-blue-600 dark:text-blue-400' :
+                  'text-foreground/40';
+
+            return (
+              <div key={task.id} className="flex items-center gap-2">
+                <span className="text-foreground/40 font-mono text-[10px] select-none">
+                  {isLast ? "└─" : "├─"}
+                </span>
+                <span className={`text-[10px] font-mono ${taskStatusColor}`}>
+                  {taskStatusIcon}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${SERVICE_BADGE_CLASSES[serviceColor] || SERVICE_BADGE_CLASSES.blue}`}>
+                  {task.description}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
+}
+
+function getServiceColorForTool(toolName: string): string {
+  if (toolName.startsWith('gmail_')) return "blue";
+  if (toolName.startsWith('drive_')) return "green";
+  if (toolName.startsWith('docs_')) return "indigo";
+  if (toolName.startsWith('calendar_')) return "purple";
+  if (toolName.startsWith('sheets_')) return "emerald";
+  if (toolName.startsWith('slides_')) return "amber";
+  return "blue";
 }

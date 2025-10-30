@@ -1,6 +1,7 @@
 import { google, type Auth } from 'googleapis';
 import { GaxiosError } from 'gaxios';
 import { prisma } from '@/lib/prisma';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { GOOGLE_PROVIDER_ID } from './scopes';
 
 export interface GoogleSuiteClientContext {
@@ -14,7 +15,7 @@ function createOAuth2Client(): Auth.OAuth2Client {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXT_PUBLIC_APP_URL } = process.env;
   
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !NEXT_PUBLIC_APP_URL) {
-    throw new Error('Missing Google OAuth credentials in environment variables');
+    throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MISSING_OAUTH_CREDENTIALS);
   }
   
   return new google.auth.OAuth2(
@@ -46,7 +47,7 @@ export async function createGoogleSuiteClient(userId: string): Promise<GoogleSui
   });
 
   if (!account?.accessToken || !account?.refreshToken) {
-    throw new Error('Google account not authorized. Please sign in with Google via the Tools menu.');
+    throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REQUIRED_MENU);
   }
 
   const oauth2Client = createOAuth2Client();

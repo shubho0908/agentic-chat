@@ -3,7 +3,10 @@ import { GOOGLE_WORKSPACE_TOOLS } from '@/lib/tools/google-suite/definitions';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient, isAuthRevokedError } from '@/lib/tools/google-suite/client';
 import { getToolDisplayName } from '@/utils/google/tool-names';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
+import type { GoogleWorkspaceProgressCallback } from '@/types/google-suite';
+import type { GoogleSuiteTask } from '@/types/tools';
 import type {
   HandlerArgs,
   GmailSearchArgs,
@@ -90,11 +93,7 @@ export interface GoogleWorkspaceExecutorOptions {
   apiKey: string;
   model: string;
   conversationHistory?: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
-  onProgress?: (progress: {
-    status: string;
-    message: string;
-    details?: Record<string, unknown>;
-  }) => void;
+  onProgress?: GoogleWorkspaceProgressCallback;
   abortSignal?: AbortSignal;
 }
 
@@ -169,7 +168,7 @@ async function executeToolCall(
     case 'slides_add_slide':
       return await handleSlidesAddSlide(context, args as SlidesAddSlideArgs);
     default:
-      throw new Error(`Unknown tool: ${functionName}`);
+      throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.UNKNOWN_TOOL(functionName));
   }
 }
 
@@ -179,7 +178,7 @@ export async function executeGoogleWorkspace(
   const { query, userId, apiKey, model, conversationHistory, onProgress, abortSignal } = options;
 
   try {
-    if (abortSignal?.aborted) throw new Error('Operation aborted by user');
+    if (abortSignal?.aborted) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.OPERATION_ABORTED_BY_USER);
 
     onProgress?.({
       status: 'initializing',
@@ -200,13 +199,20 @@ export async function executeGoogleWorkspace(
 
     messages.push({ role: 'user', content: query });
 
+    onProgress?.({
+      status: 'analyzing',
+      message: 'Analyzing request and planning actions...',
+      details: { query },
+    });
+
     const MAX_ITERATIONS = 20;
     let consecutiveErrors = 0;
     let finalResponse = '';
     let taskCount = 0;
+    const allTasks: GoogleSuiteTask[] = [];
 
     for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-      if (abortSignal?.aborted) throw new Error('Operation aborted by user');
+      if (abortSignal?.aborted) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.OPERATION_ABORTED_BY_USER);
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         if (msg?.role === 'tool') {
@@ -226,7 +232,7 @@ export async function executeGoogleWorkspace(
               index: i,
               messageRoles: messages.map((m, idx) => ({ idx, role: m?.role, hasToolCalls: m?.role === 'assistant' && 'tool_calls' in m })),
             });
-            throw new Error(`Invalid message structure: tool message at index ${i} without preceding tool_calls`);
+            throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_MESSAGE_STRUCTURE(i));
           }
         }
       }
@@ -239,7 +245,7 @@ export async function executeGoogleWorkspace(
       });
 
       const message = completion.choices[0]?.message;
-      if (!message) throw new Error('No response from AI');
+      if (!message) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NO_RESPONSE);
 
       if (!message.tool_calls?.length) {
         if (iteration === 1 && taskCount === 0) {
@@ -255,11 +261,47 @@ export async function executeGoogleWorkspace(
         }
         
         finalResponse = message.content || 'Task completed successfully.';
+        
+        const completedTasks = allTasks.filter(t => t.status === 'completed');
         onProgress?.({
           status: 'completed',
           message: `Task completed (${taskCount} actions executed)`,
+          details: {
+            step: taskCount,
+            totalSteps: taskCount,
+            allTasks,
+            completedTasks,
+          },
         });
         break;
+      }
+
+      if (iteration === 1 && message.tool_calls?.length > 0) {
+        const toolsToUse = message.tool_calls
+          .filter(tc => tc.type === 'function')
+          .map(tc => tc.function.name);
+        onProgress?.({
+          status: 'planning',
+          message: `Planning complete: Will execute ${toolsToUse.length} action(s)`,
+          details: {
+            iteration,
+            planning: {
+              toolsToUse,
+              estimatedSteps: toolsToUse.length,
+            },
+          },
+        });
+      }
+
+      if (message.content) {
+        onProgress?.({
+          status: 'thinking',
+          message: 'Analyzing results and planning next steps...',
+          details: {
+            iteration,
+            thinking: message.content.substring(0, 200),
+          },
+        });
       }
 
       messages.push({
@@ -284,22 +326,73 @@ export async function executeGoogleWorkspace(
             console.error('[Google Workspace Executor] Failed to parse arguments:', toolCall.function.arguments);
             return {
               tool_call_id: toolCall.id,
-              content: 'Error: Invalid JSON arguments',
+              content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_JSON_ARGS,
             };
           }
 
           taskCount++;
+          const taskId = `task_${iteration}_${taskCount}`;
+          const taskDescription = getToolDisplayName(functionName);
+          
+          const currentTask: GoogleSuiteTask = {
+            id: taskId,
+            tool: functionName,
+            description: taskDescription,
+            status: 'in_progress',
+            iteration,
+          };
+          
+          allTasks.push(currentTask);
+          
+          onProgress?.({
+            status: 'task_start',
+            message: `Starting: ${taskDescription}`,
+            details: { 
+              tool: functionName, 
+              iteration, 
+              step: taskCount,
+              currentTask,
+              allTasks: [...allTasks],
+            },
+          });
+
           onProgress?.({
             status: 'executing',
-            message: `${getToolDisplayName(functionName)}...`,
-            details: { tool: functionName, iteration, step: taskCount },
+            message: `${taskDescription}...`,
+            details: { 
+              tool: functionName, 
+              iteration, 
+              step: taskCount,
+              currentTask,
+              allTasks: [...allTasks],
+            },
           });
 
           try {
             const result = await executeToolCall(context, functionName, args);
             consecutiveErrors = 0;
+            
+            currentTask.status = 'completed';
+            currentTask.result = result.substring(0, 200);
+            
+            onProgress?.({
+              status: 'task_complete',
+              message: `✓ Completed: ${taskDescription}`,
+              details: { 
+                tool: functionName, 
+                iteration, 
+                step: taskCount,
+                currentTask,
+                allTasks: [...allTasks],
+                completedTasks: allTasks.filter(t => t.status === 'completed'),
+              },
+            });
+            
             return { tool_call_id: toolCall.id, content: result };
           } catch (error) {
+            currentTask.status = 'failed';
+            currentTask.error = error instanceof Error ? error.message : 'Unknown error';
+            
             if (isAuthRevokedError(error)) {
               console.error(`[Google Workspace Executor] ✗ Authorization revoked for ${functionName}`);
               onProgress?.({
@@ -308,7 +401,7 @@ export async function executeGoogleWorkspace(
               });
               return {
                 tool_call_id: toolCall.id,
-                content: 'Error: Your Google Workspace authorization has been revoked or expired. Please sign in with Google again via the Tools menu.',
+                content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REVOKED,
               };
             }
 
@@ -326,7 +419,7 @@ export async function executeGoogleWorkspace(
 
       if (consecutiveErrors >= 3) {
         console.error('[Google Workspace Executor] Too many consecutive errors, aborting');
-        return 'Multiple consecutive errors occurred. Please check your request and try again.';
+        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MULTIPLE_ERRORS;
       }
 
       toolResults.forEach((result) => {
@@ -338,6 +431,18 @@ export async function executeGoogleWorkspace(
       });
 
       if (iteration >= 1) {
+        const completedInIteration = allTasks.filter(t => t.iteration === iteration && t.status === 'completed').length;
+        
+        onProgress?.({
+          status: 'validating',
+          message: `Validating results from iteration ${iteration}...`,
+          details: {
+            iteration,
+            completedInIteration,
+            totalCompleted: allTasks.filter(t => t.status === 'completed').length,
+          },
+        });
+        
         messages.push({
           role: 'user',
           content: `✓ Step ${taskCount} complete. VALIDATION: Analyze the result above and:\n1. Extract any IDs, links, or data needed for remaining steps\n2. Decide: Execute next step OR finish if task is complete\n\nReminder: Continue until ALL parts of the original request are satisfied.`,
@@ -371,7 +476,7 @@ export async function executeGoogleWorkspace(
       }
     }
 
-    return finalResponse || 'Task execution reached maximum iterations. Some steps may be incomplete.';
+    return finalResponse || TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MAX_ITERATIONS_REACHED;
   } catch (error) {
     console.error('[Google Workspace] Error:', error);
 
@@ -380,7 +485,7 @@ export async function executeGoogleWorkspace(
         status: 'auth_required',
         message: 'Google Workspace authorization has been revoked or expired',
       });
-      return 'Your Google Workspace authorization has been revoked or expired. Please sign in with Google again via the Tools menu.';
+      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REVOKED;
     }
 
     if (error instanceof Error) {
@@ -390,16 +495,16 @@ export async function executeGoogleWorkspace(
           status: 'auth_required',
           message: 'Google Workspace authorization required',
         });
-        return 'Google Workspace access not authorized. Please sign in with Google via the Tools menu.';
+        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
       }
 
       if (error.message.includes('aborted')) {
-        return 'Operation was aborted.';
+        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED;
       }
 
       return `Error: ${error.message}`;
     }
 
-    return 'An unexpected error occurred while accessing Google Workspace.';
+    return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.UNEXPECTED_ERROR;
   }
 }

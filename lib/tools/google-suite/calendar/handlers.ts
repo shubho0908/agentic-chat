@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '../types';
 import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handler-types';
 
@@ -40,17 +41,17 @@ export async function handleCalendarCreateEvent(
   const startDate = new Date(args.startTime);
   if (isNaN(startDate.getTime())) {
     console.error('[Calendar Handler] Invalid startTime:', args.startTime);
-    throw new Error(`Invalid startTime format: "${args.startTime}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`);
+    throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_START_TIME(args.startTime));
   }
   const endDate = new Date(args.endTime);
   if (isNaN(endDate.getTime())) {
     console.error('[Calendar Handler] Invalid endTime:', args.endTime);
-    throw new Error(`Invalid endTime format: "${args.endTime}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`);
+    throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_END_TIME(args.endTime));
   }
   
   if (endDate.getTime() <= startDate.getTime()) {
     console.error('[Calendar Handler] endTime must be after startTime');
-    throw new Error(`endTime (${args.endTime}) must be after startTime (${args.startTime})`);
+    throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.END_TIME_BEFORE_START(args.startTime, args.endTime));
   }
   
   const timeZone = args.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -130,7 +131,7 @@ export async function handleCalendarUpdateEvent(
   if (args.startTime !== undefined) {
     const startDate = new Date(args.startTime);
     if (isNaN(startDate.getTime())) {
-      throw new Error(`Invalid startTime format: "${args.startTime}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`);
+      throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_START_TIME(args.startTime));
     }
     updatedEvent.start = { dateTime: args.startTime, timeZone };
   } else if (event.data.start?.dateTime) {
@@ -140,7 +141,7 @@ export async function handleCalendarUpdateEvent(
   if (args.endTime !== undefined) {
     const endDate = new Date(args.endTime);
     if (isNaN(endDate.getTime())) {
-      throw new Error(`Invalid endTime format: "${args.endTime}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`);
+      throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_END_TIME(args.endTime));
     }
     updatedEvent.end = { dateTime: args.endTime, timeZone };
   } else if (event.data.end?.dateTime) {
@@ -151,7 +152,7 @@ export async function handleCalendarUpdateEvent(
     const startTimestamp = new Date(updatedEvent.start.dateTime).getTime();
     const endTimestamp = new Date(updatedEvent.end.dateTime).getTime();
     if (endTimestamp <= startTimestamp) {
-      throw new Error(`endTime must be after startTime`);
+      throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.END_TIME_AFTER_START_REQUIRED);
     }
   }
   

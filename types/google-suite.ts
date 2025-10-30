@@ -6,3 +6,11 @@ export interface GoogleAuthorizationStatus {
   message?: string;
   missingScopes?: string[];
 }
+
+export interface GoogleWorkspaceProgressCallback {
+  (progress: {
+    status: string;
+    message: string;
+    details?: Record<string, unknown>;
+  }): void;
+}

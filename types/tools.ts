@@ -167,9 +167,24 @@ export interface DeepResearchProgress {
 export enum GoogleSuiteStatus {
   INITIALIZING = 'initializing',
   ANALYZING = 'analyzing',
+  PLANNING = 'planning',
+  THINKING = 'thinking',
+  TASK_START = 'task_start',
   EXECUTING = 'executing',
+  TASK_COMPLETE = 'task_complete',
+  VALIDATING = 'validating',
   COMPLETED = 'completed',
   AUTH_REQUIRED = 'auth_required',
+}
+
+export interface GoogleSuiteTask {
+  id: string;
+  tool: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  iteration: number;
+  result?: string;
+  error?: string;
 }
 
 export interface GoogleSuiteProgress {
@@ -178,6 +193,18 @@ export interface GoogleSuiteProgress {
   details?: {
     query?: string;
     operation?: string;
+    tool?: string;
+    iteration?: number;
+    step?: number;
+    totalSteps?: number;
     error?: string;
+    currentTask?: GoogleSuiteTask;
+    allTasks?: GoogleSuiteTask[];
+    completedTasks?: GoogleSuiteTask[];
+    thinking?: string;
+    planning?: {
+      toolsToUse: string[];
+      estimatedSteps: number;
+    };
   };
 }
