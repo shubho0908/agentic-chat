@@ -246,7 +246,7 @@ export function ToolMenuItem({
                         return (
                           <div
                             key={service.name}
-                            className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-accent/20 transition-colors cursor-pointer"
+                            className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-accent/70 transition-colors cursor-pointer"
                           >
                             <div className="size-8 flex items-center justify-center">
                               <ServiceIcon className="size-7" />

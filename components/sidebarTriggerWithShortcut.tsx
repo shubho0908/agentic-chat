@@ -54,8 +54,8 @@ export function SidebarTriggerWithShortcut({ className, showTooltip = true }: Si
         <TooltipTrigger asChild>
           <SidebarTrigger className={cn(className)} />
         </TooltipTrigger>
-        <TooltipContent side="right" align="start" className="flex items-center gap-2 bg-secondary/45 backdrop-blur-2xl border border-border rounded-xl">
-          <span className="text-xs text-muted-foreground">
+        <TooltipContent side="right" align="start" className="flex items-center gap-2">
+          <span className="text-muted-foreground">
             {state === "collapsed" ? "Open" : "Close"} sidebar
           </span>
           <div className="flex items-center gap-1">
