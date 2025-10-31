@@ -4,14 +4,14 @@ Visual walkthroughs showcasing the key capabilities of Agentic Chat.
 
 ## 📹 Quick Navigation
 
-| Feature | Description | Demo |
-|---------|-------------|------|
-| [Web Search](#web-search) | Real-time internet search with AI planning | [▶️ Watch](./demos/websearch-tool.mp4) |
-| [YouTube Analysis](#youtube-analysis) | Transcript extraction & video intelligence | [▶️ Search](./demos/youtube-search.mp4) • [▶️ Tool](./demos/youtube-tool.mp4) |
-| [RAG Document Intelligence](#rag-document-intelligence) | Multi-format document processing with semantic search | [▶️ Single](./demos/rag.mp4) • [▶️ Multi-file](./demos/rag-multi-files.mp4) |
-| [Deep Research](#deep-research) | Autonomous multi-step research workflows | [▶️ Watch](./demos/deep-research.mp4) |
-| [URL Scraping](#url-scraping) | Automatic web page content extraction | [▶️ Watch](./demos/scrape.mp4) |
-| [Google Suite Integration](#google-suite-integration) | Gmail, Calendar, Drive, Docs, Sheets, Slides | [▶️ Watch](./demos/google-tool.mp4) |
+| Feature | Description
+|---------|-------------|
+| [Web Search](#web-search) | Real-time internet search with AI planning |
+| [YouTube Analysis](#youtube-analysis) | Transcript extraction & video intelligence |
+| [RAG Document Intelligence](#rag-document-intelligence) | Multi-format document processing with semantic search |
+| [Deep Research](#deep-research) | Autonomous multi-step research workflows |
+| [URL Scraping](#url-scraping) | Automatic web page content extraction |
+| [Google Suite Integration](#google-suite-integration) | Gmail, Calendar, Drive, Docs, Sheets, Slides |
 
 ---
 
@@ -25,7 +25,7 @@ Real-time internet search powered by Tavily API with intelligent query planning.
 - Image results with gallery view
 - Source deduplication and relevance scoring
 
-**[▶️ Watch Demo](./demos/websearch-tool.mp4)**
+https://github.com/user-attachments/assets/062a477c-f577-4ca6-ad3c-c3a1aafa60da
 
 ---
 
@@ -40,8 +40,15 @@ Extract transcripts, parse chapters, and analyze video content.
 - Metadata enrichment via YouTube Data API
 
 **Demos:**
-- **[▶️ YouTube Search](./demos/youtube-search.mp4)** - Search and analyze videos
-- **[▶️ YouTube Tool](./demos/youtube-tool.mp4)** - Transcript extraction & analysis
+- Search and analyze videos
+  
+https://github.com/user-attachments/assets/60163e7e-f414-4295-9d00-302418b3757e
+
+
+- Transcript extraction & analysis
+
+https://github.com/user-attachments/assets/151f3774-c3bb-45cc-80c7-a57eeb526390
+
 
 ---
 
@@ -60,8 +67,17 @@ Semantic search across documents with pgvector embeddings and Cohere reranking.
 - Batch document uploads (up to 5 files)
 
 **Demos:**
-- **[▶️ Single Document RAG](./demos/rag.mp4)** - Query single document
-- **[▶️ Multi-file RAG](./demos/rag-multi-files.mp4)** - Cross-document intelligence
+- Query single document
+
+
+https://github.com/user-attachments/assets/c7cf2457-b8fc-45b4-b9b7-9744e83129e5
+
+
+- Cross-document intelligence
+
+
+https://github.com/user-attachments/assets/b368b5c0-0bc1-462d-bad7-a8a25710deba
+
 
 ---
 
@@ -77,7 +93,8 @@ Autonomous multi-step research using LangGraph workflows (3 uses/month).
 5. **Evaluation** - Quality assessment with iterative refinement
 6. **Formatting** - Structured output generation
 
-**[▶️ Watch Demo](./demos/deep-research.mp4)**
+
+https://github.com/user-attachments/assets/4cb42b81-a6da-47a6-813b-991d4a3ba28f
 
 ---
 
@@ -91,7 +108,7 @@ Automatic detection and extraction of web page content (up to 5 URLs per message
 - 1-hour content caching for performance
 - Automatic context injection into queries
 
-**[▶️ Watch Demo](./demos/scrape.mp4)**
+https://github.com/user-attachments/assets/283deac3-d207-434b-a315-0b86a500c648
 
 ---
 
@@ -107,7 +124,9 @@ OAuth 2.0 access to your Google Workspace with automatic token refresh.
 - **Google Sheets** - Create, read, write, append, clear ranges
 - **Google Slides** - Create, read, add slides
 
-**[▶️ Watch Demo](./demos/google-tool.mp4)**
+
+https://github.com/user-attachments/assets/b84a87a1-2da6-48f5-aada-4b7819f7326d
+
 
 ---
 
