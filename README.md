@@ -6,7 +6,8 @@ Multi-modal AI chat platform with intelligent query routing, semantic caching, R
 
 Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Features dynamic query classification, specialized tool routing, multi-agent orchestration, and comprehensive document processing with OCR support.
 
-📖 **[Setup Guide](./SETUP.md)** - Installation and configuration instructions
+📖 **[Setup Guide](./SETUP.md)** - Installation and configuration instructions  
+📹 **[Feature Demos](./docs/FEATURES.md)** - Video walkthroughs of all major features
 
 ## Core Features
 
