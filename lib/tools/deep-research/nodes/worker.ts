@@ -6,6 +6,7 @@ import { executeWebSearch } from '../../web-search';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
 import { executeMultiSearch } from '../../web-search/search-planner';
 import { createUnifiedPlan, type WebSearchPlan } from '../../unified-planner';
+import { withTrace } from '@/lib/langsmith-config';
 
 const MAX_RETRIES = 2;
 
@@ -179,6 +180,13 @@ export async function workerNode(
     const llm = new ChatOpenAI({
       model: config.model,
       apiKey: config.openaiApiKey,
+      metadata: {
+        taskIndex: currentTaskIndex,
+        taskQuestion: currentTask.question,
+        tools: currentTask.tools,
+        userId: config.userId,
+        conversationId: config.conversationId,
+      },
     });
 
     const contextParts = [];
@@ -200,13 +208,29 @@ export async function workerNode(
       : 'Please answer based on your knowledge.';
 
     const workerPrompt = createWorkerPrompt(currentTask.question, previousFindings);
-    
-    const response = await llm.invoke(
-      [
-        { role: 'system', content: workerPrompt },
-        { role: 'user', content: combinedContext },
-      ],
-      { signal: config.abortSignal }
+
+    const response = await withTrace(
+      `deep-research-task-${currentTaskIndex + 1}`,
+      async () => {
+        return await llm.invoke(
+          [
+            { role: 'system', content: workerPrompt },
+            { role: 'user', content: combinedContext },
+          ],
+          { signal: config.abortSignal }
+        );
+      },
+      {
+        taskIndex: currentTaskIndex,
+        taskQuestion: currentTask.question,
+        tools: currentTask.tools.join(', '),
+        hasRAG: !!ragResults,
+        hasWebSearch: !!searchResults,
+        hasImages: !!state.imageContext,
+        userId: config.userId,
+        conversationId: config.conversationId,
+        model: config.model,
+      }
     );
 
     const result = Array.isArray(response.content)

@@ -8,6 +8,7 @@ import { getPgPool } from '../storage/pgvector-client';
 import { RAG_CONFIG } from '../config';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/api-utils';
+import { withTrace } from '@/lib/langsmith-config';
 
 async function getEmbeddings(userId: string) {
   const apiKey = await getUserApiKey(userId);
@@ -48,32 +49,45 @@ export async function addDocumentsToPgVector(
 ): Promise<void> {
   await ensurePgVectorTables();
 
-  try {
-    const docsWithMetadata = documents.map((doc) => ({
-      ...doc,
-      metadata: {
-        ...doc.metadata,
-        attachmentId,
-        userId,
-        fileName,
-        conversationId,
-        timestamp: new Date().toISOString(),
-      },
-    }));
+  await withTrace(
+    'rag-document-indexing',
+    async () => {
+      try {
+        const docsWithMetadata = documents.map((doc) => ({
+          ...doc,
+          metadata: {
+            ...doc.metadata,
+            attachmentId,
+            userId,
+            fileName,
+            conversationId,
+            timestamp: new Date().toISOString(),
+          },
+        }));
 
-    const embeddings = await getEmbeddings(userId);
-    await PGVectorStore.fromDocuments(
-      docsWithMetadata,
-      embeddings,
-      getVectorStoreConfig()
-    );
-  } catch (error) {
-    throw new RAGError(
-      `Error adding documents to pgvector: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.VECTOR_STORE_FAILED,
-      error
-    );
-  }
+        const embeddings = await getEmbeddings(userId);
+        await PGVectorStore.fromDocuments(
+          docsWithMetadata,
+          embeddings,
+          getVectorStoreConfig()
+        );
+      } catch (error) {
+        throw new RAGError(
+          `Error adding documents to pgvector: ${error instanceof Error ? error.message : String(error)}`,
+          RAGErrorCode.VECTOR_STORE_FAILED,
+          error
+        );
+      }
+    },
+    {
+      userId,
+      attachmentId,
+      fileName,
+      conversationId,
+      documentCount: documents.length,
+      embeddingModel: RAG_CONFIG.embeddings.model,
+    }
+  );
 }
 
 export async function deleteDocumentChunks(attachmentId: string): Promise<void> {

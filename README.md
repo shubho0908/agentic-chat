@@ -124,6 +124,7 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **OpenAI API** - LLM inference with vision support
 - **LangChain** - Agent orchestration
 - **LangGraph** - Multi-agent workflows
+- **LangSmith** - LLM observability and tracing
 - **Cohere** - Reranking
 - **Tavily** - Web search
 - **mem0** - Conversation memory

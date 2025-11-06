@@ -11,6 +11,7 @@ import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { MEMORY_CLASSIFICATION_PROMPT } from './prompts';
 import OpenAI from 'openai';
+import { wrapOpenAIWithLangSmith } from './langsmith-config';
 
 export interface ContextRoutingResult {
   context: string;
@@ -66,8 +67,8 @@ async function shouldQueryMemory(query: string, apiKey: string, model: string): 
   if (query.trim().length < 3) return false;
   
   try {
-    const openai = new OpenAI({ apiKey });
-    
+    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
+
     const response = await openai.chat.completions.create({
       model,
       messages: [

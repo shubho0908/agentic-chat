@@ -3,6 +3,7 @@ import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { PromptTemplate } from '@langchain/core/prompts';
 import type { YouTubeTranscriptSegment, YouTubeChapter } from '@/types/tools';
 import { formatTimestamp, parseTimestampToSeconds } from '@/utils/youtube';
+import { withTrace } from '@/lib/langsmith-config';
 
 export interface VideoAnalysis {
   quickSummary: string;
@@ -71,23 +72,34 @@ export async function analyzeVideo(
   onProgress?: (step: string, details?: Record<string, unknown>) => void
 ): Promise<VideoAnalysis> {
   if (!apiKey || apiKey.trim().length === 0) {
-    console.error('[YouTube Analyzer] API key validation failed at entry point');
     throw new Error('OpenAI API key is required but was not provided');
   }
 
-  if (video.transcriptText.length < 8000) {
-    onProgress?.('direct_analysis', { reason: 'short_video' });
-    return await analyzeDirectly(video, apiKey, model);
-  }
+  return withTrace(
+    'youtube-video-analysis',
+    async () => {
+      if (video.transcriptText.length < 8000) {
+        onProgress?.('direct_analysis', { reason: 'short_video' });
+        return await analyzeDirectly(video, apiKey, model);
+      }
 
-  onProgress?.('chunking', { textLength: video.transcriptText.length });
-  const chunks = await createSemanticChunks(video.transcript);
-  
-  onProgress?.('analyzing_chunks', { chunkCount: chunks.length });
-  const chunkAnalyses = await analyzeChunksInParallel(chunks, video, apiKey, model);
-  
-  onProgress?.('synthesizing', { analysisCount: chunkAnalyses.length });
-  return await synthesizeAnalyses(chunkAnalyses, video, apiKey, model);
+      onProgress?.('chunking', { textLength: video.transcriptText.length });
+      const chunks = await createSemanticChunks(video.transcript);
+
+      onProgress?.('analyzing_chunks', { chunkCount: chunks.length });
+      const chunkAnalyses = await analyzeChunksInParallel(chunks, video, apiKey, model);
+
+      onProgress?.('synthesizing', { analysisCount: chunkAnalyses.length });
+      return await synthesizeAnalyses(chunkAnalyses, video, apiKey, model);
+    },
+    {
+      videoId: video.videoId,
+      title: video.title,
+      transcriptLength: video.transcriptText.length,
+      hasChapters: !!video.chapters?.length,
+      model,
+    }
+  );
 }
 
 async function analyzeDirectly(

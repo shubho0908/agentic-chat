@@ -12,6 +12,7 @@ import { RoutingDecision, type MemoryStatus } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
+import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,29 +63,42 @@ export async function POST(request: NextRequest) {
     
     try {
       const lastUserMessage = messages[messages.length - 1]?.content || '';
-      
-      const { context, metadata } = await routeContext(
-        lastUserMessage,
-        authUser.id,
-        messages.slice(0, -1) as Message[],
-        conversationId,
-        activeTool,
-        memoryEnabled,
-        deepResearchEnabled,
-        apiKey,
-        model
+
+      const contextResult = await withTrace(
+        'context-routing',
+        async () => {
+          return await routeContext(
+            lastUserMessage,
+            authUser.id,
+            messages.slice(0, -1) as Message[],
+            conversationId,
+            activeTool,
+            memoryEnabled,
+            deepResearchEnabled,
+            apiKey,
+            model
+          );
+        },
+        {
+          userId: authUser.id,
+          conversationId,
+          activeTool,
+          memoryEnabled,
+          deepResearchEnabled,
+          model,
+        }
       );
 
-      memoryStatusInfo = metadata;
-      
-      if (context) {
-        enhancedMessages = injectContextToMessages(enhancedMessages, context);
+      memoryStatusInfo = contextResult.metadata;
+
+      if (contextResult.context) {
+        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context);
       }
     } catch (error) {
       console.error('[Context Routing Error]', error);
     }
 
-    const openai = new OpenAI({ apiKey });
+    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 
     if (stream) {
       const abortController = new AbortController();

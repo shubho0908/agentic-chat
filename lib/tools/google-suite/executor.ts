@@ -7,6 +7,7 @@ import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
 import type { GoogleWorkspaceProgressCallback } from '@/types/google-suite';
 import type { GoogleSuiteTask } from '@/types/tools';
+import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
 import type {
   HandlerArgs,
   GmailSearchArgs,
@@ -177,7 +178,10 @@ export async function executeGoogleWorkspace(
 ): Promise<string> {
   const { query, userId, apiKey, model, conversationHistory, onProgress, abortSignal } = options;
 
-  try {
+  return withTrace(
+    'google-workspace-execution',
+    async () => {
+      try {
     if (abortSignal?.aborted) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.OPERATION_ABORTED_BY_USER);
 
     onProgress?.({
@@ -187,7 +191,7 @@ export async function executeGoogleWorkspace(
 
     const { oauth2Client } = await createGoogleSuiteClient(userId);
     const context: ToolHandlerContext = { userId, oauth2Client };
-    const openai = new OpenAI({ apiKey });
+    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
@@ -476,35 +480,43 @@ export async function executeGoogleWorkspace(
       }
     }
 
-    return finalResponse || TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MAX_ITERATIONS_REACHED;
-  } catch (error) {
-    console.error('[Google Workspace] Error:', error);
+      return finalResponse || TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MAX_ITERATIONS_REACHED;
+    } catch (error) {
+      console.error('[Google Workspace] Error:', error);
 
-    if (isAuthRevokedError(error)) {
-      onProgress?.({
-        status: 'auth_required',
-        message: 'Google Workspace authorization has been revoked or expired',
-      });
-      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REVOKED;
-    }
-
-    if (error instanceof Error) {
-      if (error.message.includes('not authorized') || 
-          error.message.includes('Please sign in with Google')) {
+      if (isAuthRevokedError(error)) {
         onProgress?.({
           status: 'auth_required',
-          message: 'Google Workspace authorization required',
+          message: 'Google Workspace authorization has been revoked or expired',
         });
-        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REVOKED;
       }
 
-      if (error.message.includes('aborted')) {
-        return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED;
+      if (error instanceof Error) {
+        if (error.message.includes('not authorized') ||
+            error.message.includes('Please sign in with Google')) {
+          onProgress?.({
+            status: 'auth_required',
+            message: 'Google Workspace authorization required',
+          });
+          return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+        }
+
+        if (error.message.includes('aborted')) {
+          return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED;
+        }
+
+        return `Error: ${error.message}`;
       }
 
-      return `Error: ${error.message}`;
+      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.UNEXPECTED_ERROR;
     }
-
-    return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.UNEXPECTED_ERROR;
+  },
+  {
+    userId,
+    query,
+    model,
+    hasConversationHistory: !!conversationHistory?.length,
   }
+);
 }

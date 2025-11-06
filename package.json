@@ -55,6 +55,7 @@
     "framer-motion": "^12.23.22",
     "googleapis": "^162.0.0",
     "langchain": "^0.3.35",
+    "langsmith": "^0.3.78",
     "linkedom": "^0.18.12",
     "lucide-react": "^0.544.0",
     "mammoth": "^1.11.0",
