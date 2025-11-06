@@ -32,30 +32,27 @@ export async function POST(request: NextRequest) {
     }
 
     const uniqueIds = Array.from(new Set(ids));
-    const result = await prisma.conversation.deleteMany({
+    const ownedConversations = await prisma.conversation.findMany({
       where: {
         id: { in: uniqueIds },
+        userId: user.id
+      },
+      select: { id: true }
+    });
+
+    const ownedIdSet = new Set(ownedConversations.map(c => c.id));
+
+    const result = await prisma.conversation.deleteMany({
+      where: {
+        id: { in: Array.from(ownedIdSet) },
         userId: user.id
       }
     });
 
     const response: BulkDeleteResponse = {
       deleted: result.count,
-      failed: []
+      failed: uniqueIds.filter(id => !ownedIdSet.has(id))
     };
-
-    if (result.count < uniqueIds.length) {
-      const deletedIds = await prisma.conversation.findMany({
-        where: {
-          id: { in: uniqueIds },
-          userId: user.id
-        },
-        select: { id: true }
-      });
-
-      const deletedIdSet = new Set(deletedIds.map(c => c.id));
-      response.failed = uniqueIds.filter(id => !deletedIdSet.has(id));
-    }
 
     return jsonResponse(response);
   } catch (error) {
