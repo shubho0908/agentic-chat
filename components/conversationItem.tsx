@@ -2,6 +2,7 @@
 
 import { forwardRef } from "react";
 import { Trash2, MoreHorizontal, Loader, Pencil, Share2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { RenameDialog } from "@/components/renameDialog";
 import { ShareDialog } from "@/components/shareDialog";
-import { DeleteDialog } from "@/components/deleteDialog";
+import { DeleteConversationDialog } from "@/components/deleteConversationDialog";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
@@ -36,6 +37,9 @@ interface ConversationItemProps {
   onDelete: (id: string) => void;
   onRename: (data: { id: string; title: string }) => void;
   onToggleSharing: (data: { id: string; isPublic: boolean }) => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
 export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>(
@@ -48,31 +52,72 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
     onDelete,
     onRename,
     onToggleSharing,
+    selectionMode = false,
+    isSelected = false,
+    onToggleSelect,
   }, ref) => {
+    const handleRowClick = () => {
+      if (selectionMode && onToggleSelect && !isDeleting) {
+        onToggleSelect(conversation.id);
+      }
+    };
+
     return (
       <SidebarMenuItem
         ref={ref}
         className={isDeleting ? "opacity-50 pointer-events-none" : ""}
       >
-        <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
-          <Link 
-            href={`/c/${conversation.id}`} 
-            className={`py-3 px-3 ${isDeleting ? "cursor-not-allowed" : "cursor-pointer"}`}
+        {selectionMode ? (
+          <div
+            data-sidebar="menu-button"
+            className="peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-data-[sidebar=menu-action]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 h-14 cursor-pointer"
+            onClick={handleRowClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleRowClick();
+              }
+            }}
           >
-            {isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
-            <div className="flex flex-col gap-1 min-w-0">
-              <span className="truncate font-medium">{conversation.title}</span>
-              <span className="text-xs text-muted-foreground">
+            <Checkbox
+              checked={isSelected}
+              disabled={isDeleting}
+              className="shrink-0 pointer-events-none"
+              tabIndex={-1}
+            />
+            <div className="flex flex-col gap-1 min-w-0 flex-1">
+              <span className="truncate font-medium text-sm leading-none">{conversation.title}</span>
+              <span className="text-xs text-muted-foreground leading-none">
                 {formatDistanceToNow(new Date(conversation.updatedAt), {
                   addSuffix: true,
                 })}
               </span>
             </div>
-          </Link>
-        </SidebarMenuButton>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild disabled={isDeleting}>
-            <SidebarMenuAction className="cursor-pointer" showOnHover>
+          </div>
+        ) : (
+          <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
+            <Link
+              href={`/c/${conversation.id}`}
+              className="py-2 px-2"
+            >
+              {isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
+              <div className="flex flex-col gap-1 min-w-0 flex-1">
+                <span className="truncate font-medium text-sm leading-none">{conversation.title}</span>
+                <span className="text-xs text-muted-foreground leading-none">
+                  {formatDistanceToNow(new Date(conversation.updatedAt), {
+                    addSuffix: true,
+                  })}
+                </span>
+              </div>
+            </Link>
+          </SidebarMenuButton>
+        )}
+        {!selectionMode && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={isDeleting}>
+              <SidebarMenuAction className="cursor-pointer" showOnHover>
               {isDeleting ? (
                 <Loader className="size-4 animate-spin" />
               ) : (
@@ -113,7 +158,8 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
               }
             />
             <DropdownMenuSeparator />
-            <DeleteDialog
+            <DeleteConversationDialog
+              mode="single"
               conversationId={conversation.id}
               conversationTitle={conversation.title}
               onDelete={onDelete}
@@ -131,6 +177,7 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
             />
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </SidebarMenuItem>
     );
   }

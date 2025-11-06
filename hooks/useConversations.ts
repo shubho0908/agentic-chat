@@ -56,6 +56,20 @@ async function deleteConversation(id: string): Promise<void> {
   }
 }
 
+async function bulkDeleteConversations(ids: string[]): Promise<{ deleted: number; failed: string[] }> {
+  const response = await fetch("/api/conversations/bulk-delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) {
+    throw new Error(HOOK_ERROR_MESSAGES.FAILED_DELETE_CONVERSATIONS);
+  }
+  return response.json();
+}
+
 async function renameConversation(id: string, title: string): Promise<Conversation> {
   const response = await fetch(`/api/conversations/${id}`, {
     method: "PATCH",
@@ -209,6 +223,49 @@ export function useConversations() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: bulkDeleteConversations,
+    onMutate: async (deletedIds) => {
+      await queryClient.cancelQueries({ queryKey: ["conversations"] });
+
+      const previousData = queryClient.getQueryData(["conversations"]);
+
+      queryClient.setQueryData<{
+        pages: ConversationsResponse[];
+        pageParams: (string | undefined)[];
+      }>(["conversations"], (old) => {
+        if (!old) return old;
+        const deletedIdSet = new Set(deletedIds);
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((conv) => !deletedIdSet.has(conv.id)),
+          })),
+        };
+      });
+
+      return { previousData };
+    },
+    onSuccess: (result) => {
+      const count = result.deleted;
+      toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATIONS_DELETED(count));
+
+      if (result.failed.length > 0) {
+        toast.error(`${result.failed.length} conversation${result.failed.length === 1 ? '' : 's'} could not be deleted`);
+      }
+    },
+    onError: (_error, _deletedIds, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["conversations"], context.previousData);
+      }
+      toast.error(TOAST_ERROR_MESSAGES.CONVERSATION.FAILED_DELETE_MULTIPLE);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+
   return {
     conversations,
     isLoading,
@@ -218,10 +275,12 @@ export function useConversations() {
     isFetchingNextPage,
     createConversation: createMutation.mutate,
     deleteConversation: deleteMutation.mutate,
+    bulkDeleteConversations: bulkDeleteMutation.mutate,
     renameConversation: renameMutation.mutate,
     toggleSharing: toggleSharingMutation.mutate,
     isCreating: createMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isBulkDeleting: bulkDeleteMutation.isPending,
     isRenaming: renameMutation.isPending,
     isToggling: toggleSharingMutation.isPending,
   };

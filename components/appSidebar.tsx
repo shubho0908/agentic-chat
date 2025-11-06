@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { MessageSquare, Plus, Loader } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { MessageSquare, Plus, Loader, ListChecks, X, Trash2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
@@ -24,11 +23,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ConversationItem } from "@/components/conversationItem";
+import { DeleteConversationDialog } from "@/components/deleteConversationDialog";
 import { useConversations } from "@/hooks/useConversations";
 import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Separator } from "./ui/separator";
+import { Button } from "./ui/button";
 
 export function AppSidebar() {
   const { data: session } = useSession();
@@ -36,6 +37,9 @@ export function AppSidebar() {
   const pathname = usePathname();
   const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const { isMobile, openMobile } = useSidebar();
   const fetchingRef = useRef(false);
@@ -48,10 +52,12 @@ export function AppSidebar() {
     hasNextPage,
     isFetchingNextPage,
     deleteConversation,
+    bulkDeleteConversations,
     renameConversation,
     toggleSharing,
     isRenaming,
     isToggling,
+    isBulkDeleting,
   } = useConversations();
 
   const virtualizer = useVirtualizer({
@@ -137,6 +143,36 @@ export function AppSidebar() {
     });
   };
 
+  const handleToggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedIds(new Set());
+  };
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = () => {
+    const idsToDelete = Array.from(selectedIds);
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setShowDeleteDialog(false);
+
+    if (currentConversationId && selectedIds.has(currentConversationId)) {
+      router.push("/");
+    }
+
+    bulkDeleteConversations(idsToDelete);
+  };
+
   if (!session) {
     return null;
   }
@@ -148,7 +184,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 text-foreground">
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-linear-to-br from-primary/20 to-primary/10 text-foreground">
                   <MessageSquare className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
@@ -159,22 +195,78 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarGroupLabel>Conversations</SidebarGroupLabel>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger className="top-1.5" asChild>
-                  <SidebarGroupAction
-                    onClick={handleNewChat}
-                    className="cursor-pointer"
+            {selectionMode ? (
+              <div className="flex items-center justify-between w-full px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={handleToggleSelectionMode}
                   >
-                    <Plus /> <span className="sr-only">New Conversation</span>
-                  </SidebarGroupAction>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>New Conversation</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                    <X className="size-4" />
+                    <span className="sr-only">Cancel selection</span>
+                  </Button>
+                  <span className="text-sm font-medium">
+                    {selectedIds.size} selected
+                  </span>
+                </div>
+                {selectedIds.size > 0 && (
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => setShowDeleteDialog(true)}
+                    disabled={isBulkDeleting}
+                    className="h-8 w-8"
+                  >
+                    <Trash2 className="size-4" />
+                    <span className="sr-only">Delete selected conversations</span>
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <SidebarGroupLabel>Conversations</SidebarGroupLabel>
+                <div className="flex gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleToggleSelectionMode}
+                        >
+                          <ListChecks className="size-4" />
+                          <span className="sr-only">Select</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p>Select conversations</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={handleNewChat}
+                        >
+                          <Plus className="size-4" />
+                          <span className="sr-only">New Conversation</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        <p>New Conversation</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -237,6 +329,9 @@ export function AppSidebar() {
                             onDelete={handleDeleteConversation}
                             onRename={renameConversation}
                             onToggleSharing={toggleSharing}
+                            selectionMode={selectionMode}
+                            isSelected={selectedIds.has(conversation.id)}
+                            onToggleSelect={handleToggleSelect}
                           />
                         );
                       })
@@ -252,6 +347,9 @@ export function AppSidebar() {
                           onDelete={handleDeleteConversation}
                           onRename={renameConversation}
                           onToggleSharing={toggleSharing}
+                          selectionMode={selectionMode}
+                          isSelected={selectedIds.has(conversation.id)}
+                          onToggleSelect={handleToggleSelect}
                         />
                       ))
                     )}
@@ -273,8 +371,16 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-sidebar to-transparent" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-linear-to-t from-sidebar to-transparent" />
       </div>
+      <DeleteConversationDialog
+        mode="bulk"
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        selectedCount={selectedIds.size}
+        onConfirm={handleBulkDelete}
+        isDeleting={isBulkDeleting}
+      />
     </Sidebar>
   );
 }
