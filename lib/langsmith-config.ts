@@ -101,9 +101,13 @@ export function configureLangChainTracing(): void {
   }
 
   process.env.LANGCHAIN_TRACING_V2 = 'true';
-  process.env.LANGCHAIN_ENDPOINT = LANGSMITH_CONFIG.endpoint;
+  if (LANGSMITH_CONFIG.endpoint) {
+    process.env.LANGCHAIN_ENDPOINT = LANGSMITH_CONFIG.endpoint;
+  }
   process.env.LANGCHAIN_API_KEY = LANGSMITH_CONFIG.apiKey;
-  process.env.LANGCHAIN_PROJECT = LANGSMITH_CONFIG.project;
+  if (LANGSMITH_CONFIG.project) {
+    process.env.LANGCHAIN_PROJECT = LANGSMITH_CONFIG.project;
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';

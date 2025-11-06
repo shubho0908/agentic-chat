@@ -139,8 +139,8 @@ export async function getRAGContext(
       userId,
       conversationId: options.conversationId,
       queryLength: query.length,
-      limit: options.limit || RAG_CONFIG.search.defaultLimit,
-      scoreThreshold: options.scoreThreshold || RAG_CONFIG.search.scoreThreshold,
+      limit: options.limit ?? RAG_CONFIG.search.defaultLimit,
+      scoreThreshold: options.scoreThreshold ?? RAG_CONFIG.search.scoreThreshold,
       waitForProcessing: options.waitForProcessing,
       providedAttachmentCount: options.attachmentIds?.length || 0,
     }
