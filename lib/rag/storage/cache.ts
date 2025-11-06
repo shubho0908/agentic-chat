@@ -5,12 +5,13 @@ import { ensurePgVectorTables } from './pgvector-init';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/api-utils';
 import OpenAI from "openai";
+import { wrapOpenAIWithLangSmith } from '@/lib/langsmith-config';
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
 
 async function getOpenAIClient(userId: string): Promise<OpenAI> {
   const apiKey = await getUserApiKey(userId);
-  return new OpenAI({ apiKey });
+  return wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 }
 
 export async function generateEmbedding(text: string, userId: string): Promise<number[]> {

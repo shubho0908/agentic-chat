@@ -14,13 +14,17 @@ import {
   filterDocumentAttachments,
 } from './status-helpers';
 import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
+import { withTrace } from '@/lib/langsmith-config';
 
 export async function getRAGContext(
   query: string,
   userId: string,
   options: RAGContextOptions = {}
 ): Promise<RAGContextResult | null> {
-  try {
+  return withTrace(
+    'rag-context-retrieval',
+    async () => {
+      try {
     const {
       conversationId,
       attachmentIds: providedAttachmentIds,
@@ -122,12 +126,23 @@ export async function getRAGContext(
       })
       .join('\n\n---\n\n');
 
-    return {
-      context: `\n\nRelevant document context:\n${context}`,
-      documentCount: usedAttachmentIds.length,
-      usedAttachmentIds,
-    };
-  } catch {
-    return null;
-  }
+        return {
+          context: `\n\nRelevant document context:\n${context}`,
+          documentCount: usedAttachmentIds.length,
+          usedAttachmentIds,
+        };
+      } catch {
+        return null;
+      }
+    },
+    {
+      userId,
+      conversationId: options.conversationId,
+      queryLength: query.length,
+      limit: options.limit || RAG_CONFIG.search.defaultLimit,
+      scoreThreshold: options.scoreThreshold || RAG_CONFIG.search.scoreThreshold,
+      waitForProcessing: options.waitForProcessing,
+      providedAttachmentCount: options.attachmentIds?.length || 0,
+    }
+  );
 }
