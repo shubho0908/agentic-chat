@@ -18,8 +18,8 @@ import {
 import { RenameDialog } from "@/components/renameDialog";
 import { ShareDialog } from "@/components/shareDialog";
 import { DeleteConversationDialog } from "@/components/deleteConversationDialog";
+import { ProtectedConversationLink } from "@/components/protectedConversationLink";
 import { formatDistanceToNow } from "date-fns";
-import Link from "next/link";
 
 interface Conversation {
   id: string;
@@ -98,8 +98,9 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
           </div>
         ) : (
           <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
-            <Link
-              href={`/c/${conversation.id}`}
+            <ProtectedConversationLink
+              conversationId={conversation.id}
+              conversationTitle={conversation.title}
               className="py-2 px-2"
             >
               {isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
@@ -111,7 +112,7 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
                   })}
                 </span>
               </div>
-            </Link>
+            </ProtectedConversationLink>
           </SidebarMenuButton>
         )}
         {!selectionMode && (

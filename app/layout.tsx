@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/themeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/components/providers/queryProvider";
 import { LayoutProvider } from "@/components/providers/layoutProvider";
+import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
 
@@ -64,16 +65,18 @@ export default function RootLayout({
             enableSystem={false}
             disableTransitionOnChange
           >
-            <LayoutProvider>
-              <SidebarProvider>
-                <Suspense fallback={null}>
-                  <ConditionalSidebar />
-                </Suspense>
-                <main className="w-full">
-                  {children}
-                </main>
-              </SidebarProvider>
-            </LayoutProvider>
+            <StreamingProvider>
+              <LayoutProvider>
+                <SidebarProvider>
+                  <Suspense fallback={null}>
+                    <ConditionalSidebar />
+                  </Suspense>
+                  <main className="w-full">
+                    {children}
+                  </main>
+                </SidebarProvider>
+              </LayoutProvider>
+            </StreamingProvider>
             <Toaster position="bottom-right" richColors />
           </ThemeProvider>
         </QueryProvider>
