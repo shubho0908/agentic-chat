@@ -41,7 +41,7 @@ export async function getRAGContext(
           conversationId,
           isDeleted: false,
         },
-        include: {
+        select: {
           attachments: {
             select: {
               id: true,
