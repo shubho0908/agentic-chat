@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const title = searchParams.get('title') || 'Agentic Chat';
     const truncatedTitle = title.length > 80 ? title.substring(0, 77) + '...' : title;
+    const baseUrl = new URL(request.url).origin;
+    const logoUrl = `${baseUrl}/light.png`;
 
     return new ImageResponse(
       (
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
             justifyContent: 'space-between',
             backgroundColor: '#0a0a0a',
             padding: '80px',
-            fontFamily: 'system-ui, sans-serif',
+            fontFamily: 'Helvetica, Arial, sans-serif',
           }}
         >
           {/* Gradient Background */}
@@ -49,21 +51,15 @@ export async function GET(request: NextRequest) {
             }}
           >
             {/* Logo/Icon */}
-            <div
+            <img
+              src={logoUrl}
+              alt="Agentic Chat"
+              width="80"
+              height="80"
               style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '20px',
-                background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0.1) 100%)',
-                border: '2px solid rgba(139, 92, 246, 0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '40px',
+                objectFit: 'contain',
               }}
-            >
-              💬
-            </div>
+            />
 
             {/* Title */}
             <div

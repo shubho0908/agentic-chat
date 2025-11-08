@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader, MessageSquare } from "lucide-react";
+import { Loader } from "lucide-react";
+import { useTheme } from "next-themes";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +24,7 @@ interface AuthModalProps {
 
 export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const { theme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
@@ -59,9 +62,14 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
           
           <div className="p-8">
             <div className="flex flex-col items-center text-center space-y-6">
-              <div className="flex aspect-square size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 text-foreground shadow-lg">
-                <MessageSquare className="size-7" strokeWidth={2} />
-              </div>
+                <Image
+                  src={theme === "dark" ? "/dark.png" : "/light.png"}
+                  alt="Agentic Chat"
+                  width={80}
+                  height={80}
+                  className="object-contain"
+                  priority
+                />
 
               <div className="space-y-2">
                 <DialogTitle className="text-2xl font-semibold tracking-tight">
