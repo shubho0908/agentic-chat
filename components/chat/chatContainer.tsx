@@ -3,6 +3,7 @@ import { usePathname } from "next/navigation";
 import { Loader } from "lucide-react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { ChatMessage } from "./chatMessage";
+import { ContextLimitBanner } from "./contextLimitBanner";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
 import type { MemoryStatus } from "@/types/chat";
@@ -19,19 +20,21 @@ interface ChatContainerProps {
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
   isFetchingNextPage?: boolean;
+  onNewChat?: () => void;
 }
 
-export function ChatContainer({ 
-  messages, 
-  isLoading, 
-  userName, 
-  onEditMessage, 
+export function ChatContainer({
+  messages,
+  isLoading,
+  userName,
+  onEditMessage,
   onRegenerateMessage,
   onSendMessage,
   memoryStatus,
   hasNextPage,
   fetchNextPage,
-  isFetchingNextPage
+  isFetchingNextPage,
+  onNewChat
 }: ChatContainerProps) {
   const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -78,6 +81,14 @@ export function ChatContainer({
     }
   };
 
+  const lastMessage = messages[messages.length - 1];
+  const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
+  const shouldShowBanner =
+    isContextBlocked &&
+    !isLoading &&
+    messages.length > 0 &&
+    lastMessage?.role === 'assistant';
+
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
       <div className={cn("flex flex-col md:pt-0", !isSharePage && "pt-20")}>
@@ -111,9 +122,9 @@ export function ChatContainer({
               key={message.id || `${message.role}-${index}`}
               ref={index === messages.length - 1 ? lastMessageRef : undefined}
             >
-              <ChatMessage 
-                message={message} 
-                userName={userName} 
+              <ChatMessage
+                message={message}
+                userName={userName}
                 onEditMessage={isLoading ? undefined : onEditMessage}
                 onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
                 onSendMessage={onSendMessage}
@@ -123,6 +134,15 @@ export function ChatContainer({
               />
             </div>
           ))}
+
+        {shouldShowBanner && onNewChat && memoryStatus?.tokenUsage && (
+          <div ref={lastMessageRef}>
+            <ContextLimitBanner
+              tokenUsage={memoryStatus.tokenUsage}
+              onNewChat={onNewChat}
+            />
+          </div>
+        )}
       </div>
     </ScrollArea>
   );

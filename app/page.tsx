@@ -3,6 +3,7 @@
 import { useState, useRef, Suspense } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
 import { ChatContainer } from "@/components/chat/chatContainer";
 import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
@@ -16,6 +17,7 @@ import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth
 
 function HomeContent() {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
+  const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({ memoryStatus });
   const [isConfigured, setIsConfigured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
@@ -93,6 +95,7 @@ function HomeContent() {
           isLoading={isLoading}
           onStop={stopGeneration}
           onAuthRequired={() => setShowAuthModal(true)}
+          tokenUsage={tokenUsage}
         />
         <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
       </>
@@ -106,20 +109,22 @@ function HomeContent() {
         onNewChat={clearChat}
         byokTriggerRef={byokTriggerRef}
       />
-      <ChatContainer 
-        messages={messages} 
+      <ChatContainer
+        messages={messages}
         isLoading={isLoading}
         userName={session?.user?.name}
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}
-        memoryStatus={memoryStatus}
+        memoryStatus={mergedMemoryStatus}
+        onNewChat={clearChat}
       />
       <ChatInput
         onSend={handleSendMessage}
         isLoading={isLoading}
         onStop={stopGeneration}
         onAuthRequired={() => setShowAuthModal(true)}
+        tokenUsage={tokenUsage}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>

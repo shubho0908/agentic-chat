@@ -28,10 +28,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   useEffect(() => {
     const currentId = initialConversationId || null;
     const prevId = prevConversationIdRef.current;
-    
     const isNavigatingToExistingConversation = currentId !== null && prevId !== currentId && initialMessages.length > 0;
     const messagesJustLoaded = messages.length === 0 && initialMessages.length > 0 && currentId !== null;
-    
     if (isNavigatingToExistingConversation || messagesJustLoaded) {
       setMessages(initialMessages);
       setConversationId(currentId);

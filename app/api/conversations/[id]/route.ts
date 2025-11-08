@@ -5,6 +5,9 @@ import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, err
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import { calculateTokenUsage } from '@/lib/utils/token-counter';
+import type { TokenUsage } from '@/types/chat';
+import type { Message } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
 
 interface MessageAttachment {
@@ -165,6 +168,15 @@ export async function GET(
       };
     });
 
+    let tokenUsage: TokenUsage | undefined;
+    try {
+      const model = searchParams.get('model') as string;
+      tokenUsage = calculateTokenUsage(transformedMessages as Message[], model);
+    } catch (error) {
+      console.error('[Token Calculation Error]', error);
+      // Continue without token usage if calculation fails
+    }
+
     return jsonResponse({
       conversation: {
         id: conversation.id,
@@ -173,7 +185,8 @@ export async function GET(
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt
       },
-      messages: paginateResults(transformedMessages, limit)
+      messages: paginateResults(transformedMessages, limit),
+      ...(tokenUsage && { tokenUsage })
     });
   } catch (error) {
     return errorResponse(

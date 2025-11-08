@@ -12,9 +12,10 @@ import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
-import type { MessageSendHandler } from "@/types/chat";
+import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/auth-client";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
@@ -35,6 +36,7 @@ interface ChatInputProps {
   disabled?: boolean;
   centered?: boolean;
   onAuthRequired?: () => void;
+  tokenUsage?: TokenUsage;
 }
 
 export function ChatInput({
@@ -45,6 +47,7 @@ export function ChatInput({
   disabled = false,
   centered = false,
   onAuthRequired,
+  tokenUsage,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
@@ -78,8 +81,8 @@ export function ChatInput({
         setActiveTool(null);
         removeActiveTool();
       }
-      toast.info('Deep Research deactivated', {
-        description: 'You have reached your monthly usage limit.',
+      toast.info(TOAST_INFO_MESSAGES.DEEP_RESEARCH_DEACTIVATED, {
+        description: TOAST_INFO_MESSAGES.DEEP_RESEARCH_MONTHLY_LIMIT,
         duration: 5000,
       });
     }
@@ -123,8 +126,18 @@ export function ChatInput({
     currentFileCount: selectedFiles.length,
   });
 
+  const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
+
   async function sendMessage() {
     if (!input.trim() || isLoading || disabled || isUploading || isSending) return;
+
+    if (isContextBlocked) {
+      toast.error(TOAST_ERROR_MESSAGES.CONTEXT.LIMIT_REACHED, {
+        description: TOAST_ERROR_MESSAGES.CONTEXT.LIMIT_REACHED_DESCRIPTION,
+        duration: 3000,
+      });
+      return;
+    }
 
     if (!session && selectedFiles.length > 0) {
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
@@ -136,8 +149,8 @@ export function ChatInput({
 
     if (deepResearchEnabled && usageData && usageData.remaining === 0) {
       setDeepResearchEnabled(false);
-      toast.error('Deep Research limit reached', {
-        description: 'You have used all your deep research requests for this month. Your message will be sent with standard processing.',
+      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED, {
+        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED_DESCRIPTION,
         duration: 5000,
       });
     }
@@ -173,7 +186,7 @@ export function ChatInput({
     const { files, hasUnsupportedFormats } = extractImagesFromClipboard(items);
 
     if (hasUnsupportedFormats) {
-      toast.error('Unsupported image format', {
+      toast.error(TOAST_ERROR_MESSAGES.UPLOAD.UNSUPPORTED_FORMAT, {
         description: `Supported formats: ${SUPPORTED_IMAGE_EXTENSIONS_DISPLAY}`,
         duration: 5000,
       });
@@ -194,7 +207,7 @@ export function ChatInput({
     if (!session) {
       onAuthRequired?.();
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: 'Please sign in to use tools',
+        description: TOAST_ERROR_MESSAGES.TOOLS.AUTH_REQUIRED_DESCRIPTION,
         duration: 3000,
       });
       return;
@@ -206,8 +219,9 @@ export function ChatInput({
     }
 
     if (toolId === TOOL_IDS.DEEP_RESEARCH && usageData && usageData.remaining === 0) {
-      toast.error('Deep Research unavailable', {
-        description: `You have used all ${usageData.limit} deep research requests for this month. Resets on ${new Date(usageData.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.`,
+      const resetDate = new Date(usageData.resetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.UNAVAILABLE, {
+        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.MONTHLY_LIMIT_DESCRIPTION(usageData.limit, resetDate),
         duration: 5000,
       });
       return;
@@ -232,10 +246,10 @@ export function ChatInput({
 
     const toolName = toolId === TOOL_IDS.WEB_SEARCH ? 'Web Search' : toolId.replace('_', ' ');
     const currentDepth = selectedDepth || searchDepth;
-    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH 
+    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
       ? ` (${currentDepth === 'advanced' ? 'Advanced' : 'Basic'})`
       : '';
-    toast.success('Tool activated', {
+    toast.success(TOAST_ERROR_MESSAGES.TOOLS.ACTIVATED, {
       description: `${toolName}${searchModeText} is now enabled for your next query`,
       duration: 2500,
     });
@@ -250,7 +264,7 @@ export function ChatInput({
       storeDeepResearchEnabled(false);
     }
 
-    toast.info('Tool deactivated', {
+    toast.info(TOAST_INFO_MESSAGES.TOOL_DEACTIVATED, {
       duration: 2000,
     });
   }
@@ -259,15 +273,15 @@ export function ChatInput({
     if (enabled && !session) {
       onAuthRequired?.();
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: 'Please sign in to use memory features',
+        description: TOAST_ERROR_MESSAGES.MEMORY_UI.AUTH_REQUIRED_DESCRIPTION,
         duration: 3000,
       });
       return;
     }
-    
+
     setMemoryEnabled(enabled);
     storeMemoryEnabled(enabled);
-    toast.success(enabled ? 'Memory enabled' : 'Memory disabled', {
+    toast.success(enabled ? TOAST_SUCCESS_MESSAGES.MEMORY_ENABLED : TOAST_SUCCESS_MESSAGES.MEMORY_DISABLED, {
       duration: 2500,
     });
   }
@@ -280,7 +294,7 @@ export function ChatInput({
     isLoading,
     isUploading,
     isSending,
-    disabled,
+    disabled: disabled || !!isContextBlocked,
     activeTool,
     memoryEnabled,
     searchDepth,
@@ -329,6 +343,10 @@ export function ChatInput({
     );
   }
 
+  const inputPlaceholder = isContextBlocked
+    ? "Context limit reached. Start a new chat to continue..."
+    : placeholder;
+
   return (
     <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto max-w-3xl p-4">
@@ -339,7 +357,7 @@ export function ChatInput({
           dropZoneRef={dropZoneRef}
           dragState={dragState}
           dragHandlers={handlers}
-          placeholder={placeholder}
+          placeholder={inputPlaceholder}
           maxFilesReached={maxFilesReached}
           centered={false}
         />

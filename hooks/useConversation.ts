@@ -3,7 +3,9 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ERROR_CODES } from "@/constants/errors";
+import { getModel } from "@/lib/storage";
 import type { Attachment } from "@/lib/schemas/chat";
+import type { TokenUsage } from "@/types/chat";
 
 interface ConversationMessage {
   id: string;
@@ -33,6 +35,7 @@ interface MessagesPage {
 interface ConversationData {
   conversation: ConversationDetails;
   messages: MessagesPage;
+  tokenUsage?: TokenUsage;
 }
 
 async function fetchConversation(
@@ -40,12 +43,16 @@ async function fetchConversation(
   cursor?: string
 ): Promise<ConversationData> {
   try {
+    const model = getModel();
     const url = new URL(
       `/api/conversations/${conversationId}`,
       window.location.origin
     );
     url.searchParams.set("versions", "true");
     url.searchParams.set("limit", "30");
+    if (model) {
+      url.searchParams.set("model", model);
+    }
     if (cursor) {
       url.searchParams.set("cursor", cursor);
     }
@@ -115,6 +122,7 @@ export function useConversation(conversationId: string | null) {
         items: allMessages,
         nextCursor: query.data.pages[query.data.pages.length - 1]?.messages.nextCursor,
       },
+      tokenUsage: firstPage.tokenUsage,
     };
   }, [query.data]);
 

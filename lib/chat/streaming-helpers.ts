@@ -10,7 +10,7 @@ export function encodeMemoryStatus(
   memoryStatusInfo: MemoryStatus,
   activeTool?: string | null
 ): Uint8Array {
-  return encodeSSEMessage({ 
+  return encodeSSEMessage({
     type: 'memory_status',
     hasMemories: memoryStatusInfo.hasMemories,
     hasDocuments: memoryStatusInfo.hasDocuments,
@@ -22,9 +22,10 @@ export function encodeMemoryStatus(
     urlCount: memoryStatusInfo.urlCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
-    activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly 
-      ? (memoryStatusInfo.activeToolName || activeTool) 
-      : undefined
+    activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly
+      ? (memoryStatusInfo.activeToolName || activeTool)
+      : undefined,
+    tokenUsage: memoryStatusInfo.tokenUsage
   });
 }
 
@@ -82,10 +83,11 @@ export function encodeDone(): Uint8Array {
 }
 
 export function shouldSendMemoryStatus(memoryStatusInfo: MemoryStatus): boolean {
-  return memoryStatusInfo.hasMemories || 
-    memoryStatusInfo.hasDocuments || 
+  return memoryStatusInfo.hasMemories ||
+    memoryStatusInfo.hasDocuments ||
     memoryStatusInfo.hasImages ||
     memoryStatusInfo.hasUrls ||
+    memoryStatusInfo.tokenUsage !== undefined ||
     memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ||
     memoryStatusInfo.routingDecision === RoutingDecision.MemoryOnly ||
     memoryStatusInfo.routingDecision === RoutingDecision.VisionOnly ||

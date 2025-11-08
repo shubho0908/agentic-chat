@@ -3,6 +3,7 @@
 import { use, useMemo, useRef, useState } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
+import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
 import { useConversation } from "@/hooks/useConversation";
 import { useConversations } from "@/hooks/useConversations";
 import { ChatContainer } from "@/components/chat/chatContainer";
@@ -23,19 +24,19 @@ export default function ChatPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: conversationId } = use(params);
-  const { 
-    data: conversationData, 
-    error: conversationError, 
+  const {
+    data: conversationData,
+    error: conversationError,
     isLoading: isLoadingConversation,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage
   } = useConversation(conversationId);
   const { toggleSharing, isToggling } = useConversations();
-  
+
   const initialMessages = useMemo(() => {
     if (!conversationData?.messages.items) return [];
-    
+
     const dbMessages = convertDbMessagesToFrontend(conversationData.messages.items);
     return flattenMessageTree(dbMessages);
   }, [conversationData?.messages.items]);
@@ -46,7 +47,11 @@ export default function ChatPage({
     initialMessages,
     conversationId,
   });
-  
+  const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({
+    memoryStatus,
+    conversationTokenUsage: conversationData?.tokenUsage
+  });
+
   const [isConfigured, setIsConfigured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
@@ -153,23 +158,25 @@ export default function ChatPage({
         onToggleSharing={handleToggleSharing}
         isToggling={isToggling}
       />
-      <ChatContainer 
-        messages={messages} 
+      <ChatContainer
+        messages={messages}
         isLoading={isLoading}
         userName={session?.user?.name}
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}
-        memoryStatus={memoryStatus}
+        memoryStatus={mergedMemoryStatus}
         hasNextPage={hasNextPage}
         fetchNextPage={fetchNextPage}
         isFetchingNextPage={isFetchingNextPage}
+        onNewChat={clearChat}
       />
       <ChatInput
         onSend={handleSendMessage}
         isLoading={isLoading}
         onStop={stopGeneration}
         onAuthRequired={() => setShowAuthModal(true)}
+        tokenUsage={tokenUsage}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
