@@ -125,6 +125,7 @@ function HomeContent() {
         onStop={stopGeneration}
         onAuthRequired={() => setShowAuthModal(true)}
         tokenUsage={tokenUsage}
+        conversationId={null}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>

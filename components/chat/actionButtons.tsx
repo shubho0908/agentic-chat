@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 interface ActionButtonsProps {
   isLoading: boolean;
   isUploading: boolean;
+  isSending: boolean;
   disabled: boolean;
   hasInput: boolean;
   onStop?: () => void;
@@ -20,6 +21,7 @@ interface ActionButtonsProps {
 export function ActionButtons({
   isLoading,
   isUploading,
+  isSending,
   disabled,
   hasInput,
   onStop,
@@ -57,14 +59,14 @@ export function ActionButtons({
   return (
     <Button
       type="submit"
-      disabled={!hasInput || isLoading || disabled || isUploading}
+      disabled={!hasInput || isLoading || disabled || isUploading || isSending}
       size="icon"
       className={cn(
         "size-10 rounded-lg",
         isLarge && "size-11 rounded-xl"
       )}
     >
-      {isUploading ? (
+      {isUploading || isSending ? (
         <Loader className={cn("size-4 animate-spin", isLarge && "size-5")} />
       ) : (
         <Send className={cn("size-4", isLarge && "size-5")} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useRef, useState } from "react";
+import { use, useMemo, useRef, useState, useEffect } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
@@ -43,7 +43,7 @@ export default function ChatPage({
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat({
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, continueConversation, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
   });
@@ -56,8 +56,45 @@ export default function ChatPage({
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
   const { data: session, isPending } = useSession();
+  const autoTriggerStateRef = useRef<{ conversationId: string | null; triggered: boolean }>({
+    conversationId: null,
+    triggered: false,
+  });
 
   const conversationNotFound = !!conversationError;
+
+  useEffect(() => {
+    if (autoTriggerStateRef.current.conversationId !== conversationId) {
+      autoTriggerStateRef.current = { conversationId, triggered: false };
+    }
+    if (autoTriggerStateRef.current.triggered || messages.length === 0 || isLoading || !session || !isConfigured) {
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    const lastUserMessage = messages.findLast(msg => msg.role === 'user');
+    const isIncomplete =
+      (lastMessage?.role === 'user' && lastMessage.id) ||
+      (lastMessage?.role === 'assistant' && !lastMessage.content && lastUserMessage?.id);
+
+    if (isIncomplete && lastUserMessage?.id) {
+      autoTriggerStateRef.current.triggered = true;
+
+      const activeTool = getActiveTool();
+      const memoryEnabled = getMemoryEnabled();
+      const deepResearchEnabled = getDeepResearchEnabled();
+      const searchDepth = getSearchDepth();
+
+      continueConversation({
+        userMessage: lastUserMessage,
+        session,
+        activeTool,
+        memoryEnabled,
+        deepResearchEnabled,
+        searchDepth
+      });
+    }
+  }, [conversationId, messages, isLoading, session, isConfigured, continueConversation]);
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
     const activeTool = getActiveTool();
@@ -177,6 +214,7 @@ export default function ChatPage({
         onStop={stopGeneration}
         onAuthRequired={() => setShowAuthModal(true)}
         tokenUsage={tokenUsage}
+        conversationId={conversationId}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>

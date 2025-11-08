@@ -145,12 +145,22 @@ export interface RegenerateMessageOptions {
   searchDepth?: SearchDepth;
 }
 
+export interface ContinueConversationOptions {
+  userMessage: Message;
+  session?: { user: { id: string } };
+  activeTool?: string | null;
+  memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
+}
+
 export interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
   sendMessage: (options: SendMessageOptions) => Promise<void>;
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
+  continueConversation: (options: ContinueConversationOptions) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
   memoryStatus?: MemoryStatus;

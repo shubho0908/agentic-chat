@@ -37,6 +37,7 @@ interface ChatInputProps {
   centered?: boolean;
   onAuthRequired?: () => void;
   tokenUsage?: TokenUsage;
+  conversationId?: string | null;
 }
 
 export function ChatInput({
@@ -48,6 +49,7 @@ export function ChatInput({
   centered = false,
   onAuthRequired,
   tokenUsage,
+  conversationId,
 }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolId | null>(null);
@@ -172,10 +174,13 @@ export function ChatInput({
       onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled, finalDeepResearchEnabled, searchDepth);
     } catch (error) {
       console.error("Error sending message:", error);
-    } finally {
-      clearInput();
-      clearAttachments();
       setIsSending(false);
+    } finally {
+      if (conversationId) {
+        clearInput();
+        clearAttachments();
+        setIsSending(false);
+      }
     }
   }
 

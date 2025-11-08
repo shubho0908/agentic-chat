@@ -91,7 +91,7 @@ export function ChatInputForm({
             onInput={onInput}
             onPaste={onPaste}
             placeholder={placeholder}
-            disabled={disabled || isLoading || isUploading}
+            disabled={disabled || isLoading || isUploading || isSending}
             rows={1}
             className={textareaClassName}
           />
@@ -99,14 +99,14 @@ export function ChatInputForm({
           <div className={`absolute ${buttonPosition} flex items-center gap-1`}>
             <div className="hidden md:block">
               <FileUploadButton
-                disabled={disabled || isLoading || isUploading || maxFilesReached}
+                disabled={disabled || isLoading || isUploading || isSending || maxFilesReached}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
               />
             </div>
             <div className="mr-1">
               <ToolsMenu
-                disabled={disabled || isLoading || isUploading}
+                disabled={disabled || isLoading || isUploading || isSending}
                 onToolSelected={onToolSelected}
                 activeTool={activeTool}
                 memoryEnabled={memoryEnabled}
@@ -120,6 +120,7 @@ export function ChatInputForm({
             <ActionButtons
               isLoading={isLoading}
               isUploading={isUploading}
+              isSending={isSending}
               disabled={disabled}
               hasInput={!!input.trim()}
               onStop={onStop}

@@ -136,6 +136,52 @@ async function createNewConversation(
   }
 }
 
+function updateQueryCacheWithUserMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  userContent: string | MessageContentPart[],
+  userMessageId: string,
+  userTimestamp: number,
+  attachments?: Attachment[]
+): void {
+  const title = generateTitle(userContent);
+  const textContent = extractTextFromContent(userContent);
+  const placeholderAssistantId = `assistant-pending-${conversationId}`;
+
+  queryClient.setQueryData(["conversation", conversationId], {
+    pages: [{
+      conversation: {
+        id: conversationId,
+        title,
+        isPublic: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      messages: {
+        items: [
+          {
+            id: placeholderAssistantId,
+            role: "assistant" as const,
+            content: "",
+            createdAt: new Date().toISOString(),
+            attachments: [],
+          },
+          {
+            id: userMessageId,
+            role: "user" as const,
+            content: textContent,
+            createdAt: new Date(userTimestamp).toISOString(),
+            attachments: attachments || [],
+          },
+        ],
+        nextCursor: undefined,
+      },
+      tokenUsage: undefined,
+    }],
+    pageParams: [undefined],
+  });
+}
+
 function updateQueryCache(
   queryClient: QueryClient,
   conversationId: string,
@@ -155,6 +201,7 @@ function updateQueryCache(
       conversation: {
         id: conversationId,
         title,
+        isPublic: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -175,7 +222,9 @@ function updateQueryCache(
             ...(metadata && { metadata }),
           },
         ],
+        nextCursor: undefined,
       },
+      tokenUsage: undefined,
     }],
     pageParams: [undefined],
   });
@@ -199,7 +248,16 @@ export async function handleConversationSaving(
     const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata);
 
     if (result && onConversationCreated) {
-      if (!earlyCreate && assistantContent) {
+      if (earlyCreate) {
+        updateQueryCacheWithUserMessage(
+          queryClient,
+          result.conversationId,
+          userContent,
+          result.userMessageId,
+          userTimestamp,
+          attachments
+        );
+      } else if (assistantContent) {
         updateQueryCache(
           queryClient,
           result.conversationId,

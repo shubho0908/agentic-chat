@@ -13,6 +13,7 @@ interface StreamingContextValue {
   streamingConversationId: string | null;
   startStreaming: (conversationId: string | null, abortController: AbortController) => void;
   stopStreaming: () => void;
+  updateStreamingConversationId: (conversationId: string) => void;
   isStreamingInConversation: (conversationId: string) => boolean;
 }
 
@@ -46,6 +47,13 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const updateStreamingConversationId = useCallback((conversationId: string) => {
+    setStreamingState((prev) => ({
+      ...prev,
+      conversationId,
+    }));
+  }, []);
+
   const isStreamingInConversation = useCallback(
     (conversationId: string) => {
       return streamingState.isStreaming && streamingState.conversationId === conversationId;
@@ -60,6 +68,7 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
         streamingConversationId: streamingState.conversationId,
         startStreaming,
         stopStreaming,
+        updateStreamingConversationId,
         isStreamingInConversation,
       }}
     >
