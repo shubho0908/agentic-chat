@@ -1,6 +1,7 @@
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
 import type { CacheCheckResult } from "@/types/chat";
+import { checkSemanticCacheAction } from "@/lib/rag/storage/cache-actions";
 
 interface CacheCheckContext {
   messages: Message[];
@@ -60,23 +61,37 @@ export async function checkCache(
   signal: AbortSignal
 ): Promise<CacheCheckResult> {
   try {
-    const response = await fetch("/api/cache/check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-      signal,
+    if (signal.aborted) {
+      return { cached: false };
+    }
+
+    const startTime = Date.now();
+    const CACHE_TIMEOUT_MS = 5000;
+    const timeoutPromise = new Promise<CacheCheckResult>((resolve) => {
+      setTimeout(() => {
+        resolve({ cached: false });
+      }, CACHE_TIMEOUT_MS);
     });
 
-    if (response.ok) {
-      return await response.json();
+    const cachePromise = checkSemanticCacheAction(query);
+    const result = await Promise.race([cachePromise, timeoutPromise]);
+    const duration = Date.now() - startTime;
+    if (result.cached) {
+      console.log(`[Cache] ✅ HIT in ${duration}ms - using cached response`);
+    } else if (duration < CACHE_TIMEOUT_MS) {
+      console.log(`[Cache] ❌ MISS in ${duration}ms - generating new response`);
     }
+
+    return result;
+
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      throw err;
+      console.log('[Cache] Aborted by user');
+      return { cached: false };
     }
-    console.error("Cache check failed:", err);
+    console.error('[Cache] Error:', err);
+    return { cached: false };
   }
-  return { cached: false };
 }
 
 export async function performCacheCheck(

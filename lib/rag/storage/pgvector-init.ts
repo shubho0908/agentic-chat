@@ -290,8 +290,15 @@ export async function ensurePgVectorTables(): Promise<void> {
       );
 
       await client.query(
-        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (created_at)', 
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (created_at)',
           'semantic_cache_created_at_idx',
+          'semantic_cache'
+        )
+      );
+
+      await client.query(
+        sqlFormat('CREATE INDEX IF NOT EXISTS %I ON %I (user_id, created_at DESC)',
+          'semantic_cache_user_created_idx',
           'semantic_cache'
         )
       );

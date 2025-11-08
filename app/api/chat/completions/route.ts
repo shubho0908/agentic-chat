@@ -74,9 +74,7 @@ export async function POST(request: NextRequest) {
             conversationId,
             activeTool,
             memoryEnabled,
-            deepResearchEnabled,
-            apiKey,
-            model
+            deepResearchEnabled
           );
         },
         {

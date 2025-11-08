@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { checkSemanticCacheAction, saveToSemanticCacheAction } from "@/lib/rag/storage/cache-actions";
 
 interface CacheCheckResponse {
   cached: boolean;
@@ -15,17 +16,16 @@ export function useSemanticCache(query: string, enabled: boolean = true) {
   return useQuery<CacheCheckResponse>({
     queryKey: ["agentic-chat-cache", query],
     queryFn: async () => {
-      const response = await fetch("/api/cache/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
+      const result = await checkSemanticCacheAction(query);
 
-      if (!response.ok) {
-        throw new Error(HOOK_ERROR_MESSAGES.FAILED_CACHE_CHECK);
+      if (result.error) {
+        throw new Error(result.error);
       }
 
-      return response.json();
+      return {
+        cached: result.cached,
+        response: result.response,
+      };
     },
     enabled: enabled && !!query,
     staleTime: 5 * 60 * 1000,
@@ -38,17 +38,13 @@ export function useSaveToCache() {
 
   return useMutation({
     mutationFn: async ({ query, response }: CacheSavePayload) => {
-      const res = await fetch("/api/cache/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, response }),
-      });
+      const result = await saveToSemanticCacheAction(query, response);
 
-      if (!res.ok) {
-        throw new Error(HOOK_ERROR_MESSAGES.FAILED_SAVE_CACHE);
+      if (!result.success) {
+        throw new Error(result.error || HOOK_ERROR_MESSAGES.FAILED_SAVE_CACHE);
       }
 
-      return res.json();
+      return result;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
