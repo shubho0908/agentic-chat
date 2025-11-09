@@ -24,7 +24,7 @@ interface AuthModalProps {
 
 export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
@@ -63,7 +63,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
           <div className="p-8">
             <div className="flex flex-col items-center text-center space-y-6">
                 <Image
-                  src={theme === "dark" ? "/dark.png" : "/light.png"}
+                  src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
                   alt="Agentic Chat"
                   width={80}
                   height={80}

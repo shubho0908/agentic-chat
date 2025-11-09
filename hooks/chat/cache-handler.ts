@@ -67,6 +67,16 @@ export async function checkCache(
 
     const startTime = Date.now();
     const CACHE_TIMEOUT_MS = 5000;
+    
+    const abortPromise = new Promise<CacheCheckResult>((_, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+      }
+      signal.addEventListener('abort', () => {
+        reject(new DOMException('Aborted', 'AbortError'));
+      });
+    });
+    
     const timeoutPromise = new Promise<CacheCheckResult>((resolve) => {
       setTimeout(() => {
         resolve({ cached: false });
@@ -74,7 +84,7 @@ export async function checkCache(
     });
 
     const cachePromise = checkSemanticCacheAction(query);
-    const result = await Promise.race([cachePromise, timeoutPromise]);
+    const result = await Promise.race([cachePromise, timeoutPromise, abortPromise]);
     const duration = Date.now() - startTime;
     if (result.cached) {
       console.log(`[Cache] ✅ HIT in ${duration}ms - using cached response`);

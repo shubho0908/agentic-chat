@@ -14,7 +14,7 @@ interface ConversationNotFoundProps {
 
 export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundProps) {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const handleNewChat = () => {
@@ -32,7 +32,7 @@ export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundPr
           <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 blur-3xl rounded-full" />
           <div className="relative flex items-center justify-center">
               <Image
-                src={theme === "dark" ? "/dark.png" : "/light.png"}
+                src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
                 alt="Agentic Chat"
                 width={100}
                 height={100}

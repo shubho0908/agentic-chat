@@ -45,16 +45,32 @@ export function shouldQueryMemoryFast(query: string): boolean {
     return false;
   }
   const normalized = query.toLowerCase().trim();
-  for (const pattern of MEMORY_NOT_REQUIRED_PATTERNS) {
-    if (pattern.test(normalized)) {
-      return false;
-    }
-  }
+  
+  let hasRequiredPattern = false;
+  let hasNotRequiredPattern = false;
+  
   for (const pattern of MEMORY_REQUIRED_PATTERNS) {
     if (pattern.test(normalized)) {
-      return true;
+      hasRequiredPattern = true;
+      break;
     }
   }
+  
+  for (const pattern of MEMORY_NOT_REQUIRED_PATTERNS) {
+    if (pattern.test(normalized)) {
+      hasNotRequiredPattern = true;
+      break;
+    }
+  }
+  
+  if (hasRequiredPattern) {
+    return true;
+  }
+  
+  if (hasNotRequiredPattern) {
+    return false;
+  }
+  
   return false;
 }
 

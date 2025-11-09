@@ -9,7 +9,6 @@ const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
 
 const IMAGE_TOKEN_COST = 1700;
 const TOKENS_PER_MESSAGE = 3;
-const TOKENS_PER_NAME = 1;
 
 const encoderCache = new Map<string, ReturnType<typeof encoding_for_model>>();
 
@@ -71,7 +70,7 @@ export function calculateTokenUsage(
 
   for (const message of messages) {
     const { textTokens, imageCount } = countContentTokens(message.content, model);
-    conversationTokens += textTokens + TOKENS_PER_MESSAGE + TOKENS_PER_NAME;
+    conversationTokens += textTokens + TOKENS_PER_MESSAGE;
     imageTokens += imageCount * IMAGE_TOKEN_COST;
   }
 

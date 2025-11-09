@@ -112,8 +112,8 @@ async function tryYoutubeTranscriptLibrary(videoId: string): Promise<ExtractionA
 
     const segments: YouTubeTranscriptSegment[] = transcriptItems.map((item) => ({
       text: item.text,
-      offset: item.offset,
-      duration: item.duration || 0,
+      offset: item.offset * 1000,
+      duration: (item.duration || 0) * 1000,
     }));
 
     const text = segments.map(seg => seg.text).join(' ');

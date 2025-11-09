@@ -133,17 +133,24 @@ export async function handleStreamingResponse(
 
     if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
       assistantContent = cacheData.response;
-      onMessagesUpdate((prev) => [
-        ...prev,
-        {
-          role: "assistant",
+      
+      if (existingAssistantMessageId) {
+        updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
           content: assistantContent,
-          id: assistantMessageId,
-          timestamp: Date.now(),
-          model,
-          toolActivities: [],
-        },
-      ]);
+        });
+      } else {
+        onMessagesUpdate((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: assistantContent,
+            id: assistantMessageId,
+            timestamp: Date.now(),
+            model,
+            toolActivities: [],
+          },
+        ]);
+      }
       await handleConversationSaving(
         false,
         conversationId,

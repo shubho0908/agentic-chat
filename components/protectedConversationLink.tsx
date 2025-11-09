@@ -2,7 +2,7 @@
 
 import { useState, forwardRef, type MouseEvent, type ReactNode, type ComponentPropsWithoutRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useStreaming } from "@/contexts/streaming-context";
 import { NavigationGuardDialog } from "./navigationGuardDialog";
 
@@ -15,6 +15,7 @@ interface ProtectedConversationLinkProps extends Omit<ComponentPropsWithoutRef<t
 export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, ProtectedConversationLinkProps>(
   ({ conversationId, conversationTitle, children, onClick, ...props }, ref) => {
   const pathname = usePathname();
+  const router = useRouter();
   const { isStreaming, streamingConversationId, stopStreaming } = useStreaming();
   const [showDialog, setShowDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
@@ -43,7 +44,7 @@ export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, Protected
 
     if (pendingNavigation) {
       setTimeout(() => {
-        window.location.href = pendingNavigation;
+        router.push(pendingNavigation);
       }, 50);
     }
   };
