@@ -32,6 +32,8 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
+import { useStreaming } from "@/contexts/streaming-context";
+import { NavigationGuardDialog } from "@/components/navigationGuardDialog";
 
 export function AppSidebar() {
   const { data: session } = useSession();
@@ -43,11 +45,13 @@ export function AppSidebar() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showGuardDialog, setShowGuardDialog] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const { isMobile, openMobile } = useSidebar();
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const { isStreaming, stopStreaming } = useStreaming();
 
   const {
     conversations,
@@ -91,7 +95,7 @@ export function AppSidebar() {
       }, 100);
       return () => clearTimeout(timer);
     }
-    
+
     if (!isMobile && parentRef.current) {
       const timer = setTimeout(() => {
         virtualizer.measure();
@@ -103,7 +107,7 @@ export function AppSidebar() {
   useEffect(() => {
     const scrollElement = parentRef.current;
     const loader = loaderRef.current;
-    
+
     if (!scrollElement || !loader || conversations.length === 0 || !hasNextPage) return;
 
     const observer = new IntersectionObserver(
@@ -122,7 +126,7 @@ export function AppSidebar() {
     );
 
     observer.observe(loader);
-    
+
     const checkInitialLoad = setTimeout(() => {
       const { scrollHeight, clientHeight } = scrollElement;
       if (scrollHeight <= clientHeight && !fetchingRef.current) {
@@ -138,6 +142,15 @@ export function AppSidebar() {
   }, [hasNextPage, fetchNextPage, conversations.length, isMobile, openMobile]);
 
   const handleNewChat = () => {
+    if (isStreaming) {
+      setShowGuardDialog(true);
+    } else {
+      router.push("/");
+    }
+  };
+
+  const handleConfirmNewChat = () => {
+    stopStreaming();
     router.push("/");
   };
 
@@ -322,7 +335,7 @@ export function AppSidebar() {
                       left: 0,
                       width: '100%',
                       transform: virtualizer.getVirtualItems()[0]
-                        ? `translateY(${virtualizer.getVirtualItems()[0].start}px)` 
+                        ? `translateY(${virtualizer.getVirtualItems()[0].start}px)`
                         : 'none',
                     }}
                   >
@@ -330,7 +343,7 @@ export function AppSidebar() {
                       virtualizer.getVirtualItems().map((virtualItem) => {
                         const conversation = conversations[virtualItem.index];
                         if (!conversation) return null;
-                        
+
                         return (
                           <ConversationItem
                             key={conversation.id}
@@ -399,6 +412,12 @@ export function AppSidebar() {
         selectedCount={selectedIds.size}
         onConfirm={handleBulkDelete}
         isDeleting={isBulkDeleting}
+      />
+      <NavigationGuardDialog
+        open={showGuardDialog}
+        onOpenChange={setShowGuardDialog}
+        onConfirm={handleConfirmNewChat}
+        destinationTitle="New Conversation"
       />
     </Sidebar>
   );
