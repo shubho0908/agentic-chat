@@ -48,11 +48,18 @@ export async function continueIncompleteConversation(
       ? lastMessage.id
       : undefined;
 
+  const userTextContent = typeof userMessage.content === 'string'
+    ? userMessage.content
+    : userMessage.content;
+  const reconstructedContent = typeof userTextContent === 'string' && userMessage.attachments
+    ? buildMultimodalContent(userTextContent, userMessage.attachments)
+    : userMessage.content;
+
   const result = await handleStreamingResponse(
     {
       messages: existingEmptyAssistantId ? messages.slice(0, -1) : messages,
       conversationId,
-      userMessageContent: userMessage.content,
+      userMessageContent: reconstructedContent,
       userTimestamp: userMessage.timestamp ?? Date.now(),
       userAttachments: userMessage.attachments,
       model,

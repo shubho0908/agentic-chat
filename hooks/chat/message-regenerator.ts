@@ -6,7 +6,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
-import { buildCacheQuery } from "./cache-handler";
+import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
@@ -72,7 +72,8 @@ export async function handleRegenerateResponse(
       await deleteMessagesAfter(conversationId, assistantMessage.id);
     }
 
-    const cacheQuery = buildCacheQuery(messagesUpToAssistant, previousUserMessage.content);
+    const useCaching = shouldUseSemanticCache(previousUserMessage.attachments, activeTool, deepResearchEnabled);
+    const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT);
 
     const responseContent = await streamChatCompletion({

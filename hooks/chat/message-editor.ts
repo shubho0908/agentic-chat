@@ -7,7 +7,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { updateUserMessage, saveAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
-import { buildCacheQuery } from "./cache-handler";
+import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
@@ -97,7 +97,8 @@ export async function handleEditMessage(
       }
     }
 
-    const cacheQuery = buildCacheQuery(messagesUpToEdit, messageContent);
+    const useCaching = shouldUseSemanticCache(attachments, activeTool, deepResearchEnabled);
+    const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
 
     const responseContent = await streamChatCompletion({
