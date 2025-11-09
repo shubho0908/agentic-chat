@@ -34,10 +34,13 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - Source deduplication
 
 #### YouTube Analysis
+- **Global Video Caching** - PostgreSQL-backed caching with automatic expiration and access tracking
+- **Multi-tier Transcript Fallback** - Tries youtube-transcript, yt-dlp service, then official API
 - Transcript extraction with multi-language support
 - Automatic chapter parsing from video descriptions
 - Video search and batch processing
 - Metadata enrichment via YouTube Data API
+- Cache statistics and performance monitoring
 
 #### URL Scraping & Context Injection
 - Automatic URL detection and content extraction (up to 5 URLs)
@@ -69,7 +72,9 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 
 ### 🧠 Memory & Context
 - **Semantic Caching** - Response caching based on query similarity with pgvector
+- **Performance-optimized Cache Actions** - Server actions for efficient cache operations
 - **Conversation Memory** - Cross-conversation context retention via mem0
+- **Token Usage Tracking** - Real-time token counting with context limit notifications
 - **Message Versioning & Branching** - Tree-based conversation versioning with sibling management
 - **Intelligent Context Router** - Dynamic routing with 5 modes:
   - **MemoryOnly**: Uses conversation memory
@@ -89,6 +94,8 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 
 ### 💬 Chat Features
 - **Real-time Streaming** - Progressive response generation with abort support
+- **Continue Conversation** - Automatically resume incomplete conversations with context preservation
+- **Context Limit Warnings** - Visual notifications when approaching token limits with usage statistics
 - **File Attachments** - Up to 5 files per message (documents + images)
 - **Clipboard Image Paste** - Direct image paste from clipboard with auto-naming
 - **Processing Status Tracking** - Real-time document processing progress with chunk/token counts
@@ -98,7 +105,7 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **Message Actions** - Edit, regenerate, copy, delete after point
 - **Version Navigation** - Navigate between message versions with visual indicators
 - **Image Lightbox** - Full-screen image viewing with keyboard shortcuts
-- **Dark/Light Theme** - System-aware theme switching
+- **Dark/Light Theme** - System-aware theme switching with custom logo support
 - **Tool Selection UI** - Visual tool picker with gradient indicators
 - **Link Previews** - Rich metadata cards for URLs in messages
 
@@ -166,7 +173,7 @@ Multimodal support across all models for image analysis, OCR, and hybrid vision+
 OAuth 2.0 access to Gmail, Calendar, Drive, Docs, Sheets, and Slides with automatic token refresh.
 
 **YouTube Processing**  
-Extracts captions with multi-language support and chapter metadata from descriptions.
+Global caching system stores video metadata, transcripts, and analysis in PostgreSQL. Multi-tier fallback tries youtube-transcript library, then yt-dlp service, then official YouTube API. Caches expire based on access patterns with built-in statistics tracking.
 
 **Message Versioning System**  
 Tree-based message storage with parent-child relationships and sibling indexing enables conversation branching, version navigation, and soft deletion.
