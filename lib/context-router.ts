@@ -9,9 +9,7 @@ import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
 import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
-import { MEMORY_CLASSIFICATION_PROMPT } from './prompts';
-import OpenAI from 'openai';
-import { wrapOpenAIWithLangSmith } from './langsmith-config';
+import { shouldQueryMemoryWithCache } from './memory-classifier';
 
 export interface ContextRoutingResult {
   context: string;
@@ -54,60 +52,24 @@ function isReferentialQuery(normalized: string): boolean {
   return REFERENTIAL_PATTERNS.some(p => p.test(normalized));
 }
 
-const memoryDecisionCache = new Map<string, { decision: boolean; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000;
-
-async function shouldQueryMemory(query: string, apiKey: string, model: string): Promise<boolean> {
-  const cacheKey = query.toLowerCase().trim();
-  
-  const cached = memoryDecisionCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.decision;
-  }
-  if (query.trim().length < 3) return false;
-  
-  try {
-    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
-
-    const response = await openai.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: MEMORY_CLASSIFICATION_PROMPT },
-        { role: "user", content: query }
-      ],
-      response_format: { type: "json_object" },
-    });
-    
-    const result = JSON.parse(response.choices[0].message.content || '{"needsMemory": false}');
-    const decision = result.needsMemory === true;
-    memoryDecisionCache.set(cacheKey, { decision, timestamp: Date.now() });
-    
-    if (memoryDecisionCache.size > 100) {
-      const now = Date.now();
-      for (const [key, value] of memoryDecisionCache.entries()) {
-        if (now - value.timestamp > CACHE_TTL) {
-          memoryDecisionCache.delete(key);
-        }
-      }
-    }
-    
-    return decision;
-  } catch (error) {
-    console.error('[Memory Classification] Error:', error);
-    return true;
-  }
+function shouldQueryMemory(query: string): boolean {
+  return shouldQueryMemoryWithCache(query);
 }
 
-async function hasDocumentAttachments(conversationId: string): Promise<boolean> {
+async function getAttachmentInfo(conversationId: string): Promise<{
+  hasDocuments: boolean;
+  hasAny: boolean;
+}> {
   try {
     const messages = await prisma.message.findMany({
       where: {
         conversationId,
         isDeleted: false,
       },
-      include: {
+      select: {
         attachments: {
           select: {
+            id: true,
             fileType: true,
             fileName: true,
           },
@@ -116,36 +78,21 @@ async function hasDocumentAttachments(conversationId: string): Promise<boolean> 
     });
 
     const allAttachments = messages.flatMap(m => m.attachments);
+
+    if (allAttachments.length === 0) {
+      return { hasDocuments: false, hasAny: false };
+    }
+
     const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
       att.fileName && isSupportedDocumentExtension(att.fileName)
     );
-    
-    return documentAttachments.length > 0;
-  } catch {
-    return false;
-  }
-}
 
-async function hasAnyAttachments(conversationId: string): Promise<boolean> {
-  try {
-    const messages = await prisma.message.findMany({
-      where: {
-        conversationId,
-        isDeleted: false,
-      },
-      include: {
-        attachments: {
-          select: {
-            id: true,
-          },
-        },
-      },
-    });
-
-    const allAttachments = messages.flatMap(m => m.attachments);
-    return allAttachments.length > 0;
+    return {
+      hasDocuments: documentAttachments.length > 0,
+      hasAny: true,
+    };
   } catch {
-    return false;
+    return { hasDocuments: false, hasAny: false };
   }
 }
 
@@ -157,8 +104,6 @@ export async function routeContext(
   activeTool?: string | null,
   memoryEnabled: boolean = false,
   deepResearchEnabled: boolean = false,
-  apiKey?: string,
-  model?: string
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
   const normalized = textQuery.toLowerCase().trim();
@@ -195,14 +140,14 @@ export async function routeContext(
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
     metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
-    
+
     if (conversationId) {
-      const hasAttachments = await hasDocumentAttachments(conversationId);
-      if (hasAttachments) {
+      const attachmentInfo = await getAttachmentInfo(conversationId);
+      if (attachmentInfo.hasDocuments) {
         metadata.hasDocuments = true;
       }
     }
-    
+
     return { context: '', metadata };
   }
 
@@ -241,9 +186,9 @@ export async function routeContext(
     }
   }
 
-  const hasAttachmentsPromise = conversationId 
-    ? hasDocumentAttachments(conversationId)
-    : Promise.resolve(false);
+  const attachmentInfoPromise = conversationId
+    ? getAttachmentInfo(conversationId)
+    : Promise.resolve({ hasDocuments: false, hasAny: false });
 
   const ragPromise = getRAGContext(textQuery, userId, {
     conversationId,
@@ -284,23 +229,23 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const [ragResult, hasAttachments] = await Promise.all([ragPromise, hasAttachmentsPromise]);
+  const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
 
   if (ragResult) {
     metadata.hasDocuments = true;
     metadata.documentCount = ragResult.documentCount;
     metadata.skippedMemory = true;
-    
+
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.Hybrid;
       return { context: ragResult.context, metadata };
     }
-    
+
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     return { context: ragResult.context, metadata };
   }
 
-  if (hasAttachments) {
+  if (attachmentInfo.hasDocuments) {
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
     metadata.hasDocuments = true;
@@ -313,23 +258,17 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  // Skip memory search if conversation has any attachments
-  if (conversationId) {
-    const hasAnyAttachment = await hasAnyAttachments(conversationId);
-    if (hasAnyAttachment) {
-      metadata.skippedMemory = true;
-    }
+  // Skip memory search if conversation has any attachments (reuse existing info)
+  if (attachmentInfo.hasAny) {
+    metadata.skippedMemory = true;
   }
 
   if (!memoryEnabled || metadata.skippedMemory) {
     return { context: '', metadata };
   }
 
-  if (!apiKey || !model) {
-    return { context: '', metadata };
-  }
-
-  const needsMemory = await shouldQueryMemory(normalized, apiKey, model);
+  // Fast heuristic-based memory classification (no LLM call needed)
+  const needsMemory = shouldQueryMemory(normalized);
   if (!needsMemory) {
     return { context: '', metadata };
   }

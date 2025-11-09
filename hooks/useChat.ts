@@ -7,9 +7,10 @@ import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import type { UseChatOptions, UseChatReturn, MemoryStatus } from "@/types/chat";
-import { handleSendMessage } from "./chat/message-sender";
+import { handleSendMessage, continueIncompleteConversation } from "./chat/message-sender";
 import { handleEditMessage } from "./chat/message-editor";
 import { handleRegenerateResponse } from "./chat/message-regenerator";
+import { useStreaming } from "@/contexts/streaming-context";
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { initialMessages = [], conversationId: initialConversationId } = options;
@@ -22,14 +23,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const router = useRouter();
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
+  const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   useEffect(() => {
     const currentId = initialConversationId || null;
     const prevId = prevConversationIdRef.current;
-    
     const isNavigatingToExistingConversation = currentId !== null && prevId !== currentId && initialMessages.length > 0;
     const messagesJustLoaded = messages.length === 0 && initialMessages.length > 0 && currentId !== null;
-    
     if (isNavigatingToExistingConversation || messagesJustLoaded) {
       setMessages(initialMessages);
       setConversationId(currentId);
@@ -41,38 +41,53 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
       if (!content.trim() || isLoading) return;
 
-      setIsLoading(true);
-      setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const isNewConversation = !conversationId;
+      if (!isNewConversation) {
+        setIsLoading(true);
+        setMemoryStatus(undefined);
+        abortControllerRef.current = new AbortController();
+        startStreaming(conversationId, abortControllerRef.current);
+      }
 
-      await handleSendMessage(
-        content,
-        attachments,
-        {
-          messages,
-          conversationId,
-          abortSignal: abortControllerRef.current.signal,
-          queryClient,
-          onMessagesUpdate: setMessages,
-          onConversationIdUpdate: (id: string) => {
-            setConversationId(id);
-            prevConversationIdRef.current = id;
+      try {
+        await handleSendMessage(
+          content,
+          attachments,
+          {
+            messages,
+            conversationId,
+            abortSignal: isNewConversation ? new AbortController().signal : abortControllerRef.current!.signal,
+            queryClient,
+            onMessagesUpdate: setMessages,
+            onConversationIdUpdate: (id: string) => {
+              setConversationId(id);
+              prevConversationIdRef.current = id;
+              if (!isNewConversation) {
+                updateStreamingConversationId(id);
+              }
+            },
+            onNavigate: (path: string) => router.replace(path),
+            saveToCacheMutate: saveToCache.mutate,
+            onMemoryStatusUpdate: setMemoryStatus,
           },
-          onNavigate: (path: string) => router.replace(path),
-          saveToCacheMutate: saveToCache.mutate,
-          onMemoryStatusUpdate: setMemoryStatus,
-        },
-        session,
-        activeTool,
-        memoryEnabled,
-        deepResearchEnabled,
-        searchDepth
-      );
-
-      setIsLoading(false);
-      abortControllerRef.current = null;
+          session,
+          activeTool,
+          memoryEnabled,
+          deepResearchEnabled,
+          searchDepth
+        );
+        if (isNewConversation) {
+          return;
+        }
+      } finally {
+        if (!isNewConversation) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext();
+        }
+      }
     },
-    [messages, isLoading, saveToCache, conversationId, router, queryClient]
+    [messages, isLoading, saveToCache, conversationId, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]
   );
 
   const editMessage = useCallback(
@@ -83,29 +98,34 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setMemoryStatus(undefined);
       abortControllerRef.current = new AbortController();
 
-      await handleEditMessage(
-        messageId,
-        content,
-        attachments,
-        {
-          messages,
-          conversationId,
-          abortSignal: abortControllerRef.current.signal,
-          queryClient,
-          onMessagesUpdate: setMessages,
-          saveToCacheMutate: saveToCache.mutate,
-          onMemoryStatusUpdate: setMemoryStatus,
-        },
-        activeTool,
-        memoryEnabled,
-        deepResearchEnabled,
-        searchDepth
-      );
+      startStreaming(conversationId, abortControllerRef.current);
 
-      setIsLoading(false);
-      abortControllerRef.current = null;
+      try {
+        await handleEditMessage(
+          messageId,
+          content,
+          attachments,
+          {
+            messages,
+            conversationId,
+            abortSignal: abortControllerRef.current.signal,
+            queryClient,
+            onMessagesUpdate: setMessages,
+            saveToCacheMutate: saveToCache.mutate,
+            onMemoryStatusUpdate: setMemoryStatus,
+          },
+          activeTool,
+          memoryEnabled,
+          deepResearchEnabled,
+          searchDepth
+        );
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+        stopStreamingContext();
+      }
     },
-    [messages, isLoading, conversationId, saveToCache, queryClient]
+    [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const regenerateResponse = useCallback(
@@ -116,27 +136,69 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setMemoryStatus(undefined);
       abortControllerRef.current = new AbortController();
 
-      await handleRegenerateResponse(
-        messageId,
-        {
-          messages,
-          conversationId,
-          abortSignal: abortControllerRef.current.signal,
-          queryClient,
-          onMessagesUpdate: setMessages,
-          saveToCacheMutate: saveToCache.mutate,
-          onMemoryStatusUpdate: setMemoryStatus,
-        },
-        activeTool,
-        memoryEnabled,
-        deepResearchEnabled,
-        searchDepth
-      );
+      startStreaming(conversationId, abortControllerRef.current);
 
-      setIsLoading(false);
-      abortControllerRef.current = null;
+      try {
+        await handleRegenerateResponse(
+          messageId,
+          {
+            messages,
+            conversationId,
+            abortSignal: abortControllerRef.current.signal,
+            queryClient,
+            onMessagesUpdate: setMessages,
+            saveToCacheMutate: saveToCache.mutate,
+            onMemoryStatusUpdate: setMemoryStatus,
+          },
+          activeTool,
+          memoryEnabled,
+          deepResearchEnabled,
+          searchDepth
+        );
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+        stopStreamingContext();
+      }
     },
-    [messages, isLoading, conversationId, saveToCache, queryClient]
+    [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
+  );
+
+  const continueConversation = useCallback(
+    async ({ userMessage, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { userMessage: Message; session?: { user: { id: string } }; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
+      if (isLoading || !conversationId) return;
+
+      setIsLoading(true);
+      setMemoryStatus(undefined);
+      abortControllerRef.current = new AbortController();
+
+      startStreaming(conversationId, abortControllerRef.current);
+
+      try {
+        await continueIncompleteConversation(
+          userMessage,
+          {
+            messages,
+            conversationId,
+            abortSignal: abortControllerRef.current.signal,
+            queryClient,
+            onMessagesUpdate: setMessages,
+            saveToCacheMutate: saveToCache.mutate,
+            onMemoryStatusUpdate: setMemoryStatus,
+          },
+          session,
+          activeTool,
+          memoryEnabled,
+          deepResearchEnabled,
+          searchDepth
+        );
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+        stopStreamingContext();
+      }
+    },
+    [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const clearChat = useCallback(() => {
@@ -153,7 +215,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current = null;
     }
     setIsLoading(false);
-  }, []);
+    stopStreamingContext();
+  }, [stopStreamingContext]);
 
   useEffect(() => {
     return () => {
@@ -170,6 +233,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     sendMessage,
     editMessage,
     regenerateResponse,
+    continueConversation,
     clearChat,
     stopGeneration,
     memoryStatus,

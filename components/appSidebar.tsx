@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { MessageSquare, Plus, Loader, ListChecks, X, Trash2 } from "lucide-react";
+import { Plus, Loader, ListChecks, X, Trash2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTheme } from "next-themes";
+import Image from "next/image";
 import {
   Sidebar,
   SidebarContent,
@@ -30,20 +32,26 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
+import { useStreaming } from "@/contexts/streaming-context";
+import { NavigationGuardDialog } from "@/components/navigationGuardDialog";
 
 export function AppSidebar() {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const { theme } = useTheme();
   const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showGuardDialog, setShowGuardDialog] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const parentRef = useRef<HTMLDivElement>(null);
   const { isMobile, openMobile } = useSidebar();
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
+  const { isStreaming, stopStreaming } = useStreaming();
 
   const {
     conversations,
@@ -69,6 +77,10 @@ export function AppSidebar() {
   });
 
   useEffect(() => {
+    setImageLoaded(false);
+  }, [theme]);
+
+  useEffect(() => {
     if (!isFetchingNextPage) {
       fetchingRef.current = false;
     }
@@ -83,7 +95,7 @@ export function AppSidebar() {
       }, 100);
       return () => clearTimeout(timer);
     }
-    
+
     if (!isMobile && parentRef.current) {
       const timer = setTimeout(() => {
         virtualizer.measure();
@@ -95,7 +107,7 @@ export function AppSidebar() {
   useEffect(() => {
     const scrollElement = parentRef.current;
     const loader = loaderRef.current;
-    
+
     if (!scrollElement || !loader || conversations.length === 0 || !hasNextPage) return;
 
     const observer = new IntersectionObserver(
@@ -114,7 +126,7 @@ export function AppSidebar() {
     );
 
     observer.observe(loader);
-    
+
     const checkInitialLoad = setTimeout(() => {
       const { scrollHeight, clientHeight } = scrollElement;
       if (scrollHeight <= clientHeight && !fetchingRef.current) {
@@ -130,6 +142,15 @@ export function AppSidebar() {
   }, [hasNextPage, fetchNextPage, conversations.length, isMobile, openMobile]);
 
   const handleNewChat = () => {
+    if (isStreaming) {
+      setShowGuardDialog(true);
+    } else {
+      router.push("/");
+    }
+  };
+
+  const handleConfirmNewChat = () => {
+    stopStreaming();
     router.push("/");
   };
 
@@ -184,8 +205,19 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-linear-to-br from-primary/20 to-primary/10 text-foreground">
-                  <MessageSquare className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
+                  {!imageLoaded && (
+                    <div className="absolute inset-0 bg-linear-to-br from-primary/20 to-primary/10 animate-pulse" />
+                  )}
+                  <Image
+                    src={theme === "dark" ? "/dark.png" : "/light.png"}
+                    alt="Agentic chat logo"
+                    width={32}
+                    height={32}
+                    className="object-contain"
+                    onLoad={() => setImageLoaded(true)}
+                    priority
+                  />
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
                   <span className="font-semibold">Agentic chat</span>
@@ -303,7 +335,7 @@ export function AppSidebar() {
                       left: 0,
                       width: '100%',
                       transform: virtualizer.getVirtualItems()[0]
-                        ? `translateY(${virtualizer.getVirtualItems()[0].start}px)` 
+                        ? `translateY(${virtualizer.getVirtualItems()[0].start}px)`
                         : 'none',
                     }}
                   >
@@ -311,7 +343,7 @@ export function AppSidebar() {
                       virtualizer.getVirtualItems().map((virtualItem) => {
                         const conversation = conversations[virtualItem.index];
                         if (!conversation) return null;
-                        
+
                         return (
                           <ConversationItem
                             key={conversation.id}
@@ -380,6 +412,12 @@ export function AppSidebar() {
         selectedCount={selectedIds.size}
         onConfirm={handleBulkDelete}
         isDeleting={isBulkDeleting}
+      />
+      <NavigationGuardDialog
+        open={showGuardDialog}
+        onOpenChange={setShowGuardDialog}
+        onConfirm={handleConfirmNewChat}
+        destinationTitle="New Conversation"
       />
     </Sidebar>
   );

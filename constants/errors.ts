@@ -98,6 +98,7 @@ export const TOAST_ERROR_MESSAGES = {
     FAILED: "Upload failed",
     TOO_MANY_FILES: "Too many files",
     MAX_REACHED: "Maximum files reached",
+    UNSUPPORTED_FORMAT: "Unsupported image format",
   },
   CONVERSATION: {
     FAILED_CREATE: "Failed to create conversation",
@@ -116,6 +117,28 @@ export const TOAST_ERROR_MESSAGES = {
     FAILED_DELETE: "Failed to delete memory",
     FAILED_SEARCH: "Failed to search memories",
     FAILED_EXTRACT: "Failed to extract memories",
+  },
+  CONTEXT: {
+    LIMIT_REACHED: "Context limit reached",
+    LIMIT_REACHED_DESCRIPTION: "Start a new chat to continue",
+  },
+  TOOLS: {
+    ACTIVATED: "Tool activated",
+    DEACTIVATED: "Tool deactivated",
+    AUTH_REQUIRED_DESCRIPTION: "Please sign in to use tools",
+  },
+  DEEP_RESEARCH_UI: {
+    DEACTIVATED: "Deep Research deactivated",
+    LIMIT_REACHED: "Deep Research limit reached",
+    LIMIT_REACHED_DESCRIPTION: "You have used all your deep research requests for this month. Your message will be sent with standard processing.",
+    UNAVAILABLE: "Deep Research unavailable",
+    MONTHLY_LIMIT_DESCRIPTION: (limit: number, resetDate: string) =>
+      `You have used all ${limit} deep research requests for this month. Resets on ${resetDate}.`,
+  },
+  MEMORY_UI: {
+    ENABLED: "Memory enabled",
+    DISABLED: "Memory disabled",
+    AUTH_REQUIRED_DESCRIPTION: "Please sign in to use memory features",
   },
 } as const;
 

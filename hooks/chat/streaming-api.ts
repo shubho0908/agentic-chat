@@ -92,6 +92,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
               routingDecision: parsed.routingDecision,
               skippedMemory: parsed.skippedMemory,
               activeToolName: parsed.activeToolName,
+              tokenUsage: parsed.tokenUsage,
             });
           }
 

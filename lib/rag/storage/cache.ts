@@ -1,6 +1,6 @@
 'use server';
 
-import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "./pgvector-client";
+import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS, EMBEDDING_DIMENSIONS } from "./pgvector-client";
 import { ensurePgVectorTables } from './pgvector-init';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/api-utils';
@@ -8,6 +8,16 @@ import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from '@/lib/langsmith-config';
 
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
+
+function getVectorType(): string {
+  const FP32_MAX_DIMENSIONS = 2000;
+
+  if (EMBEDDING_DIMENSIONS <= FP32_MAX_DIMENSIONS) {
+    return 'vector';
+  } else {
+    return 'halfvec';
+  }
+}
 
 async function getOpenAIClient(userId: string): Promise<OpenAI> {
   const apiKey = await getUserApiKey(userId);
@@ -21,6 +31,7 @@ export async function generateEmbedding(text: string, userId: string): Promise<n
       model: EMBEDDING_MODEL,
       input: text,
     });
+
     return embeddingResponse.data[0].embedding;
   } catch (error) {
     throw new RAGError(
@@ -36,25 +47,21 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
     await ensurePgVectorTables();
     const pool = getPgPool();
 
+    const vectorType = getVectorType();
+    const cutoffTimestamp = new Date(Date.now() - (CACHE_TTL_SECONDS * 1000));
     const result = await pool.query(
-      `SELECT 
-        answer, 
-        created_at,
-        1 - (embedding <=> $1::vector) AS score
+      `SELECT
+        answer,
+        1 - (embedding <=> $1::${vectorType}) AS score
        FROM semantic_cache
        WHERE user_id = $2
-       ORDER BY embedding <=> $1::vector
+         AND created_at > $3
+       ORDER BY embedding <=> $1::${vectorType}
        LIMIT 1`,
-      [JSON.stringify(queryEmbedding), userId]
+      [JSON.stringify(queryEmbedding), userId, cutoffTimestamp]
     );
 
     if (result.rows.length > 0 && result.rows[0].score >= SIMILARITY_THRESHOLD) {
-      const cacheAge = (Date.now() - new Date(result.rows[0].created_at).getTime()) / 1000;
-      
-      if (cacheAge > CACHE_TTL_SECONDS) {
-        return null;
-      }
-      
       return result.rows[0].answer;
     }
 
@@ -72,10 +79,11 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
   try {
     await ensurePgVectorTables();
     const pool = getPgPool();
+    const vectorType = getVectorType();
 
     await pool.query(
       `INSERT INTO semantic_cache (user_id, question, answer, embedding)
-       VALUES ($1, $2, $3, $4::vector)`,
+       VALUES ($1, $2, $3, $4::${vectorType})`,
       [userId, userQuery, answer, JSON.stringify(queryEmbedding)]
     );
   } catch (error) {

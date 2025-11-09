@@ -1,18 +1,92 @@
-import type { Message, Attachment, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
-import { ToolStatus } from "@/lib/schemas/chat";
-import type { ConversationResult, MemoryStatus } from "@/types/chat";
+import type { Message, Attachment } from "@/lib/schemas/chat";
+import type { ConversationResult } from "@/types/chat";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { toast } from "sonner";
-import { buildMultimodalContent, extractTextFromContent } from "@/lib/content-utils";
+import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
-import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { saveUserMessage } from "./message-api";
-import { streamChatCompletion } from "./streaming-api";
-import { performCacheCheck } from "./cache-handler";
-import { handleConversationSaving, buildMessagesForAPI, generateTitle } from "./conversation-manager";
-import { storeConversationMemory } from "@/lib/memory";
-import type { SendMessageContext } from "@/types/chat-hooks";
+import { handleConversationSaving } from "./conversation-manager";
+import type { SendMessageContext, BaseChatContext } from "@/types/chat-hooks";
+import { handleStreamingResponse } from "./streaming-handler";
+
+export async function continueIncompleteConversation(
+  userMessage: Message,
+  context: BaseChatContext,
+  session?: { user: { id: string } },
+  activeTool?: string | null,
+  memoryEnabled?: boolean,
+  deepResearchEnabled?: boolean,
+  searchDepth?: SearchDepth
+): Promise<{ success: boolean; error?: string }> {
+  const {
+    messages,
+    conversationId,
+    abortSignal,
+    queryClient,
+    onMessagesUpdate,
+    saveToCacheMutate,
+    onMemoryStatusUpdate,
+  } = context;
+
+  if (!conversationId) {
+    return { success: false, error: "No conversation ID" };
+  }
+
+  const model = getModel();
+  if (!model) {
+    toast.error(TOAST_ERROR_MESSAGES.MODEL.NOT_SELECTED);
+    return { success: false, error: "No model selected" };
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  const existingEmptyAssistantId =
+    lastMessage?.role === "assistant" &&
+    !lastMessage.content &&
+    lastMessage.id &&
+    lastMessage.id.startsWith("assistant-")
+      ? lastMessage.id
+      : undefined;
+
+  const userTextContent = typeof userMessage.content === 'string'
+    ? userMessage.content
+    : userMessage.content;
+  const reconstructedContent = typeof userTextContent === 'string' && userMessage.attachments
+    ? buildMultimodalContent(userTextContent, userMessage.attachments)
+    : userMessage.content;
+
+  const result = await handleStreamingResponse(
+    {
+      messages: existingEmptyAssistantId ? messages.slice(0, -1) : messages,
+      conversationId,
+      userMessageContent: reconstructedContent,
+      userTimestamp: userMessage.timestamp ?? Date.now(),
+      userAttachments: userMessage.attachments,
+      model,
+      abortSignal,
+      queryClient,
+      session,
+      activeTool,
+      memoryEnabled,
+      deepResearchEnabled,
+      searchDepth,
+      existingAssistantMessageId: existingEmptyAssistantId,
+    },
+    {
+      onMessagesUpdate,
+      saveToCacheMutate,
+      onMemoryStatusUpdate,
+    }
+  );
+
+  if (!result.success && result.error && result.error !== "aborted") {
+    toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
+      description: result.error,
+    });
+  }
+
+  return result;
+}
 
 export async function handleSendMessage(
   content: string,
@@ -35,10 +109,7 @@ export async function handleSendMessage(
     saveToCacheMutate,
     onMemoryStatusUpdate,
   } = context;
-  
-  let shouldNavigate = false;
-  let navigationPath = '';
-  
+
   const model = getModel();
   if (!model) {
     toast.error(TOAST_ERROR_MESSAGES.MODEL.NOT_SELECTED);
@@ -55,30 +126,27 @@ export async function handleSendMessage(
     attachments,
   };
 
-  const assistantMessageId = `assistant-${Date.now()}`;
-  let assistantContent = "";
-  let savedUserMessageId = userMessage.id;
-  const toolActivities: ToolActivity[] = [];
-  let currentMemoryStatus: MemoryStatus | undefined;
-  let messageMetadata: MessageMetadata | undefined;
+  const isNewConversation = !conversationId;
+  const placeholderAssistantId = conversationId ? `assistant-pending-${conversationId}` : undefined;
 
-  onMessagesUpdate((prev) => [
-    ...prev,
-    userMessage,
-    {
-      role: "assistant",
-      content: "",
-      id: assistantMessageId,
-      timestamp: Date.now(),
-      model: model,
-      toolActivities: [],
-    },
-  ]);
+  if (!isNewConversation && placeholderAssistantId) {
+    onMessagesUpdate((prev) => [
+      ...prev,
+      userMessage,
+      {
+        role: "assistant",
+        content: "",
+        id: placeholderAssistantId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [],
+      },
+    ]);
+  }
 
   try {
     let currentConversationId = conversationId;
-    const isNewConversation = !currentConversationId;
-    
+
     if (isNewConversation) {
       await handleConversationSaving(
         true,
@@ -89,312 +157,75 @@ export async function handleSendMessage(
         queryClient,
         (data: ConversationResult) => {
           currentConversationId = data.conversationId;
-          savedUserMessageId = data.userMessageId;
           onConversationIdUpdate(data.conversationId);
-          onMessagesUpdate((prev) =>
-            prev.map((msg) => {
-              if (msg.id === userMessage.id) {
-                return { ...msg, id: data.userMessageId };
-              }
-              return msg;
-            })
-          );
-          shouldNavigate = true;
-          navigationPath = `/c/${data.conversationId}`;
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          onNavigate(`/c/${data.conversationId}`);
         },
         attachments,
         true,
         abortSignal,
-        messageMetadata
+        undefined
       );
-      
+
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
-      }
-    } else if (currentConversationId) {
-      const savedMsgId = await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
-      if (savedMsgId) {
-        savedUserMessageId = savedMsgId;
-        onMessagesUpdate((prev) =>
-          prev.map((msg) => {
-            if (msg.id === userMessage.id) {
-              return { ...msg, id: savedMsgId };
-            }
-            return msg;
-          })
-        );
-      }
-    }
-
-    const { cacheQuery, cacheData } = await performCacheCheck({
-      messages,
-      content: messageContent,
-      attachments,
-      abortSignal,
-      activeTool,
-      deepResearchEnabled,
-    });
-
-    if (cacheData.cached && cacheData.response && typeof cacheData.response === 'string') {
-      assistantContent = cacheData.response;
-      onMessagesUpdate((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? { ...msg, content: assistantContent }
-            : msg
-        )
-      );
-
-      if (currentConversationId) {
-        await handleConversationSaving(
-          false,
-          currentConversationId,
-          messageContent,
-          assistantContent,
-          userMessage.timestamp ?? Date.now(),
-          queryClient,
-          (data: ConversationResult) => {
-            onMessagesUpdate((prev) =>
-              prev.map((msg) => {
-                if (msg.id === assistantMessageId) {
-                  return { ...msg, id: data.assistantMessageId, metadata: messageMetadata };
-                }
-                return msg;
-              })
-            );
-          },
-          undefined,
-          false,
-          undefined,
-          messageMetadata
-        );
       }
 
       return { success: true };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, messageContent, DEFAULT_ASSISTANT_PROMPT);
+    if (!currentConversationId) {
+      throw new Error("Conversation ID is required for existing conversations");
+    }
 
-    const responseContent = await streamChatCompletion({
-      messages: messagesForAPI,
-      model,
-      signal: abortSignal,
-      onChunk: (fullContent) => {
-        onMessagesUpdate((prev) => {
-          const updated = prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? { ...msg, content: fullContent }
-              : msg
-          );
-          return updated;
-        });
-      },
-      conversationId: currentConversationId,
-      onMemoryStatus: (status) => {
-        currentMemoryStatus = status;
-        onMemoryStatusUpdate?.(status);
-      },
-      onToolCall: (toolCall) => {
-        const activity: ToolActivity = {
-          toolCallId: toolCall.toolCallId,
-          toolName: toolCall.toolName,
-          status: ToolStatus.Calling,
-          args: toolCall.args,
-          timestamp: Date.now(),
-        };
-        
-        toolActivities.push(activity);
-        
-        onMessagesUpdate((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? { ...msg, toolActivities: [...toolActivities] }
-              : msg
-          )
-        );
-      },
-      onToolResult: (toolResult) => {
-        const activityIndex = toolActivities.findIndex(
-          (a) => a.toolCallId === toolResult.toolCallId
-        );
-        
-        if (activityIndex !== -1) {
-          toolActivities[activityIndex] = {
-            ...toolActivities[activityIndex],
-            status: ToolStatus.Completed,
-            result: toolResult.result,
-            timestamp: Date.now(),
-          };
-          
-          onMessagesUpdate((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, toolActivities: [...toolActivities] }
-                : msg
-            )
-          );
-        }
-      },
-      onToolProgress: (progress) => {
-        if (currentMemoryStatus && onMemoryStatusUpdate) {
-          const updatedStatus: MemoryStatus = {
-            ...currentMemoryStatus,
-            toolProgress: {
-              status: progress.status,
-              message: progress.message,
-              details: {
-                ...(currentMemoryStatus.toolProgress?.details || {}),
-                ...(progress.details || {}),
-              },
-            },
-          };
-          currentMemoryStatus = updatedStatus;
-          onMemoryStatusUpdate(updatedStatus);
-          
-          if (progress.details) {
-            if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
-              const details = progress.details as { sources?: MessageMetadata['sources'] };
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
-              };
-            }
+    const savedMsgId = await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
+    if (savedMsgId) {
+      onMessagesUpdate((prev) =>
+        prev.map((msg) => (msg.id === userMessage.id ? { ...msg, id: savedMsgId } : msg))
+      );
+    }
 
-            if ('images' in progress.details && Array.isArray(progress.details.images)) {
-              const details = progress.details as { images?: MessageMetadata['images'] };
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                ...(details.images && details.images.length > 0 && { images: details.images }),
-              };
-            }
-            
-            const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
-            
-            if ('citations' in details && details.citations) {
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                citations: details.citations,
-              };
-            }
-            
-            if ('followUpQuestions' in details && details.followUpQuestions) {
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                followUpQuestions: details.followUpQuestions,
-              };
-            }
-          }
-        }
+    const result = await handleStreamingResponse(
+      {
+        messages,
+        conversationId: currentConversationId,
+        userMessageContent: messageContent,
+        userTimestamp: userMessage.timestamp ?? Date.now(),
+        userAttachments: attachments,
+        model,
+        abortSignal,
+        queryClient,
+        session,
+        activeTool,
+        memoryEnabled,
+        deepResearchEnabled,
+        searchDepth,
+        existingAssistantMessageId: placeholderAssistantId,
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deep-research-usage'] });
-      },
-      activeTool,
-      memoryEnabled: memoryEnabled ?? true,
-      deepResearchEnabled: deepResearchEnabled ?? false,
-      searchDepth: searchDepth ?? 'basic',
-    });
-
-    assistantContent = responseContent;
-
-    onMessagesUpdate((prev) =>
-      prev.map((msg) =>
-        msg.id === assistantMessageId
-          ? { ...msg, metadata: messageMetadata }
-          : msg
-      )
+      {
+        onMessagesUpdate,
+        saveToCacheMutate,
+        onMemoryStatusUpdate,
+      }
     );
 
-    if (assistantContent && !abortSignal.aborted) {
-      if (cacheQuery) {
-        saveToCacheMutate({
-          query: cacheQuery,
-          response: assistantContent,
-        });
-      }
-
-      if (currentConversationId) {
-        await handleConversationSaving(
-          false,
-          currentConversationId,
-          messageContent,
-          assistantContent,
-          userMessage.timestamp ?? Date.now(),
-          queryClient,
-          (data: ConversationResult) => {
-            onMessagesUpdate((prev) =>
-              prev.map((msg) => {
-                if (msg.id === assistantMessageId) {
-                  return { ...msg, id: data.assistantMessageId, metadata: messageMetadata };
-                }
-                return msg;
-              })
-            );
-          },
-          undefined,
-          false,
-          undefined,
-          messageMetadata
-        );
-      }
-
-      if (session?.user?.id && memoryEnabled === true && !deepResearchEnabled) {
-        const textContent = extractTextFromContent(messageContent);
-        storeConversationMemory(textContent, assistantContent, session.user.id).catch((err) => {
-          console.error('[Memory] Failed to store conversation memory:', err);
-        });
-      }
-    }
-
-    if (shouldNavigate && navigationPath && currentConversationId) {
-      const textContent = extractTextFromContent(messageContent);
-      queryClient.setQueryData(["conversation", currentConversationId], {
-        pages: [{
-          conversation: {
-            id: currentConversationId,
-            title: generateTitle(messageContent),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            isPublic: false,
-          },
-          messages: {
-            items: [
-                {
-                id: assistantMessageId,
-                role: "assistant" as const,
-                content: assistantContent,
-                createdAt: new Date().toISOString(),
-                ...(messageMetadata && { metadata: messageMetadata }),
-              },
-              {
-                id: savedUserMessageId,
-                role: "user" as const,
-                content: textContent,
-                createdAt: new Date(userMessage.timestamp ?? Date.now()).toISOString(),
-                attachments: attachments || [],
-              },
-            ],
-          },
-        }],
-        pageParams: [undefined],
+    if (!result.success && result.error && result.error !== "aborted") {
+      toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
+        description: result.error,
       });
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      onNavigate(navigationPath);
     }
 
-    return { success: true };
+    return result;
   } catch (err) {
     if ((err as Error).name === "AbortError") {
-      onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
       return { success: false, error: "aborted" };
     }
-    
+
     const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    
-    onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
+
     return { success: false, error: errorMessage };
   }
 }

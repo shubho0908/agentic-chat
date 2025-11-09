@@ -10,6 +10,7 @@ import type { YouTubeProgress, YouTubeVideo, YouTubeChapter } from '@/types/tool
 import { extractTranscript } from './transcript-extractor';
 import { analyzeVideo, type VideoAnalysis } from './analyzer';
 import { formatVideoForLLM, formatVideoError, formatSearchResults } from './structured-formatter';
+import { getCachedVideoAnalysis, cacheVideoAnalysis } from './cache';
 
 type YouTubeInput = z.infer<typeof youtubeParamsSchema>;
 
@@ -105,7 +106,32 @@ async function processVideo(
   totalVideos?: number
 ): Promise<ProcessedVideo> {
   const videoPrefix = videoNumber && totalVideos ? `[${videoNumber}/${totalVideos}] ` : '';
-  
+  const processingStartTime = Date.now();
+  onProgress?.({
+    status: 'extracting',
+    message: `${videoPrefix}Checking cache...`,
+    details: { currentVideoId: videoId, step: 'cache_check' },
+  });
+
+  const cachedResult = await getCachedVideoAnalysis(videoId, language);
+
+  if (cachedResult) {
+    console.log(`[YouTube Cache] HIT - videoId: ${videoId}, language: ${language}`);
+    onProgress?.({
+      status: 'completed',
+      message: `${videoPrefix}Retrieved from cache`,
+      details: { currentVideoId: videoId, step: 'cache_hit' },
+    });
+
+    return {
+      video: cachedResult.video,
+      transcriptText: cachedResult.transcriptText,
+      chapters: cachedResult.chapters,
+      analysis: cachedResult.analysis,
+    };
+  }
+
+  console.log(`[YouTube Cache] MISS - videoId: ${videoId}, language: ${language}`);
   onProgress?.({
     status: 'extracting',
     message: `${videoPrefix}Fetching video metadata...`,
@@ -198,6 +224,17 @@ async function processVideo(
       error: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }
+
+  const processingTimeMs = Date.now() - processingStartTime;
+  const resultToCache = {
+    video,
+    transcriptText,
+    transcriptSegments: transcript,
+    chapters,
+    analysis,
+  };
+
+  cacheVideoAnalysis(videoId, language, resultToCache, processingTimeMs);
 
   return {
     video,

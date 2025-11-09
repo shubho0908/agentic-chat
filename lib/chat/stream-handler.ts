@@ -274,7 +274,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     const visionResponse = await openai.chat.completions.create({
                       model,
                       messages: visionMessages,
-                      max_tokens: 2000,
                     });
                     
                     imageContext = visionResponse.choices[0]?.message?.content || '';

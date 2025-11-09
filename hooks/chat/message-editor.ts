@@ -7,7 +7,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { updateUserMessage, saveAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
-import { buildCacheQuery } from "./cache-handler";
+import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
@@ -46,7 +46,7 @@ export async function handleEditMessage(
   }
 
   const messageContent = buildMultimodalContent(newContent, attachments);
-  const assistantMessageId = `assistant-${Date.now()}`;
+  const placeholderAssistantId = `assistant-pending-${conversationId}`;
   const messagesUpToEdit = messages.slice(0, messageIndex);
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
@@ -78,7 +78,7 @@ export async function handleEditMessage(
     {
       role: "assistant",
       content: "",
-      id: assistantMessageId,
+      id: placeholderAssistantId,
       timestamp: Date.now(),
       model: model,
       toolActivities: [],
@@ -97,7 +97,8 @@ export async function handleEditMessage(
       }
     }
 
-    const cacheQuery = buildCacheQuery(messagesUpToEdit, messageContent);
+    const useCaching = shouldUseSemanticCache(attachments, activeTool, deepResearchEnabled);
+    const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
 
     const responseContent = await streamChatCompletion({
@@ -107,7 +108,7 @@ export async function handleEditMessage(
       onChunk: (fullContent) => {
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
-            msg.id === assistantMessageId
+            msg.id === placeholderAssistantId
               ? { ...msg, content: fullContent }
               : msg
           )
@@ -131,7 +132,7 @@ export async function handleEditMessage(
         
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
-            msg.id === assistantMessageId
+            msg.id === placeholderAssistantId
               ? { ...msg, toolActivities: [...toolActivities] }
               : msg
           )
@@ -152,7 +153,7 @@ export async function handleEditMessage(
           
           onMessagesUpdate((prev) =>
             prev.map((msg) =>
-              msg.id === assistantMessageId
+              msg.id === placeholderAssistantId
                 ? { ...msg, toolActivities: [...toolActivities] }
                 : msg
             )
@@ -221,7 +222,7 @@ export async function handleEditMessage(
 
     onMessagesUpdate((prev) =>
       prev.map((msg) =>
-        msg.id === assistantMessageId
+        msg.id === placeholderAssistantId
           ? { ...msg, metadata: messageMetadata }
           : msg
       )
@@ -248,7 +249,7 @@ export async function handleEditMessage(
               if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
                 return updateMessageWithVersions(msg, updatedMessageId, versions);
               }
-              if (msg.id === assistantMessageId) {
+              if (msg.id === placeholderAssistantId) {
                 return { ...msg, id: savedAssistantMessageId, metadata: messageMetadata };
               }
               return msg;

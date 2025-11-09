@@ -3,8 +3,11 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export const runtime = 'edge';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const baseUrl = new URL(request.url).origin;
+    const logoUrl = `${baseUrl}/light.png`;
+
     return new ImageResponse(
       (
         <div
@@ -17,7 +20,7 @@ export async function GET() {
             justifyContent: 'center',
             backgroundColor: '#0a0a0a',
             position: 'relative',
-            fontFamily: 'system-ui, sans-serif',
+            fontFamily: 'Helvetica, Arial, sans-serif',
             overflow: 'hidden',
           }}
         >
@@ -96,32 +99,15 @@ export async function GET() {
                 position: 'relative',
               }}
             >
-              <div
+              <img
+                src={logoUrl}
+                alt="Agentic Chat"
+                width="120"
+                height="120"
                 style={{
-                  position: 'absolute',
-                  width: '180px',
-                  height: '180px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)',
-                  filter: 'blur(40px)',
+                  objectFit: 'contain',
                 }}
               />
-              <div
-                style={{
-                  width: '120px',
-                  height: '120px',
-                  borderRadius: '30px',
-                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.2) 100%)',
-                  border: '3px solid rgba(139, 92, 246, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '64px',
-                  boxShadow: '0 0 60px rgba(139, 92, 246, 0.3)',
-                }}
-              >
-                💬
-              </div>
             </div>
 
             {/* Title with gradient text */}

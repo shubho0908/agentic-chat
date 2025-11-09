@@ -19,6 +19,17 @@ export enum ToolProgressStatus {
   Completed = 'completed',
 }
 
+export interface TokenUsage {
+  used: number;
+  limit: number;
+  remaining: number;
+  percentage: number;
+  breakdown: {
+    conversation: number;
+    images: number;
+  };
+}
+
 export interface MemoryStatus {
   hasMemories: boolean;
   hasDocuments: boolean;
@@ -31,6 +42,7 @@ export interface MemoryStatus {
   routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
   activeToolName?: string;
+  tokenUsage?: TokenUsage;
   toolProgress?: {
     status: ToolProgressStatus | string;
     message: string;
@@ -45,18 +57,18 @@ export interface MemoryStatus {
       searchDepth?: SearchDepth;
       phase?: number;
       totalPhases?: number;
-      
+
       // YouTube fields
       videoCount?: number;
       videos?: YouTubeVideo[];
       failedCount?: number;
       currentVideo?: YouTubeVideo;
-      
+
       // Google Suite fields
       operation?: string;
       tool?: string;
       error?: string;
-      
+
       // Deep research fields
       status?: string; // Deep research status
       gateDecision?: GateDecision;
@@ -133,12 +145,22 @@ export interface RegenerateMessageOptions {
   searchDepth?: SearchDepth;
 }
 
+export interface ContinueConversationOptions {
+  userMessage: Message;
+  session?: { user: { id: string } };
+  activeTool?: string | null;
+  memoryEnabled?: boolean;
+  deepResearchEnabled?: boolean;
+  searchDepth?: SearchDepth;
+}
+
 export interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
   sendMessage: (options: SendMessageOptions) => Promise<void>;
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
+  continueConversation: (options: ContinueConversationOptions) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
   memoryStatus?: MemoryStatus;

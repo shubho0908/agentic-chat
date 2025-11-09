@@ -162,3 +162,32 @@ model DeepResearchUsage {
   @@unique([userId, year, month])
   @@map("deep_research_usage")
 }
+
+model YouTubeVideoCache {
+  id       String @id @default(cuid())
+  videoId  String
+  language String @default("en")
+
+  title        String
+  channelName  String?
+  duration     String?
+  url          String
+  thumbnailUrl String?
+  publishedAt  String?
+  viewCount    Int?
+
+  transcriptText     String @db.Text
+  transcriptSegments Json   @db.JsonB
+  chapters           Json   @db.JsonB
+  analysisResult Json @db.JsonB
+  createdAt      DateTime @default(now())
+  lastAccessedAt DateTime @default(now())
+  accessCount    Int      @default(0)
+  processingTime Int?
+
+  @@unique([videoId, language])
+  @@index([lastAccessedAt])
+  @@index([createdAt])
+  @@index([accessCount])
+  @@map("youtube_video_cache")
+}

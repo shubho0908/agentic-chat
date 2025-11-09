@@ -13,6 +13,7 @@ import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
+import { calculateTokenUsage } from '@/lib/utils/token-counter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -74,9 +75,7 @@ export async function POST(request: NextRequest) {
             conversationId,
             activeTool,
             memoryEnabled,
-            deepResearchEnabled,
-            apiKey,
-            model
+            deepResearchEnabled
           );
         },
         {
@@ -96,6 +95,13 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       console.error('[Context Routing Error]', error);
+    }
+
+    try {
+      const tokenUsage = calculateTokenUsage(enhancedMessages, model);
+      memoryStatusInfo.tokenUsage = tokenUsage;
+    } catch (error) {
+      console.error('[Token Counting Error]', error);
     }
 
     const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
