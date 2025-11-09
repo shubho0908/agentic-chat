@@ -197,6 +197,9 @@ importers:
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
+      youtube-transcript:
+        specifier: ^1.2.1
+        version: 1.2.1
       youtubei.js:
         specifier: ^16.0.1
         version: 16.0.1
@@ -6852,6 +6855,10 @@ packages:
 
   yoga-layout@3.2.1:
     resolution: {integrity: sha512-0LPOt3AxKqMdFBZA3HBAt/t/8vIKq7VaQYbuA8WxCgung+p9TVyKRYdpvCb80HcdTN2NkbIKbhNwKUfm3tQywQ==}
+
+  youtube-transcript@1.2.1:
+    resolution: {integrity: sha512-TvEGkBaajKw+B6y91ziLuBLsa5cawgowou+Bk0ciGpjELDfAzSzTGXaZmeSSkUeknCPpEr/WGApOHDwV7V+Y9Q==}
+    engines: {node: '>=18.0.0'}
 
   youtubei.js@16.0.1:
     resolution: {integrity: sha512-3802bCAGkBc2/G5WUTc0l/bO5mPYJbQAHL04d9hE9PnrDHoBUT8MN721Yqt4RCNncAXdHcfee9VdJy3Fhq1r5g==}
@@ -14669,6 +14676,8 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoga-layout@3.2.1: {}
+
+  youtube-transcript@1.2.1: {}
 
   youtubei.js@16.0.1:
     dependencies:
