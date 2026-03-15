@@ -1,0 +1,267 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "en-US"
+
+tone_instructions: "Be direct and precise. Flag concrete bugs, security issues, regressions, and edge cases. Prioritize authentication, streaming correctness, Prisma data integrity, and client/server boundary mistakes."
+
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  high_level_summary_instructions: |
+    Summarize the actual changes in this Next.js app.
+    - Call out security-sensitive changes first when `app/api/**`, `lib/auth*.ts`, `lib/tools/**`, `lib/encryption.ts`, `prisma/**`, or `.github/**` are touched.
+    - Mention user-facing behavior changes in chat, auth, uploads, sharing, memory, RAG, deep research, YouTube, or Google Workspace.
+    - Flag migration, env var, or data model risks explicitly.
+    - Use bullets only.
+  poem: false
+  review_status: true
+  review_details: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  suggested_labels: true
+  auto_apply_labels: true
+  enable_prompt_for_ai_agents: true
+  abort_on_close: true
+
+  labeling_instructions:
+    - label: "security"
+      instructions: "Apply when the diff touches auth, OAuth, Better Auth config, encryption, API key handling, uploads, share links, request validation, secrets, `app/api/**`, `lib/auth*.ts`, `lib/encryption.ts`, or `prisma/**`."
+    - label: "streaming"
+      instructions: "Apply when the diff touches `app/api/chat/completions/route.ts`, `lib/chat/**`, streaming helpers, or client chat code that consumes streamed responses."
+    - label: "breaking-change"
+      instructions: "Apply when the diff changes Prisma schema/models, route response contracts used by the client, exported types/constants under `types/`, `constants/`, or `lib/`, or adds/renames required environment variables."
+    - label: "performance"
+      instructions: "Apply when the diff changes caching, token counting, vector retrieval, Prisma query patterns, large client rendering paths, or tool/stream throughput."
+    - label: "ai-agent"
+      instructions: "Apply when the diff modifies `.agent/**` or `.agents/**`."
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "SKIP REVIEW"
+    base_branches:
+      - "^main$"
+
+  path_filters:
+    - "!**/.next/**"
+    - "!**/node_modules/**"
+    - "!**/*.generated.ts"
+
+  path_instructions:
+    - path: "app/api/chat/completions/route.ts"
+      instructions: |
+        This is the main streaming chat endpoint for Agentic Chat. Review it as critical infrastructure.
+
+        Focus on:
+        - Authentication must happen before any stream work starts.
+        - The SSE/streaming response must always terminate cleanly on success, error, and abort.
+        - Abort signals must propagate to long-running tool execution and upstream model calls.
+        - Do not allow silent hangs if OpenAI/tool execution fails mid-stream.
+        - Validate request bodies defensively; never trust `request.json()` shape.
+        - Do not leak decrypted API keys, raw prompts, raw model responses, or stack traces.
+        - Watch for token usage work, Prisma reads, and context routing happening in avoidable serial order on the hot path.
+
+    - path: "app/api/**"
+      instructions: |
+        These are Next.js route handlers, not Express routes.
+
+        Review for:
+        - AuthN/AuthZ on every route that reads or mutates user data.
+        - Correct Next.js 15 handler usage (`headers()`, `cookies()`, `NextRequest`, `Response`).
+        - Zod/schema validation or equivalent before trusting body/query input.
+        - No sensitive details in JSON error responses.
+        - Safe redirects only; reject untrusted callback/return URLs.
+        - File upload and URL scraping routes must validate content type, size, and ownership server-side.
+
+    - path: "app/**/*.tsx"
+      instructions: |
+        This is a Next.js App Router UI.
+
+        Review for:
+        - `'use client'` only where browser APIs/hooks are required.
+        - No server-only secrets serialized into client props.
+        - `target=\"_blank\"` links must include `rel=\"noreferrer noopener\"`.
+        - Protected settings/share/chat routes should not accidentally become public through client-only gating.
+        - Public pages should keep metadata accurate when route-level metadata changes.
+
+    - path: "components/chat/**"
+      instructions: |
+        This is the live chat surface for Agentic Chat.
+
+        Review for:
+        - Stream lifecycle cleanup on unmount or conversation switch.
+        - No quadratic string accumulation or unnecessary rerenders while streaming.
+        - Draft preservation, file attachment state, and tool state must survive expected UX flows.
+        - Keyboard accessibility on chat controls, tool menus, drawers, and dialogs.
+        - Any Google Workspace, deep research, or upload gating must not strand the user in a broken state.
+
+    - path: "components/**/*.tsx"
+      instructions: |
+        Review UI changes for accessibility and boundary safety.
+
+        Focus on:
+        - Buttons/menus/dialogs remain keyboard accessible.
+        - Interactive elements have labels or visible text.
+        - `dangerouslySetInnerHTML` must be absent or explicitly sanitized.
+        - External links and file previews must not trust arbitrary URLs.
+
+    - path: "lib/chat/**"
+      instructions: |
+        This folder contains the core streaming, tool execution, and message transformation logic.
+
+        Review for:
+        - Stream chunks are encoded consistently and terminate correctly.
+        - Errors are surfaced to the client instead of being swallowed.
+        - No unbounded buffering or runaway loops during tool execution.
+        - Long-running tool paths should respect abort signals.
+        - Avoid duplicate Prisma reads or expensive work inside tight streaming loops.
+
+    - path: "lib/tools/**"
+      instructions: |
+        These are tool integrations for web search, deep research, YouTube, Google Workspace, and related orchestration.
+
+        Review for:
+        - Least-privilege auth and scope handling.
+        - Safe prompt/tool argument construction; user input should not become trusted structured instructions without validation.
+        - External API failures, timeouts, retries, and partial-result behavior.
+        - Any persisted token/scope/account metadata must stay internally consistent.
+        - Watch for accidental logging of third-party responses, access tokens, or user content.
+
+    - path: "{lib/auth.ts,lib/auth-client.ts,lib/encryption.ts,app/api/auth/**}"
+      instructions: |
+        Authentication and secret-handling code.
+
+        Review for:
+        - Better Auth config changes that weaken session or OAuth guarantees.
+        - Tokens/secrets only from env or secure storage, never localStorage for server secrets.
+        - Safe callback URL handling and CSRF/state protection in OAuth flows.
+        - Logout should invalidate the real session, not only clear client state.
+        - Encryption changes must preserve confidentiality and decryption failure handling.
+
+    - path: "prisma/**"
+      instructions: |
+        Database schema and persistence layer.
+
+        Review for:
+        - Backward compatibility and data migration risk.
+        - Correct uniqueness/index choices for conversations, auth, cache, and usage tracking.
+        - Cascades and relations that could delete user data unexpectedly.
+        - Schema changes that require corresponding client/type/env updates.
+
+    - path: ".github/**"
+      instructions: |
+        CI/CD for this repo.
+
+        Review for:
+        - Third-party actions pinned appropriately.
+        - `GITHUB_TOKEN` permissions minimal.
+        - pnpm/node versions consistent with the repo.
+        - CI actually runs the commands this repo relies on (`pnpm run lint`, build, env bootstrap).
+
+    - path: "{.agent/**,.agents/**}"
+      instructions: |
+        Review skills/agent instructions for:
+        - Secrets or internal URLs accidentally committed.
+        - Over-broad instructions that increase prompt-injection risk.
+        - Scope creep beyond what this repo actually needs.
+
+    - path: "tsconfig.json"
+      instructions: |
+        This repo already uses `strict: true` with Next.js bundler resolution.
+
+        If this file changes, focus on:
+        - Whether strictness is weakened.
+        - Whether path aliases still match the repo layout.
+        - Whether changes could hide real runtime bugs in `app/`, `components/`, or `lib/`.
+
+    - path: "**/*.ts"
+      instructions: |
+        Codebase-wide TypeScript rules:
+        - Flag `any` unless truly unavoidable and justified.
+        - Flag unsafe `as` casts without a real runtime check nearby.
+        - Flag non-null assertions on values that can realistically be absent.
+        - Exported async functions should have clear return shapes.
+        - Catch blocks should not silently discard important failure context.
+
+    - path: "**/*.tsx"
+      instructions: |
+        Apply the TypeScript rules above plus:
+        - Optional props should behave as optional in practice.
+        - Event handler types should be explicit when the element type matters.
+        - Dynamic lists need stable keys.
+
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+
+  pre_merge_checks:
+    title:
+      mode: error
+      requirements: "Must follow Conventional Commits format: type(scope): description. Valid types: feat, fix, chore, refactor, perf, test, docs, ci, build, revert. Description must be lowercase and must not end with a period."
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    docstrings:
+      mode: off
+    custom_checks:
+      - name: "Env vars documented"
+        mode: error
+        instructions: "If a diff adds a new `process.env.*` reference or changes a required env var name, make sure `.env.example` is updated in the same PR."
+
+  tools:
+    eslint:
+      enabled: true
+    actionlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    yamllint:
+      enabled: true
+    dotenvLint:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 120000
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
+  mcp:
+    usage: enabled
+
+code_generation:
+  docstrings:
+    language: "en-US"
+    path_instructions: []
+  unit_tests:
+    path_instructions: []
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: true
