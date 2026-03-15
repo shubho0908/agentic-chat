@@ -110,6 +110,9 @@ export function ToolsMenu({
     googleSuiteStatus: {
       authorized: googleSuiteStatus?.authorized ?? false,
       loading: googleSuiteLoading,
+      workspaceConnected: googleSuiteStatus?.workspaceConnected ?? false,
+      grantedScopes: googleSuiteStatus?.grantedScopes ?? [],
+      missingScopes: googleSuiteStatus?.missingScopes ?? [],
     },
     onToolSelect: handleToolSelect,
   };

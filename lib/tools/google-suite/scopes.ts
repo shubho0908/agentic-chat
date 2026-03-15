@@ -60,17 +60,58 @@ export const GOOGLE_WORKSPACE_SCOPES = [
 
 export const ALL_GOOGLE_SUITE_SCOPES = [...GOOGLE_WORKSPACE_SCOPES];
 
+const IMPLIED_SCOPE_GRANTS: Record<string, string[]> = {
+  [GOOGLE_SCOPES.GMAIL_READONLY]: [GOOGLE_SCOPES.GMAIL_MODIFY],
+  [GOOGLE_SCOPES.DRIVE_READONLY]: [GOOGLE_SCOPES.DRIVE],
+  [GOOGLE_SCOPES.CALENDAR_READONLY]: [GOOGLE_SCOPES.CALENDAR],
+  [GOOGLE_SCOPES.DOCS_READONLY]: [GOOGLE_SCOPES.DOCS],
+  [GOOGLE_SCOPES.SHEETS_READONLY]: [GOOGLE_SCOPES.SHEETS],
+  [GOOGLE_SCOPES.SLIDES_READONLY]: [GOOGLE_SCOPES.SLIDES],
+};
+
 export function getGrantedGoogleScopes(scope?: string | null): Set<string> {
   if (!scope) {
     return new Set();
   }
 
-  return new Set(scope.split(/\s+/).map((value) => value.trim()).filter(Boolean));
+  return new Set(scope.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean));
+}
+
+export function getGrantedGoogleWorkspaceScopes(scope?: string | null): string[] {
+  const grantedScopes = getGrantedGoogleScopes(scope);
+
+  return Array.from(grantedScopes).filter(
+    (grantedScope) => !SCOPE_GROUPS.SIGN_IN.includes(grantedScope as (typeof SCOPE_GROUPS.SIGN_IN)[number])
+  );
+}
+
+export function hasAnyGoogleWorkspaceScopes(scope?: string | null): boolean {
+  return getGrantedGoogleWorkspaceScopes(scope).length > 0;
+}
+
+export function hasGrantedGoogleScope(
+  grantedScopes: Iterable<string>,
+  requiredScope: string
+): boolean {
+  const grantedSet = grantedScopes instanceof Set ? grantedScopes : new Set(grantedScopes);
+
+  if (grantedSet.has(requiredScope)) {
+    return true;
+  }
+
+  return (IMPLIED_SCOPE_GRANTS[requiredScope] ?? []).some((scope) => grantedSet.has(scope));
+}
+
+export function getMissingGoogleScopes(
+  requiredScopes: string[],
+  grantedScopes: Iterable<string>
+): string[] {
+  return requiredScopes.filter((requiredScope) => !hasGrantedGoogleScope(grantedScopes, requiredScope));
 }
 
 export function getMissingGoogleWorkspaceScopes(scope?: string | null): string[] {
   const grantedScopes = getGrantedGoogleScopes(scope);
-  return GOOGLE_WORKSPACE_SCOPES.filter((requiredScope) => !grantedScopes.has(requiredScope));
+  return getMissingGoogleScopes(GOOGLE_WORKSPACE_SCOPES, grantedScopes);
 }
 
 export function hasGoogleWorkspaceScopes(scope?: string | null): boolean {

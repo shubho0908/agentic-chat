@@ -29,9 +29,15 @@ interface BYOKProps {
   autoOpen?: boolean;
   onConfigured?: (configured: boolean) => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
+  hiddenTrigger?: boolean;
 }
 
-export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps = {}) {
+export function BYOK({
+  autoOpen = false,
+  onConfigured,
+  triggerRef,
+  hiddenTrigger = false,
+}: BYOKProps = {}) {
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
@@ -142,10 +148,14 @@ export function BYOK({ autoOpen = false, onConfigured, triggerRef }: BYOKProps =
           size="sm"
           className={cn(
             "gap-2 rounded-xl transition-all",
+            hiddenTrigger &&
+              "pointer-events-none absolute h-0 w-0 overflow-hidden border-0 p-0 opacity-0",
             isConfigured
               ? "shadow-sm hover:shadow-md"
               : "shadow-md hover:shadow-lg"
           )}
+          tabIndex={hiddenTrigger ? -1 : 0}
+          aria-hidden={hiddenTrigger}
         >
           {isConfigured ? (
             <>

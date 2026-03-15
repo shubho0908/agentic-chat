@@ -39,6 +39,9 @@ interface ToolsDrawerProps {
   googleSuiteStatus?: {
     authorized: boolean;
     loading: boolean;
+    workspaceConnected: boolean;
+    grantedScopes: string[];
+    missingScopes: string[];
   };
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }

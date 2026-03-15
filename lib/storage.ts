@@ -1,4 +1,5 @@
 import type { SearchDepth } from './schemas/web-search.tools';
+import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
@@ -8,6 +9,8 @@ const STORAGE_KEYS = {
   SEARCH_DEPTH: 'agentic-chat-search-depth',
   PENDING_GOOGLE_WORKSPACE_QUERY: 'agentic-chat-pending-google-workspace-query',
 } as const;
+
+const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
 
 function isLocalStorageAvailable(): boolean {
   try {
@@ -37,7 +40,18 @@ export function getModel(): string | null {
     return null;
   }
   try {
-    return localStorage.getItem(STORAGE_KEYS.OPENAI_MODEL);
+    const storedModel = localStorage.getItem(STORAGE_KEYS.OPENAI_MODEL);
+
+    if (!storedModel) {
+      return null;
+    }
+
+    if (!VALID_OPENAI_MODELS.has(storedModel)) {
+      localStorage.setItem(STORAGE_KEYS.OPENAI_MODEL, DEFAULT_MODEL);
+      return DEFAULT_MODEL;
+    }
+
+    return storedModel;
   } catch {
     return null;
   }
@@ -178,4 +192,3 @@ export function clearPendingGoogleWorkspaceQuery(): void {
 }
 
 export { STORAGE_KEYS };
-

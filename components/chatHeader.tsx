@@ -41,10 +41,7 @@ export function ChatHeader({
       )}
       <div className="flex items-center gap-2 md:ml-0 ml-auto">
       {isPending ? (
-        <>
-          <Skeleton className="h-9 w-24 rounded-xl" />
-          <Skeleton className="size-9 rounded-full" />
-        </>
+        <Skeleton className="size-9 rounded-full" />
       ) : (
         <>
           {session ? (
@@ -70,8 +67,9 @@ export function ChatHeader({
                 autoOpen={autoOpenByok}
                 onConfigured={onConfigured}
                 triggerRef={byokTriggerRef}
+                hiddenTrigger
               />
-              <UserMenu />
+              <UserMenu byokTriggerRef={byokTriggerRef} />
             </>
           ) : (
             <>

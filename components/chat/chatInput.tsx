@@ -1,6 +1,6 @@
 import { ClipboardEvent, useState, useEffect } from "react";
 import { toast } from "sonner";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
 import { ChatInputForm } from "./chatInputForm";
@@ -15,21 +15,21 @@ import type { ToolId } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
-import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
-import { inferGoogleWorkspaceScopes } from "@/lib/tools/google-suite/scopes";
+import { getMissingGoogleScopes, inferGoogleWorkspaceScopes } from "@/lib/tools/google-suite/scopes";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
   removeActiveTool,
+  getPendingGoogleWorkspaceQuery,
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
   getDeepResearchEnabled as getStoredDeepResearchEnabled,
   setDeepResearchEnabled as storeDeepResearchEnabled,
   getSearchDepth as getStoredSearchDepth,
   setSearchDepth as storeSearchDepth,
-  getPendingGoogleWorkspaceQuery,
   setPendingGoogleWorkspaceQuery,
   clearPendingGoogleWorkspaceQuery,
 } from "@/lib/storage";
@@ -66,8 +66,7 @@ export function ChatInput({
   const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage({ enabled: !!session });
   const { status: googleSuiteStatus, isLoading: googleSuiteAuthLoading } = useGoogleSuiteAuth({ enabled: !!session });
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     if (!isPending) {
@@ -131,7 +130,7 @@ export function ChatInput({
     setInput(pendingQuery);
     clearPendingGoogleWorkspaceQuery();
     toast.success("Google Workspace request restored", {
-      description: "Your draft was restored after the permission flow.",
+      description: "Your draft was restored after the permissions flow.",
       duration: 3000,
     });
   }, [activeTool, input, session, setInput]);
@@ -193,25 +192,22 @@ export function ChatInput({
       }
 
       const requiredScopes = inferGoogleWorkspaceScopes(input);
-      const grantedScopes = new Set(googleSuiteStatus?.grantedScopes ?? []);
-      const missingRequiredScopes = requiredScopes.filter((scope) => !grantedScopes.has(scope));
+      const missingRequiredScopes = getMissingGoogleScopes(
+        requiredScopes,
+        googleSuiteStatus?.grantedScopes ?? []
+      );
 
       if (missingRequiredScopes.length > 0) {
-        const query = searchParams?.toString();
-        const callbackURL = query ? `${pathname}?${query}` : pathname || "/";
-
         setPendingGoogleWorkspaceQuery(input);
-
-        try {
-          await authorizeGoogleWorkspace(callbackURL, requiredScopes);
-        } catch (error) {
-          console.error("Google Workspace authorization error:", error);
-          clearPendingGoogleWorkspaceQuery();
-          toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
-            description: "We couldn't start Google Workspace permissions. Please try again.",
-          });
-        }
-
+        toast.error("Google Workspace access needed", {
+          description:
+            "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
+          action: {
+            label: "Open settings",
+            onClick: () => router.push("/settings/google-workspace"),
+          },
+          duration: 6000,
+        });
         return;
       }
     }
