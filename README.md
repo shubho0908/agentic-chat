@@ -18,11 +18,14 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **Rate Limiting & Usage Tracking** - Built-in cost management
 
 ### 🤖 Multi-Model Support
-- **GPT-5 Series**: GPT-5, GPT-5 Mini, GPT-5 Nano (with extended reasoning)
-- **GPT-4.1 Series**: GPT-4.1, GPT-4.1 Mini, GPT-4.1 Nano
-- **GPT-4o Series**: GPT-4o, GPT-4o Mini
+- **GPT-5.4** ⭐ Recommended
+- **GPT-5.2**
+- **GPT-5.2 Codex**
+- **GPT-5**
+- **GPT-5 Mini**
+- **GPT-5 Nano**
 - **Vision Capabilities**: All models support multimodal input (text + images)
-- Context windows up to 1M+ tokens
+- **Extended Reasoning**: All models include chain-of-thought reasoning support
 
 ### 🛠️ Specialized Tools
 
@@ -112,39 +115,51 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 ## Tech Stack
 
 ### Frontend
-- **Next.js 15** - React framework with App Router
-- **React 19** - Latest React features
-- **TanStack Query** - Data fetching and caching
+- **Next.js 15.5** - React framework with App Router
+- **React 19.1** - Latest React features
+- **TanStack Query v5** - Data fetching and caching
+- **TanStack Virtual v3** - Virtualized list rendering
 - **Tailwind CSS 4** - Utility-first styling
-- **Radix UI** - Accessible components
-- **Framer Motion** - Animations
-- **Shiki** - Syntax highlighting
+- **Radix UI** - Accessible component primitives
+- **Framer Motion v12** - Animations
+- **highlight.js + rehype-highlight** - Syntax highlighting
+- **react-markdown + remark-gfm** - Markdown rendering with GFM support
+- **Lucide React** - Icon library
+- **Sonner** - Toast notifications
+- **Vaul** - Drawer component
+- **next-themes** - Dark/light theme management
 
 ### Backend
 - **PostgreSQL** - Primary database
-- **Prisma** - ORM and migrations
+- **Prisma v6** - ORM and migrations
 - **pgvector** - Vector similarity search
-- **Better Auth** - Authentication
-- **UploadThing** - File uploads
+- **Better Auth v1.5** - Authentication
+- **UploadThing v7** - File uploads
+- **Zod v4** - Schema validation and type safety
+- **jose** - JSON Web Token handling
 
 ### AI & ML
-- **OpenAI API** - LLM inference with vision support
-- **LangChain** - Agent orchestration
-- **LangGraph** - Multi-agent workflows
+- **OpenAI SDK v6** - LLM inference with vision support
+- **LangChain** - Agent orchestration (`@langchain/core`, `@langchain/community`, `@langchain/openai`)
+- **LangGraph v0.4** - Multi-agent workflows
 - **LangSmith** - LLM observability and tracing
 - **Cohere** - Reranking
 - **Tavily** - Web search
-- **mem0** - Conversation memory
-- **Google APIs** - YouTube Data API & Google Workspace APIs
+- **mem0** (`@mem0/vercel-ai-provider`) - Conversation memory
+- **tiktoken** - Token counting and context limit tracking
+- **Google APIs v171** - YouTube Data API & Google Workspace APIs
 
 ### Document Processing
 - **pdf-parse** - PDF text extraction
 - **mammoth** - DOCX processing
 - **word-extractor** - DOC files
 - **xlsx** - Spreadsheet parsing
-- **youtube-transcript** - YouTube caption extraction
+- **youtube-transcript** - YouTube caption extraction (primary)
+- **youtubei.js v16** - YouTube fallback client for transcripts and metadata
 - **@mozilla/readability** - Article content extraction
 - **cheerio** - HTML parsing and manipulation
+- **linkedom** - DOM parsing for server-side environments
+- **@react-pdf/renderer v4** - Server-side PDF export generation
 
 ## Architecture
 
