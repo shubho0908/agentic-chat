@@ -1,4 +1,4 @@
-import { ClipboardEvent, useState, useEffect } from "react";
+import { ClipboardEvent, useEffect, useReducer } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { ChatInputHeader } from "./chatInputHeader";
@@ -46,6 +46,79 @@ interface ChatInputProps {
   conversationId?: string | null;
 }
 
+interface ChatInputUiState {
+  isSending: boolean;
+  activeTool: ToolId | null;
+  memoryEnabled: boolean;
+  deepResearchEnabled: boolean;
+  searchDepth: SearchDepth;
+}
+
+type ChatInputUiAction =
+  | { type: "hydrate"; payload: Partial<ChatInputUiState> }
+  | { type: "reset-session" }
+  | { type: "set-sending"; isSending: boolean }
+  | { type: "set-memory"; enabled: boolean }
+  | { type: "set-deep-research"; enabled: boolean }
+  | { type: "activate-tool"; toolId: ToolId; searchDepth?: SearchDepth }
+  | { type: "deactivate-tool" };
+
+const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
+  isSending: false,
+  activeTool: null,
+  memoryEnabled: false,
+  deepResearchEnabled: false,
+  searchDepth: "basic",
+};
+
+function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction): ChatInputUiState {
+  switch (action.type) {
+    case "hydrate":
+      return { ...state, ...action.payload };
+    case "reset-session":
+      return {
+        ...state,
+        activeTool: null,
+        memoryEnabled: false,
+        deepResearchEnabled: false,
+      };
+    case "set-sending":
+      return {
+        ...state,
+        isSending: action.isSending,
+      };
+    case "set-memory":
+      return {
+        ...state,
+        memoryEnabled: action.enabled,
+      };
+    case "set-deep-research":
+      return {
+        ...state,
+        deepResearchEnabled: action.enabled,
+      };
+    case "activate-tool":
+      return {
+        ...state,
+        activeTool: action.toolId,
+        deepResearchEnabled: action.toolId === TOOL_IDS.DEEP_RESEARCH,
+        searchDepth:
+          action.toolId === TOOL_IDS.WEB_SEARCH && action.searchDepth
+            ? action.searchDepth
+            : state.searchDepth,
+      };
+    case "deactivate-tool":
+      return {
+        ...state,
+        activeTool: null,
+        deepResearchEnabled:
+          state.activeTool === TOOL_IDS.DEEP_RESEARCH ? false : state.deepResearchEnabled,
+      };
+    default:
+      return state;
+  }
+}
+
 export function ChatInput({
   onSend,
   isLoading,
@@ -57,11 +130,8 @@ export function ChatInput({
   tokenUsage,
   conversationId,
 }: ChatInputProps) {
-  const [isSending, setIsSending] = useState(false);
-  const [activeTool, setActiveTool] = useState<ToolId | null>(null);
-  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(false);
-  const [deepResearchEnabled, setDeepResearchEnabled] = useState<boolean>(false);
-  const [searchDepth, setSearchDepth] = useState<SearchDepth>('basic');
+  const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
+  const { isSending, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = uiState;
 
   const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage({ enabled: !!session });
@@ -72,23 +142,26 @@ export function ChatInput({
     if (!isPending) {
       if (session) {
         const stored = getStoredActiveTool();
-        setActiveTool(stored && isValidToolId(stored) ? (stored as ToolId) : null);
-        setMemoryEnabled(getStoredMemoryEnabled());
-        setDeepResearchEnabled(getStoredDeepResearchEnabled());
-        setSearchDepth(getStoredSearchDepth());
+        dispatchUi({
+          type: "hydrate",
+          payload: {
+            activeTool: stored && isValidToolId(stored) ? (stored as ToolId) : null,
+            memoryEnabled: getStoredMemoryEnabled(),
+            deepResearchEnabled: getStoredDeepResearchEnabled(),
+            searchDepth: getStoredSearchDepth(),
+          },
+        });
       } else {
-        setActiveTool(null);
-        setMemoryEnabled(false);
-        setDeepResearchEnabled(false);
+        dispatchUi({ type: "reset-session" });
       }
     }
   }, [session, isPending]);
 
   useEffect(() => {
     if (usageData?.remaining === 0 && (deepResearchEnabled || activeTool === TOOL_IDS.DEEP_RESEARCH)) {
-      setDeepResearchEnabled(false);
+      dispatchUi({ type: "set-deep-research", enabled: false });
       if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
-        setActiveTool(null);
+        dispatchUi({ type: "deactivate-tool" });
         removeActiveTool();
       }
       toast.info(TOAST_INFO_MESSAGES.DEEP_RESEARCH_DEACTIVATED, {
@@ -171,12 +244,12 @@ export function ChatInput({
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
         description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
       });
-      setIsSending(false);
+      dispatchUi({ type: "set-sending", isSending: false });
       return;
     }
 
     if (deepResearchEnabled && usageData && usageData.remaining === 0) {
-      setDeepResearchEnabled(false);
+      dispatchUi({ type: "set-deep-research", enabled: false });
       toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED, {
         description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED_DESCRIPTION,
         duration: 5000,
@@ -212,7 +285,7 @@ export function ChatInput({
       }
     }
 
-    setIsSending(true);
+    dispatchUi({ type: "set-sending", isSending: true });
 
     try {
       const attachmentsToSend = uploadedAttachments;
@@ -221,7 +294,7 @@ export function ChatInput({
         toast.info(TOAST_INFO_MESSAGES.UPLOAD_IN_PROGRESS, {
           description: "Please wait for attachments to finish uploading before sending.",
         });
-        setIsSending(false);
+        dispatchUi({ type: "set-sending", isSending: false });
         return;
       }
 
@@ -229,12 +302,12 @@ export function ChatInput({
       onSend(input, attachmentsToSend.length > 0 ? attachmentsToSend : undefined, activeTool, memoryEnabled, finalDeepResearchEnabled, searchDepth);
     } catch (error) {
       console.error("Error sending message:", error);
-      setIsSending(false);
+      dispatchUi({ type: "set-sending", isSending: false });
     } finally {
       if (conversationId) {
         clearInput();
         clearAttachments();
-        setIsSending(false);
+        dispatchUi({ type: "set-sending", isSending: false });
       }
     }
   }
@@ -287,20 +360,17 @@ export function ChatInput({
       return;
     }
 
-    setActiveTool(toolId);
+    dispatchUi({ type: "activate-tool", toolId, searchDepth: selectedDepth });
     storeActiveTool(toolId);
 
     if (toolId === TOOL_IDS.DEEP_RESEARCH) {
-      setDeepResearchEnabled(true);
       storeDeepResearchEnabled(true);
     } else {
-      setDeepResearchEnabled(false);
       storeDeepResearchEnabled(false);
     }
 
     // If selectedDepth is provided (for web search), update the depth
     if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
-      setSearchDepth(selectedDepth);
       storeSearchDepth(selectedDepth);
     }
 
@@ -316,11 +386,10 @@ export function ChatInput({
   }
 
   function handleToolDeactivated() {
-    setActiveTool(null);
+    dispatchUi({ type: "deactivate-tool" });
     removeActiveTool();
 
     if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
-      setDeepResearchEnabled(false);
       storeDeepResearchEnabled(false);
     }
 
@@ -339,7 +408,7 @@ export function ChatInput({
       return;
     }
 
-    setMemoryEnabled(enabled);
+    dispatchUi({ type: "set-memory", enabled });
     storeMemoryEnabled(enabled);
     toast.success(enabled ? TOAST_SUCCESS_MESSAGES.MEMORY_ENABLED : TOAST_SUCCESS_MESSAGES.MEMORY_DISABLED, {
       duration: 2500,

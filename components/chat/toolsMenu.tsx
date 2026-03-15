@@ -126,12 +126,14 @@ export function ToolsMenu({
       <TooltipProvider>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <div
+            <Button
+              type="button"
               onClick={handleButtonClick}
+              disabled={disabled}
+              variant="ghost"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon" }),
-                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200 cursor-pointer",
-                disabled ? "pointer-events-none opacity-50" : ""
+                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200"
               )}
               style={{
                 background: `linear-gradient(135deg, ${toolConfig.gradientColors.from}33, ${toolConfig.gradientColors.via}53, ${toolConfig.gradientColors.to}33)`,
@@ -149,7 +151,7 @@ export function ToolsMenu({
               }}
             >
               <ActiveToolIcon className={`size-4 ${toolConfig.iconColorClass} animate-in spin-in-180 zoom-in-0 duration-300`} />
-            </div>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
             <p>

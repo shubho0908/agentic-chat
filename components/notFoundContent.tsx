@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus, ArrowLeft, LogIn, AlertCircle } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
-import { useState, useEffect, useMemo } from "react";
+import { useLayoutEffect, useState, useMemo } from "react";
 import { AuthModal } from "@/components/authModal";
 import { useLayout } from "@/components/providers/layoutProvider";
 
@@ -31,27 +31,17 @@ function BackgroundOrbs() {
 }
 
 function FloatingParticles() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const particles = useMemo(
     () =>
       Array.from({ length: PARTICLES_COUNT }, (_, i) => ({
         id: i,
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        delay: Math.random() * 5,
-        duration: 5 + Math.random() * 10,
+        left: (i * 37) % 100,
+        top: (i * 53) % 100,
+        delay: ((i * 7) % 50) / 10,
+        duration: 5 + ((i * 13) % 100) / 10,
       })),
     []
   );
-
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
@@ -167,7 +157,7 @@ function NotFoundActions() {
 export function NotFoundClient() {
   const { setShowSidebar } = useLayout();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setShowSidebar(false);
     return () => setShowSidebar(true);
   }, [setShowSidebar]);

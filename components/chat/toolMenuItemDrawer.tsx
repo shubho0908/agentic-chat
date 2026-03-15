@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Zap, Check, ChevronDown, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,8 @@ export function ToolMenuItemDrawer({
 
   if (isWebSearch) {
     return (
-      <div className="space-y-1">
+      <LazyMotion features={domAnimation}>
+        <div className="space-y-1">
         <Button
           variant="ghost"
           disabled={isDisabled}
@@ -122,9 +123,9 @@ export function ToolMenuItemDrawer({
             )}
           />
           {isActive && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
+            <m.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               className="size-2 rounded-full bg-primary shadow-lg shadow-primary/50 shrink-0"
             />
           )}
@@ -132,7 +133,7 @@ export function ToolMenuItemDrawer({
 
         <AnimatePresence>
           {isExpanded && (
-            <motion.div
+            <m.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -185,10 +186,11 @@ export function ToolMenuItemDrawer({
                   )}
                 </Button>
               </div>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
-      </div>
+        </div>
+      </LazyMotion>
     );
   }
 
@@ -258,11 +260,13 @@ export function ToolMenuItemDrawer({
         </span>
       </div>
       {isActive && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="size-2 rounded-full bg-primary shadow-lg shadow-primary/50 shrink-0"
-        />
+        <LazyMotion features={domAnimation}>
+          <m.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="size-2 rounded-full bg-primary shadow-lg shadow-primary/50 shrink-0"
+          />
+        </LazyMotion>
       )}
     </Button>
   );

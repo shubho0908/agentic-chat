@@ -117,24 +117,24 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   }, [editText, message.id, message.attachments, onEditMessage]);
 
   const handlePreviousVersion = useCallback(() => {
-    if (versionIndex === -1) {
-      if (versions.length > 0) {
-        setVersionIndex(0);
+    setVersionIndex((currentIndex) => {
+      if (currentIndex === -1) {
+        return versions.length > 0 ? 0 : currentIndex;
       }
-    } else if (versionIndex < versions.length - 1) {
-      setVersionIndex(versionIndex + 1);
-    }
-  }, [versionIndex, versions.length]);
+
+      return currentIndex < versions.length - 1 ? currentIndex + 1 : currentIndex;
+    });
+  }, [versions.length]);
 
   const handleNextVersion = useCallback(() => {
-    if (versionIndex === -1) return;
+    setVersionIndex((currentIndex) => {
+      if (currentIndex === -1) {
+        return currentIndex;
+      }
 
-    if (versionIndex > 0) {
-      setVersionIndex(versionIndex - 1);
-    } else {
-      setVersionIndex(-1);
-    }
-  }, [versionIndex]);
+      return currentIndex > 0 ? currentIndex - 1 : -1;
+    });
+  }, []);
 
   const isThinking = !textContent && !displayedMessage.content;
 
@@ -218,18 +218,18 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     let lastIndex = 0;
 
     for (const match of text.matchAll(USER_URL_REGEX)) {
-      const index = match.index ?? 0;
+      const matchStart = match.index ?? 0;
       const rawUrl = match[0];
       const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
 
-      if (index > lastIndex) {
-        nodes.push(<span key={`text-${index}`}>{text.slice(lastIndex, index)}</span>);
+      if (matchStart > lastIndex) {
+        nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
       }
 
       if (url) {
         nodes.push(
           <a
-            key={`url-${index}`}
+            key={`url-${matchStart}`}
             href={url}
             target="_blank"
             rel="noopener noreferrer"
@@ -241,10 +241,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       }
 
       if (trailing) {
-        nodes.push(<span key={`trail-${index}`}>{trailing}</span>);
+        nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
       }
 
-      lastIndex = index + rawUrl.length;
+      lastIndex = matchStart + rawUrl.length;
     }
 
     if (lastIndex < text.length) {
@@ -277,7 +277,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
             <AttachmentDisplay
               attachments={displayedAttachments}
-              messageId={message.id}
               isUser={isUser}
             />
 
@@ -314,8 +313,8 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
                 {isUser && userUrls.length > 0 && (
                   <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
-                    {userUrls.map((url, index) => (
-                      <RichLink key={`url-${index}`} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
+                    {userUrls.map((url) => (
+                      <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
                     ))}
                   </div>
                 )}

@@ -31,7 +31,7 @@ export function RenameDialog({
   trigger,
 }: RenameDialogProps) {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState(currentTitle);
+  const [title, setTitle] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +43,7 @@ export function RenameDialog({
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
-    if (!newOpen) {
-      setTitle(currentTitle);
-    }
+    setTitle(newOpen ? currentTitle : "");
   };
 
   return (
@@ -76,7 +74,6 @@ export function RenameDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Enter conversation title"
               maxLength={255}
-              autoFocus
             />
           </div>
           <DialogFooter className="gap-2">

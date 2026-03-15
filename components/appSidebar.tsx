@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useReducer } from "react";
 import { Plus, Loader, ListChecks, X, Trash2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTheme } from "next-themes";
@@ -35,6 +35,87 @@ import { Button } from "./ui/button";
 import { useStreaming } from "@/contexts/streaming-context";
 import { NavigationGuardDialog } from "@/components/navigationGuardDialog";
 
+function SidebarBrandLogo({ src }: { src: string }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  return (
+    <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg">
+      {!imageLoaded && (
+        <div className="absolute inset-0 animate-pulse bg-linear-to-br from-primary/20 to-primary/10" />
+      )}
+      <Image
+        src={src}
+        alt="Agentic chat logo"
+        width={32}
+        height={32}
+        className="object-contain"
+        onLoad={() => setImageLoaded(true)}
+        priority
+      />
+    </div>
+  );
+}
+
+interface SidebarSelectionState {
+  selectionMode: boolean;
+  selectedIds: Set<string>;
+  showDeleteDialog: boolean;
+}
+
+type SidebarSelectionAction =
+  | { type: "toggle-selection-mode" }
+  | { type: "toggle-selected-id"; id: string }
+  | { type: "set-delete-dialog"; open: boolean }
+  | { type: "clear-selection" };
+
+const INITIAL_SELECTION_STATE: SidebarSelectionState = {
+  selectionMode: false,
+  selectedIds: new Set(),
+  showDeleteDialog: false,
+};
+
+function sidebarSelectionReducer(
+  state: SidebarSelectionState,
+  action: SidebarSelectionAction
+): SidebarSelectionState {
+  switch (action.type) {
+    case "toggle-selection-mode":
+      return {
+        ...state,
+        selectionMode: !state.selectionMode,
+        selectedIds: new Set(),
+      };
+    case "toggle-selected-id": {
+      const nextSelectedIds = new Set(state.selectedIds);
+
+      if (nextSelectedIds.has(action.id)) {
+        nextSelectedIds.delete(action.id);
+      } else {
+        nextSelectedIds.add(action.id);
+      }
+
+      return {
+        ...state,
+        selectedIds: nextSelectedIds,
+      };
+    }
+    case "set-delete-dialog":
+      return {
+        ...state,
+        showDeleteDialog: action.open,
+      };
+    case "clear-selection":
+      return {
+        ...state,
+        selectionMode: false,
+        selectedIds: new Set(),
+        showDeleteDialog: false,
+      };
+    default:
+      return state;
+  }
+}
+
 export function AppSidebar() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -42,16 +123,18 @@ export function AppSidebar() {
   const { theme } = useTheme();
   const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showGuardDialog, setShowGuardDialog] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
+  const [selectionState, dispatchSelection] = useReducer(
+    sidebarSelectionReducer,
+    INITIAL_SELECTION_STATE
+  );
   const parentRef = useRef<HTMLDivElement>(null);
   const { isMobile, openMobile } = useSidebar();
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
   const { isStreaming, stopStreaming } = useStreaming();
+  const logoSrc = theme === "dark" ? "/dark.png" : "/light.png";
+  const { selectionMode, selectedIds, showDeleteDialog } = selectionState;
 
   const {
     conversations,
@@ -75,10 +158,6 @@ export function AppSidebar() {
     overscan: 10,
     enabled: conversations.length > 0,
   });
-
-  useEffect(() => {
-    setImageLoaded(false);
-  }, [theme]);
 
   useEffect(() => {
     if (!isFetchingNextPage) {
@@ -165,27 +244,16 @@ export function AppSidebar() {
   };
 
   const handleToggleSelectionMode = () => {
-    setSelectionMode(!selectionMode);
-    setSelectedIds(new Set());
+    dispatchSelection({ type: "toggle-selection-mode" });
   };
 
   const handleToggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    dispatchSelection({ type: "toggle-selected-id", id });
   }, []);
 
   const handleBulkDelete = () => {
     const idsToDelete = Array.from(selectedIds);
-    setSelectionMode(false);
-    setSelectedIds(new Set());
-    setShowDeleteDialog(false);
+    dispatchSelection({ type: "clear-selection" });
 
     if (currentConversationId && selectedIds.has(currentConversationId)) {
       router.push("/");
@@ -205,20 +273,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg overflow-hidden">
-                  {!imageLoaded && (
-                    <div className="absolute inset-0 bg-linear-to-br from-primary/20 to-primary/10 animate-pulse" />
-                  )}
-                  <Image
-                    src={theme === "dark" ? "/dark.png" : "/light.png"}
-                    alt="Agentic chat logo"
-                    width={32}
-                    height={32}
-                    className="object-contain"
-                    onLoad={() => setImageLoaded(true)}
-                    priority
-                  />
-                </div>
+                <SidebarBrandLogo key={logoSrc} src={logoSrc} />
                 <div className="flex flex-col gap-0.5 leading-none pl-1">
                   <span className="font-medium text-sm">Agentic</span>
                   <span className="text-[11px] text-muted-foreground">Chat History</span>
@@ -247,7 +302,7 @@ export function AppSidebar() {
                   <Button
                     variant="destructive"
                     size="icon"
-                    onClick={() => setShowDeleteDialog(true)}
+                    onClick={() => dispatchSelection({ type: "set-delete-dialog", open: true })}
                     disabled={isBulkDeleting}
                     className="h-8 w-8"
                   >
@@ -407,7 +462,7 @@ export function AppSidebar() {
       <DeleteConversationDialog
         mode="bulk"
         open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
+        onOpenChange={(open) => dispatchSelection({ type: "set-delete-dialog", open })}
         selectedCount={selectedIds.size}
         onConfirm={handleBulkDelete}
         isDeleting={isBulkDeleting}

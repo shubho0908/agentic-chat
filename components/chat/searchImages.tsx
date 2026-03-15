@@ -27,6 +27,10 @@ interface ImageCardProps {
   sizes?: string;
 }
 
+function getSearchImageKey(image: SearchImage) {
+  return `${image.url}::${image.description ?? ""}`;
+}
+
 function ImageCard({ image, index, onClick, showOverlay, showDescription = true, sizes = "(max-width: 640px) 50vw, 25vw" }: ImageCardProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,11 +51,14 @@ function ImageCard({ image, index, onClick, showOverlay, showDescription = true,
   }, [isLoading, hasError, onClick]);
 
   return (
-    <div
+    <button
+      type="button"
       className={`group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 transition-all duration-200 ease-out ${
         !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]' : 'cursor-default'
       }`}
       onClick={handleClick}
+      disabled={isLoading || hasError}
+      aria-label={image.description || `Open search result image ${index + 1}`}
     >
       {!hasError ? (
         <>
@@ -105,7 +112,7 @@ function ImageCard({ image, index, onClick, showOverlay, showDescription = true,
           </p>
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -144,7 +151,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
             
             return (
               <ImageCard
-                key={`preview-${image.url}-${index}`}
+                key={getSearchImageKey(image)}
                 image={image}
                 index={index}
                 onClick={() => shouldShowOverlay ? handleShowAll() : handleImageSelect(image.url, image.description)}
@@ -178,7 +185,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
               <div className="grid grid-cols-2 gap-4 px-4">
                 {images.map((image, index) => (
                   <ImageCard
-                    key={`sheet-${image.url}-${index}`}
+                    key={getSearchImageKey(image)}
                     image={image}
                     index={index}
                     onClick={() => handleImageSelect(image.url, image.description)}
@@ -197,7 +204,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
               <div className="grid grid-cols-2 gap-4 px-2">
                 {images.map((image, index) => (
                   <ImageCard
-                    key={`dialog-${image.url}-${index}`}
+                    key={getSearchImageKey(image)}
                     image={image}
                     index={index}
                     onClick={() => handleImageSelect(image.url, image.description)}

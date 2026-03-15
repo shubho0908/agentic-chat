@@ -9,7 +9,6 @@ import { filterImageAttachments, filterDocumentAttachments } from "@/lib/attachm
 
 interface AttachmentDisplayProps {
   attachments?: Attachment[];
-  messageId?: string;
   isUser?: boolean;
 }
 
@@ -26,7 +25,7 @@ function getDocumentIcon(fileType: string, fileName: string) {
   return <FileIcon className="size-5" />;
 }
 
-export function AttachmentDisplay({ attachments, messageId, isUser }: AttachmentDisplayProps) {
+export function AttachmentDisplay({ attachments, isUser }: AttachmentDisplayProps) {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string } | null>(null);
 
@@ -39,13 +38,16 @@ export function AttachmentDisplay({ attachments, messageId, isUser }: Attachment
     <>
       {imageAttachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {imageAttachments.map((attachment, idx) => (
-            <div
-              key={attachment.id || `${messageId}-img-${idx}`}
+          {imageAttachments.map((attachment) => (
+            <button
+              key={attachment.id ?? attachment.fileUrl ?? attachment.fileName}
+              type="button"
               className={cn(
-                "group relative w-48 h-48 sm:w-56 sm:h-56 overflow-hidden border border-black/5 dark:border-white/10 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl"
+                "group relative h-48 w-48 overflow-hidden rounded-2xl border border-black/5 shadow-sm transition-all duration-300 sm:h-56 sm:w-56",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-white/10"
               )}
               onClick={() => setLightboxImage(attachment.fileUrl)}
+              aria-label={`Open image ${attachment.fileName}`}
             >
               <Image
                 src={attachment.fileUrl}
@@ -63,23 +65,26 @@ export function AttachmentDisplay({ attachments, messageId, isUser }: Attachment
               <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/40 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100">
                 <Maximize2 className="size-4 text-white" />
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
       {documentAttachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {documentAttachments.map((attachment, idx) => (
-            <div
-              key={attachment.id || `${messageId}-doc-${idx}`}
+          {documentAttachments.map((attachment) => (
+            <button
+              key={attachment.id ?? attachment.fileUrl ?? attachment.fileName}
+              type="button"
               className={cn(
-                "group relative flex items-center gap-3 px-3.5 py-3 transition-all duration-300 cursor-pointer max-w-[260px] shadow-sm rounded-2xl",
+                "group relative flex max-w-[260px] items-center gap-3 rounded-2xl px-3.5 py-3 text-left shadow-sm transition-all duration-300",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 isUser 
                   ? "bg-black/5 dark:bg-[#1E1E1E] text-foreground dark:text-white border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]" 
                   : "bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/[0.04]"
               )}
               onClick={() => setPreviewDocument({ url: attachment.fileUrl, name: attachment.fileName, type: attachment.fileType })}
+              aria-label={`Preview document ${attachment.fileName}`}
             >
               <div className={cn(
                 "flex-shrink-0 p-2.5 rounded-[12px] transition-colors",
@@ -102,10 +107,10 @@ export function AttachmentDisplay({ attachments, messageId, isUser }: Attachment
                 )}>
                   {typeof attachment.fileSize === "number" && Number.isFinite(attachment.fileSize)
                     ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
-                    : "—"}
+                    : "-"}
                 </p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}

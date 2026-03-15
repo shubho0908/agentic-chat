@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { Info, Zap, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -130,11 +129,7 @@ export function ToolMenuItem({
             </span>
           </div>
           {isActive && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-            />
+            <div className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50 animate-in fade-in-0 zoom-in-95 duration-200" />
           )}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent sideOffset={8} className="w-56 p-1">
@@ -344,11 +339,7 @@ export function ToolMenuItem({
         </span>
       </div>
       {isActive && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-        />
+        <div className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50 animate-in fade-in-0 zoom-in-95 duration-200" />
       )}
     </DropdownMenuItem>
   );

@@ -28,7 +28,6 @@ export function MessageEditForm({
           value={editText}
           onChange={(e) => onEditTextChange(e.target.value)}
           className="min-h-[100px] resize-none rounded-lg border-[1.5px] border-border/80 dark:border-border/70 focus-visible:border-primary transition-all bg-background shadow-sm outline-none focus:outline-none focus-visible:ring-0"
-          autoFocus
         />
       </div>
       <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150 delay-75">

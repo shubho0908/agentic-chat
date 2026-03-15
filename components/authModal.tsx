@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Loader } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
@@ -53,19 +53,20 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
         className="sm:max-w-[380px] border-0 p-0 sm:p-0 gap-0 overflow-hidden bg-transparent shadow-none"
         showCloseButton={false}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 8 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ 
-            duration: 0.2,
-            ease: [0.16, 1, 0.3, 1]
-          }}
-          className="relative bg-background dark:bg-black/80 backdrop-blur-xl border border-border shadow-xl rounded-2xl overflow-hidden"
-        >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
-          
-          <div className="p-8">
-            <div className="flex flex-col items-center text-center space-y-6">
+        <LazyMotion features={domAnimation}>
+          <m.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{
+              duration: 0.2,
+              ease: [0.16, 1, 0.3, 1]
+            }}
+            className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-xl backdrop-blur-xl dark:bg-black/80"
+          >
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+
+            <div className="p-8">
+              <div className="flex flex-col items-center text-center space-y-6">
                 <Image
                   src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
                   alt="Agentic Chat"
@@ -93,7 +94,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
               >
                 <AnimatePresence mode="wait">
                   {isLoading ? (
-                    <motion.div
+                    <m.div
                       key="loading"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -102,9 +103,9 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                     >
                       <Loader className="w-4 h-4 animate-spin" />
                       <span>Signing in...</span>
-                    </motion.div>
+                    </m.div>
                   ) : (
-                    <motion.div
+                    <m.div
                       key="idle"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -130,7 +131,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                         />
                       </svg>
                       <span>Continue with Google</span>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </Button>
@@ -139,8 +140,9 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                 By continuing, you agree to our Terms and Privacy Policy
               </p>
             </div>
-          </div>
-        </motion.div>
+            </div>
+          </m.div>
+        </LazyMotion>
       </DialogContent>
     </Dialog>
   );

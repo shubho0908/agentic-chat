@@ -140,7 +140,7 @@ export function GoogleWorkspaceSettings() {
       });
     }
 
-    router.replace("/settings/google-workspace");
+    window.history.replaceState(null, "", "/settings/google-workspace");
   }, [refetch, router]);
 
   const comparison = compareGoogleWorkspaceSelections(currentSelections, selectedLevels);

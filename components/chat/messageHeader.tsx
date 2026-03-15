@@ -2,6 +2,8 @@ import { SourcesSheet } from "./sourcesSheet";
 import type { Citation } from "@/types/deep-research";
 import { OpenAIIcon } from "@/components/icons/openai-icon";
 
+const EMPTY_CITATIONS: Citation[] = [];
+
 interface MessageHeaderProps {
   isUser: boolean;
   userName?: string | null;
@@ -21,7 +23,7 @@ export function MessageHeader({
   userName,
   modelName,
   timestamp,
-  citations = [],
+  citations = EMPTY_CITATIONS,
 }: MessageHeaderProps) {
   const hasCitations = !isUser && citations.length > 0;
 
