@@ -30,6 +30,7 @@ export const RAG_CONFIG = {
     pollInterval: 500,
     exponentialBackoff: true,
     maxBackoffInterval: 2000,
+    maxWaitMs: 8000,
   },
   search: {
     defaultLimit: 5,

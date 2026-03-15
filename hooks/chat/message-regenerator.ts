@@ -72,7 +72,12 @@ export async function handleRegenerateResponse(
       await deleteMessagesAfter(conversationId, assistantMessage.id);
     }
 
-    const useCaching = shouldUseSemanticCache(previousUserMessage.attachments, activeTool, deepResearchEnabled);
+    const useCaching = shouldUseSemanticCache(
+      messagesUpToAssistant,
+      previousUserMessage.attachments,
+      activeTool,
+      deepResearchEnabled
+    );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT);
 

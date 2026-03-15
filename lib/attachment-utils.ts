@@ -8,17 +8,30 @@ interface UploadFileResponse {
   type?: string;
 }
 
-function uploadResponseToAttachment(uploadResult: UploadFileResponse): Attachment {
+export type UploadAttachment = Attachment & {
+  clientFileId?: string;
+};
+
+function uploadResponseToAttachment(
+  uploadResult: UploadFileResponse,
+  clientFileId?: string
+): UploadAttachment {
   return {
     fileUrl: uploadResult.url,
     fileName: uploadResult.name,
     fileType: uploadResult.type || 'image/jpeg',
     fileSize: uploadResult.size || 0,
+    clientFileId,
   };
 }
 
-export function uploadResponsesToAttachments(uploadResults: UploadFileResponse[]): Attachment[] {
-  return uploadResults.map(uploadResponseToAttachment);
+export function uploadResponsesToAttachments(
+  uploadResults: UploadFileResponse[],
+  uploadMetadata: Array<{ clientFileId: string }> = []
+): UploadAttachment[] {
+  return uploadResults.map((uploadResult, index) =>
+    uploadResponseToAttachment(uploadResult, uploadMetadata[index]?.clientFileId)
+  );
 }
 
 export function filterImageAttachments(attachments?: Attachment[]): Attachment[] {

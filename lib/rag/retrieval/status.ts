@@ -25,15 +25,18 @@ export async function waitForDocumentProcessing(
   options: {
     pollInterval?: number;
     useExponentialBackoff?: boolean;
+    timeoutMs?: number;
   } = {}
 ): Promise<string[]> {
   const {
     pollInterval = RAG_CONFIG.processing.pollInterval,
     useExponentialBackoff = RAG_CONFIG.processing.exponentialBackoff,
+    timeoutMs = RAG_CONFIG.processing.maxWaitMs,
   } = options;
 
   let currentInterval = pollInterval;
   let previousCompletedCount = 0;
+  const startedAt = Date.now();
 
   while (true) {
     const statuses = await getAttachmentStatuses(attachmentIds);
@@ -48,6 +51,13 @@ export async function waitForDocumentProcessing(
     }
 
     if (stillProcessing.length === 0) {
+      return completedIds;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      console.warn(
+        `[RAG] Timed out waiting for ${stillProcessing.length} document(s) after ${timeoutMs}ms`
+      );
       return completedIds;
     }
 

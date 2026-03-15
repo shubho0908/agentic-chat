@@ -1,7 +1,7 @@
 'use server';
 
 import { getMemoryContext } from './memory';
-import { getRAGContext } from './rag/retrieval/context';
+import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
@@ -10,6 +10,7 @@ import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { shouldQueryMemoryWithCache } from './memory-classifier';
+import { extractTextFromMessage } from './chat/message-helpers';
 
 export interface ContextRoutingResult {
   context: string;
@@ -56,6 +57,108 @@ function shouldQueryMemory(query: string): boolean {
   return shouldQueryMemoryWithCache(query);
 }
 
+function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
+  const relevantMessages = messages
+    .filter((message) => message.role !== 'system')
+    .slice(-maxMessages)
+    .map((message) => {
+      const text = extractTextFromMessage(message.content).trim();
+      if (!text) return null;
+      return `${message.role}: ${text}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  return relevantMessages.join('\n');
+}
+
+function uniqueQueries(queries: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const query of queries) {
+    const normalized = query.trim().replace(/\s+/g, ' ');
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    deduped.push(normalized);
+  }
+
+  return deduped;
+}
+
+function buildRetrievalQueries(
+  textQuery: string,
+  messages: Message[],
+  isReferential: boolean
+): string[] {
+  const trimmedQuery = textQuery.trim();
+  const recentConversation = getRecentConversationExcerpt(messages);
+
+  if (!recentConversation) {
+    return uniqueQueries([trimmedQuery]);
+  }
+
+  const standaloneQuery =
+    `Recent conversation about attached documents:\n${recentConversation}\n\n` +
+    `Current request:\n${trimmedQuery || 'Summarize the attached document.'}`;
+
+  const focusedQuery =
+    `Document question: ${trimmedQuery || 'Summarize the attached document.'}\n\n` +
+    `Relevant recent conversation:\n${recentConversation}`;
+
+  if (isReferential || trimmedQuery.length < 48) {
+    return uniqueQueries([focusedQuery, standaloneQuery, trimmedQuery]);
+  }
+
+  return uniqueQueries([trimmedQuery, focusedQuery, standaloneQuery]);
+}
+
+async function resolveDocumentContext(
+  queries: string[],
+  userId: string,
+  options: {
+    conversationId?: string;
+    waitForProcessing?: boolean;
+  }
+) {
+  const attempts = queries.map((query, index) => ({
+    query,
+    limit: index === 0 ? 5 : 8,
+    scoreThreshold: index === 0 ? 0.7 : 0.55,
+    waitForProcessing: index === 0 ? options.waitForProcessing : false,
+  }));
+
+  for (const attempt of attempts) {
+    const result = await getRAGContext(attempt.query, userId, {
+      conversationId: options.conversationId,
+      limit: attempt.limit,
+      scoreThreshold: attempt.scoreThreshold,
+      waitForProcessing: attempt.waitForProcessing,
+    });
+
+    if (result) {
+      return result;
+    }
+  }
+
+  return null;
+}
+
+function buildMissingDocumentContext(query: string): string {
+  const normalizedQuery = query.trim() || 'the attached documents';
+
+  return (
+    '\n\nDocuments are attached to this conversation, but no strong supporting passage was retrieved for the current request.' +
+    '\n<document_retrieval_warning>' +
+    `\nCurrent request: ${normalizedQuery}` +
+    '\nDo not answer as though the documents were successfully retrieved.' +
+    '\nExplain that you need a more specific section, page, table, quote, or a clearer question.' +
+    '\nOffer to summarize the attached documents first if that would help.' +
+    '\n</document_retrieval_warning>'
+  );
+}
+
 async function getAttachmentInfo(conversationId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
@@ -99,7 +202,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
 export async function routeContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
-  _messages: Message[],
+  messages: Message[],
   conversationId?: string,
   activeTool?: string | null,
   memoryEnabled: boolean = false,
@@ -110,6 +213,7 @@ export async function routeContext(
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(normalized);
+  const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
 
   const metadata: {
     hasMemories: boolean;
@@ -190,10 +294,8 @@ export async function routeContext(
     ? getAttachmentInfo(conversationId)
     : Promise.resolve({ hasDocuments: false, hasAny: false });
 
-  const ragPromise = getRAGContext(textQuery, userId, {
+  const ragPromise = resolveDocumentContext(retrievalQueries, userId, {
     conversationId,
-    limit: 5,
-    scoreThreshold: 0.7,
     waitForProcessing: true,
   });
 
@@ -207,7 +309,7 @@ export async function routeContext(
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
-    const ragResult = await ragPromise;
+    const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
     if (ragResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = ragResult.documentCount;
@@ -224,6 +326,22 @@ export async function routeContext(
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.VisionOnly;
       return { context: '', metadata };
+    }
+
+    if (attachmentInfo.hasDocuments) {
+      const overviewContext = await getDocumentOverviewContext(userId, {
+        conversationId,
+        waitForProcessing: false,
+      });
+
+      if (overviewContext) {
+        metadata.hasDocuments = true;
+        metadata.documentCount = overviewContext.documentCount;
+        return { context: overviewContext.context, metadata };
+      }
+
+      metadata.hasDocuments = true;
+      return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
     return { context: '', metadata };
@@ -249,7 +367,18 @@ export async function routeContext(
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
     metadata.hasDocuments = true;
-    return { context: '', metadata };
+
+    const overviewContext = await getDocumentOverviewContext(userId, {
+      conversationId,
+      waitForProcessing: false,
+    });
+
+    if (overviewContext) {
+      metadata.documentCount = overviewContext.documentCount;
+      return { context: overviewContext.context, metadata };
+    }
+
+    return { context: buildMissingDocumentContext(textQuery), metadata };
   }
 
   if (hasImages) {

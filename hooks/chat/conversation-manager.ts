@@ -41,6 +41,7 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
 }
 
 const MAX_CONTEXT_MESSAGES = 20;
+const DOCUMENT_CONTEXT_MESSAGES = 12;
 
 export function buildMessagesForAPI(
   messages: Message[],
@@ -51,12 +52,12 @@ export function buildMessagesForAPI(
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
 
   if (isReferential && hasAttachmentsInContext) {
-    const recentMessages = messages.slice(-4);
+    const recentMessages = messages.slice(-DOCUMENT_CONTEXT_MESSAGES);
     
     return [
       {
         role: "system" as const,
-        content: DOCUMENT_FOCUSED_ASSISTANT_PROMPT,
+        content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
       },
       ...recentMessages.map(({ role, content }) => ({
         role: role as "user" | "assistant" | "system",

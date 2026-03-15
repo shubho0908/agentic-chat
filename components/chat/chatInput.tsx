@@ -94,7 +94,6 @@ export function ChatInput({
     selectedFiles,
     uploadedAttachments,
     isUploading,
-    uploadFiles,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
@@ -160,14 +159,14 @@ export function ChatInput({
     setIsSending(true);
 
     try {
-      let attachmentsToSend = uploadedAttachments;
+      const attachmentsToSend = uploadedAttachments;
 
-      if (selectedFiles.length > 0) {
-        attachmentsToSend = await uploadFiles();
-        if (attachmentsToSend.length === 0 && selectedFiles.length > 0) {
-          setIsSending(false);
-          return;
-        }
+      if (selectedFiles.length > 0 && attachmentsToSend.length !== selectedFiles.length) {
+        toast.info(TOAST_INFO_MESSAGES.UPLOAD_IN_PROGRESS, {
+          description: "Please wait for attachments to finish uploading before sending.",
+        });
+        setIsSending(false);
+        return;
       }
 
       const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);

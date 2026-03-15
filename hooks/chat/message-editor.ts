@@ -97,7 +97,12 @@ export async function handleEditMessage(
       }
     }
 
-    const useCaching = shouldUseSemanticCache(attachments, activeTool, deepResearchEnabled);
+    const useCaching = shouldUseSemanticCache(
+      messagesUpToEdit,
+      attachments,
+      activeTool,
+      deepResearchEnabled
+    );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
 
