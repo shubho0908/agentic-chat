@@ -1,9 +1,16 @@
-import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
+import {
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+  MAX_IMAGE_FILE_SIZE_BYTES,
+  SUPPORTED_DOCUMENT_EXTENSIONS,
+  SUPPORTED_IMAGE_EXTENSIONS,
+} from "@/constants/upload";
 
 interface FileFilterResult {
   validImages: File[];
   unsupportedImages: File[];
+  oversizedImages: File[];
   validDocuments: File[];
+  oversizedDocuments: File[];
   unsupportedFiles: File[];
 }
 
@@ -35,14 +42,24 @@ export function isSupportedDocumentExtension(filename: string): boolean {
 export function filterFiles(files: File[]): FileFilterResult {
   const validImages: File[] = [];
   const unsupportedImages: File[] = [];
+  const oversizedImages: File[] = [];
   const validDocuments: File[] = [];
+  const oversizedDocuments: File[] = [];
   const unsupportedFiles: File[] = [];
   
   for (const file of files) {
     if (isSupportedDocumentExtension(file.name)) {
-      validDocuments.push(file);
+      if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+        oversizedDocuments.push(file);
+      } else {
+        validDocuments.push(file);
+      }
     } else if (isSupportedImageExtension(file.name)) {
-      validImages.push(file);
+      if (file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        oversizedImages.push(file);
+      } else {
+        validImages.push(file);
+      }
     } else if (isImageFile(file)) {
       unsupportedImages.push(file);
     } else {
@@ -50,7 +67,14 @@ export function filterFiles(files: File[]): FileFilterResult {
     }
   }
   
-  return { validImages, unsupportedImages, validDocuments, unsupportedFiles };
+  return {
+    validImages,
+    unsupportedImages,
+    oversizedImages,
+    validDocuments,
+    oversizedDocuments,
+    unsupportedFiles,
+  };
 }
 
 export function getFileNames(files: File[]): string {

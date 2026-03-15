@@ -9,24 +9,27 @@ import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
 import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
-import { shouldQueryMemoryWithCache } from './memory-classifier';
 import { extractTextFromMessage } from './chat/message-helpers';
+import { mediateMemoryIntent } from './chat/request-mediator';
+import { estimateMemoryEntryCount } from './chat/memory-policy';
+
+interface ContextRoutingMetadata {
+  hasMemories: boolean;
+  hasDocuments: boolean;
+  hasImages: boolean;
+  hasUrls: boolean;
+  memoryCount: number;
+  documentCount: number;
+  imageCount: number;
+  urlCount: number;
+  routingDecision?: RoutingDecision;
+  skippedMemory: boolean;
+  activeToolName?: string;
+}
 
 interface ContextRoutingResult {
   context: string;
-  metadata: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    hasImages: boolean;
-    hasUrls: boolean;
-    memoryCount: number;
-    documentCount: number;
-    imageCount: number;
-    urlCount: number;
-    routingDecision?: RoutingDecision;
-    skippedMemory: boolean;
-    activeToolName?: string;
-  };
+  metadata: ContextRoutingMetadata;
 }
 
 function extractTextQuery(query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): string {
@@ -51,10 +54,6 @@ function detectImages(content: string | Array<{ type: string; text?: string; ima
 
 function isReferentialQuery(normalized: string): boolean {
   return REFERENTIAL_PATTERNS.some(p => p.test(normalized));
-}
-
-function shouldQueryMemory(query: string): boolean {
-  return shouldQueryMemoryWithCache(query);
 }
 
 function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
@@ -207,6 +206,9 @@ export async function routeContext(
   activeTool?: string | null,
   memoryEnabled: boolean = false,
   deepResearchEnabled: boolean = false,
+  options?: {
+    apiKey?: string;
+  },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
   const normalized = textQuery.toLowerCase().trim();
@@ -215,19 +217,7 @@ export async function routeContext(
   const isReferential = isReferentialQuery(normalized);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
 
-  const metadata: {
-    hasMemories: boolean;
-    hasDocuments: boolean;
-    hasImages: boolean;
-    hasUrls: boolean;
-    memoryCount: number;
-    documentCount: number;
-    imageCount: number;
-    urlCount: number;
-    routingDecision?: RoutingDecision;
-    skippedMemory: boolean;
-    activeToolName?: string;
-  } = {
+  const metadata: ContextRoutingMetadata = {
     hasMemories: false,
     hasDocuments: false,
     hasImages,
@@ -387,18 +377,18 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  // Skip memory search if conversation has any attachments (reuse existing info)
-  if (attachmentInfo.hasAny) {
-    metadata.skippedMemory = true;
-  }
-
   if (!memoryEnabled || metadata.skippedMemory) {
     return { context: '', metadata };
   }
 
-  // Fast heuristic-based memory classification (no LLM call needed)
-  const needsMemory = shouldQueryMemory(normalized);
-  if (!needsMemory) {
+  const recentConversation = getRecentConversationExcerpt(messages);
+  const memoryDecision = await mediateMemoryIntent({
+    messageText: textQuery,
+    recentConversation,
+    apiKey: options?.apiKey,
+  });
+
+  if (!memoryDecision.shouldQuery) {
     return { context: '', metadata };
   }
 
@@ -406,8 +396,7 @@ export async function routeContext(
 
   if (memoryContext) {
     metadata.hasMemories = true;
-    const memoryMatches = memoryContext.match(/\d+\./g);
-    metadata.memoryCount = memoryMatches?.length || 0;
+    metadata.memoryCount = estimateMemoryEntryCount(memoryContext);
     metadata.routingDecision = RoutingDecision.MemoryOnly;
     return { context: memoryContext, metadata };
   }

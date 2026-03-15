@@ -10,6 +10,7 @@ import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
+import { persistConversationMemoryIfEligible } from "./memory-persistence";
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -230,6 +231,18 @@ export async function handleRegenerateResponse(
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
+
+      persistConversationMemoryIfEligible({
+        userMessageContent: previousUserMessage.content,
+        assistantContent: responseContent,
+        userId: context.session?.user?.id,
+        memoryEnabled: memoryEnabled ?? true,
+        activeTool,
+        deepResearchEnabled: deepResearchEnabled ?? false,
+        userAttachments: previousUserMessage.attachments,
+        memoryStatus: currentMemoryStatus,
+        flow: "regenerate",
+      });
     }
 
     return { success: true };

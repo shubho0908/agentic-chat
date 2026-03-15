@@ -100,7 +100,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
     const searchDepth = getSearchDepth();
-    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleRegenerate = (messageId: string) => {
@@ -108,7 +108,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
     const searchDepth = getSearchDepth();
-    return regenerateResponse({ messageId, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleToggleSharing = (id: string, nextIsPublic: boolean) => {

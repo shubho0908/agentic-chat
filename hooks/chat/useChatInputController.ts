@@ -207,6 +207,50 @@ export function useChatInputController({
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
   const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
 
+  function activateTool(toolId: ToolId, selectedDepth?: SearchDepth) {
+    if (!session) {
+      onAuthRequired?.();
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.TOOLS.AUTH_REQUIRED_DESCRIPTION,
+        duration: 3000,
+      });
+      return false;
+    }
+
+    if (toolId === TOOL_IDS.DEEP_RESEARCH && usageData && usageData.remaining === 0) {
+      const resetDate = new Date(usageData.resetDate).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+      });
+      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.UNAVAILABLE, {
+        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.MONTHLY_LIMIT_DESCRIPTION(usageData.limit, resetDate),
+        duration: 5000,
+      });
+      return false;
+    }
+
+    dispatchUi({ type: "activate-tool", toolId, searchDepth: selectedDepth });
+    storeActiveTool(toolId);
+    storeDeepResearchEnabled(toolId === TOOL_IDS.DEEP_RESEARCH);
+
+    if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
+      storeSearchDepth(selectedDepth);
+    }
+
+    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : toolId.replace("_", " ");
+    const currentDepth = selectedDepth || searchDepth;
+    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
+      ? ` (${currentDepth === "advanced" ? "Advanced" : "Basic"})`
+      : "";
+
+    toast.success(TOAST_ERROR_MESSAGES.TOOLS.ACTIVATED, {
+      description: `${toolName}${searchModeText} is now enabled for your next query`,
+      duration: 2500,
+    });
+
+    return true;
+  }
+
   const handleFilesSelectedWithAuth = (files: File[]) => {
     if (!session) {
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
@@ -339,49 +383,12 @@ export function useChatInputController({
   }
 
   function handleToolSelected(toolId: ToolId, selectedDepth?: SearchDepth) {
-    if (!session) {
-      onAuthRequired?.();
-      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.TOOLS.AUTH_REQUIRED_DESCRIPTION,
-        duration: 3000,
-      });
-      return;
-    }
-
     if (activeTool === toolId) {
       handleToolDeactivated();
       return;
     }
 
-    if (toolId === TOOL_IDS.DEEP_RESEARCH && usageData && usageData.remaining === 0) {
-      const resetDate = new Date(usageData.resetDate).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-      });
-      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.UNAVAILABLE, {
-        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.MONTHLY_LIMIT_DESCRIPTION(usageData.limit, resetDate),
-        duration: 5000,
-      });
-      return;
-    }
-
-    dispatchUi({ type: "activate-tool", toolId, searchDepth: selectedDepth });
-    storeActiveTool(toolId);
-    storeDeepResearchEnabled(toolId === TOOL_IDS.DEEP_RESEARCH);
-
-    if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
-      storeSearchDepth(selectedDepth);
-    }
-
-    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : toolId.replace("_", " ");
-    const currentDepth = selectedDepth || searchDepth;
-    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
-      ? ` (${currentDepth === "advanced" ? "Advanced" : "Basic"})`
-      : "";
-    toast.success(TOAST_ERROR_MESSAGES.TOOLS.ACTIVATED, {
-      description: `${toolName}${searchModeText} is now enabled for your next query`,
-      duration: 2500,
-    });
+    activateTool(toolId, selectedDepth);
   }
 
   function handleToolDeactivated() {

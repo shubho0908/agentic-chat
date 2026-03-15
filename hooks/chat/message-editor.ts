@@ -12,6 +12,7 @@ import { buildMessagesForAPI } from "./conversation-manager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chat-hooks";
+import { persistConversationMemoryIfEligible } from "./memory-persistence";
 
 export async function handleEditMessage(
   messageId: string,
@@ -265,6 +266,18 @@ export async function handleEditMessage(
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       }
+
+      persistConversationMemoryIfEligible({
+        userMessageContent: messageContent,
+        assistantContent: responseContent,
+        userId: context.session?.user?.id,
+        memoryEnabled: memoryEnabled ?? true,
+        activeTool,
+        deepResearchEnabled: deepResearchEnabled ?? false,
+        userAttachments: attachments,
+        memoryStatus: currentMemoryStatus,
+        flow: "edit",
+      });
     }
 
     return { success: true };

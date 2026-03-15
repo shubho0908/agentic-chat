@@ -1,11 +1,30 @@
 import { useRef, useState, type SetStateAction } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
-import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import {
+  MAX_DOCUMENT_FILE_SIZE_LABEL,
+  MAX_FILE_ATTACHMENTS,
+  MAX_IMAGE_FILE_SIZE_LABEL,
+  SUPPORTED_IMAGE_EXTENSIONS_DISPLAY,
+} from "@/constants/upload";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { filterFiles, getFileNames } from "@/lib/file-validation";
 import { uploadResponsesToAttachments, type UploadAttachment } from "@/lib/attachment-utils";
+
+function getUploadErrorDescription(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return HOOK_ERROR_MESSAGES.UNKNOWN_ERROR;
+  }
+
+  const message = error.message.trim();
+
+  if (message.includes("FileSizeMismatch")) {
+    return `That file is too large. Images must be ${MAX_IMAGE_FILE_SIZE_LABEL} or smaller, and documents must be ${MAX_DOCUMENT_FILE_SIZE_LABEL} or smaller.`;
+  }
+
+  return message || HOOK_ERROR_MESSAGES.UNKNOWN_ERROR;
+}
 
 export function useChatFileUpload() {
   const [selectedFilesState, setSelectedFilesState] = useState<File[]>([]);
@@ -37,7 +56,14 @@ export function useChatFileUpload() {
   }
 
   async function handleFilesSelected(files: File[]) {
-    const { validImages, unsupportedImages, validDocuments, unsupportedFiles } = filterFiles(files);
+    const {
+      validImages,
+      unsupportedImages,
+      oversizedImages,
+      validDocuments,
+      oversizedDocuments,
+      unsupportedFiles,
+    } = filterFiles(files);
     
     if (unsupportedFiles.length > 0) {
       toast.error('Unsupported file format', {
@@ -49,6 +75,20 @@ export function useChatFileUpload() {
     if (unsupportedImages.length > 0) {
       toast.error('Unsupported image format', {
         description: `${getFileNames(unsupportedImages)} - Supported: ${SUPPORTED_IMAGE_EXTENSIONS_DISPLAY}`,
+        duration: 5000,
+      });
+    }
+
+    if (oversizedImages.length > 0) {
+      toast.error('Image too large', {
+        description: `${getFileNames(oversizedImages)} - Images must be ${MAX_IMAGE_FILE_SIZE_LABEL} or smaller`,
+        duration: 5000,
+      });
+    }
+
+    if (oversizedDocuments.length > 0) {
+      toast.error('Document too large', {
+        description: `${getFileNames(oversizedDocuments)} - Documents must be ${MAX_DOCUMENT_FILE_SIZE_LABEL} or smaller`,
         duration: 5000,
       });
     }
@@ -104,7 +144,7 @@ export function useChatFileUpload() {
         prev.filter((attachment) => !attachment.clientFileId || !uploadBatchIds.has(attachment.clientFileId))
       );
       toast.error(TOAST_ERROR_MESSAGES.UPLOAD.FAILED, {
-        description: error instanceof Error ? error.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR,
+        description: getUploadErrorDescription(error),
       });
     } finally {
       setIsUploading(false);

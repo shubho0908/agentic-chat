@@ -7,6 +7,7 @@ export interface BaseChatContext {
   conversationId: string | null;
   abortSignal: AbortSignal;
   queryClient: QueryClient;
+  session?: { user: { id: string } };
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
   saveToCacheMutate: (data: { query: string; response: string }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
