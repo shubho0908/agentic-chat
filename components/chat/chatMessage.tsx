@@ -227,17 +227,17 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       }
 
       if (url) {
-        nodes.push(
-          <a
-            key={`url-${matchStart}`}
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors break-all"
-          >
-            {url}
-          </a>
-        );
+          nodes.push(
+            <a
+              key={`url-${matchStart}`}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all"
+            >
+              {url}
+            </a>
+          );
       }
 
       if (trailing) {
@@ -296,8 +296,8 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                 <div className={cn(
                   "text-[15px] leading-relaxed",
                   isUser 
-                    ? "bg-[#0A84FF] text-white px-4 py-2.5 rounded-[20px] rounded-br-[4px] shadow-sm whitespace-pre-wrap break-words" 
-                    : "prose prose-sm dark:prose-invert max-w-none text-foreground ml-1"
+                    ? "border border-chat-user-bubble-border bg-chat-user-bubble text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words" 
+                    : "max-w-none min-w-0 text-foreground ml-1"
                 )}>
                   {textContent ? (
                     isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>

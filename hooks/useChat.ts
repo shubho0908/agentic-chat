@@ -19,6 +19,14 @@ import { handleEditMessage } from "./chat/message-editor";
 import { handleRegenerateResponse } from "./chat/message-regenerator";
 import { useStreaming } from "@/contexts/streaming-context";
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException && error.name === "AbortError"
+  ) || (
+    error instanceof Error && error.name === "AbortError"
+  );
+}
+
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { initialMessages = [], conversationId: initialConversationId } = options;
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -86,11 +94,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         if (isNewConversation) {
           return;
         }
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         if (!isNewConversation) {
           setIsLoading(false);
           abortControllerRef.current = null;
-          stopStreamingContext();
+          stopStreamingContext(false);
         }
       }
     },
@@ -127,10 +139,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -164,10 +180,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -201,10 +221,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -224,7 +248,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current = null;
     }
     setIsLoading(false);
-    stopStreamingContext();
+    stopStreamingContext(false);
   }, [stopStreamingContext]);
 
   useEffect(() => {

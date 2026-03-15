@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../node_modules/streamdown/dist/index.js";
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -34,6 +32,8 @@
   --sidebar-accent-foreground: hsl(240 6% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(217 91% 60%);
+  --chat-user-bubble: hsl(240 8% 94%);
+  --chat-user-bubble-border: hsl(240 7% 87%);
 }
 
 .dark {
@@ -64,6 +64,8 @@
   --sidebar-accent-foreground: hsl(0 0% 100%);
   --sidebar-border: hsl(0 0% 10%);
   --sidebar-ring: hsl(217 91% 60%);
+  --chat-user-bubble: hsl(240 4% 16%);
+  --chat-user-bubble-border: hsl(240 4% 23%);
 }
 
 @theme inline {
@@ -97,6 +99,8 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-chat-user-bubble: var(--chat-user-bubble);
+  --color-chat-user-bubble-border: var(--chat-user-bubble-border);
   --shadow-apple: 0 8px 30px rgba(0, 0, 0, 0.12);
   --shadow-apple-dark: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
@@ -111,6 +115,90 @@
 
   .prose a {
     @apply text-blue-600 dark:text-blue-400 underline underline-offset-4 decoration-current/30 hover:decoration-current transition-colors;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: hsl(240 4% 46%);
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: hsl(221 83% 53%);
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition {
+    color: hsl(160 84% 39%);
+  }
+
+  .hljs-number,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-regexp,
+  .hljs-meta .hljs-string {
+    color: hsl(25 95% 53%);
+  }
+
+  .hljs-built_in,
+  .hljs-function,
+  .hljs-class .hljs-title {
+    color: hsl(262 83% 58%);
+  }
+
+  .hljs-deletion {
+    color: hsl(0 84% 60%);
+  }
+
+  .dark .hljs-comment,
+  .dark .hljs-quote {
+    color: hsl(0 0% 55%);
+  }
+
+  .dark .hljs-keyword,
+  .dark .hljs-selector-tag,
+  .dark .hljs-literal,
+  .dark .hljs-section,
+  .dark .hljs-link {
+    color: hsl(213 94% 68%);
+  }
+
+  .dark .hljs-string,
+  .dark .hljs-title,
+  .dark .hljs-name,
+  .dark .hljs-type,
+  .dark .hljs-attribute,
+  .dark .hljs-symbol,
+  .dark .hljs-bullet,
+  .dark .hljs-addition {
+    color: hsl(160 84% 55%);
+  }
+
+  .dark .hljs-number,
+  .dark .hljs-variable,
+  .dark .hljs-template-variable,
+  .dark .hljs-regexp,
+  .dark .hljs-meta .hljs-string {
+    color: hsl(32 95% 64%);
+  }
+
+  .dark .hljs-built_in,
+  .dark .hljs-function,
+  .dark .hljs-class .hljs-title {
+    color: hsl(263 85% 72%);
+  }
+
+  .dark .hljs-deletion {
+    color: hsl(0 91% 71%);
   }
 
   @keyframes float {
