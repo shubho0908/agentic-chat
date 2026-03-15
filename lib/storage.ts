@@ -190,5 +190,3 @@ export function clearPendingGoogleWorkspaceQuery(): void {
   } catch {
   }
 }
-
-export { STORAGE_KEYS };

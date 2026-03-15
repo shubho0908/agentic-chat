@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ComponentType, type SVGProps } from "react";
+import type { ComponentType, SVGProps } from "react";
 import {
   CheckCircle2,
   ExternalLink,
@@ -11,20 +11,11 @@ import {
   ShieldCheck,
   Unplug,
 } from "lucide-react";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { useSession, authorizeGoogleWorkspace } from "@/lib/auth-client";
-import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import {
-  compareGoogleWorkspaceSelections,
   countEnabledGoogleWorkspaceServices,
-  DEFAULT_GOOGLE_WORKSPACE_SELECTIONS,
   getGoogleWorkspaceLevel,
-  getGoogleWorkspaceScopesFromSelections,
   GOOGLE_WORKSPACE_SERVICE_CONFIGS,
-  resolveGoogleWorkspaceSelections,
   type GoogleWorkspaceServiceId,
-  type GoogleWorkspaceServiceSelections,
 } from "@/lib/tools/google-suite/access-levels";
 import {
   CalendarIcon,
@@ -39,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useGoogleWorkspaceSettingsController } from "@/hooks/useGoogleWorkspaceSettingsController";
 
 const SERVICE_ICONS = {
   gmail: GmailIcon,
@@ -49,183 +41,27 @@ const SERVICE_ICONS = {
   slides: SlidesIcon,
 } satisfies Record<GoogleWorkspaceServiceId, ComponentType<SVGProps<SVGSVGElement>>>;
 
-function getConnectionTone(status: {
-  connected?: boolean;
-  workspaceConnected?: boolean;
-  authorized?: boolean;
-}) {
-  if (!status.connected) {
-    return {
-      label: "Google not linked",
-      className: "border-slate-300/70 bg-slate-500/10 text-slate-700 dark:border-slate-700 dark:text-slate-200",
-    };
-  }
-
-  if (status.authorized) {
-    return {
-      label: "Full access ready",
-      className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    };
-  }
-
-  if (status.workspaceConnected) {
-    return {
-      label: "Custom access",
-      className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    };
-  }
-
-  return {
-    label: "Workspace disconnected",
-    className: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  };
-}
-
 export function GoogleWorkspaceSettings() {
-  const { data: session, isPending } = useSession();
-  const { status, isLoading, refetch } = useGoogleSuiteAuth({ enabled: !!session });
-  const router = useRouter();
-  const [selectedLevels, setSelectedLevels] = useState<GoogleWorkspaceServiceSelections>(
-    DEFAULT_GOOGLE_WORKSPACE_SELECTIONS
-  );
-  const [isApplying, setIsApplying] = useState(false);
-
-  const grantedScopes = status?.grantedScopes ?? [];
-  const configuredScopes = status?.configuredScopes ?? grantedScopes;
-  const currentSelections = resolveGoogleWorkspaceSelections(grantedScopes);
-  const suggestedSelections = resolveGoogleWorkspaceSelections(configuredScopes);
-  const selectionSource = status?.workspaceConnected ? grantedScopes : configuredScopes;
-  const selectionScopeKey = [...selectionSource].sort().join(",");
-  const hasStatus = Boolean(status);
-
-  useEffect(() => {
-    if (!hasStatus) {
-      return;
-    }
-
-    setSelectedLevels(
-      resolveGoogleWorkspaceSelections(selectionScopeKey ? selectionScopeKey.split(",") : [])
-    );
-  }, [selectionScopeKey, hasStatus]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    const oauthResult = params.get("google_workspace");
-    const oauthReason = params.get("reason");
-
-    if (!oauthResult) {
-      return;
-    }
-
-    void refetch();
-
-    if (oauthResult === "success") {
-      toast.success("Google access updated", {
-        description: "Your selected Google Workspace permissions are now synced.",
-      });
-    } else {
-      toast.error("Google access update failed", {
-        description:
-          oauthReason === "account_mismatch"
-            ? "Finish the reconnect with the same Google account you originally linked to this workspace."
-            : oauthReason === "account_linked"
-              ? "That Google account is already linked elsewhere. Reconnect with the original account for this workspace."
-              : oauthReason === "persist_failed"
-            ? "Google returned successfully, but we could not save the new grant. Please try again."
-            : "Google did not finish the Workspace permission update. Please try again.",
-      });
-    }
-
-    window.history.replaceState(null, "", "/settings/google-workspace");
-  }, [refetch, router]);
-
-  const comparison = compareGoogleWorkspaceSelections(currentSelections, selectedLevels);
-  const selectedScopes = getGoogleWorkspaceScopesFromSelections(selectedLevels);
-  const currentEnabledCount = countEnabledGoogleWorkspaceServices(currentSelections);
-  const selectedEnabledCount = countEnabledGoogleWorkspaceServices(selectedLevels);
-  const connectionTone = getConnectionTone(status ?? {});
-
-  const actionLabel = !comparison.hasChanges
-    ? "Access is up to date"
-    : !status?.workspaceConnected && selectedEnabledCount > 0
-      ? "Reconnect selected access"
-    : comparison.hasRemovals && selectedEnabledCount === 0
-      ? "Disconnect Workspace tools"
-      : comparison.hasRemovals
-        ? "Reconnect with selected access"
-        : "Add selected access";
-
-  const actionDescription = !comparison.hasChanges
-    ? "Everything already matches your current Google Workspace access."
-    : !status?.workspaceConnected && selectedEnabledCount > 0
-      ? "Your last Google Workspace selection is preserved locally. Reconnect to make that access live again."
-    : comparison.hasRemovals
-      ? "We will revoke the current Workspace grant, keep you signed in, then reconnect with only this selection."
-      : "Google will ask only for the extra access you just turned on.";
-
-  const handleLevelChange = (serviceId: GoogleWorkspaceServiceId, levelId: string) => {
-    setSelectedLevels((current) => ({
-      ...current,
-      [serviceId]: levelId,
-    }));
-  };
-
-  const handleResetSelection = () => {
-    setSelectedLevels(currentSelections);
-  };
-
-  const handleApply = async () => {
-    if (!comparison.hasChanges) {
-      return;
-    }
-
-    setIsApplying(true);
-
-    try {
-      if (comparison.hasRemovals) {
-        const resetResponse = await fetch("/api/google-suite/auth/reset", {
-          method: "POST",
-        });
-
-        if (!resetResponse.ok) {
-          throw new Error("Failed to reset Google Workspace access");
-        }
-
-        if (selectedEnabledCount === 0) {
-          await refetch();
-          toast.success("Google Workspace disconnected", {
-            description: "You stayed signed in. Reconnect any app from this page whenever you need it.",
-          });
-          setIsApplying(false);
-          return;
-        }
-      }
-
-      toast.info(
-        comparison.hasRemovals ? "Reconnect required" : "Opening Google consent",
-        {
-          description: comparison.hasRemovals
-            ? "Continue with Google to apply your smaller, cleaner access set."
-            : "Continue with Google to add the new access you selected.",
-          duration: 5000,
-        }
-      );
-
-      await authorizeGoogleWorkspace("/settings/google-workspace", selectedScopes);
-      setIsApplying(false);
-    } catch (error) {
-      console.error("Google Workspace settings error:", error);
-      await refetch();
-      setIsApplying(false);
-      toast.error("Unable to update Google Workspace access", {
-        description: "Please try again. Your existing setup was preserved as much as possible.",
-      });
-    }
-  };
+  const {
+    actionDescription,
+    actionLabel,
+    comparison,
+    connectionTone,
+    currentEnabledCount,
+    currentSelections,
+    handleApply,
+    handleGoHome,
+    handleLevelChange,
+    handleResetSelection,
+    isApplying,
+    isLoading,
+    isPending,
+    selectedEnabledCount,
+    selectedLevels,
+    session,
+    status,
+    suggestedSelections,
+  } = useGoogleWorkspaceSettingsController();
 
   if (isPending || isLoading) {
     return (
@@ -241,7 +77,7 @@ export function GoogleWorkspaceSettings() {
   if (!session?.user) {
     return (
       <div className="flex min-h-screen flex-col">
-        <ChatHeader onConfigured={() => {}} onNewChat={() => router.push("/")} />
+        <ChatHeader onConfigured={() => {}} onNewChat={handleGoHome} />
         <div className="mx-auto flex w-full max-w-3xl flex-1 items-center justify-center px-4 pb-10 pt-24">
           <Card className="w-full border-border/60 bg-card shadow-none">
             <CardContent className="space-y-4 p-8 text-center">
@@ -264,7 +100,7 @@ export function GoogleWorkspaceSettings() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <ChatHeader onConfigured={() => {}} onNewChat={() => router.push("/")} />
+      <ChatHeader onConfigured={() => {}} onNewChat={handleGoHome} />
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pb-10 pt-24 sm:px-6">
         <Card className="border-border/60 bg-card shadow-none">
           <CardContent className="space-y-5 p-6 sm:p-7">

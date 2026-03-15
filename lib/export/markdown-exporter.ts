@@ -1,6 +1,6 @@
 import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
 
-export function exportToMarkdown(
+function exportToMarkdown(
   conversation: ExportConversation,
   options: ExportOptions = {}
 ): string {

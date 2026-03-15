@@ -88,7 +88,7 @@ export function getContextualMessage(
     : AI_THINKING_MESSAGES.GENERATING;
 }
 
-export type RoutingIconConfig = {
+type RoutingIconConfig = {
   icon: LucideIcon;
   className: string;
 };

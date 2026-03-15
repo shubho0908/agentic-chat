@@ -66,7 +66,7 @@ export function buildCacheQuery(
   return contextParts.join('\n');
 }
 
-export async function checkCache(
+async function checkCache(
   query: string,
   signal: AbortSignal
 ): Promise<CacheCheckResult> {

@@ -1,6 +1,6 @@
 import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 
-export const WEB_SEARCH_BASIC_INSTRUCTIONS = `
+const WEB_SEARCH_BASIC_INSTRUCTIONS = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚡ BASIC WEB SEARCH - QUICK & EFFICIENT MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -55,7 +55,7 @@ export const WEB_SEARCH_BASIC_INSTRUCTIONS = `
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
-export const WEB_SEARCH_ADVANCED_INSTRUCTIONS = `
+const WEB_SEARCH_ADVANCED_INSTRUCTIONS = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔬 ADVANCED WEB SEARCH - AGENTIC DEEP RESEARCH MODE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

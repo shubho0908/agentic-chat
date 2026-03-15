@@ -5,7 +5,6 @@ import { loadDocument } from './loader';
 import { isSupportedForRAG } from '../utils';
 import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
-import { getAuthorizedAttachment } from '../auth/attachment';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@prisma/client';
 
@@ -159,49 +158,5 @@ export async function processDocument(
       attachmentId,
       error: errorMessage,
     };
-  }
-}
-
-export async function reprocessDocument(
-  attachmentId: string,
-  userId: string
-): Promise<ProcessDocumentResult> {
-  try {
-    await deleteDocumentChunks(attachmentId);
-
-    await prisma.attachment.update({
-      where: { id: attachmentId },
-      data: {
-        processingStatus: 'PENDING' as ProcessingStatus,
-        processedAt: null,
-        processingError: null,
-        chunkCount: null,
-        totalTokens: null,
-      },
-    });
-
-    return await processDocument(attachmentId, userId);
-  } catch (error) {
-    throw new Error(`Error reprocessing document: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-export async function deleteDocument(
-  attachmentId: string,
-  userId: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    await getAuthorizedAttachment(attachmentId, userId);
-
-    await deleteDocumentChunks(attachmentId);
-
-    return { success: true };
-  } catch (error) {
-    if (error instanceof RAGError) {
-      logRAGError(error, 'deleteDocument');
-      return { success: false, error: error.message };
-    }
-    
-    throw new Error(`Error deleting document: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

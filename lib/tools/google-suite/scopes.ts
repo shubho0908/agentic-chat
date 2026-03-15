@@ -31,7 +31,7 @@ export const GOOGLE_SCOPES = {
   SLIDES: 'https://www.googleapis.com/auth/presentations',
 } as const;
 
-export const SCOPE_GROUPS = {
+const SCOPE_GROUPS = {
   SIGN_IN: [
     GOOGLE_SCOPES.OPENID,
     GOOGLE_SCOPES.USERINFO_EMAIL,
@@ -53,7 +53,7 @@ export const SCOPE_GROUPS = {
 export const GOOGLE_SIGN_IN_SCOPES = [...SCOPE_GROUPS.SIGN_IN];
 export const GOOGLE_CONNECTOR_SCOPES = [...SCOPE_GROUPS.SIGN_IN];
 
-export const GOOGLE_WORKSPACE_SCOPES = [
+const GOOGLE_WORKSPACE_SCOPES = [
   ...SCOPE_GROUPS.SIGN_IN,
   ...SCOPE_GROUPS.WORKSPACE,
 ];
@@ -77,7 +77,7 @@ export function getGrantedGoogleScopes(scope?: string | null): Set<string> {
   return new Set(scope.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean));
 }
 
-export function getGrantedGoogleWorkspaceScopes(scope?: string | null): string[] {
+function getGrantedGoogleWorkspaceScopes(scope?: string | null): string[] {
   const grantedScopes = getGrantedGoogleScopes(scope);
 
   return Array.from(grantedScopes).filter(
@@ -89,7 +89,7 @@ export function hasAnyGoogleWorkspaceScopes(scope?: string | null): boolean {
   return getGrantedGoogleWorkspaceScopes(scope).length > 0;
 }
 
-export function hasGrantedGoogleScope(
+function hasGrantedGoogleScope(
   grantedScopes: Iterable<string>,
   requiredScope: string
 ): boolean {
@@ -112,10 +112,6 @@ export function getMissingGoogleScopes(
 export function getMissingGoogleWorkspaceScopes(scope?: string | null): string[] {
   const grantedScopes = getGrantedGoogleScopes(scope);
   return getMissingGoogleScopes(GOOGLE_WORKSPACE_SCOPES, grantedScopes);
-}
-
-export function hasGoogleWorkspaceScopes(scope?: string | null): boolean {
-  return getMissingGoogleWorkspaceScopes(scope).length === 0;
 }
 
 function uniqueScopes(scopes: string[]): string[] {

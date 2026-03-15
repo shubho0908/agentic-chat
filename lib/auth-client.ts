@@ -8,7 +8,7 @@ const clientBaseUrl =
     ? window.location.origin
     : process.env.NEXT_PUBLIC_APP_URL;
 
-export const authClient = createAuthClient({
+const authClient = createAuthClient({
   baseURL: clientBaseUrl,
 });
 

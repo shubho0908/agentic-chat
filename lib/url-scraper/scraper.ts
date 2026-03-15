@@ -3,7 +3,7 @@ import { parseHTML } from "linkedom";
 import * as cheerio from "cheerio";
 import { unstable_cache } from 'next/cache';
 
-export interface ScrapedContent {
+interface ScrapedContent {
   url: string;
   title?: string;
   content: string;

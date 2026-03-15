@@ -11,7 +11,7 @@ export type GoogleWorkspaceServiceId =
   | "sheets"
   | "slides";
 
-export interface GoogleWorkspaceServiceLevel {
+interface GoogleWorkspaceServiceLevel {
   id: string;
   label: string;
   description: string;
@@ -20,7 +20,7 @@ export interface GoogleWorkspaceServiceLevel {
   isGranted: (grantedScopes: Set<string>) => boolean;
 }
 
-export interface GoogleWorkspaceServiceConfig {
+interface GoogleWorkspaceServiceConfig {
   id: GoogleWorkspaceServiceId;
   name: string;
   summary: string;
@@ -250,7 +250,7 @@ function uniqueScopes(scopes: string[]): string[] {
   return Array.from(new Set(scopes));
 }
 
-export function getGoogleWorkspaceServiceConfig(serviceId: GoogleWorkspaceServiceId) {
+function getGoogleWorkspaceServiceConfig(serviceId: GoogleWorkspaceServiceId) {
   return GOOGLE_WORKSPACE_SERVICE_CONFIGS.find((service) => service.id === serviceId);
 }
 

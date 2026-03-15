@@ -1,7 +1,7 @@
 import type { gmail_v1 } from 'googleapis';
 import { formatEmailDate } from '@/utils/dateFormatter';
 
-export interface ParsedEmailContent {
+interface ParsedEmailContent {
   from: string;
   to: string;
   subject: string;

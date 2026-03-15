@@ -1,4 +1,4 @@
-export interface OpenAIModel {
+interface OpenAIModel {
   id: string;
   name: string;
   description: string;

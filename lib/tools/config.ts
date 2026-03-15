@@ -81,16 +81,6 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
   },
 };
 
-export function getToolConfig(toolId: ToolId): ToolConfig | undefined {
-  return AVAILABLE_TOOLS[toolId];
-}
-
 export function isValidToolId(id: string): id is ToolId {
   return Object.values(TOOL_IDS).includes(id as ToolId);
-}
-
-export function getToolGradientClasses(toolId: ToolId): string {
-  const config = getToolConfig(toolId);
-  if (!config) return '';
-  return `from-${config.gradientColors.from} via-${config.gradientColors.via} to-${config.gradientColors.to}`;
 }

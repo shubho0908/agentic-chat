@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Info, Zap, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -11,32 +10,23 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
+import { type ToolId, type ToolConfig } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
-import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
 import { GOOGLE_SUITE_SERVICES } from "@/components/icons/google-suite-icons";
+import { getGoogleWorkspaceLevel } from "@/lib/tools/google-suite/access-levels";
 import {
-  getGoogleWorkspaceLevel,
-  resolveGoogleWorkspaceSelections,
-} from "@/lib/tools/google-suite/access-levels";
+  useToolMenuItemState,
+  type ToolMenuDeepResearchUsage,
+  type ToolMenuGoogleSuiteStatus,
+} from "@/hooks/chat/useToolMenuItemState";
 
 interface ToolMenuItemProps {
   tool: ToolConfig;
   isActive: boolean;
   isAuthenticated: boolean;
   searchDepth?: SearchDepth;
-  deepResearchUsage?: {
-    remaining: number;
-    limit: number;
-    loading: boolean;
-  };
-  googleSuiteStatus?: {
-    authorized: boolean;
-    loading: boolean;
-    workspaceConnected: boolean;
-    grantedScopes: string[];
-    missingScopes: string[];
-  };
+  deepResearchUsage?: ToolMenuDeepResearchUsage;
+  googleSuiteStatus?: ToolMenuGoogleSuiteStatus;
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
@@ -49,38 +39,25 @@ export function ToolMenuItem({
   googleSuiteStatus,
   onToolSelect,
 }: ToolMenuItemProps) {
-  const router = useRouter();
-  const ToolIcon = tool.icon;
-  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
-  const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
-  const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
-  const hasWorkspaceAccess = (googleSuiteStatus?.grantedScopes ?? []).some(
-    (scope) => !signInScopes.has(scope)
-  );
-  const googleSuiteNeedsSetup =
-    isGoogleSuite &&
-    isAuthenticated &&
-    !googleSuiteStatus?.loading &&
-    !hasWorkspaceAccess;
-  const isDisabled =
-    !isAuthenticated ||
-    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
-    (isGoogleSuite && !!googleSuiteStatus?.loading);
-  const needsPermissions =
-    isGoogleSuite &&
-    isAuthenticated &&
-    !googleSuiteStatus?.loading &&
-    (!hasWorkspaceAccess || (googleSuiteStatus?.missingScopes?.length ?? 0) > 0);
-  const googleWorkspaceSelections = resolveGoogleWorkspaceSelections(
-    googleSuiteStatus?.grantedScopes ?? []
-  );
-
-  const handleOpenGoogleSettings = (event?: React.MouseEvent) => {
-    event?.preventDefault();
-    event?.stopPropagation();
-    router.push("/settings/google-workspace");
-  };
+  const {
+    ToolIcon,
+    googleWorkspaceSelections,
+    handleOpenGoogleSettings,
+    hasWorkspaceAccess,
+    isDeepResearch,
+    isDisabled,
+    isGoogleSuite,
+    isWebSearch,
+    needsPermissions,
+    googleSuiteNeedsSetup,
+    openGoogleSettings,
+    toolDescription,
+  } = useToolMenuItemState({
+    tool,
+    isAuthenticated,
+    deepResearchUsage,
+    googleSuiteStatus,
+  });
 
   if (isWebSearch) {
     return (
@@ -188,7 +165,7 @@ export function ToolMenuItem({
     <DropdownMenuItem
       onClick={() => {
         if (googleSuiteNeedsSetup) {
-          router.push("/settings/google-workspace");
+          openGoogleSettings();
           return;
         }
 
@@ -327,15 +304,7 @@ export function ToolMenuItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated
-            ? 'Login required to access this tool'
-            : googleSuiteNeedsSetup
-              ? 'Enable at least one Google app in Settings before using Google Suite.'
-            : needsPermissions
-              ? hasWorkspaceAccess
-                ? 'Some Google permissions are missing. Update them in Settings before broader Workspace tasks.'
-                : 'Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides.'
-              : tool.description}
+          {toolDescription}
         </span>
       </div>
       {isActive && (

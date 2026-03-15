@@ -21,7 +21,7 @@ import { filterDocumentAttachments, partitionByStatus, extractIds } from '@/lib/
 import { waitForDocumentProcessing } from '@/lib/rag/retrieval/status';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
 
-export interface StreamHandlerOptions {
+interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
   messages: Message[];
   activeTool?: string | null;

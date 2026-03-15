@@ -4,14 +4,14 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/api-utils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
 
-export interface CacheCheckResult {
+interface CacheCheckResult {
   cached: boolean;
   response?: string;
   latency?: number;
   error?: string;
 }
 
-export interface CacheSaveResult {
+interface CacheSaveResult {
   success: boolean;
   error?: string;
 }

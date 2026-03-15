@@ -47,7 +47,6 @@ function formatRetrievedContext(
 }
 
 async function resolveCompletedAttachmentScope(
-  userId: string,
   options: RAGContextOptions = {}
 ): Promise<ResolvedAttachmentScope | null> {
   const {
@@ -134,7 +133,7 @@ export async function getDocumentOverviewContext(
     'rag-document-overview',
     async () => {
       try {
-        const scope = await resolveCompletedAttachmentScope(userId, options);
+        const scope = await resolveCompletedAttachmentScope(options);
         if (!scope) {
           return null;
         }
@@ -222,7 +221,7 @@ export async function getRAGContext(
       scoreThreshold = RAG_CONFIG.search.scoreThreshold,
     } = options;
 
-    const scope = await resolveCompletedAttachmentScope(userId, options);
+    const scope = await resolveCompletedAttachmentScope(options);
     if (!scope) {
       return null;
     }

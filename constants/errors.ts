@@ -232,5 +232,3 @@ export const HTTP_STATUS = {
   GONE: 410,
   INTERNAL_SERVER_ERROR: 500,
 } as const;
-
-export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];

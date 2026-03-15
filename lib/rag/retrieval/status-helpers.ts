@@ -15,7 +15,7 @@ export function extractIds<T extends { id: string }>(items: T[]): string[] {
   return items.map(item => item.id);
 }
 
-export function isDocumentAttachment(fileType: string): boolean {
+function isDocumentAttachment(fileType: string): boolean {
   return fileType.startsWith('text/') || 
     fileType === 'application/pdf' ||
     fileType.includes('wordprocessingml') ||

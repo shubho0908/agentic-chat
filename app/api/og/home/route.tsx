@@ -63,7 +63,7 @@ export async function GET(request: Request) {
               height: '300px',
               borderRadius: '50%',
               background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)',
-              filter: 'blur(60px)',
+              filter: 'blur(8px)',
             }}
           />
           <div
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
               height: '400px',
               borderRadius: '50%',
               background: 'radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%)',
-              filter: 'blur(80px)',
+              filter: 'blur(8px)',
             }}
           />
 

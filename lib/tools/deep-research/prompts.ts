@@ -90,52 +90,6 @@ Respond with ONLY a JSON object:
   "confidence": "low" | "medium" | "high"
 }`;
 
-export const ROUTER_SYSTEM_PROMPT = `You are a query complexity analyzer. Your task is to determine if a user query requires deep research or can be answered simply.
-
-**CRITICAL: Deep research is for queries that benefit from multi-source research and comprehensive analysis.**
-
-**Deep Research Required For:**
-1. **Comparison Questions**: "What are the differences between X and Y?", "Compare X vs Y", "X or Y - which should I choose?"
-2. **Comprehensive Analysis**: "Explain the pros and cons of X", "What are the key aspects of X?", "Analyze the impact of X"
-3. **Multi-faceted Topics**: Questions requiring perspectives from multiple angles or domains
-4. **Best Practices/Recommendations**: "When should I use X?", "What's the best approach for X?", "How do I decide between X and Y?"
-5. **Strategic/Architectural Questions**: Software architecture, system design, technology choices
-6. **Trade-off Analysis**: Questions about advantages, disadvantages, considerations, implications
-7. **Research Requests**: Contains "research", "analyze", "comprehensive", "detailed", "deep dive", "thorough"
-8. **Complex How/Why**: Not simple facts, but questions requiring multi-step explanations with context
-
-**Simple Query Indicators (Only these should be 'simple'):**
-- Single fact lookup: "What is X?", "When was X created?", "Who invented X?"
-- Definitions: "Define X", "What does X mean?"
-- Current status: time, weather, stock prices
-- Simple calculations or conversions
-- Straightforward "yes/no" questions
-- Single-sentence factual answers
-
-**Examples:**
-
-DEEP RESEARCH:
-- "What are the key differences between microservices and monolithic architecture, and when should each be used?"
-- "Compare React vs Vue: pros, cons, and use cases"
-- "Explain the trade-offs between SQL and NoSQL databases"
-- "How do I choose between REST and GraphQL for my API?"
-- "What are the best practices for implementing authentication?"
-
-SIMPLE:
-- "What is React?"
-- "When was Python created?"
-- "Who is the CEO of Apple?"
-- "What time is it in Tokyo?"
-- "Convert 100 USD to EUR"
-
-**Default Behavior**: When in doubt, choose 'deep_research' - it's better to over-research than under-research.
-
-Respond with ONLY a JSON object in this format:
-{
-  "decision": "simple" | "deep_research",
-  "reasoning": "Brief explanation of why"
-}`;
-
 export const PLANNER_SYSTEM_PROMPT = `You are an expert research planner creating focused, specific research questions.
 
 **CRITICAL RULES:**
@@ -409,7 +363,7 @@ While microservices offer benefits, they introduce operational complexity. Studi
 
 **Remember**: This synthesis is the FOUNDATION for the final report. Make it SO comprehensive, analytical, and detailed that the formatter can expand it into an exceptional 8000-10000 word expert-level document by adding structure, elaboration, and formatting polish.`;
 
-export const EVALUATION_PROMPT = `You are a research quality evaluator. Check if the research output meets standards based on the current strictness level.
+const EVALUATION_PROMPT = `You are a research quality evaluator. Check if the research output meets standards based on the current strictness level.
 
 **CRITICAL**: Deep research aims to produce comprehensive, expert-level reports of 8000-10000 words. Evaluation must ensure sufficient depth, breadth, and quality.
 

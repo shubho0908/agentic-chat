@@ -40,7 +40,7 @@ const MEMORY_NOT_REQUIRED_PATTERNS = [
   /^(write|create|generate|make)\s+(a|an|some)/i,
 ];
 
-export function shouldQueryMemoryFast(query: string): boolean {
+function shouldQueryMemoryFast(query: string): boolean {
   if (!query || query.trim().length < 3) {
     return false;
   }
@@ -74,7 +74,7 @@ export function shouldQueryMemoryFast(query: string): boolean {
   return false;
 }
 
-export class MemoryClassificationCache {
+class MemoryClassificationCache {
   private cache = new Map<string, { decision: boolean; timestamp: number }>();
   private readonly TTL = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_SIZE = 1000;
@@ -127,7 +127,7 @@ export class MemoryClassificationCache {
   }
 }
 
-export const memoryClassificationCache = new MemoryClassificationCache();
+const memoryClassificationCache = new MemoryClassificationCache();
 
 export function shouldQueryMemoryWithCache(query: string): boolean {
   const cached = memoryClassificationCache.get(query);

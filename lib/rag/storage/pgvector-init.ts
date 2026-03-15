@@ -316,8 +316,3 @@ export async function ensurePgVectorTables(): Promise<void> {
 
   return initializationPromise;
 }
-
-export function resetInitialization(): void {
-  initialized = false;
-  initializationPromise = null;
-}

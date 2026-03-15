@@ -1,6 +1,6 @@
 import type { ExportConversation, ExportOptions } from '@/types/export';
 
-export function exportToJSON(
+function exportToJSON(
   conversation: ExportConversation,
   options: ExportOptions = {}
 ): string {

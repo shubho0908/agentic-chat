@@ -12,7 +12,7 @@ import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForCont
 import { shouldQueryMemoryWithCache } from './memory-classifier';
 import { extractTextFromMessage } from './chat/message-helpers';
 
-export interface ContextRoutingResult {
+interface ContextRoutingResult {
   context: string;
   metadata: {
     hasMemories: boolean;

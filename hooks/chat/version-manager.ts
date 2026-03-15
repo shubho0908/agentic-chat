@@ -36,7 +36,7 @@ export function createNewVersion(
   return newVersion;
 }
 
-export function getCleanedVersions(message: Message): Message[] {
+function getCleanedVersions(message: Message): Message[] {
   const existingVersions = message.versions || [];
   return existingVersions.filter(v => v.id && !v.id.startsWith('temp-'));
 }
@@ -118,23 +118,6 @@ export function updateMessageWithVersions(
   return { 
     ...currentVersion,
     attachments: message.attachments || currentVersion.attachments,
-    versions: olderVersions
-  };
-}
-
-export function normalizeMessageVersions(message: Message): Message {
-  if (!message.versions || message.versions.length === 0) {
-    return message;
-  }
-
-  const allVersions = [message, ...message.versions];
-  const sortedVersions = allVersions.sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
-  
-  const newestVersion = sortedVersions[0];
-  const olderVersions = sortedVersions.slice(1);
-  
-  return {
-    ...newestVersion,
     versions: olderVersions
   };
 }

@@ -1,21 +1,4 @@
 import { prisma } from './prisma';
-import type { Message as PrismaMessage } from '@prisma/client';
-
-export async function getNextSiblingIndex(parentMessageId: string): Promise<number> {
-  const maxSibling = await prisma.message.aggregate({
-    where: {
-      OR: [
-        { id: parentMessageId },
-        { parentMessageId: parentMessageId }
-      ]
-    },
-    _max: {
-      siblingIndex: true
-    }
-  });
-
-  return (maxSibling._max.siblingIndex ?? -1) + 1;
-}
 
 export async function getMessageVersions(
   messageId: string,
@@ -121,28 +104,4 @@ export async function getVersionCount(messageId: string): Promise<number> {
   });
 
   return count;
-}
-
-export function buildMessageTree(messages: PrismaMessage[]) {
-  const originals: PrismaMessage[] = [];
-  const versionsByParent = new Map<string, PrismaMessage[]>();
-
-  for (const msg of messages) {
-    if (msg.isDeleted) continue;
-    
-    if (!msg.parentMessageId) {
-      originals.push(msg);
-    } else {
-      const versions = versionsByParent.get(msg.parentMessageId) || [];
-      versions.push(msg);
-      versionsByParent.set(msg.parentMessageId, versions);
-    }
-  }
-
-  originals.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-
-  return originals.map(msg => ({
-    ...msg,
-    versions: (versionsByParent.get(msg.id) || []).sort((a, b) => a.siblingIndex - b.siblingIndex)
-  }));
 }

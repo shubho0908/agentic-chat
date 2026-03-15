@@ -21,7 +21,6 @@ interface SynchronizedGoogleAccount {
   grantedScopes: string[];
 }
 
-export const GOOGLE_AUTH_REVOKED_ERROR = 'GOOGLE_AUTH_REVOKED';
 export const GOOGLE_ACCOUNT_MISMATCH_ERROR = 'GOOGLE_ACCOUNT_MISMATCH';
 export const GOOGLE_ACCOUNT_LINKED_ERROR = 'GOOGLE_ACCOUNT_LINKED';
 
