@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Image from "next/image";
+import { cn } from "@/lib/utils";
 import { Maximize2, FileText, FileSpreadsheet, File as FileIcon } from "lucide-react";
 import type { Attachment } from "@/lib/schemas/chat";
 import { ImageLightbox } from "./imageLightbox";
@@ -9,6 +10,7 @@ import { filterImageAttachments, filterDocumentAttachments } from "@/lib/attachm
 interface AttachmentDisplayProps {
   attachments?: Attachment[];
   messageId?: string;
+  isUser?: boolean;
 }
 
 function getDocumentIcon(fileType: string, fileName: string) {
@@ -24,7 +26,7 @@ function getDocumentIcon(fileType: string, fileName: string) {
   return <FileIcon className="size-5" />;
 }
 
-export function AttachmentDisplay({ attachments, messageId }: AttachmentDisplayProps) {
+export function AttachmentDisplay({ attachments, messageId, isUser }: AttachmentDisplayProps) {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ url: string; name: string; type: string } | null>(null);
 
@@ -36,23 +38,25 @@ export function AttachmentDisplay({ attachments, messageId }: AttachmentDisplayP
   return (
     <>
       {imageAttachments.length > 0 && (
-        <div className="flex flex-wrap gap-3 mt-3">
+        <div className="flex flex-wrap gap-2">
           {imageAttachments.map((attachment, idx) => (
             <div
               key={attachment.id || `${messageId}-img-${idx}`}
-              className="group relative w-56 h-56 rounded-xl overflow-hidden border-2 border-border/60 hover:border-primary/50 transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+              className={cn(
+                "group relative w-48 h-48 sm:w-56 sm:h-56 overflow-hidden border border-black/5 dark:border-white/10 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl"
+              )}
               onClick={() => setLightboxImage(attachment.fileUrl)}
             >
               <Image
                 src={attachment.fileUrl}
                 alt={attachment.fileName}
                 fill
-                sizes="(max-width: 768px) 224px, 224px"
+                sizes="(max-width: 768px) 192px, 224px"
                 className="object-cover"
                 unoptimized
                 loading="lazy"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <div className="absolute bottom-0 left-0 right-0 p-3 text-white text-xs font-medium truncate opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                 {attachment.fileName}
               </div>
@@ -65,19 +69,37 @@ export function AttachmentDisplay({ attachments, messageId }: AttachmentDisplayP
       )}
 
       {documentAttachments.length > 0 && (
-        <div className="flex flex-wrap gap-3 mt-3">
+        <div className="flex flex-wrap gap-2">
           {documentAttachments.map((attachment, idx) => (
             <div
               key={attachment.id || `${messageId}-doc-${idx}`}
-              className="group relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-border/60 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer min-w-[200px] max-w-[280px]"
+              className={cn(
+                "group relative flex items-center gap-3 px-3.5 py-3 transition-all duration-300 cursor-pointer max-w-[260px] shadow-sm rounded-2xl",
+                isUser 
+                  ? "bg-black/5 dark:bg-[#1E1E1E] text-foreground dark:text-white border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]" 
+                  : "bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/5 hover:bg-black/5 dark:hover:bg-white/[0.04]"
+              )}
               onClick={() => setPreviewDocument({ url: attachment.fileUrl, name: attachment.fileName, type: attachment.fileType })}
             >
-              <div className="flex-shrink-0 p-2 rounded-lg bg-background/80 border border-border/50">
+              <div className={cn(
+                "flex-shrink-0 p-2.5 rounded-[12px] transition-colors",
+                isUser 
+                  ? "bg-white dark:bg-black text-foreground dark:text-white shadow-sm dark:shadow-none" 
+                  : "bg-black/5 dark:bg-black text-foreground/80 group-hover:text-foreground"
+              )}>
                 {getDocumentIcon(attachment.fileType, attachment.fileName)}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{attachment.fileName}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+              <div className="flex-1 min-w-0 pr-1">
+                <p className={cn(
+                  "text-[14px] font-medium truncate",
+                  isUser ? "text-foreground dark:text-white" : "text-foreground/90"
+                )}>
+                  {attachment.fileName}
+                </p>
+                <p className={cn(
+                  "text-[12px] mt-0.5",
+                  isUser ? "text-muted-foreground dark:text-white/60" : "text-muted-foreground"
+                )}>
                   {typeof attachment.fileSize === "number" && Number.isFinite(attachment.fileSize)
                     ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
                     : "—"}

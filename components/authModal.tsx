@@ -50,7 +50,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent 
-        className="sm:max-w-md border-0 p-0 gap-0 overflow-hidden bg-transparent shadow-none"
+        className="sm:max-w-[380px] border-0 p-0 sm:p-0 gap-0 overflow-hidden bg-transparent shadow-none"
         showCloseButton={false}
       >
         <motion.div
@@ -60,9 +60,9 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
             duration: 0.2,
             ease: [0.16, 1, 0.3, 1]
           }}
-          className="relative bg-background border border-border rounded-2xl shadow-[0_0_0_1px_rgba(0,0,0,0.03),0_2px_4px_rgba(0,0,0,0.05),0_12px_24px_rgba(0,0,0,0.05)] overflow-hidden"
+          className="relative bg-background dark:bg-black/80 backdrop-blur-xl border border-border shadow-xl rounded-2xl overflow-hidden"
         >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
           
           <div className="p-8">
             <div className="flex flex-col items-center text-center space-y-6">
@@ -88,7 +88,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
                 size="lg"
-                className="w-full h-11 rounded-xl text-[15px] font-medium bg-foreground hover:bg-foreground/90 text-background border-0 shadow-sm hover:shadow-md transition-all duration-200"
+                className="w-full h-11 rounded-xl text-[15px] font-medium bg-foreground hover:bg-foreground/90 text-background border-0 shadow-sm transition-all duration-200 ease-out hover:shadow-md active:scale-[0.98]"
                 variant="default"
               >
                 <AnimatePresence mode="wait">

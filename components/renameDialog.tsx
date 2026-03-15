@@ -85,12 +85,14 @@ export function RenameDialog({
               variant="outline"
               onClick={() => handleOpenChange(false)}
               disabled={isRenaming}
+              className="transition-all duration-200 ease-out active:scale-[0.98]"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={!title.trim() || title === currentTitle || isRenaming}
+              className="transition-all duration-200 ease-out active:scale-[0.98]"
             >
               {isRenaming ? "Renaming..." : "Rename"}
             </Button>

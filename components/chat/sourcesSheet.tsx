@@ -59,7 +59,7 @@ function SourcesSheetComponent({ citations, trigger }: SourcesSheetProps) {
               {citations.map((citation, index) => (
                 <div
                   key={citation.id || index}
-                  className="group relative rounded-lg border border-border/60 bg-card/30 backdrop-blur-sm transition-all duration-200 hover:border-primary/30 hover:bg-card/50 hover:shadow-md overflow-hidden"
+                  className="group relative rounded-xl border border-black/5 dark:border-white/10 shadow-sm bg-card/30 backdrop-blur-sm transition-all duration-200 ease-out hover:border-primary/30 hover:bg-card/50 hover:shadow-lg hover:-translate-y-0.5"
                 >
                   <div className="flex gap-3 sm:gap-4 p-3 sm:p-4">
                     <div className="flex-shrink-0 flex items-start pt-0.5">
@@ -97,7 +97,7 @@ function SourcesSheetComponent({ citations, trigger }: SourcesSheetProps) {
                             href={citation.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-shrink-0 flex items-center justify-center size-8 sm:size-9 rounded-lg border border-border/50 bg-background/50 text-primary transition-all hover:bg-primary/10 hover:border-primary/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+                            className="flex-shrink-0 flex items-center justify-center size-8 sm:size-9 rounded-lg border border-border/50 bg-background/50 text-primary transition-all duration-200 ease-out hover:bg-primary/10 hover:border-primary/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
                             onClick={(e) => e.stopPropagation()}
                             aria-label="Open source"
                           >

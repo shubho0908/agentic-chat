@@ -197,12 +197,12 @@ export function ToolMenuItemDrawer({
           <span className="font-medium truncate">{tool.name}</span>
           {needsPermissions && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Grant access
+              On demand
             </Badge>
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Click to grant Google Workspace permissions' : tool.description}
+          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Permissions are requested on first Google Workspace task' : tool.description}
         </span>
       </div>
       {isActive && (

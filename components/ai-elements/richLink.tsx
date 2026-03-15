@@ -21,7 +21,7 @@ interface LinkMetadata {
 interface RichLinkProps {
   url: string;
   className?: string;
-  variant?: "default" | "compact" | "minimal";
+  variant?: "default" | "compact" | "minimal" | "userMessage";
 }
 
 const SafeImage = ({ 
@@ -73,6 +73,21 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
   });
 
   if (isLoading) {
+    if (variant === "userMessage") {
+      return (
+        <div className={cn("inline-block w-full", className)}>
+          <div className="relative flex items-center gap-3.5 p-3 pr-4 rounded-2xl bg-black/5 dark:bg-[#1E1E1E] border border-black/5 dark:border-white/5 shadow-sm">
+            <div className="relative size-[60px] flex-shrink-0 rounded-[12px] bg-black/10 dark:bg-white/10 animate-pulse" />
+            <div className="flex-1 min-w-0 space-y-2.5">
+              <div className="h-3.5 w-5/6 animate-pulse rounded bg-black/10 dark:bg-white/10" />
+              <div className="h-3 w-4/6 animate-pulse rounded bg-black/10 dark:bg-white/10" />
+              <div className="h-2.5 w-1/3 animate-pulse rounded bg-black/10 dark:bg-white/10" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={cn("inline-block w-full max-w-2xl", className)}>
         <Card className="group relative overflow-hidden border border-border/40 bg-gradient-to-br from-card/90 via-card/80 to-card/90 backdrop-blur-xl shadow-sm">
@@ -185,6 +200,53 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
               </div>
             </CardContent>
           </Card>
+        </Link>
+      </div>
+    );
+  }
+
+  if (variant === "userMessage") {
+    return (
+      <div className={cn("inline-block w-full", className)}>
+        <Link
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group block rounded-2xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
+        >
+          <div className="relative flex items-center gap-3.5 p-3 pr-4 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl bg-black/5 dark:bg-[#1E1E1E] border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]">
+            <div className="relative size-[60px] flex-shrink-0 overflow-hidden rounded-[12px] bg-white dark:bg-black flex items-center justify-center shadow-sm dark:shadow-none border border-black/5 dark:border-white/10">
+              {metadata.image ? (
+                <SafeImage
+                  src={metadata.image}
+                  alt={displayTitle}
+                  size={60}
+                  className="object-cover size-full transition-transform duration-500 group-hover:scale-105"
+                  fallback={<Globe className="size-6 text-foreground/20 dark:text-white/20" />}
+                />
+              ) : (
+                <Globe className="size-6 text-foreground/20 dark:text-white/20" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0 py-0.5 flex flex-col justify-center">
+              <h4 className="text-[15px] font-semibold text-foreground dark:text-white line-clamp-1 leading-tight mb-0.5">
+                {displayTitle}
+              </h4>
+              <p className="text-[13px] text-muted-foreground dark:text-white/60 line-clamp-1 leading-snug mb-1">
+                {metadata.description || 'No description available'}
+              </p>
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/80 dark:text-white/50 uppercase tracking-wider">
+                <SafeImage
+                  src={metadata.favicon}
+                  alt=""
+                  size={12}
+                  className="size-3 flex-shrink-0 rounded-sm opacity-80"
+                  fallback={<Globe className="size-3 flex-shrink-0 opacity-60" />}
+                />
+                <span className="truncate">{displaySite}</span>
+              </div>
+            </div>
+          </div>
         </Link>
       </div>
     );

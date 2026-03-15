@@ -1,5 +1,6 @@
 import { ClipboardEvent, useState, useEffect } from "react";
 import { toast } from "sonner";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
 import { ChatInputForm } from "./chatInputForm";
@@ -7,15 +8,17 @@ import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
+import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/file-validation";
 import type { ToolId } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { isValidToolId, TOOL_IDS } from "@/lib/tools/config";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
-import { useSession } from "@/lib/auth-client";
+import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
+import { inferGoogleWorkspaceScopes } from "@/lib/tools/google-suite/scopes";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
@@ -25,7 +28,10 @@ import {
   getDeepResearchEnabled as getStoredDeepResearchEnabled,
   setDeepResearchEnabled as storeDeepResearchEnabled,
   getSearchDepth as getStoredSearchDepth,
-  setSearchDepth as storeSearchDepth
+  setSearchDepth as storeSearchDepth,
+  getPendingGoogleWorkspaceQuery,
+  setPendingGoogleWorkspaceQuery,
+  clearPendingGoogleWorkspaceQuery,
 } from "@/lib/storage";
 
 interface ChatInputProps {
@@ -59,6 +65,9 @@ export function ChatInput({
 
   const { data: session, isPending } = useSession();
   const { data: usageData } = useDeepResearchUsage({ enabled: !!session });
+  const { status: googleSuiteStatus, isLoading: googleSuiteAuthLoading } = useGoogleSuiteAuth({ enabled: !!session });
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!isPending) {
@@ -108,6 +117,25 @@ export function ChatInput({
     clearInput,
   } = useChatTextarea(sendMessage);
 
+  useEffect(() => {
+    if (!session || activeTool !== TOOL_IDS.GOOGLE_SUITE || input.trim()) {
+      return;
+    }
+
+    const pendingQuery = getPendingGoogleWorkspaceQuery();
+
+    if (!pendingQuery) {
+      return;
+    }
+
+    setInput(pendingQuery);
+    clearPendingGoogleWorkspaceQuery();
+    toast.success("Google Workspace request restored", {
+      description: "Your draft was restored after the permission flow.",
+      duration: 3000,
+    });
+  }, [activeTool, input, session, setInput]);
+
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
 
   const handleFilesSelectedWithAuth = (files: File[]) => {
@@ -154,6 +182,38 @@ export function ChatInput({
         description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED_DESCRIPTION,
         duration: 5000,
       });
+    }
+
+    if (activeTool === TOOL_IDS.GOOGLE_SUITE && session) {
+      if (googleSuiteAuthLoading) {
+        toast.info("Checking Google Workspace permissions...", {
+          duration: 2000,
+        });
+        return;
+      }
+
+      const requiredScopes = inferGoogleWorkspaceScopes(input);
+      const grantedScopes = new Set(googleSuiteStatus?.grantedScopes ?? []);
+      const missingRequiredScopes = requiredScopes.filter((scope) => !grantedScopes.has(scope));
+
+      if (missingRequiredScopes.length > 0) {
+        const query = searchParams?.toString();
+        const callbackURL = query ? `${pathname}?${query}` : pathname || "/";
+
+        setPendingGoogleWorkspaceQuery(input);
+
+        try {
+          await authorizeGoogleWorkspace(callbackURL, requiredScopes);
+        } catch (error) {
+          console.error("Google Workspace authorization error:", error);
+          clearPendingGoogleWorkspaceQuery();
+          toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
+            description: "We couldn't start Google Workspace permissions. Please try again.",
+          });
+        }
+
+        return;
+      }
     }
 
     setIsSending(true);
@@ -352,8 +412,8 @@ export function ChatInput({
     : placeholder;
 
   return (
-    <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto max-w-3xl p-4">
+    <div className="sticky bottom-0 pb-4 md:pb-6 bg-gradient-to-t from-background via-background/80 to-transparent pt-6 pointer-events-none">
+      <div className="mx-auto max-w-3xl px-4 pointer-events-auto">
         <ChatInputForm
           state={formState}
           handlers={formHandlers}

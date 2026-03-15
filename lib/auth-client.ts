@@ -21,10 +21,10 @@ export async function signInWithGoogle(callbackURL: string) {
   });
 }
 
-export async function authorizeGoogleWorkspace(callbackURL: string) {
+export async function authorizeGoogleWorkspace(callbackURL: string, scopes: string[] = ALL_GOOGLE_SUITE_SCOPES) {
   return linkSocial({
     provider: "google",
     callbackURL,
-    scopes: ALL_GOOGLE_SUITE_SCOPES,
+    scopes,
   });
 }

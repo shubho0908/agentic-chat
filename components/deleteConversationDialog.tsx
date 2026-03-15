@@ -67,6 +67,7 @@ export function DeleteConversationDialog(props: DeleteConversationDialogProps) {
           variant="outline"
           onClick={() => setOpen(false)}
           disabled={isDeleting}
+          className="transition-all duration-200 ease-out active:scale-[0.98]"
         >
           Cancel
         </Button>
@@ -75,6 +76,7 @@ export function DeleteConversationDialog(props: DeleteConversationDialogProps) {
           variant="destructive"
           onClick={handleConfirm}
           disabled={isDeleting}
+          className="transition-all duration-200 ease-out active:scale-[0.98]"
         >
           Delete
         </Button>

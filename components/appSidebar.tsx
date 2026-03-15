@@ -219,9 +219,9 @@ export function AppSidebar() {
                     priority
                   />
                 </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Agentic chat</span>
-                  <span className="text-xs">Chat History</span>
+                <div className="flex flex-col gap-0.5 leading-none pl-1">
+                  <span className="font-medium text-sm">Agentic</span>
+                  <span className="text-[11px] text-muted-foreground">Chat History</span>
                 </div>
               </Link>
             </SidebarMenuButton>
@@ -403,7 +403,6 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-20 bg-linear-to-t from-sidebar to-transparent" />
       </div>
       <DeleteConversationDialog
         mode="bulk"

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { ExportSection } from "@/components/export/exportSection";
+import { cn } from "@/lib/utils";
 
 interface ShareDialogProps {
   conversationId: string;
@@ -80,17 +81,24 @@ export function ShareDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isPublic ? (
-                <Globe className="size-5 text-green-600" />
-              ) : (
-                <Lock className="size-5 text-muted-foreground" />
-              )}
-              <div>
-                <p className="text-sm font-medium">
-                  {isPublic ? "Public" : "Private"}
+        <div className="space-y-5 py-4">
+          <div className="flex items-center justify-between p-3.5 rounded-xl border bg-card/60 shadow-sm transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "flex items-center justify-center p-2 rounded-full transition-colors duration-300",
+                isPublic 
+                  ? "bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400" 
+                  : "bg-muted text-muted-foreground"
+              )}>
+                {isPublic ? (
+                  <Globe className="size-4" />
+                ) : (
+                  <Lock className="size-4" />
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium leading-none">
+                  {isPublic ? "Public Access" : "Private Session"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {isPublic 
@@ -105,6 +113,7 @@ export function ShareDialog({
               size="sm"
               onClick={handleToggleSharing}
               disabled={isToggling}
+              className="rounded-lg transition-all duration-200 ease-out active:scale-[0.98]"
             >
               {isToggling 
                 ? "Updating..." 
@@ -134,7 +143,7 @@ export function ShareDialog({
                     size="icon"
                     variant="outline"
                     onClick={handleCopyLink}
-                    className="shrink-0"
+                    className="shrink-0 transition-transform active:scale-95"
                   >
                     {copied ? (
                       <Check className="size-4 text-green-600" />

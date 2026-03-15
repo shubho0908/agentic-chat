@@ -57,7 +57,7 @@ export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundPr
           <Button
             onClick={handleNewChat}
             size="lg"
-            className="gap-2 rounded-xl min-w-[160px]"
+            className="gap-2 rounded-xl min-w-[160px] transition-all duration-200 ease-out active:scale-[0.98] hover:shadow-md"
           >
             <Plus className="size-4" />
             New Chat
@@ -66,7 +66,7 @@ export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundPr
           <Button
             onClick={handleLogin}
             size="lg"
-            className="gap-2 rounded-xl min-w-[160px]"
+            className="gap-2 rounded-xl min-w-[160px] transition-all duration-200 ease-out active:scale-[0.98] hover:shadow-md"
           >
             <LogIn className="size-4" />
             Sign In

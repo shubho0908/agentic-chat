@@ -57,8 +57,8 @@ export function ToolMenuItem({
         <DropdownMenuSubTrigger
           disabled={isDisabled}
           className={cn(
-            "gap-3 py-3 rounded-lg transition-all",
-            !isDisabled && "cursor-pointer group",
+            "gap-3 py-3 rounded-lg transition-all duration-200 ease-out",
+            !isDisabled && "cursor-pointer group active:scale-[0.98]",
             isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
             isDisabled && "opacity-50"
           )}
@@ -162,8 +162,8 @@ export function ToolMenuItem({
       onClick={() => !isDisabled && onToolSelect(tool.id)}
       disabled={isDisabled}
       className={cn(
-        "gap-3 py-3 rounded-lg transition-all",
-        !isDisabled && "cursor-pointer group",
+        "gap-3 py-3 rounded-lg transition-all duration-200 ease-out",
+        !isDisabled && "cursor-pointer group active:scale-[0.98]",
         isDisabled && "opacity-50",
         isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
       )}
@@ -190,7 +190,7 @@ export function ToolMenuItem({
           <span className="font-medium truncate">{tool.name}</span>
           {needsPermissions && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Grant access
+              On demand
             </Badge>
           )}
           {isDeepResearch && (
@@ -266,7 +266,7 @@ export function ToolMenuItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Click to grant Google Workspace permissions' : tool.description}
+          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Permissions are requested on first Google Workspace task' : tool.description}
         </span>
       </div>
       {isActive && (

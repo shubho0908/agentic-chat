@@ -129,7 +129,7 @@ function NotFoundActions() {
             onClick={() => router.back()}
             variant="outline"
             size="lg"
-            className="w-full sm:flex-1 gap-2 rounded-xl group min-w-0"
+            className="w-full sm:flex-1 gap-2 rounded-xl group min-w-0 transition-all duration-200 ease-out active:scale-[0.98]"
           >
             <ArrowLeft className="size-4 shrink-0 group-hover:-translate-x-1 transition-transform" />
             <span className="truncate">Go Back</span>
@@ -137,7 +137,7 @@ function NotFoundActions() {
           <Button
             onClick={handlePrimaryAction}
             size="lg"
-            className="w-full sm:flex-1 gap-2 rounded-xl group shadow-lg hover:shadow-xl min-w-0"
+            className="w-full sm:flex-1 gap-2 rounded-xl group shadow-lg hover:shadow-xl min-w-0 transition-all duration-200 ease-out active:scale-[0.98]"
           >
             {session ? (
               <>

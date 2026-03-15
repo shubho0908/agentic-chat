@@ -48,8 +48,8 @@ function ImageCard({ image, index, onClick, showOverlay, showDescription = true,
 
   return (
     <div
-      className={`group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 transition-all duration-200 ${
-        !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-md' : 'cursor-default'
+      className={`group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 transition-all duration-200 ease-out ${
+        !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]' : 'cursor-default'
       }`}
       onClick={handleClick}
     >

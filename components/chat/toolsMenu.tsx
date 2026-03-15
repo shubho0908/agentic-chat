@@ -3,8 +3,6 @@
 import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
-import { motion } from "framer-motion";
-import { usePathname, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -24,13 +22,11 @@ import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/t
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
-import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ToolMenuItem } from "./toolMenuItem";
 import { MemoryToggle } from "./memoryToggle";
 import { ToolsDrawer } from "./toolsDrawer";
-import { toast } from "sonner";
-import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -64,8 +60,6 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage({ enabled: !!session });
   const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
@@ -75,27 +69,9 @@ export function ToolsMenu({
     loading: usageLoading,
   };
 
-  const currentCallbackURL = (() => {
-    const query = searchParams?.toString();
-    return query ? `${pathname}?${query}` : pathname || "/";
-  })();
-
-  const handleToolSelect = async (toolId: ToolId, selectedDepth?: SearchDepth) => {
+  const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
     if (!session) {
       onAuthRequired?.();
-      setIsOpen(false);
-      return;
-    }
-
-    if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
-      try {
-        await authorizeGoogleWorkspace(currentCallbackURL);
-      } catch (error) {
-        console.error("Google Workspace authorization error:", error);
-        toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
-          description: "We couldn't start Google Workspace authorization. Please try again.",
-        });
-      }
       setIsOpen(false);
       return;
     }
@@ -259,79 +235,69 @@ export function ToolsMenu({
           <DropdownMenuContent
             align="start"
             side="top"
-            className="w-56 border-muted/50 shadow-xl md:w-64"
+            className="w-56 border-muted/50 shadow-xl md:w-64 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
             sideOffset={8}
-            asChild
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-            >
-              <div>
-                {onFilesSelected && (
-                  <>
-                    <div className="md:hidden">
-                      <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                        Attachments
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={disabled}
-                        className="cursor-pointer gap-3 py-2.5"
-                      >
-                        <Paperclip className="size-4 text-muted-foreground" />
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium">Attach Files</span>
-                          <span className="text-xs text-muted-foreground">
-                            {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
-                          </span>
-                        </div>
-                      </DropdownMenuItem>
-                    </div>
-                    <DropdownMenuSeparator className="md:hidden" />
-                  </>
-                )}
-
-                <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
-                    <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                      <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
-                    </div>
-                    <div className="flex flex-col gap-0.5 flex-1">
-                      <span className="font-medium">Connectors</span>
+            {onFilesSelected && (
+              <>
+                <div className="md:hidden">
+                  <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                    Attachments
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={disabled}
+                    className="cursor-pointer gap-3 py-2.5"
+                  >
+                    <Paperclip className="size-4 text-muted-foreground" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium">Attach Files</span>
                       <span className="text-xs text-muted-foreground">
-                        {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
+                        {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
                       </span>
                     </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1">
-                    <div className="px-2 py-1.5 mb-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Integrated Apps
-                      </p>
+                  </DropdownMenuItem>
+                </div>
+                <DropdownMenuSeparator className="md:hidden" />
+              </>
+            )}
+
+            <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
+                <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
+                  <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
+                </div>
+                <div className="flex flex-col gap-0.5 flex-1">
+                  <span className="font-medium">Connectors</span>
+                  <span className="text-xs text-muted-foreground">
+                    {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
+                  </span>
+                </div>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1 animate-in zoom-in-95 duration-200">
+                <div className="px-2 py-1.5 mb-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Integrated Apps
+                  </p>
+                </div>
+                {Object.values(AVAILABLE_TOOLS)
+                  .filter((tool): tool is ToolConfig => tool !== undefined)
+                  .map((tool) => (
+                    <div key={tool.id}>
+                      <ToolMenuItem
+                        tool={tool}
+                        isActive={activeTool === tool.id}
+                        isAuthenticated={!!session}
+                        {...commonToolProps}
+                      />
                     </div>
-                    {Object.values(AVAILABLE_TOOLS)
-                      .filter((tool): tool is ToolConfig => tool !== undefined)
-                      .map((tool) => (
-                        <div key={tool.id}>
-                          <ToolMenuItem
-                            tool={tool}
-                            isActive={activeTool === tool.id}
-                            isAuthenticated={!!session}
-                            {...commonToolProps}
-                          />
-                        </div>
-                      ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </div>
-            </motion.div>
+                  ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

@@ -46,7 +46,7 @@ export function UserMenu() {
         <Button
           variant="ghost"
           size="icon"
-          className="size-9 rounded-full hover:bg-accent/50 transition-all hover:scale-105 active:scale-95"
+          className="size-9 rounded-full hover:bg-accent/50 transition-all duration-200 ease-out hover:scale-105 active:scale-95"
         >
           <Avatar className="size-8 border border-primary/20 hover:border-primary/40 transition-colors">
             <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />

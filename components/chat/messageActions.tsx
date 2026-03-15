@@ -72,7 +72,7 @@ export function MessageActions({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300 ease-out translate-y-1 md:group-hover:translate-y-0">
         {isUser && canEdit && !isEditing && (
           <Tooltip>
             <TooltipTrigger asChild>

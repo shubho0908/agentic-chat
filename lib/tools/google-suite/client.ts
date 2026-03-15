@@ -41,6 +41,7 @@ export function isAuthRevokedError(error: unknown): boolean {
 export async function createGoogleSuiteClient(userId: string): Promise<GoogleSuiteClientContext> {
   const account = await prisma.account.findFirst({
     where: { userId, providerId: GOOGLE_PROVIDER_ID },
+    orderBy: { updatedAt: 'desc' },
     select: {
       accessToken: true,
       refreshToken: true,
