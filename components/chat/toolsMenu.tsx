@@ -3,7 +3,6 @@
 import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
-import { motion } from "framer-motion";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -61,8 +60,8 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage();
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth();
+  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage({ enabled: !!session });
+  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
   const deepResearchUsage = {
     remaining: usageData?.remaining ?? 3,
@@ -76,9 +75,7 @@ export function ToolsMenu({
       setIsOpen(false);
       return;
     }
-    if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
-      return;
-    }
+
     onToolSelected?.(toolId, selectedDepth);
     setIsOpen(false);
   };
@@ -113,6 +110,9 @@ export function ToolsMenu({
     googleSuiteStatus: {
       authorized: googleSuiteStatus?.authorized ?? false,
       loading: googleSuiteLoading,
+      workspaceConnected: googleSuiteStatus?.workspaceConnected ?? false,
+      grantedScopes: googleSuiteStatus?.grantedScopes ?? [],
+      missingScopes: googleSuiteStatus?.missingScopes ?? [],
     },
     onToolSelect: handleToolSelect,
   };
@@ -126,12 +126,14 @@ export function ToolsMenu({
       <TooltipProvider>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <div
+            <Button
+              type="button"
               onClick={handleButtonClick}
+              disabled={disabled}
+              variant="ghost"
               className={cn(
                 buttonVariants({ variant: "ghost", size: "icon" }),
-                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200 cursor-pointer",
-                disabled ? "pointer-events-none opacity-50" : ""
+                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200"
               )}
               style={{
                 background: `linear-gradient(135deg, ${toolConfig.gradientColors.from}33, ${toolConfig.gradientColors.via}53, ${toolConfig.gradientColors.to}33)`,
@@ -149,7 +151,7 @@ export function ToolsMenu({
               }}
             >
               <ActiveToolIcon className={`size-4 ${toolConfig.iconColorClass} animate-in spin-in-180 zoom-in-0 duration-300`} />
-            </div>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
             <p>
@@ -238,79 +240,69 @@ export function ToolsMenu({
           <DropdownMenuContent
             align="start"
             side="top"
-            className="w-56 border-muted/50 shadow-xl md:w-64"
+            className="w-56 border-muted/50 shadow-xl md:w-64 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
             sideOffset={8}
-            asChild
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-            >
-              <div>
-                {onFilesSelected && (
-                  <>
-                    <div className="md:hidden">
-                      <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                        Attachments
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={disabled}
-                        className="cursor-pointer gap-3 py-2.5"
-                      >
-                        <Paperclip className="size-4 text-muted-foreground" />
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-medium">Attach Files</span>
-                          <span className="text-xs text-muted-foreground">
-                            {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
-                          </span>
-                        </div>
-                      </DropdownMenuItem>
-                    </div>
-                    <DropdownMenuSeparator className="md:hidden" />
-                  </>
-                )}
-
-                <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
-                    <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                      <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
-                    </div>
-                    <div className="flex flex-col gap-0.5 flex-1">
-                      <span className="font-medium">Connectors</span>
+            {onFilesSelected && (
+              <>
+                <div className="md:hidden">
+                  <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
+                    Attachments
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={disabled}
+                    className="cursor-pointer gap-3 py-2.5"
+                  >
+                    <Paperclip className="size-4 text-muted-foreground" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-medium">Attach Files</span>
                       <span className="text-xs text-muted-foreground">
-                        {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
+                        {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
                       </span>
                     </div>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1">
-                    <div className="px-2 py-1.5 mb-1">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Integrated Apps
-                      </p>
+                  </DropdownMenuItem>
+                </div>
+                <DropdownMenuSeparator className="md:hidden" />
+              </>
+            )}
+
+            <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
+                <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
+                  <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
+                </div>
+                <div className="flex flex-col gap-0.5 flex-1">
+                  <span className="font-medium">Connectors</span>
+                  <span className="text-xs text-muted-foreground">
+                    {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
+                  </span>
+                </div>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1 animate-in zoom-in-95 duration-200">
+                <div className="px-2 py-1.5 mb-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Integrated Apps
+                  </p>
+                </div>
+                {Object.values(AVAILABLE_TOOLS)
+                  .filter((tool): tool is ToolConfig => tool !== undefined)
+                  .map((tool) => (
+                    <div key={tool.id}>
+                      <ToolMenuItem
+                        tool={tool}
+                        isActive={activeTool === tool.id}
+                        isAuthenticated={!!session}
+                        {...commonToolProps}
+                      />
                     </div>
-                    {Object.values(AVAILABLE_TOOLS)
-                      .filter((tool): tool is ToolConfig => tool !== undefined)
-                      .map((tool) => (
-                        <div key={tool.id}>
-                          <ToolMenuItem
-                            tool={tool}
-                            isActive={activeTool === tool.id}
-                            isAuthenticated={!!session}
-                            {...commonToolProps}
-                          />
-                        </div>
-                      ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </div>
-            </motion.div>
+                  ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

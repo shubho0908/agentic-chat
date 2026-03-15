@@ -3,13 +3,12 @@ import { ToolStatus } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "@/types/chat";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import type { QueryClient } from "@tanstack/react-query";
-import { extractTextFromContent } from "@/lib/content-utils";
 import { streamChatCompletion } from "./streaming-api";
 import { performCacheCheck } from "./cache-handler";
 import { handleConversationSaving, buildMessagesForAPI } from "./conversation-manager";
-import { storeConversationMemory } from "@/lib/memory";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { persistConversationMemoryIfEligible } from "./memory-persistence";
 
 interface StreamingContext {
   messages: Message[];
@@ -151,9 +150,9 @@ export async function handleStreamingResponse(
           },
         ]);
       }
-      await handleConversationSaving(
-        false,
-        conversationId,
+	      await handleConversationSaving(
+	        false,
+	        conversationId,
         userMessageContent,
         assistantContent,
         userTimestamp,
@@ -166,11 +165,22 @@ export async function handleStreamingResponse(
         undefined,
         false,
         undefined,
-        undefined 
-      );
+	        undefined 
+	      );
 
-      return { success: true, assistantMessageId };
-    }
+        persistConversationMemoryIfEligible({
+          userMessageContent,
+          assistantContent,
+          userId: session?.user?.id,
+          memoryEnabled,
+          activeTool,
+          deepResearchEnabled,
+          userAttachments,
+          flow: "send",
+        });
+
+	      return { success: true, assistantMessageId };
+	    }
 
     const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT);
 
@@ -190,6 +200,7 @@ export async function handleStreamingResponse(
               timestamp: Date.now(),
               model,
               toolActivities: [],
+              metadata: messageMetadata,
             },
           ]);
         } else {
@@ -213,6 +224,7 @@ export async function handleStreamingResponse(
               timestamp: Date.now(),
               model,
               toolActivities: [],
+              metadata: messageMetadata,
             },
           ]);
         }
@@ -239,6 +251,7 @@ export async function handleStreamingResponse(
               timestamp: Date.now(),
               model,
               toolActivities: [...toolActivities],
+              metadata: messageMetadata,
             },
           ]);
         } else {
@@ -326,13 +339,18 @@ export async function handleStreamingResponse(
         messageMetadata
       );
 
-      if (session?.user?.id && memoryEnabled && !deepResearchEnabled) {
-        const textContent = extractTextFromContent(userMessageContent);
-        storeConversationMemory(textContent, assistantContent, session.user.id).catch((err) => {
-          console.error('[Memory] Failed to store conversation memory:', err);
+        persistConversationMemoryIfEligible({
+          userMessageContent,
+          assistantContent,
+          userId: session?.user?.id,
+          memoryEnabled,
+          activeTool,
+          deepResearchEnabled,
+          userAttachments,
+          memoryStatus: currentMemoryStatus,
+          flow: "send",
         });
-      }
-    }
+	    }
 
     return { success: true, assistantMessageId };
   } catch (err) {

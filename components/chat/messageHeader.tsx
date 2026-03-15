@@ -1,5 +1,8 @@
 import { SourcesSheet } from "./sourcesSheet";
 import type { Citation } from "@/types/deep-research";
+import { OpenAIIcon } from "@/components/icons/openai-icon";
+
+const EMPTY_CITATIONS: Citation[] = [];
 
 interface MessageHeaderProps {
   isUser: boolean;
@@ -20,14 +23,19 @@ export function MessageHeader({
   userName,
   modelName,
   timestamp,
-  citations = [],
+  citations = EMPTY_CITATIONS,
 }: MessageHeaderProps) {
   const hasCitations = !isUser && citations.length > 0;
 
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold">
+        {!isUser && (
+          <div className="relative flex size-6 items-center justify-center rounded-full overflow-hidden border border-black/5 dark:border-white/10 bg-white dark:bg-[#1A1A1C] shadow-sm">
+            <OpenAIIcon className="size-3 text-black dark:text-primary" />
+          </div>
+        )}
+        <span className="text-[13px] font-semibold tracking-tight text-muted-foreground">
           {isUser ? (userName ?? "User") : modelName}
         </span>
         {timestamp != null && (

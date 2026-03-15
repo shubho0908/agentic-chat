@@ -9,6 +9,7 @@ import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
+import { appBaseUrl } from "@/lib/appUrl";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,7 +24,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agentic Chat - Intelligent Conversations",
   description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL as string),
+  metadataBase: new URL(appBaseUrl),
   openGraph: {
     title: "Agentic Chat - Intelligent Conversations",
     description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
@@ -56,8 +57,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased selection:bg-primary/20 bg-background`}
       >
+        <div className="fixed inset-0 z-[-1] opacity-[0.03] dark:opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('/noise.svg')]" />
         <QueryProvider>
           <ThemeProvider
             attribute="class"

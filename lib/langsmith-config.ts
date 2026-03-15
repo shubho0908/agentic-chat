@@ -10,16 +10,14 @@ const LANGSMITH_CONFIG = {
   project: process.env.LANGSMITH_PROJECT,
 } as const;
 
-let langsmithClient: Client | null = null;
-
-export function initializeLangSmith(): void {
+function initializeLangSmith(): void {
   if (!LANGSMITH_CONFIG.tracing || !LANGSMITH_CONFIG.apiKey) {
     console.error('[LangSmith] Tracing disabled or API key not configured');
     return;
   }
 
   try {
-    langsmithClient = new Client({
+    void new Client({
       apiUrl: LANGSMITH_CONFIG.endpoint,
       apiKey: LANGSMITH_CONFIG.apiKey,
     });
@@ -28,11 +26,7 @@ export function initializeLangSmith(): void {
   }
 }
 
-export function getLangSmithClient(): Client | null {
-  return langsmithClient;
-}
-
-export function isLangSmithEnabled(): boolean {
+function isLangSmithEnabled(): boolean {
   return LANGSMITH_CONFIG.tracing && !!LANGSMITH_CONFIG.apiKey;
 }
 
@@ -47,28 +41,6 @@ export function wrapOpenAIWithLangSmith<T extends OpenAI>(client: T): T {
     console.error('[LangSmith] Failed to wrap OpenAI client:', error);
     return client;
   }
-}
-
-export function traceWithLangSmith<T extends (...args: unknown[]) => unknown>(
-  fn: T,
-  options?: {
-    name?: string;
-    metadata?: Record<string, unknown>;
-    tags?: string[];
-  }
-): T {
-  if (!isLangSmithEnabled()) {
-    return fn;
-  }
-
-  const tracedFn = traceable(fn, {
-    name: options?.name || fn.name || 'unnamed-function',
-    metadata: options?.metadata,
-    tags: options?.tags,
-    project_name: LANGSMITH_CONFIG.project,
-  });
-
-  return tracedFn as T;
 }
 
 export async function withTrace<T>(
@@ -95,7 +67,7 @@ export async function withTrace<T>(
   return tracedFn();
 }
 
-export function configureLangChainTracing(): void {
+function configureLangChainTracing(): void {
   if (!LANGSMITH_CONFIG.tracing || !LANGSMITH_CONFIG.apiKey) {
     return;
   }

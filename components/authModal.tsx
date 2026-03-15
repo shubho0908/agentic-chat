@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Loader } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { signIn } from "@/lib/auth-client";
+import { signInWithGoogle } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
@@ -20,19 +20,23 @@ interface AuthModalProps {
   children?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  callbackURL?: string;
 }
 
-export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
+export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { resolvedTheme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      await signIn.social({
-        provider: "google",
-        callbackURL: "/",
-      });
+      const resolvedCallbackURL =
+        callbackURL ||
+        (typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/");
+
+      await signInWithGoogle(resolvedCallbackURL);
     } catch (error) {
       console.error("Sign in error:", error);
       toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
@@ -46,22 +50,23 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent 
-        className="sm:max-w-md border-0 p-0 gap-0 overflow-hidden bg-transparent shadow-none"
+        className="sm:max-w-[380px] border-0 p-0 sm:p-0 gap-0 overflow-hidden bg-transparent shadow-none"
         showCloseButton={false}
       >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 8 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ 
-            duration: 0.2,
-            ease: [0.16, 1, 0.3, 1]
-          }}
-          className="relative bg-background border border-border rounded-2xl shadow-[0_0_0_1px_rgba(0,0,0,0.03),0_2px_4px_rgba(0,0,0,0.05),0_12px_24px_rgba(0,0,0,0.05)] overflow-hidden"
-        >
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-          
-          <div className="p-8">
-            <div className="flex flex-col items-center text-center space-y-6">
+        <LazyMotion features={domAnimation}>
+          <m.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{
+              duration: 0.2,
+              ease: [0.16, 1, 0.3, 1]
+            }}
+            className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-xl backdrop-blur-xl dark:bg-black/80"
+          >
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
+
+            <div className="p-8">
+              <div className="flex flex-col items-center text-center space-y-6">
                 <Image
                   src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
                   alt="Agentic Chat"
@@ -84,12 +89,12 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
                 size="lg"
-                className="w-full h-11 rounded-xl text-[15px] font-medium bg-foreground hover:bg-foreground/90 text-background border-0 shadow-sm hover:shadow-md transition-all duration-200"
+                className="w-full h-11 rounded-xl text-[15px] font-medium bg-foreground hover:bg-foreground/90 text-background border-0 shadow-sm transition-all duration-200 ease-out hover:shadow-md active:scale-[0.98]"
                 variant="default"
               >
                 <AnimatePresence mode="wait">
                   {isLoading ? (
-                    <motion.div
+                    <m.div
                       key="loading"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -98,9 +103,9 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
                     >
                       <Loader className="w-4 h-4 animate-spin" />
                       <span>Signing in...</span>
-                    </motion.div>
+                    </m.div>
                   ) : (
-                    <motion.div
+                    <m.div
                       key="idle"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -126,7 +131,7 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
                         />
                       </svg>
                       <span>Continue with Google</span>
-                    </motion.div>
+                    </m.div>
                   )}
                 </AnimatePresence>
               </Button>
@@ -135,8 +140,9 @@ export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
                 By continuing, you agree to our Terms and Privacy Policy
               </p>
             </div>
-          </div>
-        </motion.div>
+            </div>
+          </m.div>
+        </LazyMotion>
       </DialogContent>
     </Dialog>
   );

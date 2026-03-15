@@ -58,14 +58,6 @@ export interface YouTubeTranscriptSegment {
   duration?: number;
 }
 
-export interface YouTubeVideoContext {
-  video: YouTubeVideo;
-  transcript: YouTubeTranscriptSegment[];
-  chapters: YouTubeChapter[];
-  transcriptText: string;
-  error?: string;
-}
-
 export interface YouTubeProgress {
   status: 'detecting' | 'extracting' | 'processing_chapters' | 'combining' | 'completed';
   message: string;
@@ -185,26 +177,4 @@ export interface GoogleSuiteTask {
   iteration: number;
   result?: string;
   error?: string;
-}
-
-export interface GoogleSuiteProgress {
-  status: GoogleSuiteStatus;
-  message: string;
-  details?: {
-    query?: string;
-    operation?: string;
-    tool?: string;
-    iteration?: number;
-    step?: number;
-    totalSteps?: number;
-    error?: string;
-    currentTask?: GoogleSuiteTask;
-    allTasks?: GoogleSuiteTask[];
-    completedTasks?: GoogleSuiteTask[];
-    thinking?: string;
-    planning?: {
-      toolsToUse: string[];
-      estimatedSteps: number;
-    };
-  };
 }

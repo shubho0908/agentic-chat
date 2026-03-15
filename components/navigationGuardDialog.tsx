@@ -56,10 +56,10 @@ export function NavigationGuardDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={handleCancel}>
+          <Button type="button" variant="outline" onClick={handleCancel} className="transition-all duration-200 ease-out active:scale-[0.98]">
             Cancel
           </Button>
-          <Button type="button" variant="default" onClick={handleConfirm}>
+          <Button type="button" variant="default" onClick={handleConfirm} className="transition-all duration-200 ease-out active:scale-[0.98]">
             Switch conversation
           </Button>
         </DialogFooter>

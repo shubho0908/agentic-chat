@@ -3,19 +3,6 @@ import { RAGError, RAGErrorCode } from '../common/errors';
 
 let pool: Pool | null = null;
 
-export interface VectorSearchOptions {
-  limit?: number;
-  threshold?: number;
-  filter?: Record<string, unknown>;
-}
-
-export interface VectorSearchResult {
-  id: string;
-  content: string;
-  score: number;
-  metadata: Record<string, unknown>;
-}
-
 export function getPgPool(): Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
@@ -121,10 +108,3 @@ export const EMBEDDING_DIMENSIONS = (() => {
   }
   return value;
 })();
-
-export async function closePgPool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
-}

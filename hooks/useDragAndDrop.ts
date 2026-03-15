@@ -5,7 +5,7 @@ export interface DragState {
   isProcessing: boolean;
 }
 
-export interface UseDragAndDropOptions {
+interface UseDragAndDropOptions {
   onFilesDropped: (files: File[]) => void;
   disabled?: boolean;
   maxFiles?: number;

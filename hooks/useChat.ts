@@ -2,15 +2,30 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { type Message, type Attachment } from "@/lib/schemas/chat";
-import type { SearchDepth } from "@/lib/schemas/web-search.tools";
+import { type Message } from "@/lib/schemas/chat";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
-import type { UseChatOptions, UseChatReturn, MemoryStatus } from "@/types/chat";
+import type {
+  UseChatOptions,
+  UseChatReturn,
+  MemoryStatus,
+  SendMessageOptions,
+  EditMessageOptions,
+  RegenerateMessageOptions,
+  ContinueConversationOptions,
+} from "@/types/chat";
 import { handleSendMessage, continueIncompleteConversation } from "./chat/message-sender";
 import { handleEditMessage } from "./chat/message-editor";
 import { handleRegenerateResponse } from "./chat/message-regenerator";
 import { useStreaming } from "@/contexts/streaming-context";
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException && error.name === "AbortError"
+  ) || (
+    error instanceof Error && error.name === "AbortError"
+  );
+}
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { initialMessages = [], conversationId: initialConversationId } = options;
@@ -38,7 +53,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { content: string; session?: { user: { id: string } }; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: SendMessageOptions) => {
       if (!content.trim() || isLoading) return;
 
       const isNewConversation = !conversationId;
@@ -79,11 +94,15 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         if (isNewConversation) {
           return;
         }
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         if (!isNewConversation) {
           setIsLoading(false);
           abortControllerRef.current = null;
-          stopStreamingContext();
+          stopStreamingContext(false);
         }
       }
     },
@@ -91,7 +110,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { messageId: string; content: string; attachments?: Attachment[]; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
+    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: EditMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -110,6 +129,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             conversationId,
             abortSignal: abortControllerRef.current.signal,
             queryClient,
+            session,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
@@ -119,17 +139,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { messageId: string; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
+    async ({ messageId, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: RegenerateMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -146,6 +170,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             conversationId,
             abortSignal: abortControllerRef.current.signal,
             queryClient,
+            session,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
@@ -155,17 +180,21 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const continueConversation = useCallback(
-    async ({ userMessage, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: { userMessage: Message; session?: { user: { id: string } }; activeTool?: string | null; memoryEnabled?: boolean; deepResearchEnabled?: boolean; searchDepth?: SearchDepth }) => {
+    async ({ userMessage, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: ContinueConversationOptions) => {
       if (isLoading || !conversationId) return;
 
       setIsLoading(true);
@@ -192,10 +221,14 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
+      } catch (error) {
+        if (!isAbortError(error)) {
+          throw error;
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
-        stopStreamingContext();
+        stopStreamingContext(false);
       }
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -215,7 +248,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current = null;
     }
     setIsLoading(false);
-    stopStreamingContext();
+    stopStreamingContext(false);
   }, [stopStreamingContext]);
 
   useEffect(() => {

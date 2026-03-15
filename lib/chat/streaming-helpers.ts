@@ -2,7 +2,7 @@ import { RoutingDecision, type MemoryStatus } from '@/types/chat';
 
 const encoder = new TextEncoder();
 
-export function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
+function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
 }
 

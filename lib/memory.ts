@@ -17,10 +17,16 @@ export async function storeConversationMemory(
     return;
   }
 
+  const normalizedUserMessage = userMessage.trim();
+  const normalizedAssistantMessage = assistantMessage.trim();
+  if (!normalizedUserMessage || !normalizedAssistantMessage) {
+    return;
+  }
+
   try {
     const messages = [
-      { role: 'user' as const, content: [{ type: 'text' as const, text: userMessage }] },
-      { role: 'assistant' as const, content: [{ type: 'text' as const, text: assistantMessage }] },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: normalizedUserMessage }] },
+      { role: 'assistant' as const, content: [{ type: 'text' as const, text: normalizedAssistantMessage }] },
     ];
 
     await addMemories(messages, {

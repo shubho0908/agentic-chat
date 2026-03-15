@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';

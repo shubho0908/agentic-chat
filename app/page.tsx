@@ -29,14 +29,14 @@ function HomeContent() {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
-    return editMessage({ messageId, content, attachments, activeTool, memoryEnabled, deepResearchEnabled });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
     const deepResearchEnabled = getDeepResearchEnabled();
-    return regenerateResponse({ messageId, activeTool, memoryEnabled, deepResearchEnabled });
+    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
   };
 
   const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {

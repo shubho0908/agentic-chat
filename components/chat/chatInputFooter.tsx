@@ -7,21 +7,21 @@ interface ChatInputFooterProps {
 
 export function ChatInputFooter({ centered = false }: ChatInputFooterProps) {
   return (
-    <div className={`${centered ? 'mt-4' : 'mt-2'} flex items-center justify-center text-${centered ? 'sm' : 'xs'} text-muted-foreground`}>
-      <span className="flex items-center gap-1">
+    <div className={`${centered ? 'mt-4' : 'mt-2.5'} flex items-center justify-center text-[10px] text-muted-foreground/60`}>
+      <span className="flex items-center gap-1 tracking-wide">
         Built by{' '}
         <Link
           href="https://shubhojeet.com" 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-black dark:text-white font-semibold hover:opacity-80 transition-opacity underline flex items-center gap-1.5"
+          className="text-foreground/80 font-medium hover:text-foreground transition-colors flex items-center gap-1"
         >
           <Image 
             src="/me.jpg" 
             alt="Shubhojeet" 
-            width={16} 
-            height={16} 
-            className="rounded-full ml-1"
+            width={12} 
+            height={12} 
+            className="rounded-full grayscale hover:grayscale-0 transition-all duration-300"
           />
           Shubhojeet
         </Link>

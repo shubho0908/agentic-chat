@@ -1,8 +1,7 @@
-import { memo, useState, useMemo, useCallback } from "react";
+import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
-import { OpenAIIcon } from "@/components/icons/openai-icon";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/content-utils";
 import { MessageHeader } from "./messageHeader";
@@ -12,9 +11,58 @@ import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { FollowUpQuestions } from "./followUpQuestions";
 import { SearchImages } from "./searchImages";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useSession } from "@/lib/auth-client";
+import { RichLink } from "../ai-elements/richLink";
 import type { MemoryStatus } from "@/types/chat";
+
+const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
+
+function trimTrailingUrlPunctuation(rawUrl: string) {
+  let url = rawUrl;
+  let trailing = "";
+
+  while (url.length > 0) {
+    const lastChar = url.at(-1);
+
+    if (!lastChar) {
+      break;
+    }
+
+    if (/[.,!?;:]/.test(lastChar)) {
+      trailing = `${lastChar}${trailing}`;
+      url = url.slice(0, -1);
+      continue;
+    }
+
+    if (lastChar === ")") {
+      const openParens = (url.match(/\(/g) || []).length;
+      const closeParens = (url.match(/\)/g) || []).length;
+
+      if (closeParens > openParens) {
+        trailing = `${lastChar}${trailing}`;
+        url = url.slice(0, -1);
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  return { url, trailing };
+}
+
+function extractUserUrls(text: string) {
+  const urls = new Set<string>();
+
+  for (const match of text.matchAll(USER_URL_REGEX)) {
+    const { url } = trimTrailingUrlPunctuation(match[0]);
+
+    if (url) {
+      urls.add(url);
+    }
+  }
+
+  return Array.from(urls);
+}
 
 interface ChatMessageProps {
   message: Message;
@@ -33,7 +81,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
-  const { data: session } = useSession();
 
   const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
   const totalVersions = versions.length + 1;
@@ -49,8 +96,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
   const modelName = "AI Assistant"
 
-  const userInitial = useMemo(() => userName?.charAt(0).toUpperCase() || "U", [userName]);
-  const userImage = session?.user?.image;
   const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
 
   const handleEditStart = useCallback(() => {
@@ -72,24 +117,24 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   }, [editText, message.id, message.attachments, onEditMessage]);
 
   const handlePreviousVersion = useCallback(() => {
-    if (versionIndex === -1) {
-      if (versions.length > 0) {
-        setVersionIndex(0);
+    setVersionIndex((currentIndex) => {
+      if (currentIndex === -1) {
+        return versions.length > 0 ? 0 : currentIndex;
       }
-    } else if (versionIndex < versions.length - 1) {
-      setVersionIndex(versionIndex + 1);
-    }
-  }, [versionIndex, versions.length]);
+
+      return currentIndex < versions.length - 1 ? currentIndex + 1 : currentIndex;
+    });
+  }, [versions.length]);
 
   const handleNextVersion = useCallback(() => {
-    if (versionIndex === -1) return;
+    setVersionIndex((currentIndex) => {
+      if (currentIndex === -1) {
+        return currentIndex;
+      }
 
-    if (versionIndex > 0) {
-      setVersionIndex(versionIndex - 1);
-    } else {
-      setVersionIndex(-1);
-    }
-  }, [versionIndex]);
+      return currentIndex > 0 ? currentIndex - 1 : -1;
+    });
+  }, []);
 
   const isThinking = !textContent && !displayedMessage.content;
 
@@ -160,47 +205,79 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     return [];
   }, [isUser, isLastMessage, isLoading, displayedMessage.metadata?.followUpQuestions]);
 
+  const userUrls = useMemo(() => {
+    if (!isUser || !textContent) return [];
+
+    return extractUserUrls(textContent);
+  }, [isUser, textContent]);
+
+  const renderUserTextContent = useCallback((text: string) => {
+    if (!text) return null;
+
+    const nodes: ReactNode[] = [];
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(USER_URL_REGEX)) {
+      const matchStart = match.index ?? 0;
+      const rawUrl = match[0];
+      const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
+
+      if (matchStart > lastIndex) {
+        nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
+      }
+
+      if (url) {
+          nodes.push(
+            <a
+              key={`url-${matchStart}`}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all"
+            >
+              {url}
+            </a>
+          );
+      }
+
+      if (trailing) {
+        nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
+      }
+
+      lastIndex = matchStart + rawUrl.length;
+    }
+
+    if (lastIndex < text.length) {
+      nodes.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
+    }
+
+    return nodes;
+  }, []);
+
   if (message.role === "system") return null;
 
   return (
     <div
       className={cn(
-        "group relative px-4 py-8 transition-colors w-screen md:w-full",
-        !isUser && "bg-muted/30"
+        "group relative px-4 py-3 md:py-4 transition-colors w-screen md:w-full",
       )}
     >
-      <div className="mx-auto max-w-3xl">
-        <div className="flex gap-4">
-          <div className="flex-shrink-0">
-            {isUser ? (
-              <Avatar className="size-8 border border-primary/20">
-                <AvatarImage src={userImage || undefined} alt={userName || "User"} />
-                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-sm font-semibold">
-                  {userInitial}
-                </AvatarFallback>
-              </Avatar>
-            ) : (
-              <div className="relative flex size-8 items-center justify-center rounded-lg overflow-hidden border border-primary/10 bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10">
-                <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent"></div>
-                <div className="relative z-10">
-                  <OpenAIIcon className="size-4 text-primary" />
-                </div>
-              </div>
+      <div className={cn("mx-auto max-w-3xl flex", isUser ? "justify-end" : "justify-start")}>
+        <div className={cn("flex gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "max-w-[90%] md:max-w-[85%]")}>
+          <div className={cn("flex flex-col gap-1 min-w-0", isUser ? "items-end" : "items-start")}>
+            {!isUser && (
+              <MessageHeader
+                isUser={false}
+                userName={userName}
+                modelName={modelName}
+                timestamp={displayedMessage.timestamp}
+                citations={citations}
+              />
             )}
-          </div>
-
-          <div className="flex-1 space-y-2 overflow-hidden">
-            <MessageHeader
-              isUser={isUser}
-              userName={userName}
-              modelName={modelName}
-              timestamp={displayedMessage.timestamp}
-              citations={citations}
-            />
 
             <AttachmentDisplay
               attachments={displayedAttachments}
-              messageId={message.id}
+              isUser={isUser}
             />
 
             {!isUser && images.length > 0 && (
@@ -216,18 +293,31 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
               />
             ) : (
               <>
-                <div className="prose prose-sm dark:prose-invert max-w-none">
+                <div className={cn(
+                  "text-[15px] leading-relaxed",
+                  isUser 
+                    ? "border border-chat-user-bubble-border bg-chat-user-bubble text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words" 
+                    : "max-w-none min-w-0 text-foreground ml-1"
+                )}>
                   {textContent ? (
-                    <Response>{textContent}</Response>
+                    isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
                   ) : message.content ? (
-                    <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
+                    isUser ? (typeof message.content === 'string' ? renderUserTextContent(message.content) : '') : <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
                   ) : (
-                    <AIThinkingAnimation
+                     <AIThinkingAnimation
                       memoryStatus={memoryStatus}
                       isLoading={isLoading}
                     />
                   )}
                 </div>
+
+                {isUser && userUrls.length > 0 && (
+                  <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
+                    {userUrls.map((url) => (
+                      <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
+                    ))}
+                  </div>
+                )}
 
                 {!isUser && followUpQuestions.length > 0 && (
                   <FollowUpQuestions
@@ -238,18 +328,23 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                 )}
 
                 {isUser && totalVersions > 0 && (
-                  <VersionNavigator
-                    currentVersion={currentVersion}
-                    totalVersions={totalVersions}
-                    historyIndex={versionIndex}
-                    historyLength={versions.length}
-                    onPrevious={handlePreviousVersion}
-                    onNext={handleNextVersion}
-                  />
+                  <div className="mr-2">
+                    <VersionNavigator
+                      currentVersion={currentVersion}
+                      totalVersions={totalVersions}
+                      historyIndex={versionIndex}
+                      historyLength={versions.length}
+                      onPrevious={handlePreviousVersion}
+                      onNext={handleNextVersion}
+                    />
+                  </div>
                 )}
 
                 {!isSharePage && (
-                  <div className="mt-2">
+                  <div className={cn(
+                    "mt-1 opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
+                    isUser ? "pr-2" : "pl-1"
+                  )}>
                     <MessageActions
                       isUser={isUser}
                       isEditing={isEditing}

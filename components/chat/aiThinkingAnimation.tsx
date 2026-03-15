@@ -33,7 +33,7 @@ export function AIThinkingAnimation({ memoryStatus, isLoading }: AIThinkingAnima
   return (
     <div className="flex flex-col gap-2.5">
       {hasContext && (
-        <div className="flex flex-col gap-1 rounded-lg bg-muted/30 p-3 text-xs border border-border/50">
+        <div className="flex flex-col gap-1 rounded-xl bg-muted/30 p-3 text-xs border border-black/5 dark:border-white/10 shadow-sm">
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-foreground/70 font-semibold">
               Context retrieved:

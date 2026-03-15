@@ -7,5 +7,3 @@ export const youtubeParamsSchema = z.object({
   includeTimestamps: z.boolean().optional().default(true).describe('Whether to include timestamps in transcript'),
   language: z.string().optional().default('en').describe('Preferred transcript language (ISO 639-1 code)'),
 });
-
-export type YouTubeParams = z.infer<typeof youtubeParamsSchema>;

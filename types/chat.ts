@@ -131,6 +131,7 @@ export interface EditMessageOptions {
   messageId: string;
   content: string;
   attachments?: Attachment[];
+  session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
@@ -139,6 +140,7 @@ export interface EditMessageOptions {
 
 export interface RegenerateMessageOptions {
   messageId: string;
+  session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;

@@ -18,17 +18,6 @@ export function extractTextFromContent(content: string | MessageContentPart[]): 
   return '';
 }
 
-export function isMultimodalContent(content: unknown): content is MessageContentPart[] {
-  return Array.isArray(content) && content.length > 0 && 
-    content.every(part => 
-      typeof part === 'object' && 
-      part !== null && 
-      'type' in part
-    );
-}
-
-
-
 export function buildMultimodalContent(
   text: string, 
   attachments?: Attachment[]

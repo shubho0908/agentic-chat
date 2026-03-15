@@ -1,69 +1,71 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@source "../node_modules/streamdown/dist/index.js";
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(240 10% 3.9%);
+  --background: hsl(0 0% 99%);
+  --foreground: hsl(240 10% 4%);
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 10% 3.9%);
+  --card-foreground: hsl(240 10% 4%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
+  --popover-foreground: hsl(240 10% 4%);
+  --primary: hsl(240 6% 10%);
   --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(240 4.8% 95.9%);
-  --secondary-foreground: hsl(240 5.9% 10%);
-  --muted: hsl(240 4.8% 95.9%);
-  --muted-foreground: hsl(240 3.8% 46.1%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --destructive: hsl(0 84.2% 60.2%);
+  --secondary: hsl(240 5% 96%);
+  --secondary-foreground: hsl(240 6% 10%);
+  --muted: hsl(240 5% 96%);
+  --muted-foreground: hsl(240 4% 46%);
+  --accent: hsl(240 5% 96%);
+  --accent-foreground: hsl(240 6% 10%);
+  --destructive: hsl(0 84% 60%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 5.9% 90%);
-  --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 5.9% 10%);
-  --radius: 0.5rem;
+  --border: hsl(240 6% 90%);
+  --input: hsl(240 6% 90%);
+  --ring: hsl(240 6% 10%);
+  --radius: 0.75rem;
   --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 5% 26%);
+  --sidebar-primary: hsl(240 6% 10%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-accent: hsl(240 5% 96%);
+  --sidebar-accent-foreground: hsl(240 6% 10%);
   --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-ring: hsl(217 91% 60%);
+  --chat-user-bubble: hsl(240 8% 94%);
+  --chat-user-bubble-border: hsl(240 7% 87%);
 }
 
 .dark {
-  --background: hsl(240 10% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(240 10% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(240 10% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(240 5.9% 10%);
-  --secondary: hsl(240 3.7% 15.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(240 3.7% 15.9%);
-  --muted-foreground: hsl(240 5% 64.9%);
-  --accent: hsl(240 3.7% 15.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
+  --background: hsl(0 0% 0%);
+  --foreground: hsl(0 0% 95%);
+  --card: hsl(0 0% 4%);
+  --card-foreground: hsl(0 0% 95%);
+  --popover: hsl(0 0% 4%);
+  --popover-foreground: hsl(0 0% 95%);
+  --primary: hsl(0 0% 100%);
+  --primary-foreground: hsl(0 0% 0%);
+  --secondary: hsl(0 0% 10%);
+  --secondary-foreground: hsl(0 0% 95%);
+  --muted: hsl(0 0% 10%);
+  --muted-foreground: hsl(0 0% 60%);
+  --accent: hsl(0 0% 10%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 84% 60%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 3.7% 15.9%);
-  --input: hsl(240 3.7% 15.9%);
-  --ring: hsl(240 4.9% 83.9%);
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --border: hsl(0 0% 12%);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(0 0% 84%);
+  --sidebar: hsl(0 0% 3%);
+  --sidebar-foreground: hsl(0 0% 90%);
+  --sidebar-primary: hsl(0 0% 100%);
+  --sidebar-primary-foreground: hsl(0 0% 0%);
+  --sidebar-accent: hsl(0 0% 10%);
+  --sidebar-accent-foreground: hsl(0 0% 100%);
+  --sidebar-border: hsl(0 0% 10%);
+  --sidebar-ring: hsl(217 91% 60%);
+  --chat-user-bubble: hsl(240 4% 16%);
+  --chat-user-bubble-border: hsl(240 4% 23%);
 }
 
 @theme inline {
@@ -97,6 +99,10 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-chat-user-bubble: var(--chat-user-bubble);
+  --color-chat-user-bubble-border: var(--chat-user-bubble-border);
+  --shadow-apple: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-apple-dark: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
 
 @layer base {
@@ -104,7 +110,95 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground tracking-tight selection:bg-primary/20 selection:text-foreground;
+  }
+
+  .prose a {
+    @apply text-blue-600 dark:text-blue-400 underline underline-offset-4 decoration-current/30 hover:decoration-current transition-colors;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: hsl(240 4% 46%);
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-section,
+  .hljs-link {
+    color: hsl(221 83% 53%);
+  }
+
+  .hljs-string,
+  .hljs-title,
+  .hljs-name,
+  .hljs-type,
+  .hljs-attribute,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-addition {
+    color: hsl(160 84% 39%);
+  }
+
+  .hljs-number,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-regexp,
+  .hljs-meta .hljs-string {
+    color: hsl(25 95% 53%);
+  }
+
+  .hljs-built_in,
+  .hljs-function,
+  .hljs-class .hljs-title {
+    color: hsl(262 83% 58%);
+  }
+
+  .hljs-deletion {
+    color: hsl(0 84% 60%);
+  }
+
+  .dark .hljs-comment,
+  .dark .hljs-quote {
+    color: hsl(0 0% 55%);
+  }
+
+  .dark .hljs-keyword,
+  .dark .hljs-selector-tag,
+  .dark .hljs-literal,
+  .dark .hljs-section,
+  .dark .hljs-link {
+    color: hsl(213 94% 68%);
+  }
+
+  .dark .hljs-string,
+  .dark .hljs-title,
+  .dark .hljs-name,
+  .dark .hljs-type,
+  .dark .hljs-attribute,
+  .dark .hljs-symbol,
+  .dark .hljs-bullet,
+  .dark .hljs-addition {
+    color: hsl(160 84% 55%);
+  }
+
+  .dark .hljs-number,
+  .dark .hljs-variable,
+  .dark .hljs-template-variable,
+  .dark .hljs-regexp,
+  .dark .hljs-meta .hljs-string {
+    color: hsl(32 95% 64%);
+  }
+
+  .dark .hljs-built_in,
+  .dark .hljs-function,
+  .dark .hljs-class .hljs-title {
+    color: hsl(263 85% 72%);
+  }
+
+  .dark .hljs-deletion {
+    color: hsl(0 91% 71%);
   }
 
   @keyframes float {
@@ -160,6 +254,22 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Custom Premium Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
   }
 
   /* Prevent default browser drag styles */

@@ -1,26 +1,5 @@
 import { z } from 'zod';
 
-export const webSearchResultSchema = z.object({
-  position: z.number(),
-  title: z.string(),
-  url: z.string(),
-  content: z.string(),
-  score: z.number(),
-  publishedDate: z.string().optional(),
-});
-
-export const webSearchResponseSchema = z.object({
-  success: z.boolean(),
-  query: z.string(),
-  resultsCount: z.number().optional(),
-  responseTime: z.string().optional(),
-  answer: z.string().optional(),
-  results: z.array(webSearchResultSchema).optional(),
-  formattedOutput: z.string().optional(),
-  message: z.string().optional(),
-  error: z.string().optional(),
-});
-
 export const searchDepthEnum = z.enum(['basic', 'advanced']);
 export type SearchDepth = z.infer<typeof searchDepthEnum>;
 

@@ -1,4 +1,4 @@
-export const TOOL_DISPLAY_NAMES: Record<string, string> = {
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
   // Gmail
   gmail_search: 'Searching mails',
   gmail_read: 'Reading mail',

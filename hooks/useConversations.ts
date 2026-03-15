@@ -19,6 +19,10 @@ interface ConversationsResponse {
   nextCursor?: string;
 }
 
+interface UseConversationsOptions {
+  enabled?: boolean;
+}
+
 async function fetchConversations({ cursor }: { cursor?: string }): Promise<ConversationsResponse> {
   const url = new URL("/api/conversations", window.location.origin);
   url.searchParams.set("limit", "20");
@@ -98,7 +102,7 @@ async function toggleConversationSharing(id: string, isPublic: boolean): Promise
   return response.json();
 }
 
-export function useConversations() {
+export function useConversations({ enabled = true }: UseConversationsOptions = {}) {
   const queryClient = useQueryClient();
 
   const {
@@ -111,6 +115,7 @@ export function useConversations() {
   } = useInfiniteQuery({
     queryKey: ["conversations"],
     queryFn: ({ pageParam }) => fetchConversations({ cursor: pageParam }),
+    enabled,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: undefined as string | undefined,
     staleTime: 30000,

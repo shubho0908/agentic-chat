@@ -32,7 +32,7 @@ export const messageContentPartSchema = z.union([
   }),
 ]);
 
-export const messageHistoryEntrySchema = z.object({
+const messageHistoryEntrySchema = z.object({
   content: z.union([z.string(), z.array(messageContentPartSchema)]),
   attachments: z.array(attachmentSchema).optional(),
   editedAt: z.number(),
@@ -111,26 +111,13 @@ export const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
   versions: z.array(z.lazy(() => messageSchema)).optional(),
 });
 
-export const chatRequestSchema = z.object({
-  messages: z.array(messageSchema),
-});
-
-export const chatErrorSchema = z.object({
-  error: z.string(),
-  message: z.string().optional(),
-  details: z.union([z.string(), z.number(), z.record(z.string(), z.string())]).optional(),
-});
-
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 export type ToolStatus = z.infer<typeof toolStatusSchema>;
 export type Attachment = z.infer<typeof attachmentSchema>;
 export type AttachmentInput = z.infer<typeof attachmentInputSchema>;
 export type MessageContentPart = z.infer<typeof messageContentPartSchema>;
-export type MessageHistoryEntry = z.infer<typeof messageHistoryEntrySchema>;
 export type ToolActivity = z.infer<typeof toolActivitySchema>;
 export type Message = z.infer<typeof messageSchema>;
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type ChatError = z.infer<typeof chatErrorSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataBaseSchema>;
 
 export const MessageRole = {

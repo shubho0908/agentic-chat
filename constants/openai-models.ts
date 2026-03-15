@@ -1,4 +1,4 @@
-export interface OpenAIModel {
+interface OpenAIModel {
   id: string;
   name: string;
   description: string;
@@ -10,11 +10,39 @@ export interface OpenAIModel {
 }
 
 export const OPENAI_MODELS: OpenAIModel[] = [
-  // GPT-5 Series (Latest Frontier Models)
+  // GPT-5 Series
+  {
+    id: "gpt-5.4",
+    name: "GPT-5.4",
+    description: "Best intelligence at scale for agentic, coding, and professional workflows",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    recommended: true,
+  },
+  {
+    id: "gpt-5.2",
+    name: "GPT-5.2",
+    description: "Previous frontier GPT-5 model for complex professional work",
+    contextWindow: 400000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+  },
+  {
+    id: "gpt-5.2-codex",
+    name: "GPT-5.2 Codex",
+    description: "Specialized GPT-5 model for long-horizon, agentic coding tasks",
+    contextWindow: 400000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+  },
   {
     id: "gpt-5",
     name: "GPT-5",
-    description: "Best model for coding and agentic tasks",
+    description: "Previous GPT-5 reasoning model for coding and agentic tasks",
     contextWindow: 400000,
     category: "reasoning",
     capabilities: ["text", "vision"],
@@ -23,65 +51,21 @@ export const OPENAI_MODELS: OpenAIModel[] = [
   {
     id: "gpt-5-mini",
     name: "GPT-5 Mini",
-    description: "Faster, cost-efficient version of GPT-5",
+    description: "Near-frontier GPT-5 model for lower latency and cost",
     contextWindow: 400000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
   },
   {
-    id: "gpt-5-nano-2025-08-07",
+    id: "gpt-5-nano",
     name: "GPT-5 Nano",
-    description: "Fastest, most cost-efficient version of GPT-5",
+    description: "Fastest, cheapest GPT-5 model for classification and summarization",
     contextWindow: 400000,
-    category: "chat",
+    category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    recommended: true,
-  },
-  // GPT-4.1 Series
-  {
-    id: "gpt-4.1",
-    name: "GPT-4.1",
-    description: "Smartest non-reasoning model",
-    contextWindow: 1047576,
-    category: "chat",
-    capabilities: ["text", "vision"],
-  },
-  {
-    id: "gpt-4.1-mini",
-    name: "GPT-4.1 Mini",
-    description: "Smaller, faster version of GPT-4.1",
-    contextWindow: 1047576,
-    category: "chat",
-    capabilities: ["text", "vision"],
-  },
-  {
-    id: "gpt-4.1-nano",
-    name: "GPT-4.1 Nano",
-    description: "Fastest, most cost-efficient GPT-4.1",
-    contextWindow: 1047576,
-    category: "chat",
-    capabilities: ["text", "vision"],
-  },
- 
-  // GPT-4o Series
-  {
-    id: "gpt-4o",
-    name: "GPT-4o",
-    description: "Fast, intelligent, flexible GPT model",
-    contextWindow: 128000,
-    category: "chat",
-    capabilities: ["text", "vision"],
-  },
-  {
-    id: "gpt-4o-mini",
-    name: "GPT-4o Mini",
-    description: "Fast, affordable small model",
-    contextWindow: 128000,
-    category: "chat",
-    capabilities: ["text", "vision"],
   },
 ];
 
-export const DEFAULT_MODEL = OPENAI_MODELS[2].id;
+export const DEFAULT_MODEL = "gpt-5.4";

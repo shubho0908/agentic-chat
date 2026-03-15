@@ -1,5 +1,13 @@
 import type { StreamConfig } from "@/types/chat";
 
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof DOMException && error.name === "AbortError"
+  ) || (
+    error instanceof Error && error.name === "AbortError"
+  );
+}
+
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
   const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = config;
   
@@ -171,7 +179,11 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
       }
     }
   } catch (error) {
-    reader.cancel();
+    void reader.cancel().catch((cancelError) => {
+      if (!isAbortError(cancelError)) {
+        console.warn("Failed to cancel chat stream reader:", cancelError);
+      }
+    });
     throw error;
   }
 

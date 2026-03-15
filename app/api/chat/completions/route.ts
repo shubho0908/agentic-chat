@@ -8,7 +8,7 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { routeContext } from '@/lib/context-router';
-import { RoutingDecision, type MemoryStatus } from '@/types/chat';
+import type { MemoryStatus } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
       imageCount: 0,
       hasUrls: false,
       urlCount: 0,
-      routingDecision: RoutingDecision.MemoryOnly,
       skippedMemory: false,
     };
     
@@ -75,7 +74,8 @@ export async function POST(request: NextRequest) {
             conversationId,
             activeTool,
             memoryEnabled,
-            deepResearchEnabled
+            deepResearchEnabled,
+            { apiKey }
           );
         },
         {

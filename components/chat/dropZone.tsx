@@ -48,7 +48,7 @@ export function DropZone({
             transition={{ duration: 0.15 }}
             className="absolute inset-0 z-50 pointer-events-none rounded-2xl"
           >
-            <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-primary/30 bg-primary/5" />
+            <div className="absolute inset-0 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5" />
           </motion.div>
         )}
       </AnimatePresence>

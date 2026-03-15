@@ -28,7 +28,6 @@ export function MessageEditForm({
           value={editText}
           onChange={(e) => onEditTextChange(e.target.value)}
           className="min-h-[100px] resize-none rounded-lg border-[1.5px] border-border/80 dark:border-border/70 focus-visible:border-primary transition-all bg-background shadow-sm outline-none focus:outline-none focus-visible:ring-0"
-          autoFocus
         />
       </div>
       <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150 delay-75">
@@ -41,7 +40,7 @@ export function MessageEditForm({
                 onClick={onSubmit}
                 disabled={!editText.trim()}
                 variant="ghost"
-                className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-500 dark:hover:text-green-400 dark:hover:bg-green-950/30"
+                className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-500 dark:hover:text-green-400 dark:hover:bg-green-950/30 transition-all duration-200 ease-out active:scale-90"
               >
                 <Check className="size-4" />
               </Button>
@@ -58,7 +57,7 @@ export function MessageEditForm({
                 size="sm"
                 variant="ghost"
                 onClick={onCancel}
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 p-0 transition-all duration-200 ease-out active:scale-90"
               >
                 <X className="size-4" />
               </Button>

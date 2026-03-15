@@ -35,16 +35,13 @@ export function ChatHeader({
   const { data: session, isPending } = useSession();
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white/80 dark:bg-black/40 backdrop-blur-md p-4 shadow-sm dark:shadow-xl border-b border-border/40 dark:border-white/20 md:left-auto md:top-4 md:right-4 md:bg-transparent md:backdrop-blur-none md:p-0 md:shadow-none md:border-0">
+    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white/40 dark:bg-black/20 backdrop-blur-3xl p-4 border-b border-black/5 dark:border-white/5 md:left-auto md:top-6 md:right-6 md:bg-transparent md:backdrop-blur-none md:p-0 md:border-none">
       {session && (
         <SidebarTriggerWithShortcut className="md:hidden" showTooltip={false} />
       )}
       <div className="flex items-center gap-2 md:ml-0 ml-auto">
       {isPending ? (
-        <>
-          <Skeleton className="h-9 w-24 rounded-xl" />
-          <Skeleton className="size-9 rounded-full" />
-        </>
+        <Skeleton className="size-9 rounded-full" />
       ) : (
         <>
           {session ? (
@@ -70,8 +67,9 @@ export function ChatHeader({
                 autoOpen={autoOpenByok}
                 onConfigured={onConfigured}
                 triggerRef={byokTriggerRef}
+                hiddenTrigger
               />
-              <UserMenu />
+              <UserMenu byokTriggerRef={byokTriggerRef} />
             </>
           ) : (
             <>

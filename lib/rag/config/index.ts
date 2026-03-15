@@ -30,6 +30,7 @@ export const RAG_CONFIG = {
     pollInterval: 500,
     exponentialBackoff: true,
     maxBackoffInterval: 2000,
+    maxWaitMs: 8000,
   },
   search: {
     defaultLimit: 5,
@@ -53,24 +54,3 @@ export const RAG_CONFIG = {
     'text/plain',
   ],
 };
-
-import { API_ERROR_MESSAGES } from '@/constants/errors';
-
-export function validateRAGConfig(): void {
-  const required = [
-    'DATABASE_URL',
-    'EMBEDDING_DIMENSIONS',
-    'EMBEDDING_MODEL',
-  ];
-
-  const missing = required.filter(key => !process.env[key]);
-  
-  if (missing.length > 0) {
-    throw new Error(`${API_ERROR_MESSAGES.RAG_MISSING_ENV_VARS}: ${missing.join(', ')}`);
-  }
-
-  const embeddingDimensions = Number(process.env.EMBEDDING_DIMENSIONS);
-  if (isNaN(embeddingDimensions) || !Number.isInteger(embeddingDimensions) || embeddingDimensions <= 0) {
-    throw new Error(API_ERROR_MESSAGES.RAG_INVALID_EMBEDDING_DIMENSIONS);
-  }
-}

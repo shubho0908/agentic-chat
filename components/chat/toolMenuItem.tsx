@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Info, Zap, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -11,24 +10,23 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
+import { type ToolId, type ToolConfig } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { GOOGLE_SUITE_SERVICES } from "@/components/icons/google-suite-icons";
+import { getGoogleWorkspaceLevel } from "@/lib/tools/google-suite/access-levels";
+import {
+  useToolMenuItemState,
+  type ToolMenuDeepResearchUsage,
+  type ToolMenuGoogleSuiteStatus,
+} from "@/hooks/chat/useToolMenuItemState";
 
 interface ToolMenuItemProps {
   tool: ToolConfig;
   isActive: boolean;
   isAuthenticated: boolean;
   searchDepth?: SearchDepth;
-  deepResearchUsage?: {
-    remaining: number;
-    limit: number;
-    loading: boolean;
-  };
-  googleSuiteStatus?: {
-    authorized: boolean;
-    loading: boolean;
-  };
+  deepResearchUsage?: ToolMenuDeepResearchUsage;
+  googleSuiteStatus?: ToolMenuGoogleSuiteStatus;
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
@@ -41,14 +39,25 @@ export function ToolMenuItem({
   googleSuiteStatus,
   onToolSelect,
 }: ToolMenuItemProps) {
-  const ToolIcon = tool.icon;
-  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
-  const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
-  const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const isDisabled = !isAuthenticated || 
-    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
-    (isGoogleSuite && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized);
-  const needsPermissions = isGoogleSuite && isAuthenticated && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized;
+  const {
+    ToolIcon,
+    googleWorkspaceSelections,
+    handleOpenGoogleSettings,
+    hasWorkspaceAccess,
+    isDeepResearch,
+    isDisabled,
+    isGoogleSuite,
+    isWebSearch,
+    needsPermissions,
+    googleSuiteNeedsSetup,
+    openGoogleSettings,
+    toolDescription,
+  } = useToolMenuItemState({
+    tool,
+    isAuthenticated,
+    deepResearchUsage,
+    googleSuiteStatus,
+  });
 
   if (isWebSearch) {
     return (
@@ -56,8 +65,8 @@ export function ToolMenuItem({
         <DropdownMenuSubTrigger
           disabled={isDisabled}
           className={cn(
-            "gap-3 py-3 rounded-lg transition-all",
-            !isDisabled && "cursor-pointer group",
+            "gap-3 py-3 rounded-lg transition-all duration-200 ease-out",
+            !isDisabled && "cursor-pointer group active:scale-[0.98]",
             isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
             isDisabled && "opacity-50"
           )}
@@ -97,11 +106,7 @@ export function ToolMenuItem({
             </span>
           </div>
           {isActive && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-            />
+            <div className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50 animate-in fade-in-0 zoom-in-95 duration-200" />
           )}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent sideOffset={8} className="w-56 p-1">
@@ -158,12 +163,23 @@ export function ToolMenuItem({
 
   return (
     <DropdownMenuItem
-      onClick={() => !isDisabled && onToolSelect(tool.id)}
+      onClick={() => {
+        if (googleSuiteNeedsSetup) {
+          openGoogleSettings();
+          return;
+        }
+
+        if (!isDisabled) {
+          onToolSelect(tool.id);
+        }
+      }}
       disabled={isDisabled}
+      aria-disabled={isDisabled || googleSuiteNeedsSetup}
       className={cn(
-        "gap-3 py-3 rounded-lg transition-all",
-        !isDisabled && "cursor-pointer group",
-        isDisabled && "opacity-50",
+        "gap-3 py-3 rounded-lg transition-all duration-200 ease-out",
+        !isDisabled && !googleSuiteNeedsSetup && "cursor-pointer group active:scale-[0.98]",
+        (isDisabled || googleSuiteNeedsSetup) && "opacity-50",
+        googleSuiteNeedsSetup && "cursor-not-allowed",
         isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary"
       )}
     >
@@ -187,9 +203,9 @@ export function ToolMenuItem({
       <div className="flex flex-col gap-0.5 flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="font-medium truncate">{tool.name}</span>
-          {needsPermissions && (
+          {(needsPermissions || googleSuiteNeedsSetup) && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Sign in required
+              {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
             </Badge>
           )}
           {isDeepResearch && (
@@ -238,21 +254,44 @@ export function ToolMenuItem({
                   />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs p-3">
-                  <div className="space-y-2">
-                    <p className="font-medium text-sm">Available Tools</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-sm">Available Tools</p>
+                      <button
+                        type="button"
+                        className="text-[10px] font-medium text-primary hover:underline"
+                        onClick={handleOpenGoogleSettings}
+                      >
+                        Open Settings
+                      </button>
+                    </div>
                     <div className="grid grid-cols-3 gap-2">
                       {GOOGLE_SUITE_SERVICES.map((service) => {
                         const ServiceIcon = service.icon;
+                        const serviceId = service.name.toLowerCase() as keyof typeof googleWorkspaceSelections;
+                        const levelId = googleWorkspaceSelections[serviceId];
+                        const level = getGoogleWorkspaceLevel(serviceId, levelId);
+                        const isEnabled = level.id !== "off";
+
                         return (
                           <div
                             key={service.name}
-                            className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-accent/70 transition-colors cursor-pointer"
+                            className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-lg p-2 transition-colors hover:bg-accent/70"
                           >
-                            <div className="size-8 flex items-center justify-center">
+                            <div className="relative flex size-8 items-center justify-center">
                               <ServiceIcon className="size-7" />
+                              <span
+                                className={cn(
+                                  "absolute -right-0.5 -top-0.5 size-2 rounded-full border border-popover",
+                                  isEnabled ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                )}
+                              />
                             </div>
                             <span className="text-[10px] font-medium text-center">
                               {service.name}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground text-center">
+                              {isEnabled ? level.label : "Off"}
                             </span>
                           </div>
                         );
@@ -265,15 +304,11 @@ export function ToolMenuItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Sign in with Google to access Workspace tools' : tool.description}
+          {toolDescription}
         </span>
       </div>
       {isActive && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50"
-        />
+        <div className="ml-auto size-2 rounded-full bg-primary shadow-lg shadow-primary/50 animate-in fade-in-0 zoom-in-95 duration-200" />
       )}
     </DropdownMenuItem>
   );

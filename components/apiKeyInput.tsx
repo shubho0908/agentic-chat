@@ -28,8 +28,8 @@ export function ApiKeyInput({ value, onChange }: ApiKeyInputProps) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
-            "focus-visible:outline-none focus-visible:ring-0 text-sm pr-10",
-            value && !isValidApiKey(value) ? "border-destructive" : ""
+            "text-sm pr-10 bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10",
+            value && !isValidApiKey(value) ? "border-destructive focus-visible:ring-destructive" : ""
           )}
         />
         {value && (
