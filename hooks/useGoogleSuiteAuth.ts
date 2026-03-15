@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import type { GoogleAuthorizationStatus } from '@/types/google-suite';
 
+interface UseGoogleSuiteAuthOptions {
+  enabled?: boolean;
+}
+
 async function fetchAuthStatus(): Promise<GoogleAuthorizationStatus> {
   const response = await fetch('/api/google-suite/auth/status');
   
@@ -11,10 +15,11 @@ async function fetchAuthStatus(): Promise<GoogleAuthorizationStatus> {
   return response.json();
 }
 
-export function useGoogleSuiteAuth() {
+export function useGoogleSuiteAuth({ enabled = true }: UseGoogleSuiteAuthOptions = {}) {
   const { data: status, isLoading, refetch } = useQuery({
     queryKey: ['google-suite-auth-status'],
     queryFn: fetchAuthStatus,
+    enabled,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,

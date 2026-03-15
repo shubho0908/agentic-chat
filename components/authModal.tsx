@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { signIn } from "@/lib/auth-client";
+import { signInWithGoogle } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
@@ -20,19 +20,23 @@ interface AuthModalProps {
   children?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  callbackURL?: string;
 }
 
-export function AuthModal({ children, open, onOpenChange }: AuthModalProps) {
+export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { resolvedTheme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      await signIn.social({
-        provider: "google",
-        callbackURL: "/",
-      });
+      const resolvedCallbackURL =
+        callbackURL ||
+        (typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/");
+
+      await signInWithGoogle(resolvedCallbackURL);
     } catch (error) {
       console.error("Sign in error:", error);
       toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {

@@ -40,7 +40,10 @@ export function ToolMenuItemDrawer({
   const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const isDisabled = !isAuthenticated || (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0);
+  const isDisabled =
+    !isAuthenticated ||
+    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
+    (isGoogleSuite && !!googleSuiteStatus?.loading);
   const needsPermissions = isGoogleSuite && isAuthenticated && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized;
 
   if (isWebSearch) {
@@ -194,7 +197,7 @@ export function ToolMenuItemDrawer({
           <span className="font-medium truncate">{tool.name}</span>
           {needsPermissions && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Auth needed
+              Grant access
             </Badge>
           )}
         </div>

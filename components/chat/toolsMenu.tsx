@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { motion } from "framer-motion";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -23,11 +24,13 @@ import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/t
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
-import { useSession } from "@/lib/auth-client";
+import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ToolMenuItem } from "./toolMenuItem";
 import { MemoryToggle } from "./memoryToggle";
 import { ToolsDrawer } from "./toolsDrawer";
+import { toast } from "sonner";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -61,8 +64,10 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage();
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage({ enabled: !!session });
+  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
   const deepResearchUsage = {
     remaining: usageData?.remaining ?? 3,
@@ -70,15 +75,31 @@ export function ToolsMenu({
     loading: usageLoading,
   };
 
-  const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
+  const currentCallbackURL = (() => {
+    const query = searchParams?.toString();
+    return query ? `${pathname}?${query}` : pathname || "/";
+  })();
+
+  const handleToolSelect = async (toolId: ToolId, selectedDepth?: SearchDepth) => {
     if (!session) {
       onAuthRequired?.();
       setIsOpen(false);
       return;
     }
+
     if (toolId === TOOL_IDS.GOOGLE_SUITE && !googleSuiteStatus?.authorized) {
+      try {
+        await authorizeGoogleWorkspace(currentCallbackURL);
+      } catch (error) {
+        console.error("Google Workspace authorization error:", error);
+        toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
+          description: "We couldn't start Google Workspace authorization. Please try again.",
+        });
+      }
+      setIsOpen(false);
       return;
     }
+
     onToolSelected?.(toolId, selectedDepth);
     setIsOpen(false);
   };

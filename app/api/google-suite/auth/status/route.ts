@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/api-utils';
 import { prisma } from '@/lib/prisma';
 import type { GoogleAuthorizationStatus } from '@/types/google-suite';
-import { GOOGLE_PROVIDER_ID } from '@/lib/tools/google-suite/scopes';
+import { GOOGLE_PROVIDER_ID, getMissingGoogleWorkspaceScopes } from '@/lib/tools/google-suite/scopes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +18,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       select: {
         accessToken: true,
         refreshToken: true,
+        scope: true,
       },
     });
 
@@ -34,6 +35,17 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
         authorized: false,
         reason: 'no_tokens',
         message: 'Please sign out and sign in again with Google to refresh your credentials.',
+      });
+    }
+
+    const missingScopes = getMissingGoogleWorkspaceScopes(account.scope);
+
+    if (missingScopes.length > 0) {
+      return NextResponse.json<GoogleAuthorizationStatus>({
+        authorized: false,
+        reason: 'permissions_needed',
+        message: 'Grant Google Workspace permissions to use Gmail, Drive, Calendar, Docs, Sheets, and Slides tools.',
+        missingScopes,
       });
     }
 

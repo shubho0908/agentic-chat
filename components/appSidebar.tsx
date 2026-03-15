@@ -66,7 +66,7 @@ export function AppSidebar() {
     isRenaming,
     isToggling,
     isBulkDeleting,
-  } = useConversations();
+  } = useConversations({ enabled: !!session });
 
   const virtualizer = useVirtualizer({
     count: conversations.length,

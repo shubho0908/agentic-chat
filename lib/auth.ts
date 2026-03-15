@@ -1,9 +1,11 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
-import { ALL_GOOGLE_SUITE_SCOPES } from "./tools/google-suite/scopes";
+import { GOOGLE_SIGN_IN_SCOPES } from "./tools/google-suite/scopes";
+import { appBaseUrl, trustedOrigins } from "./appUrl";
 
 export const auth = betterAuth({
+  baseURL: appBaseUrl,
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
@@ -14,12 +16,12 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      scope: ALL_GOOGLE_SUITE_SCOPES,
+      scope: GOOGLE_SIGN_IN_SCOPES,
       accessType: "offline",
-      prompt: "consent",
+      prompt: "select_account",
     },
   },
-  trustedOrigins: [process.env.NEXT_PUBLIC_APP_URL as string],
+  trustedOrigins,
 });
 
 export type Session = typeof auth.$Infer.Session;

@@ -87,18 +87,18 @@ pnpm db:studio
 ## Google OAuth Setup
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Create OAuth 2.0 credentials
+2. Create OAuth 2.0 credentials and configure the OAuth consent screen
 3. Add authorized redirect URIs:
    - `http://localhost:3000/api/auth/callback/google` (dev)
    - `https://yourdomain.com/api/auth/callback/google` (prod)
-4. Add scopes:
+4. Base sign-in only needs:
+   - `openid`
    - `email`
    - `profile`
-   - `gmail.readonly`
-   - `gmail.send`
-   - `gmail.modify`
-   - `gmail.labels`
-   - Google Calendar, Drive, Docs, Sheets, Slides (optional)
+5. Google Workspace tools request Gmail, Drive, Calendar, Docs, Sheets, and Slides access later, only when a signed-in user explicitly enables the Google Suite tool
+6. If Google still shows an unverified or restricted-access warning for Workspace permissions:
+   - Add your account under OAuth consent screen test users while the app is in testing
+   - Complete Google app verification before offering sensitive Workspace scopes to all users
 
 ## Database Requirements
 
@@ -115,7 +115,8 @@ Your PostgreSQL database must have:
 
 **OAuth issues**
 - Verify redirect URIs match exactly
-- Check that required scopes are enabled in Google Cloud Console
+- Check that `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` match your real app origin
+- Add yourself as a test user if the OAuth consent screen is still in testing
 
 **Build issues**
 - Clear `.next` folder and rebuild

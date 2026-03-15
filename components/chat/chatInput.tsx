@@ -58,7 +58,7 @@ export function ChatInput({
   const [searchDepth, setSearchDepth] = useState<SearchDepth>('basic');
 
   const { data: session, isPending } = useSession();
-  const { data: usageData } = useDeepResearchUsage();
+  const { data: usageData } = useDeepResearchUsage({ enabled: !!session });
 
   useEffect(() => {
     if (!isPending) {

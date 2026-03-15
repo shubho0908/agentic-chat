@@ -45,9 +45,10 @@ export function ToolMenuItem({
   const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const isDisabled = !isAuthenticated || 
+  const isDisabled =
+    !isAuthenticated ||
     (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
-    (isGoogleSuite && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized);
+    (isGoogleSuite && !!googleSuiteStatus?.loading);
   const needsPermissions = isGoogleSuite && isAuthenticated && !googleSuiteStatus?.loading && !googleSuiteStatus?.authorized;
 
   if (isWebSearch) {
@@ -189,7 +190,7 @@ export function ToolMenuItem({
           <span className="font-medium truncate">{tool.name}</span>
           {needsPermissions && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              Sign in required
+              Grant access
             </Badge>
           )}
           {isDeepResearch && (
@@ -265,7 +266,7 @@ export function ToolMenuItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground truncate">
-          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Sign in with Google to access Workspace tools' : tool.description}
+          {!isAuthenticated ? 'Login required to access this tool' : needsPermissions ? 'Click to grant Google Workspace permissions' : tool.description}
         </span>
       </div>
       {isActive && (

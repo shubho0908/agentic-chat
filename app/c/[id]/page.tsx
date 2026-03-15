@@ -24,6 +24,7 @@ export default function ChatPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: conversationId } = use(params);
+  const { data: session, isPending } = useSession();
   const {
     data: conversationData,
     error: conversationError,
@@ -32,7 +33,7 @@ export default function ChatPage({
     hasNextPage,
     isFetchingNextPage
   } = useConversation(conversationId);
-  const { toggleSharing, isToggling } = useConversations();
+  const { toggleSharing, isToggling } = useConversations({ enabled: !!session });
 
   const initialMessages = useMemo(() => {
     if (!conversationData?.messages.items) return [];
@@ -55,7 +56,6 @@ export default function ChatPage({
   const [isConfigured, setIsConfigured] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
-  const { data: session, isPending } = useSession();
   const autoTriggerStateRef = useRef<{ conversationId: string | null; triggered: boolean }>({
     conversationId: null,
     triggered: false,

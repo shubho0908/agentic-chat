@@ -3,6 +3,7 @@ import { GaxiosError } from 'gaxios';
 import { prisma } from '@/lib/prisma';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { GOOGLE_PROVIDER_ID } from './scopes';
+import { appBaseUrl } from '@/lib/appUrl';
 
 interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
@@ -12,16 +13,16 @@ interface GoogleSuiteClientContext {
 export const GOOGLE_AUTH_REVOKED_ERROR = 'GOOGLE_AUTH_REVOKED';
 
 function createOAuth2Client(): Auth.OAuth2Client {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXT_PUBLIC_APP_URL } = process.env;
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
   
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !NEXT_PUBLIC_APP_URL) {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !appBaseUrl) {
     throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MISSING_OAUTH_CREDENTIALS);
   }
   
   return new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
-    `${NEXT_PUBLIC_APP_URL}/api/auth/callback/google`
+    `${appBaseUrl}/api/auth/callback/google`
   );
 }
 
