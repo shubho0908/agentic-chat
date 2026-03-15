@@ -139,13 +139,20 @@ export async function processDocument(
       errorMessage = error.message;
     }
 
-    await prisma.attachment.update({
-      where: { id: attachmentId },
-      data: {
-        processingStatus: 'FAILED' as ProcessingStatus,
-        processingError: errorMessage,
-      },
-    });
+    try {
+      await prisma.attachment.updateMany({
+        where: { id: attachmentId },
+        data: {
+          processingStatus: 'FAILED' as ProcessingStatus,
+          processingError: errorMessage,
+        },
+      });
+    } catch (statusUpdateError) {
+      console.error(
+        '[RAG] Failed to persist attachment failure status:',
+        statusUpdateError
+      );
+    }
 
     try {
       await deleteDocumentChunks(attachmentId);

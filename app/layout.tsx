@@ -9,6 +9,7 @@ import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
+import { appBaseUrl } from "@/lib/appUrl";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,7 +24,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Agentic Chat - Intelligent Conversations",
   description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL as string),
+  metadataBase: new URL(appBaseUrl),
   openGraph: {
     title: "Agentic Chat - Intelligent Conversations",
     description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",

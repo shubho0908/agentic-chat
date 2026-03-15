@@ -21,16 +21,18 @@ export async function POST(request: NextRequest) {
       return errorResponse(API_ERROR_MESSAGES.INVALID_API_KEY, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    if (apiKey.length > VALIDATION_LIMITS.API_KEY_MAX_LENGTH) {
+    const normalizedApiKey = apiKey.trim();
+
+    if (normalizedApiKey.length > VALIDATION_LIMITS.API_KEY_MAX_LENGTH) {
       return errorResponse(API_ERROR_MESSAGES.PAYLOAD_TOO_LARGE, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const openaiKeyRegex = /^sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}$/;
-    if (!openaiKeyRegex.test(apiKey.trim())) {
+    if (!openaiKeyRegex.test(normalizedApiKey)) {
       return errorResponse(API_ERROR_MESSAGES.INVALID_API_KEY_FORMAT, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const encrypted = encryptApiKey(apiKey);
+    const encrypted = encryptApiKey(normalizedApiKey);
 
     await prisma.user.update({
       where: { id: session.user.id },

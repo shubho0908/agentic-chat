@@ -52,7 +52,14 @@ reviews:
     base_branches:
       - "^main$"
 
+  # ⚠️ BRUTAL RULE: .agent/ and .agents/ folders are NEVER reviewed — no exceptions.
+  # These directories contain agent instructions/skills managed outside the normal review flow.
+  # CodeRabbit must completely ignore them. Do NOT add path_instructions that override this.
   path_filters:
+    - "!.agent/**"
+    - "!.agents/**"
+    - "!**/.agent/**"
+    - "!**/.agents/**"
     - "!**/.next/**"
     - "!**/node_modules/**"
     - "!**/*.generated.ts"
