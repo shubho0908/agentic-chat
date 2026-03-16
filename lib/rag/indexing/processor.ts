@@ -7,6 +7,7 @@ import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@prisma/client';
+import { safeFetch } from '@/lib/network/safe-fetch';
 
 interface ProcessDocumentResult {
   success: boolean;
@@ -19,7 +20,10 @@ interface ProcessDocumentResult {
 }
 
 async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
-  const response = await fetch(fileUrl);
+  const response = await safeFetch(fileUrl, {
+    timeoutMs: 15000,
+    retries: 2,
+  });
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);
   }

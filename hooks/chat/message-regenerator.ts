@@ -80,7 +80,7 @@ export async function handleRegenerateResponse(
       deepResearchEnabled
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,

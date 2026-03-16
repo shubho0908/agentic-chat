@@ -20,6 +20,9 @@ import { prisma } from '@/lib/prisma';
 import { filterDocumentAttachments, partitionByStatus, extractIds } from '@/lib/rag/retrieval/status-helpers';
 import { waitForDocumentProcessing } from '@/lib/rag/retrieval/status';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
+import { withRetry } from '@/lib/retry';
+import { getStageModel } from '@/lib/model-policy';
+import { extractUrlsFromMessage, formatScrapedContentForContext, scrapeMultipleUrls } from '@/lib/url-scraper/scraper';
 
 interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
@@ -233,6 +236,21 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   // Continue without document context for planning
                 }
               }
+
+              const messageUrls = extractUrlsFromMessage(lastUserMessage);
+              if (messageUrls.length > 0) {
+                try {
+                  const scrapedUrls = await scrapeMultipleUrls(messageUrls);
+                  if (scrapedUrls.length > 0) {
+                    const urlContext = formatScrapedContentForContext(scrapedUrls);
+                    documentContextForPlanning = documentContextForPlanning
+                      ? `${documentContextForPlanning}\n\n${urlContext}`
+                      : urlContext;
+                  }
+                } catch (urlError) {
+                  console.error('[Stream Handler] URL context retrieval for deep research failed:', urlError);
+                }
+              }
               
               let imageContext = '';
               const hasImages = messages.some(m => 
@@ -271,10 +289,17 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                       }
                     }
                     
-                    const visionResponse = await openai.chat.completions.create({
-                      model,
-                      messages: visionMessages,
-                    });
+                    const visionResponse = await withRetry(
+                      () =>
+                        openai.chat.completions.create(
+                          {
+                            model: getStageModel(model, 'vision'),
+                            messages: visionMessages,
+                          },
+                          { signal: abortSignal }
+                        ),
+                      { signal: abortSignal }
+                    );
                     
                     imageContext = visionResponse.choices[0]?.message?.content || '';
                   }
@@ -302,22 +327,35 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 enhancedMessages = result.messages;
                 researchFailed = result.failed;
                 
-                if (!researchFailed && !abortSignal?.aborted && !result.skipped) {
+                if (!researchFailed && !abortSignal?.aborted) {
                   try {
-                    const updatedUsage = await incrementDeepResearchUsage(userId);
-                    try {
-                      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
-                        type: 'usage_updated',
-                        usageCount: updatedUsage.usageCount,
-                        remaining: updatedUsage.remaining,
-                        limit: updatedUsage.limit,
-                      })}\n\n`));
-                    } catch {
-                      console.error('[Stream Handler] Could not send usage update event (controller closed)');
+                    if (!result.skipped) {
+                      const updatedUsage = await incrementDeepResearchUsage(userId);
+                      try {
+                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+                          type: 'usage_updated',
+                          usageCount: updatedUsage.usageCount,
+                          remaining: updatedUsage.remaining,
+                          limit: updatedUsage.limit,
+                        })}\n\n`));
+                      } catch {
+                        console.error('[Stream Handler] Could not send usage update event (controller closed)');
+                      }
                     }
                   } catch (usageError) {
                     console.error('[Stream Handler] Failed to increment usage after successful research:', usageError);
                     // Continue anyway - research was successful, this is just a tracking issue
+                  }
+
+                  if (result.finalResponse) {
+                    try {
+                      controller.enqueue(encodeChatChunk(result.finalResponse));
+                      controller.enqueue(encodeDone());
+                    } catch {
+                      console.error('[Stream Handler] Could not enqueue direct research response (controller closed)');
+                    }
+                    safeClose();
+                    return;
                   }
                 }
               } catch (researchError) {
@@ -357,11 +395,18 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           }
         }
         
-        const streamResponse = await openai.chat.completions.create({
-          model,
-          messages: toOpenAIMessages(enhancedMessages),
-          stream: true,
-        });
+        const streamResponse = await withRetry(
+          () =>
+            openai.chat.completions.create(
+              {
+                model,
+                messages: toOpenAIMessages(enhancedMessages),
+                stream: true,
+              },
+              { signal: abortSignal }
+            ),
+          { signal: abortSignal }
+        );
         
         for await (const chunk of streamResponse) {
           const text = chunk.choices[0]?.delta?.content || '';

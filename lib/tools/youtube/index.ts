@@ -354,56 +354,69 @@ export async function executeYouTubeTool(
     }
     urls = urls.slice(0, 15);
 
-    for (let i = 0; i < urls.length; i++) {
-      if (abortSignal?.aborted) {
-        throw new Error('YouTube analysis aborted by user');
-      }
+    const concurrency = 2;
+    for (let start = 0; start < urls.length; start += concurrency) {
+      const batch = urls.slice(start, start + concurrency);
+      const batchResults = await Promise.all(batch.map(async (url, batchIndex) => {
+        if (abortSignal?.aborted) {
+          throw new Error('YouTube analysis aborted by user');
+        }
 
-      const videoId = extractVideoId(urls[i]);
-      if (!videoId) {
-        processedVideos.push({
-          video: { id: '', title: 'Invalid URL', url: urls[i] },
-          chapters: [],
-          transcriptText: '',
-          error: 'Invalid YouTube URL',
+        const absoluteIndex = start + batchIndex;
+        const videoId = extractVideoId(url);
+        if (!videoId) {
+          return {
+            absoluteIndex,
+            result: {
+              video: { id: '', title: 'Invalid URL', url },
+              chapters: [],
+              transcriptText: '',
+              error: 'Invalid YouTube URL',
+            },
+          };
+        }
+
+        onProgress?.({
+          status: 'extracting',
+          message: `Starting video ${absoluteIndex + 1}/${urls.length}...`,
+          details: {
+            videoCount: urls.length,
+            processedCount: processedVideos.length,
+            videos: [...completedVideos],
+            step: 'video_start',
+          },
         });
-        continue;
-      }
 
-      onProgress?.({
-        status: 'extracting',
-        message: `Starting video ${i + 1}/${urls.length}...`,
-        details: {
-          videoCount: urls.length,
-          processedCount: i,
-          videos: [...completedVideos],
-          step: 'video_start',
-        },
-      });
+        const result = await processVideo(
+          videoId,
+          input.language || 'en',
+          apiKey,
+          model,
+          onProgress,
+          absoluteIndex + 1,
+          urls.length
+        );
 
-      const result = await processVideo(
-        videoId,
-        input.language || 'en',
-        apiKey,
-        model,
-        onProgress,
-        i + 1,
-        urls.length
-      );
+        return { absoluteIndex, result };
+      }));
 
-      processedVideos.push(result);
-      completedVideos.push(result.video);
-      
-      onProgress?.({
-        status: 'extracting',
-        message: `Completed video ${i + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
-        details: {
-          videoCount: urls.length,
-          processedCount: i + 1,
-          videos: [...completedVideos],
-          step: 'video_complete',
-        },
-      });
+      batchResults
+        .sort((a, b) => a.absoluteIndex - b.absoluteIndex)
+        .forEach(({ absoluteIndex, result }) => {
+          processedVideos.push(result);
+          completedVideos.push(result.video);
+
+          onProgress?.({
+            status: 'extracting',
+            message: `Completed video ${absoluteIndex + 1}/${urls.length}: "${result.video.title}"${result.error ? ' (with errors)' : ''}`,
+            details: {
+              videoCount: urls.length,
+              processedCount: processedVideos.length,
+              videos: [...completedVideos],
+              step: 'video_complete',
+            },
+          });
+        });
     }
 
     const responseTime = Date.now() - startTime;

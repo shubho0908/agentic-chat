@@ -2,8 +2,9 @@ import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
 import { injectContextToMessages, extractConversationHistory } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
-import { YOUTUBE_ANALYSIS_INSTRUCTIONS, GMAIL_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
+import { YOUTUBE_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
 import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource, WebSearchImage } from '@/types/tools';
+import type { Citation } from '@/types/deep-research';
 import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { executeDeepResearch } from '@/lib/tools/deep-research';
@@ -14,6 +15,16 @@ import { executeWebSearch } from '../tools/web-search';
 import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube';
 import { executeMultiSearch } from '../tools/web-search/search-planner';
 import { createUnifiedPlan, type WebSearchPlan, type YouTubePlan } from '../tools/unified-planner';
+
+const MAX_TOOL_CONTEXT_LENGTH = 6000;
+
+function truncateContext(text: string, maxLength: number = MAX_TOOL_CONTEXT_LENGTH): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.substring(0, maxLength)}\n\n[Tool context truncated to stay within the prompt budget.]`;
+}
 
 export async function executeWebSearchTool(
   textQuery: string,
@@ -285,7 +296,7 @@ export async function executeWebSearchTool(
     }
     
     const webSearchInstructions = getWebSearchInstructions(searchDepth);
-    const searchContext = `\n\n## Web Search Context\n\n${searchResults}\n${webSearchInstructions}`;
+    const searchContext = `## Web Search Context\n\n${truncateContext(searchResults)}\n\n${webSearchInstructions}`;
     
     return injectContextToMessages(messages, searchContext);
   } catch (error) {
@@ -420,7 +431,7 @@ export async function executeYouTubeTool(
       }
     }
     
-    const youtubeContext = `\n\n## YouTube Video Context\n\n${youtubeResults}\n${YOUTUBE_ANALYSIS_INSTRUCTIONS}`;
+    const youtubeContext = `## YouTube Video Context\n\n${truncateContext(youtubeResults)}\n\n${YOUTUBE_ANALYSIS_INSTRUCTIONS}`;
     
     return injectContextToMessages(messages, youtubeContext);
   } catch (error) {
@@ -459,7 +470,7 @@ export async function executeDeepResearchTool(
   imageContext?: string,
   attachmentIds?: string[],
   documentContextForPlanning?: string
-): Promise<{ messages: Message[]; failed: boolean; skipped?: boolean }> {
+): Promise<{ messages: Message[]; failed: boolean; skipped?: boolean; finalResponse?: string; citations?: Citation[]; followUpQuestions?: string[] }> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
   
@@ -559,9 +570,16 @@ export async function executeDeepResearchTool(
       }
     }
     
-    const researchContext = `\n\n## Deep Research Results\n\n${formattedResult}`;
+    const researchContext = `## Deep Research Results\n\n${truncateContext(formattedResult, 8000)}`;
     
-    return { messages: injectContextToMessages(messages, researchContext), failed: false, skipped: result.skipped };
+    return {
+      messages: injectContextToMessages(messages, researchContext),
+      failed: false,
+      skipped: result.skipped,
+      finalResponse: result.response,
+      citations: result.citations || [],
+      followUpQuestions: result.followUpQuestions || [],
+    };
   } catch (error) {
     console.error('[Chat API] Deep research error:', error);
     streamClosed = true;
@@ -655,7 +673,7 @@ export async function executeGoogleSuiteTool(
       }
     }
 
-    const workspaceContext = `\n\n## Google Workspace Context\n\n${workspaceResults}\n${GMAIL_ANALYSIS_INSTRUCTIONS}`;
+    const workspaceContext = `## Google Workspace Context\n\n${truncateContext(workspaceResults)}`;
 
     return injectContextToMessages(messages, workspaceContext);
   } catch (error) {

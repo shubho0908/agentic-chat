@@ -8,6 +8,13 @@ import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
 import type { GoogleWorkspaceProgressCallback } from '@/types/google-suite';
 import type { GoogleSuiteTask } from '@/types/tools';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
+import { getStageModel } from '@/lib/model-policy';
+import { withRetry } from '@/lib/retry';
+import {
+  DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
+  hasExplicitGoogleWorkspaceApproval,
+  buildGoogleWorkspaceApprovalBarrierMessage,
+} from '@/lib/tools/google-suite/safety';
 import type {
   HandlerArgs,
   GmailSearchArgs,
@@ -195,6 +202,7 @@ export async function executeGoogleWorkspace(
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
+      { role: 'user', content: `Original user request: ${query}` },
     ];
 
     if (conversationHistory && conversationHistory.length > 0) {
@@ -241,29 +249,24 @@ export async function executeGoogleWorkspace(
         }
       }
 
-      const completion = await openai.chat.completions.create({
-        model,
-        messages,
-        tools: GOOGLE_WORKSPACE_TOOLS,
-        tool_choice: 'auto',
-      });
+      const completion = await withRetry(
+        () =>
+          openai.chat.completions.create(
+            {
+              model: getStageModel(model, 'workspace_agent'),
+              messages,
+              tools: GOOGLE_WORKSPACE_TOOLS,
+              tool_choice: 'auto',
+            },
+            { signal: abortSignal }
+          ),
+        { signal: abortSignal }
+      );
 
       const message = completion.choices[0]?.message;
       if (!message) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NO_RESPONSE);
 
       if (!message.tool_calls?.length) {
-        if (iteration === 1 && taskCount === 0) {
-          messages.push({
-            role: 'assistant',
-            content: message.content,
-          });
-          messages.push({
-            role: 'user',
-            content: `You MUST execute the requested actions using the available tools. Break down the user's request into specific tool calls and execute them now. Do not just respond with text - use the tools provided.`,
-          });
-          continue;
-        }
-        
         finalResponse = message.content || 'Task completed successfully.';
         
         const completedTasks = allTasks.filter(t => t.status === 'completed');
@@ -314,11 +317,21 @@ export async function executeGoogleWorkspace(
         tool_calls: message.tool_calls,
       });
 
-      const toolResults = await Promise.all(
-        message.tool_calls.map(async (toolCall) => {
+      const plannedToolNames = message.tool_calls
+        .filter((toolCall) => toolCall.type === 'function')
+        .map((toolCall) => toolCall.function.name);
+
+      if (!hasExplicitGoogleWorkspaceApproval(query) && plannedToolNames.some((toolName) => DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS.has(toolName))) {
+        return buildGoogleWorkspaceApprovalBarrierMessage(plannedToolNames);
+      }
+
+      const toolResults: Array<{ tool_call_id: string; content: string }> = [];
+
+      for (const toolCall of message.tool_calls) {
           if (toolCall.type !== 'function') {
             console.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
-            return { tool_call_id: toolCall.id, content: 'Invalid tool call type' };
+            toolResults.push({ tool_call_id: toolCall.id, content: 'Invalid tool call type' });
+            continue;
           }
 
           const functionName = toolCall.function.name;
@@ -328,10 +341,11 @@ export async function executeGoogleWorkspace(
             args = JSON.parse(toolCall.function.arguments) as HandlerArgs;
           } catch {
             console.error('[Google Workspace Executor] Failed to parse arguments:', toolCall.function.arguments);
-            return {
+            toolResults.push({
               tool_call_id: toolCall.id,
               content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_JSON_ARGS,
-            };
+            });
+            continue;
           }
 
           taskCount++;
@@ -373,7 +387,10 @@ export async function executeGoogleWorkspace(
           });
 
           try {
-            const result = await executeToolCall(context, functionName, args);
+            const result = await withRetry(
+              () => executeToolCall(context, functionName, args),
+              { signal: abortSignal, retries: 2 }
+            );
             consecutiveErrors = 0;
             
             currentTask.status = 'completed';
@@ -392,7 +409,8 @@ export async function executeGoogleWorkspace(
               },
             });
             
-            return { tool_call_id: toolCall.id, content: result };
+            toolResults.push({ tool_call_id: toolCall.id, content: result });
+            continue;
           } catch (error) {
             currentTask.status = 'failed';
             currentTask.error = error instanceof Error ? error.message : 'Unknown error';
@@ -403,23 +421,24 @@ export async function executeGoogleWorkspace(
                 status: 'auth_required',
                 message: 'Google Workspace authorization has been revoked or expired',
               });
-              return {
+              toolResults.push({
                 tool_call_id: toolCall.id,
                 content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REVOKED,
-              };
+              });
+              continue;
             }
 
             consecutiveErrors++;
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             console.error(`[Google Workspace Executor] ✗ ${functionName} failed:`, errorMessage);
             console.error('[Google Workspace Executor] Error details:', error);
-            return {
+            toolResults.push({
               tool_call_id: toolCall.id,
               content: `Error: ${errorMessage}`,
-            };
+            });
+            continue;
           }
-        })
-      );
+      }
 
       if (consecutiveErrors >= 3) {
         console.error('[Google Workspace Executor] Too many consecutive errors, aborting');

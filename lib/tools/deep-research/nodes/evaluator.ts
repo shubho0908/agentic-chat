@@ -1,9 +1,18 @@
 import { ChatOpenAI } from '@langchain/openai';
+import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
 import type { EvaluationResult, StrictnessLevel } from '@/types/deep-research';
+import { getStageModel } from '@/lib/model-policy';
 
 const MAX_ATTEMPTS = 3; // Total attempts allowed (1 initial + 2 retries)
+const evaluationResultSchema = z.object({
+  meetsStandards: z.boolean(),
+  isRelevant: z.boolean(),
+  feedback: z.string(),
+  rewrittenPrompt: z.string().optional(),
+  score: z.number(),
+});
 
 export async function evaluatorNode(
   state: ResearchState,
@@ -13,7 +22,7 @@ export async function evaluatorNode(
     throw new Error('Research aborted by user');
   }
   const llm = new ChatOpenAI({
-    model: config.model,
+    model: getStageModel(config.model, 'research_evaluator'),
     apiKey: config.openaiApiKey,
   });
 
@@ -56,17 +65,21 @@ export async function evaluatorNode(
     if (!rawContent.trim()) {
       return {
         evaluationResult: {
-          meetsStandards: true,
-          isRelevant: true,
-          feedback: 'Unable to parse evaluation, proceeding',
-          score: 75,
+          meetsStandards: false,
+          isRelevant: false,
+          feedback: 'Evaluator returned an empty payload',
+          score: 0,
         },
         currentAttempt,
         strictnessLevel,
       };
     }
 
-    const evaluationResult: EvaluationResult = JSON.parse(rawContent);
+    const parsedEvaluationResult = evaluationResultSchema.safeParse(JSON.parse(rawContent));
+    if (!parsedEvaluationResult.success) {
+      throw new Error('Invalid evaluation payload');
+    }
+    const evaluationResult: EvaluationResult = parsedEvaluationResult.data;
     const evaluationFeedback = [
       ...(state.evaluationFeedback || []),
       `Attempt ${currentAttempt} (Level ${strictnessLevel}): ${evaluationResult.feedback}`,
@@ -94,10 +107,7 @@ export async function evaluatorNode(
     }
 
     return {
-      evaluationResult: {
-        ...evaluationResult,
-        meetsStandards: true, // Force pass to proceed
-      },
+      evaluationResult,
       currentAttempt,
       strictnessLevel,
       evaluationFeedback,
@@ -107,8 +117,8 @@ export async function evaluatorNode(
     console.error('[Evaluator Node] ❌ Error:', error);
     return {
       evaluationResult: {
-        meetsStandards: true,
-        isRelevant: true,
+        meetsStandards: false,
+        isRelevant: false,
         feedback: `Evaluation error: ${error}`,
         score: 0,
       },

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { errorResponse, jsonResponse } from '@/lib/api-utils';
+import { redactSharedConversation } from '@/lib/share/redaction';
 
 export async function GET(
   _request: NextRequest,
@@ -25,12 +26,6 @@ export async function GET(
         isPublic: true,
         createdAt: true,
         updatedAt: true,
-        user: {
-          select: {
-            name: true,
-            email: true,
-          }
-        },
         messages: {
           where: {
             parentMessageId: null,
@@ -41,18 +36,8 @@ export async function GET(
             id: true,
             role: true,
             content: true,
-            metadata: true,
             createdAt: true,
             siblingIndex: true,
-            attachments: {
-              select: {
-                id: true,
-                fileUrl: true,
-                fileName: true,
-                fileType: true,
-                fileSize: true,
-              }
-            },
             versions: {
               where: {
                 isDeleted: false,
@@ -62,18 +47,8 @@ export async function GET(
                 id: true,
                 role: true,
                 content: true,
-                metadata: true,
                 createdAt: true,
                 siblingIndex: true,
-                attachments: {
-                  select: {
-                    id: true,
-                    fileUrl: true,
-                    fileName: true,
-                    fileType: true,
-                    fileSize: true,
-                  }
-                }
               }
             }
           }
@@ -89,27 +64,7 @@ export async function GET(
       return errorResponse(API_ERROR_MESSAGES.UNAUTHORIZED, undefined, HTTP_STATUS.FORBIDDEN);
     }
 
-    const transformedConversation = {
-      ...conversation,
-      messages: conversation.messages.map(msg => ({
-        id: msg.id,
-        role: msg.role.toLowerCase(),
-        content: msg.content,
-        metadata: msg.metadata,
-        createdAt: msg.createdAt,
-        siblingIndex: msg.siblingIndex,
-        attachments: msg.attachments || [],
-        versions: msg.versions?.map(v => ({
-          id: v.id,
-          role: v.role.toLowerCase(),
-          content: v.content,
-          metadata: v.metadata,
-          createdAt: v.createdAt,
-          siblingIndex: v.siblingIndex,
-          attachments: v.attachments || [],
-        })) || [],
-      }))
-    };
+    const transformedConversation = redactSharedConversation(conversation);
 
     return jsonResponse(transformedConversation);
   } catch (error) {

@@ -14,6 +14,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "test:audit": "node --import tsx --test tests/**/*.test.ts",
     "test:doc": "tsx scripts/test-doc-loader.ts",
     "test:mime": "tsx scripts/test-mime-detection.ts",
     "test:youtube-audio": "tsx scripts/test-youtube-audio.ts"

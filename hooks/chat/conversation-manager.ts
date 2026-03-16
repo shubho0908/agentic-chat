@@ -4,6 +4,7 @@ import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/li
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
 import type { ConversationResult } from "@/types/chat";
+import { OPENAI_MODELS } from "@/constants/openai-models";
 
 function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
@@ -42,11 +43,54 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
 
 const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
+const APPROX_IMAGE_TOKENS = 850;
+
+function estimateMessageTokens(content: string | MessageContentPart[]): number {
+  if (typeof content === 'string') {
+    return Math.ceil(content.length / 4) + 4;
+  }
+
+  return content.reduce((total, part) => {
+    if (part.type === 'text') {
+      return total + Math.ceil(part.text.length / 4);
+    }
+    if (part.type === 'image_url') {
+      return total + APPROX_IMAGE_TOKENS;
+    }
+    return total;
+  }, 4);
+}
+
+function trimMessagesByApproximateTokenBudget(
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>,
+  model: string
+): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
+  const contextWindow = OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ?? 128000;
+  const inputBudget = Math.max(4000, Math.floor(contextWindow * 0.8));
+  const systemMessages = messages.filter((message) => message.role === 'system');
+  const nonSystemMessages = messages.filter((message) => message.role !== 'system');
+
+  const workingMessages = [...nonSystemMessages];
+  let estimatedTokens =
+    systemMessages.reduce((total, message) => total + estimateMessageTokens(message.content), 0) +
+    workingMessages.reduce((total, message) => total + estimateMessageTokens(message.content), 0);
+
+  while (workingMessages.length > 2 && estimatedTokens > inputBudget) {
+    const removed = workingMessages.shift();
+    if (!removed) {
+      break;
+    }
+    estimatedTokens -= estimateMessageTokens(removed.content);
+  }
+
+  return [...systemMessages, ...workingMessages];
+}
 
 export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
-  systemPrompt: string
+  systemPrompt: string,
+  model: string
 ): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
@@ -54,7 +98,7 @@ export function buildMessagesForAPI(
   if (isReferential && hasAttachmentsInContext) {
     const recentMessages = messages.slice(-DOCUMENT_CONTEXT_MESSAGES);
     
-    return [
+    return trimMessagesByApproximateTokenBudget([
       {
         role: "system" as const,
         content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
@@ -67,14 +111,14 @@ export function buildMessagesForAPI(
         role: "user" as const,
         content: newContent,
       },
-    ];
+    ], model);
   }
 
   const contextMessages = messages.length > MAX_CONTEXT_MESSAGES 
     ? messages.slice(-MAX_CONTEXT_MESSAGES)
     : messages;
 
-  return [
+  return trimMessagesByApproximateTokenBudget([
     {
       role: "system" as const,
       content: systemPrompt,
@@ -87,7 +131,7 @@ export function buildMessagesForAPI(
       role: "user" as const,
       content: newContent,
     },
-  ];
+  ], model);
 }
 
 async function createNewConversation(

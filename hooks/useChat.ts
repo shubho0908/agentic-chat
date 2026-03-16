@@ -57,10 +57,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       if (!content.trim() || isLoading) return;
 
       const isNewConversation = !conversationId;
+      abortControllerRef.current = new AbortController();
       if (!isNewConversation) {
         setIsLoading(true);
         setMemoryStatus(undefined);
-        abortControllerRef.current = new AbortController();
         startStreaming(conversationId, abortControllerRef.current);
       }
 
@@ -71,15 +71,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages,
             conversationId,
-            abortSignal: isNewConversation ? new AbortController().signal : abortControllerRef.current!.signal,
+            abortSignal: abortControllerRef.current!.signal,
             queryClient,
             onMessagesUpdate: setMessages,
             onConversationIdUpdate: (id: string) => {
               setConversationId(id);
               prevConversationIdRef.current = id;
-              if (!isNewConversation) {
-                updateStreamingConversationId(id);
-              }
+              updateStreamingConversationId(id);
             },
             onNavigate: (path: string) => router.replace(path),
             saveToCacheMutate: saveToCache.mutate,
@@ -101,9 +99,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       } finally {
         if (!isNewConversation) {
           setIsLoading(false);
-          abortControllerRef.current = null;
           stopStreamingContext(false);
         }
+        abortControllerRef.current = null;
       }
     },
     [messages, isLoading, saveToCache, conversationId, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]

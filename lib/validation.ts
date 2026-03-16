@@ -1,4 +1,5 @@
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import { isTrustedAttachmentUrl } from '@/lib/network/ssrf';
 
 function isValidCuid(id: string): boolean {
   if (!id || typeof id !== 'string') {
@@ -139,7 +140,7 @@ function isValidUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
     // Only allow http and https protocols
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    return (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') && !parsedUrl.username && !parsedUrl.password;
   } catch {
     return false;
   }
@@ -156,6 +157,9 @@ function validateAttachment(attachment: unknown): ValidationResult {
   }
   if (!isValidUrl(att.fileUrl)) {
     return { valid: false, error: 'Attachment fileUrl must be a valid HTTP/HTTPS URL' };
+  }
+  if (!isTrustedAttachmentUrl(att.fileUrl)) {
+    return { valid: false, error: 'Attachment fileUrl must point to trusted uploaded storage' };
   }
   if (typeof att.fileName !== 'string' || !att.fileName.trim()) {
     return { valid: false, error: 'Attachment fileName is required and must be a non-empty string' };

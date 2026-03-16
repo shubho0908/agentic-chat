@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { getRequiredEnv } from '@/lib/env';
 
 const GOOGLE_WORKSPACE_STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -9,13 +10,10 @@ interface GoogleWorkspaceOAuthStatePayload {
 }
 
 function getGoogleWorkspaceStateSecret(): string {
-  const secret = process.env.BETTER_AUTH_SECRET;
-
-  if (!secret) {
-    throw new Error("BETTER_AUTH_SECRET is required for Google Workspace OAuth state");
-  }
-
-  return secret;
+  return getRequiredEnv("BETTER_AUTH_SECRET", {
+    fallback: process.env.NODE_ENV !== 'production' ? 'development-insecure-secret' : undefined,
+    description: "Better Auth secret",
+  });
 }
 
 function toBase64Url(value: string): string {

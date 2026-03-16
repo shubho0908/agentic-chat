@@ -15,6 +15,7 @@ import { estimateMemoryEntryCount } from './chat/memory-policy';
 
 interface ContextRoutingMetadata {
   hasMemories: boolean;
+  attemptedMemory: boolean;
   hasDocuments: boolean;
   hasImages: boolean;
   hasUrls: boolean;
@@ -219,6 +220,7 @@ export async function routeContext(
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
+    attemptedMemory: false,
     hasDocuments: false,
     hasImages,
     hasUrls: false,
@@ -239,6 +241,23 @@ export async function routeContext(
       const attachmentInfo = await getAttachmentInfo(conversationId);
       if (attachmentInfo.hasDocuments) {
         metadata.hasDocuments = true;
+      }
+    }
+
+    const detectedUrls = extractUrlsFromMessage(query);
+    if (detectedUrls.length > 0) {
+      try {
+        const scrapedContent = await scrapeMultipleUrls(detectedUrls);
+        if (scrapedContent.length > 0) {
+          metadata.hasUrls = true;
+          metadata.urlCount = scrapedContent.length;
+          return {
+            context: formatScrapedContentForContext(scrapedContent),
+            metadata,
+          };
+        }
+      } catch (error) {
+        console.error('[Context Router] Deep research URL scraping failed:', error);
       }
     }
 
@@ -392,7 +411,11 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const memoryContext = await getMemoryContext(textQuery, userId);
+  metadata.attemptedMemory = true;
+
+  const memoryContext = await getMemoryContext(textQuery, userId, {
+    recentConversation,
+  });
 
   if (memoryContext) {
     metadata.hasMemories = true;

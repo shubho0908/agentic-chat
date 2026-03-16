@@ -105,7 +105,7 @@ export async function handleEditMessage(
       deepResearchEnabled
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,

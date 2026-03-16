@@ -1,7 +1,20 @@
 import { ChatOpenAI } from '@langchain/openai';
+import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
 import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
+import { getStageModel } from '@/lib/model-policy';
+
+const gateDecisionSchema = z.object({
+  shouldResearch: z.boolean(),
+  reason: z.string(),
+  confidence: z.enum(['low', 'medium', 'high']),
+});
+
+const directResponseSchema = z.object({
+  answer: z.string(),
+  confidence: z.enum(['low', 'medium', 'high']),
+});
 
 export async function gateNode(
   state: ResearchState,
@@ -11,7 +24,7 @@ export async function gateNode(
     throw new Error('Research aborted by user');
   }
   const llm = new ChatOpenAI({
-    model: config.model,
+    model: getStageModel(config.model, 'research_gate'),
     apiKey: config.openaiApiKey,
   });
 
@@ -51,16 +64,11 @@ export async function gateNode(
       if (config.forceDeepResearch) {
         return {
           gateDecision: {
-            shouldResearch: false,
-            reason: 'Unable to parse gate decision, treating as generic query',
+            shouldResearch: true,
+            reason: 'Forced deep research request bypassed an empty gate response',
             confidence: 'low',
           },
-          skipped: true,
-          directResponse: {
-            answer: 'I apologize, but I had trouble understanding your query. Could you please rephrase or provide more details?',
-            confidence: 'low',
-          },
-          finalResponse: 'I apologize, but I had trouble understanding your query. Could you please rephrase or provide more details?',
+          skipped: false,
         };
       }
       
@@ -74,7 +82,23 @@ export async function gateNode(
       };
     }
 
-    const gateDecision: GateDecision = JSON.parse(rawContent);
+    const parsedGateDecision = gateDecisionSchema.safeParse(JSON.parse(rawContent));
+    if (!parsedGateDecision.success) {
+      throw new Error('Invalid gate decision payload');
+    }
+    const gateDecision: GateDecision = parsedGateDecision.data;
+
+    if (config.forceDeepResearch) {
+      return {
+        gateDecision: {
+          shouldResearch: true,
+          reason: 'Deep research was explicitly forced by the caller',
+          confidence: 'high',
+        },
+        skipped: false,
+      };
+    }
+
     if (!gateDecision.shouldResearch) {
       let enrichedQuery = state.originalQuery;
       
@@ -109,7 +133,7 @@ export async function gateNode(
       
       let directLLMResponse: DirectLLMResponse;
       try {
-        directLLMResponse = JSON.parse(directRawContent);
+        directLLMResponse = directResponseSchema.parse(JSON.parse(directRawContent));
       } catch {
         directLLMResponse = {
           answer: directRawContent,

@@ -50,7 +50,7 @@ function shouldRetryOrFormat(state: ResearchState): string {
     return 'planner';
   }
   
-  return 'formatter';
+  return END;
 }
 
 export function createResearchGraph(config: GraphConfig) {
@@ -75,6 +75,7 @@ export function createResearchGraph(config: GraphConfig) {
     .addConditionalEdges('evaluator', shouldRetryOrFormat, {
       planner: 'planner',
       formatter: 'formatter',
+      [END]: END,
     })
     .addEdge('formatter', END);
   return workflow.compile();

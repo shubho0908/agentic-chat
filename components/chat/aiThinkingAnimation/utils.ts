@@ -54,6 +54,10 @@ export function getContextualMessage(
     return AI_THINKING_MESSAGES.MEMORY_SYNTHESIS;
   }
 
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories) {
+    return "Checked conversation history for relevant memories...";
+  }
+
   if (routing === RoutingDecision.ToolOnly) {
     const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
     
@@ -82,6 +86,7 @@ export function getContextualMessage(
   const contexts = [];
   if (memoryStatus?.hasDocuments) contexts.push("documents");
   if (memoryStatus?.hasMemories) contexts.push("memories");
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories) contexts.push("memory lookup");
 
   return contexts.length > 0
     ? `Synthesizing response with ${contexts.join(" and ")}...`

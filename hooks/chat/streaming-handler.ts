@@ -182,7 +182,7 @@ export async function handleStreamingResponse(
 	      return { success: true, assistantMessageId };
 	    }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,

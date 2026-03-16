@@ -1,14 +1,15 @@
-import { encoding_for_model, type TiktokenModel } from 'tiktoken';
+import { encoding_for_model, get_encoding, type TiktokenModel } from 'tiktoken';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type { TokenUsage } from '@/types/chat';
 import { OPENAI_MODELS } from '@/constants/openai-models';
+import { getResponseTokenReserve } from '@/lib/model-policy';
 
 const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
   OPENAI_MODELS.map(model => [model.id, model.contextWindow])
 );
 
-const IMAGE_TOKEN_COST = 1700;
-const TOKENS_PER_MESSAGE = 3;
+const IMAGE_TOKEN_COST = 850;
+const TOKENS_PER_MESSAGE = 4;
 
 const encoderCache = new Map<string, ReturnType<typeof encoding_for_model>>();
 
@@ -23,7 +24,7 @@ function getEncoder(model: string) {
 
       encoderCache.set(model, encoding_for_model(tiktokenModel as TiktokenModel));
     } catch {
-      encoderCache.set(model, encoding_for_model('gpt-4o' as TiktokenModel));
+      encoderCache.set(model, get_encoding('o200k_base'));
     }
   }
   return encoderCache.get(model)!;
@@ -76,7 +77,8 @@ export function calculateTokenUsage(
 
   conversationTokens += 3;
   const used = conversationTokens + imageTokens;
-  const remaining = Math.max(0, limit - used);
+  const responseReserve = getResponseTokenReserve(model);
+  const remaining = Math.max(0, limit - used - responseReserve);
   const percentage = Math.min(100, (used / limit) * 100);
 
   return {
@@ -84,6 +86,7 @@ export function calculateTokenUsage(
     limit,
     remaining,
     percentage,
+    responseReserve,
     breakdown: {
       conversation: conversationTokens,
       images: imageTokens,

@@ -22,9 +22,19 @@ interface RequestMediatorArgs {
 
 const decisionCache = new Map<string, CachedDecision>();
 
+const NORMALIZATION_REPLACEMENTS = [
+  { pattern: /\bu\b/gi, replacement: "you" },
+  { pattern: /\bur\b/gi, replacement: "your" },
+  { pattern: /\bya\b/gi, replacement: "you" },
+] as const;
+
 const STRONG_MEMORY_TRUE_PATTERNS = [
   /\b(do you have any context about me|what do you know about me|tell me about myself)\b/i,
   /\b(what have i shared|what do you remember about me|my background|my preferences|what'?s my name|who am i)\b/i,
+  /\b(do|did|can|could|would)\s+(you)\s+(remember|recall|know)\s+(me|my name|anything about me)\b/i,
+  /\b(remember me|know me|what should you call me|what is my latest project|what'?s my latest project)\b/i,
+  /\b(have we talked before|did we talk before|what did i ask you|what did i tell you|did i mention)\b/i,
+  /\b(remind me what you know about me|remind me what i told you|do you still know my name)\b/i,
 ] as const;
 
 const STRONG_MEMORY_FALSE_PATTERNS = [
@@ -37,6 +47,9 @@ const MEMORY_INTENT_PATTERNS = [
   /\b(context about me|know about me|what do you know about me|tell me about myself)\b/i,
   /\b(my background|my preferences|my goals|my goal|my project|my name|who am i|what do i do|where am i from)\b/i,
   /\b(what have i told you|what do you remember about me|anything about me)\b/i,
+  /\b(what should you call me|do you know my name|do you remember me|what'?s my latest project|what is my latest project)\b/i,
+  /\b(have we talked before|did we talk before|what did i ask you|what did i tell you|did i mention|do you still know)\b/i,
+  /\b(remind me what i told you|remind me what you know about me|what did i ask you today|what did i ask you earlier)\b/i,
 ] as const;
 
 const PERSONAL_REFERENCE_PATTERNS = [
@@ -44,11 +57,15 @@ const PERSONAL_REFERENCE_PATTERNS = [
 ] as const;
 
 const MEMORY_ACTION_PATTERNS = [
-  /\b(remember|recall|know|shared|told|mentioned|context|background|preferences|goals|project|name|about me)\b/i,
+  /\b(remember|recall|know|shared|told|mentioned|context|background|preferences|goals|project|name|about me|asked|said|talked|chatted|conversation)\b/i,
 ] as const;
 
 function trimAndNormalize(text: string): string {
-  return text.trim().replace(/\s+/g, " ");
+  const replaced = NORMALIZATION_REPLACEMENTS.reduce((value, { pattern, replacement }) => {
+    return value.replace(pattern, replacement);
+  }, text);
+
+  return replaced.trim().replace(/\s+/g, " ");
 }
 
 function cacheKey(messageText: string, recentConversation?: string): string {
@@ -120,6 +137,64 @@ function shouldRunMediator(text: string): boolean {
   );
 }
 
+export function buildMemoryLookupQueries(
+  messageText: string,
+  recentConversation?: string
+): string[] {
+  const normalized = trimAndNormalize(messageText).toLowerCase();
+  const queries = new Set<string>([trimAndNormalize(messageText)]);
+
+  const recentConversationSummary = trimAndNormalize(recentConversation || "");
+  const isNameQuery = /\b(name|call me|nickname|what should you call me)\b/i.test(normalized);
+  const isProjectQuery = /\b(project|building|working on|latest project|current project)\b/i.test(normalized);
+  const isPreferenceQuery = /\b(prefer|preference|like|favorite|favourite)\b/i.test(normalized);
+  const isGoalQuery = /\b(goal|goals|aim|objective|trying to)\b/i.test(normalized);
+  const isBackgroundQuery = /\b(background|bio|biography|role|job|work|who am i|where am i from)\b/i.test(normalized);
+  const isConversationRecallQuery = /\b(what did i ask|what did i tell you|did i mention|have we talked before|did we talk before|today|earlier|last time)\b/i.test(normalized);
+  const isGeneralRecall = matchesAny(normalized, MEMORY_INTENT_PATTERNS);
+
+  if (recentConversationSummary) {
+    queries.add(
+      `Recent conversation recap for user memory lookup:\n${recentConversationSummary}\n\nCurrent question: ${trimAndNormalize(messageText)}`
+    );
+  }
+
+  if (isNameQuery) {
+    queries.add("user name preferred name nickname what assistant should call user");
+  }
+
+  if (isProjectQuery) {
+    queries.add("user current project latest project what user is building");
+  }
+
+  if (isPreferenceQuery) {
+    queries.add("user preferences likes dislikes favorites favorite tools");
+  }
+
+  if (isGoalQuery) {
+    queries.add("user goals priorities objectives what user wants to achieve");
+  }
+
+  if (isBackgroundQuery) {
+    queries.add("user background biography role job work profile");
+  }
+
+  if (isConversationRecallQuery) {
+    queries.add("user prior questions requests and facts from recent conversations");
+    queries.add("what the user asked or said in previous chats");
+  }
+
+  if (isGeneralRecall || queries.size === 1) {
+    queries.add("facts about the user from prior conversations");
+    queries.add("what do you know about me");
+  }
+
+  return Array.from(queries)
+    .map((query) => trimAndNormalize(query))
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 async function runAIMediator({
   messageText,
   recentConversation,
@@ -142,7 +217,7 @@ async function runAIMediator({
           content:
             "You classify whether a chat request should retrieve prior personal conversation memory about the user. " +
             "Return strict JSON with one top-level key called memory. " +
-            "Set memory.should_query true for requests like 'what do you know about me', 'do you have any context about me', or explicit recall of prior chats. " +
+            "Set memory.should_query true for requests like 'what do you know about me', 'do you have any context about me', 'do you know my name', 'what should you call me', or explicit recall of prior chats. " +
             "Set memory.should_query false for current attachments, generic knowledge, or requests that do not need prior personal context.",
         },
         {

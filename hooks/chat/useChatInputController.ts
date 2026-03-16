@@ -62,7 +62,7 @@ type ChatInputUiAction =
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
   activeTool: null,
-  memoryEnabled: false,
+  memoryEnabled: true,
   deepResearchEnabled: false,
   searchDepth: "basic",
 };
@@ -75,7 +75,7 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
       return {
         ...state,
         activeTool: null,
-        memoryEnabled: false,
+        memoryEnabled: true,
         deepResearchEnabled: false,
       };
     case "set-sending":

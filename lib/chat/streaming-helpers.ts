@@ -13,6 +13,7 @@ export function encodeMemoryStatus(
   return encodeSSEMessage({
     type: 'memory_status',
     hasMemories: memoryStatusInfo.hasMemories,
+    attemptedMemory: memoryStatusInfo.attemptedMemory,
     hasDocuments: memoryStatusInfo.hasDocuments,
     memoryCount: memoryStatusInfo.memoryCount,
     documentCount: memoryStatusInfo.documentCount,
@@ -84,6 +85,7 @@ export function encodeDone(): Uint8Array {
 
 export function shouldSendMemoryStatus(memoryStatusInfo: MemoryStatus): boolean {
   return memoryStatusInfo.hasMemories ||
+    memoryStatusInfo.attemptedMemory === true ||
     memoryStatusInfo.hasDocuments ||
     memoryStatusInfo.hasImages ||
     memoryStatusInfo.hasUrls ||

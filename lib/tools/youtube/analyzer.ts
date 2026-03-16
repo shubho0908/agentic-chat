@@ -217,7 +217,7 @@ Return ONLY valid JSON:
 `);
 
   const results: ChunkAnalysis[] = [];
-  const batchSize = 3;
+  const batchSize = 5;
 
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);

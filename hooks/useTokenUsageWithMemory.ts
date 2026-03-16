@@ -18,6 +18,7 @@ export function useTokenUsageWithMemory({
     if (!memoryStatus && !tokenUsage) return undefined;
     return {
       hasMemories: memoryStatus?.hasMemories ?? false,
+      attemptedMemory: memoryStatus?.attemptedMemory ?? false,
       hasDocuments: memoryStatus?.hasDocuments ?? false,
       memoryCount: memoryStatus?.memoryCount ?? 0,
       documentCount: memoryStatus?.documentCount ?? 0,

@@ -31,61 +31,73 @@ interface MultiSearchResult {
   allImages: MultiSearchImage[];
 }
 
+const MAX_PARALLEL_SEARCHES = 3;
+
 export async function executeMultiSearch(
   searchPlan: SearchPlan,
   executeSearch: (query: string, maxResults: number) => Promise<SearchResultWithSources>,
   onProgress?: (searchIndex: number, total: number, query: string) => void
 ): Promise<MultiSearchResult> {
-  const results: string[] = [];
+  const results: string[] = new Array(searchPlan.recommendedSearches.length).fill('');
   const allSources: MultiSearchSource[] = [];
   const allImages: MultiSearchImage[] = [];
 
-  for (let i = 0; i < searchPlan.recommendedSearches.length; i++) {
-    const plannedSearch = searchPlan.recommendedSearches[i];
+  for (let start = 0; start < searchPlan.recommendedSearches.length; start += MAX_PARALLEL_SEARCHES) {
+    const batch = searchPlan.recommendedSearches.slice(start, start + MAX_PARALLEL_SEARCHES);
 
-    onProgress?.(i + 1, searchPlan.recommendedSearches.length, plannedSearch.query);
+    const settledBatch = await Promise.allSettled(
+      batch.map(async (plannedSearch, batchIndex) => {
+        const searchIndex = start + batchIndex;
+        onProgress?.(searchIndex + 1, searchPlan.recommendedSearches.length, plannedSearch.query);
 
-    try {
-      const searchResult = await executeSearch(
-        plannedSearch.query,
-        plannedSearch.expectedResultCount
-      );
-      
-      searchResult.sources.forEach(source => {
-        const existingSource = allSources.find(s => s.url === source.url);
-        if (!existingSource) {
-          allSources.push({
-            ...source,
-            position: allSources.length + 1,
-            searchIndex: i + 1,
-            searchQuery: plannedSearch.query,
-          });
-        }
-      });
+        const searchResult = await executeSearch(
+          plannedSearch.query,
+          plannedSearch.expectedResultCount
+        );
 
-      if (searchResult.images && searchResult.images.length > 0) {
-        searchResult.images.forEach(image => {
-          const existingImage = allImages.find(img => img.url === image.url);
-          if (!existingImage) {
-            allImages.push({
-              url: image.url,
-              description: image.description,
-              searchIndex: i + 1,
+        return { searchIndex, plannedSearch, searchResult };
+      })
+    );
+
+    settledBatch.forEach((result, batchIndex) => {
+      const searchIndex = start + batchIndex;
+      const plannedSearch = searchPlan.recommendedSearches[searchIndex];
+
+      if (result.status === 'fulfilled') {
+        result.value.searchResult.sources.forEach(source => {
+          const existingSource = allSources.find(s => s.url === source.url);
+          if (!existingSource) {
+            allSources.push({
+              ...source,
+              position: allSources.length + 1,
+              searchIndex: searchIndex + 1,
               searchQuery: plannedSearch.query,
             });
           }
         });
+
+        if (result.value.searchResult.images && result.value.searchResult.images.length > 0) {
+          result.value.searchResult.images.forEach(image => {
+            const existingImage = allImages.find(img => img.url === image.url);
+            if (!existingImage) {
+              allImages.push({
+                url: image.url,
+                description: image.description,
+                searchIndex: searchIndex + 1,
+                searchQuery: plannedSearch.query,
+              });
+            }
+          });
+        }
+
+        results[searchIndex] =
+          `\n## Search ${searchIndex + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Purpose:** ${plannedSearch.rationale}\n\n${result.value.searchResult.output}`;
+      } else {
+        console.error(`[Multi-Search] Error in search ${searchIndex + 1}:`, result.reason);
+        results[searchIndex] =
+          `\n## Search ${searchIndex + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Error:** Search failed - ${result.reason instanceof Error ? result.reason.message : 'Unknown error'}`;
       }
-      
-      results.push(
-        `\n## Search ${i + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Purpose:** ${plannedSearch.rationale}\n\n${searchResult.output}`
-      );
-    } catch (error) {
-      console.error(`[Multi-Search] Error in search ${i + 1}:`, error);
-      results.push(
-        `\n## Search ${i + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Error:** Search failed - ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    });
   }
 
   allSources.forEach((source, index) => {

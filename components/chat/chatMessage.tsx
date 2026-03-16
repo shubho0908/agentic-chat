@@ -393,6 +393,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     const nextStatus = nextProps.memoryStatus;
 
     if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
+      prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
       prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||

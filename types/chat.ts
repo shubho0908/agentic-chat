@@ -24,6 +24,7 @@ export interface TokenUsage {
   limit: number;
   remaining: number;
   percentage: number;
+  responseReserve: number;
   breakdown: {
     conversation: number;
     images: number;
@@ -32,6 +33,7 @@ export interface TokenUsage {
 
 export interface MemoryStatus {
   hasMemories: boolean;
+  attemptedMemory?: boolean;
   hasDocuments: boolean;
   memoryCount: number;
   documentCount: number;

@@ -49,7 +49,7 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - Automatic URL detection and content extraction (up to 5 URLs)
 - Smart content extraction with Readability + Cheerio
 - Rich metadata and link previews with Open Graph
-- 1-hour content caching for performance
+- SSRF-hardened fetch pipeline with bounded previews
 
 #### Google Suite Integration
 - **Gmail**: Search, read, send, reply, delete emails, modify labels, get attachments
@@ -62,7 +62,7 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 
 #### Deep Research
 - Multi-step autonomous research with usage limits (3/month)
-- LangGraph-powered workflow: gate check → planning → parallel research → aggregation → evaluation → formatting
+- LangGraph-powered workflow: gate check → planning → research tasks → aggregation → evaluation → formatting
 - Intelligent gate system to determine research necessity
 - Iterative quality evaluation with adjustable strictness
 
@@ -167,10 +167,10 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 Analyzes queries for images, documents, URLs, and intent to determine optimal routing strategy (Memory, Documents, Vision, Hybrid, or Tool-specific) with pattern-based detection.
 
 **URL Scraping Pipeline**  
-Detects URLs in messages, extracts content using Readability/Cheerio, caches for 1 hour, and injects as context. Supports Open Graph link previews.
+Detects URLs in messages, extracts content using Readability/Cheerio through an SSRF-hardened fetch layer, and injects bounded reference context. Supports Open Graph link previews.
 
 **Intelligent Search Planning**  
-Advanced mode uses LLM planning to analyze query complexity, decompose into targeted sub-queries, execute parallel searches, and synthesize results.
+Advanced mode uses LLM planning to analyze query complexity, decompose into targeted sub-queries, execute bounded concurrent searches, and synthesize results.
 
 **Semantic Caching Layer**  
 pgvector-based similarity caching reduces redundant API calls for semantically similar queries.

@@ -6,8 +6,10 @@ import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/api-utils';
 import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from '@/lib/langsmith-config';
+import { getEmbeddingModel } from '@/lib/env';
+import { withRetry } from '@/lib/retry';
 
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
+const EMBEDDING_MODEL = getEmbeddingModel();
 
 function getVectorType(): string {
   const FP32_MAX_DIMENSIONS = 2000;
@@ -27,10 +29,14 @@ async function getOpenAIClient(userId: string): Promise<OpenAI> {
 export async function generateEmbedding(text: string, userId: string): Promise<number[]> {
   try {
     const client = await getOpenAIClient(userId);
-    const embeddingResponse = await client.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: text,
-    });
+    const embeddingResponse = await withRetry(
+      () =>
+        client.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: text,
+        }),
+      { retries: 2 }
+    );
 
     return embeddingResponse.data[0].embedding;
   } catch (error) {

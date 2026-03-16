@@ -2,7 +2,7 @@
   "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' npm run build",
   "functions": {
     "app/**/*.{ts,tsx}": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }
