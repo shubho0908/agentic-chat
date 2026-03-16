@@ -49,6 +49,18 @@ export function getStageModel(requestedModel: string, stage: ModelStage): string
   return validateRequestedModel(fallbackModel) ?? validatedRequestedModel ?? DEFAULT_MODEL;
 }
 
+export function supportsCustomTemperature(model: string): boolean {
+  return !model.trim().toLowerCase().startsWith('gpt-5');
+}
+
+export function getSupportedTemperature(model: string, temperature?: number): number | undefined {
+  if (temperature === undefined) {
+    return undefined;
+  }
+
+  return supportsCustomTemperature(model) ? temperature : undefined;
+}
+
 export function getModelContextWindow(model: string): number {
   return ALLOWED_MODELS.get(model)?.contextWindow ?? 128000;
 }

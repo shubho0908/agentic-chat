@@ -64,7 +64,6 @@ Configure these in `.env` for additional features:
 
 - **COHERE_API_KEY** - Enhanced RAG retrieval with reranking
 - **TAVILY_API_KEY** - Web search capability
-- **YOUTUBE_API_KEY** - YouTube metadata enrichment
 
 ## Running the App
 

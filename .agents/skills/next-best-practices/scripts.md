@@ -115,11 +115,6 @@ export default function Layout({ children }) {
 ## Other Third-Party Scripts
 
 ```tsx
-// YouTube embed
-import { YouTubeEmbed } from '@next/third-parties/google'
-
-<YouTubeEmbed videoid="dQw4w9WgXcQ" />
-
 // Google Maps
 import { GoogleMapsEmbed } from '@next/third-parties/google'
 

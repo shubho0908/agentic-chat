@@ -36,15 +36,6 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - Image results with gallery view
 - Source deduplication
 
-#### YouTube Analysis
-- **Global Video Caching** - PostgreSQL-backed caching with automatic expiration and access tracking
-- **Multi-tier Transcript Fallback** - Tries youtube-transcript, yt-dlp service, then official API
-- Transcript extraction with multi-language support
-- Automatic chapter parsing from video descriptions
-- Video search and batch processing
-- Metadata enrichment via YouTube Data API
-- Cache statistics and performance monitoring
-
 #### URL Scraping & Context Injection
 - Automatic URL detection and content extraction (up to 5 URLs)
 - Smart content extraction with Readability + Cheerio
@@ -147,15 +138,13 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **Tavily** - Web search
 - **mem0** (`@mem0/vercel-ai-provider`) - Conversation memory
 - **tiktoken** - Token counting and context limit tracking
-- **Google APIs v171** - YouTube Data API & Google Workspace APIs
+- **Google APIs v171** - Google Workspace APIs
 
 ### Document Processing
 - **pdf-parse** - PDF text extraction
 - **mammoth** - DOCX processing
 - **word-extractor** - DOC files
 - **xlsx** - Spreadsheet parsing
-- **youtube-transcript** - YouTube caption extraction (primary)
-- **youtubei.js v16** - YouTube fallback client for transcripts and metadata
 - **@mozilla/readability** - Article content extraction
 - **cheerio** - HTML parsing and manipulation
 - **linkedom** - DOM parsing for server-side environments
@@ -179,16 +168,13 @@ pgvector-based similarity caching reduces redundant API calls for semantically s
 Documents processed through format-specific loaders, chunked, embedded, stored in pgvector, and retrieved with semantic search + Cohere reranking. Real-time status tracking and batch operations supported.
 
 **Multi-Agent Orchestration**  
-LangGraph-powered workflows with access to RAG, web search, YouTube, Google Suite, and URL scraping tools. Deep research uses multi-phase workflow with quality evaluation (3/month limit).
+LangGraph-powered workflows with access to RAG, web search, Google Suite, and URL scraping tools. Deep research uses multi-phase workflow with quality evaluation (3/month limit).
 
 **Vision Processing**  
 Multimodal support across all models for image analysis, OCR, and hybrid vision+document workflows. Search results include image galleries.
 
 **Google Suite Integration**  
 OAuth 2.0 access to Gmail, Calendar, Drive, Docs, Sheets, and Slides with automatic token refresh.
-
-**YouTube Processing**  
-Global caching system stores video metadata, transcripts, and analysis in PostgreSQL. Multi-tier fallback tries youtube-transcript library, then yt-dlp service, then official YouTube API. Caches expire based on access patterns with built-in statistics tracking.
 
 **Message Versioning System**  
 Tree-based message storage with parent-child relationships and sibling indexing enables conversation branching, version navigation, and soft deletion.

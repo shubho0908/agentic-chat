@@ -1,11 +1,10 @@
-import { Youtube, Telescope, Globe } from "lucide-react";
+import { Telescope, Globe } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { GoogleIcon } from "@/components/icons/google-icon";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',
-  YOUTUBE: 'youtube',
   DEEP_RESEARCH: 'deep_research',
   GOOGLE_SUITE: 'google_suite',
 } as const;
@@ -39,19 +38,6 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
       to: '#4f46e5',
     },
     iconColorClass: 'text-blue-500',
-  },
-  [TOOL_IDS.YOUTUBE]: {
-    id: TOOL_IDS.YOUTUBE,
-    name: 'YouTube',
-    description: 'Analyze YouTube videos',
-    icon: Youtube,
-    inputPrefix: 'Paste YouTube link: ',
-    gradientColors: {
-    from: '#ffffff',
-    via: '#ff1a1a',
-    to: '#b36a6a',
-    },
-    iconColorClass: 'text-black dark:text-white',
   },
   [TOOL_IDS.DEEP_RESEARCH]: {
     id: TOOL_IDS.DEEP_RESEARCH,

@@ -8,7 +8,7 @@ import {
   hasExplicitGoogleWorkspaceApproval,
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
 } from '@/lib/tools/google-suite/safety';
-import { validateRequestedModel, getStageModel } from '@/lib/model-policy';
+import { validateRequestedModel, getStageModel, getSupportedTemperature } from '@/lib/model-policy';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { shouldPersistConversationMemory } from '@/lib/chat/memory-policy';
 import {
@@ -77,6 +77,9 @@ test('server model policy rejects unknown models and downshifts orchestration st
   assert.equal(validateRequestedModel('not-a-real-model'), null);
   assert.equal(getStageModel('gpt-5.4', 'research_gate'), 'gpt-5-nano');
   assert.equal(getStageModel('gpt-5.4', 'research_formatter'), 'gpt-5-mini');
+  assert.equal(getSupportedTemperature('gpt-5.4', 0.1), undefined);
+  assert.equal(getSupportedTemperature('gpt-5-mini', 0), undefined);
+  assert.equal(getSupportedTemperature('gpt-4.1', 0.1), 0.1);
 });
 
 test('untrusted context is no longer injected into the system role', () => {

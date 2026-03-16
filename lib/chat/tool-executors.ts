@@ -2,19 +2,17 @@ import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streaming-helpers';
 import { injectContextToMessages, extractConversationHistory } from './message-helpers';
 import { TOOL_IDS } from '@/lib/tools/config';
-import { YOUTUBE_ANALYSIS_INSTRUCTIONS } from '@/lib/prompts';
 import type { DeepResearchProgress, SearchResultWithSources, WebSearchSource, WebSearchImage } from '@/types/tools';
 import type { Citation } from '@/types/deep-research';
-import { mapYouTubeStatus, mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
+import { mapDeepResearchStatus, mapGoogleSuiteStatus } from '@/lib/tools/status-mapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { executeDeepResearch } from '@/lib/tools/deep-research';
 import { executeGoogleWorkspace } from '@/lib/tools/google-suite/executor';
 import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/web-search.tools';
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
-import { executeYouTubeTool as executeYouTubeToolCore } from '@/lib/tools/youtube';
 import { executeMultiSearch } from '../tools/web-search/search-planner';
-import { createUnifiedPlan, type WebSearchPlan, type YouTubePlan } from '../tools/unified-planner';
+import { createUnifiedPlan, type WebSearchPlan } from '../tools/unified-planner';
 
 const MAX_TOOL_CONTEXT_LENGTH = 6000;
 
@@ -317,142 +315,6 @@ export async function executeWebSearchTool(
       ));
     } catch {}
     
-    return messages;
-  }
-}
-
-export async function executeYouTubeTool(
-  textQuery: string,
-  controller: ReadableStreamDefaultController,
-  messages: Message[],
-  apiKey: string,
-  model: string,
-  abortSignal?: AbortSignal
-): Promise<Message[]> {
-  const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  let streamClosed = false;
-  
-  try {
-    if (abortSignal?.aborted) {
-      try {
-        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
-      } catch {}
-      return messages;
-    }
-
-    try {
-      controller.enqueue(encodeToolProgress(
-        TOOL_IDS.YOUTUBE,
-        'planning',
-        'Analyzing request and planning video analysis...',
-        {}
-      ));
-    } catch {
-      streamClosed = true;
-    }
-
-    const conversationHistory = extractConversationHistory(messages, {
-      maxExchanges: 10,
-      excludeLastMessage: true,
-      includeAllForShortConversations: true,
-    });
-
-    const youtubePlan = await createUnifiedPlan({
-      query: textQuery,
-      toolType: 'youtube',
-      apiKey,
-      model,
-      abortSignal,
-      conversationHistory,
-    }) as YouTubePlan;
-    
-    const toolArgs = {
-      urls: youtubePlan.urls || [],
-      maxResults: youtubePlan.maxResults,
-      includeChapters: true,
-      includeTimestamps: true,
-      language: youtubePlan.language,
-    };
-    
-    try {
-      controller.enqueue(encodeToolCall(TOOL_IDS.YOUTUBE, toolCallId, toolArgs));
-    } catch {
-      console.error('[YouTube Tool] Failed to enqueue tool call (controller closed)');
-      streamClosed = true;
-      return messages;
-    }
-    
-    let totalVideos = 0;
-    let processedCount = 0;
-    
-    const youtubeResults = await executeYouTubeToolCore(
-      toolArgs,
-      textQuery,
-      apiKey,
-      model,
-      abortSignal,
-      (progress) => {
-        if (streamClosed || abortSignal?.aborted) return;
-        
-        if (progress.details?.videoCount) {
-          totalVideos = progress.details.videoCount;
-        }
-        if (progress.details?.processedCount !== undefined) {
-          processedCount = progress.details.processedCount;
-        }
-        
-        const mappedStatus = mapYouTubeStatus(progress.status);
-        
-        try {
-          controller.enqueue(encodeToolProgress(
-            TOOL_IDS.YOUTUBE,
-            mappedStatus,
-            progress.message,
-            {
-              ...progress.details,
-              processedCount,
-              videoCount: totalVideos
-            }
-          ));
-          setImmediate(() => {});
-        } catch {
-          console.error('[YouTube Tool] Failed to enqueue progress (controller closed)');
-          streamClosed = true;
-        }
-      }
-    );
-    
-    if (!streamClosed && !abortSignal?.aborted) {
-      try {
-        controller.enqueue(encodeToolResult(TOOL_IDS.YOUTUBE, toolCallId, youtubeResults));
-      } catch {
-        console.error('[YouTube Tool] Failed to enqueue result (controller closed)');
-        streamClosed = true;
-      }
-    }
-    
-    const youtubeContext = `## YouTube Video Context\n\n${truncateContext(youtubeResults)}\n\n${YOUTUBE_ANALYSIS_INSTRUCTIONS}`;
-    
-    return injectContextToMessages(messages, youtubeContext);
-  } catch (error) {
-    console.error('[Chat API] YouTube tool error:', error);
-    
-    if (error instanceof Error && error.message.includes('aborted')) {
-      try {
-        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.YOUTUBE.ABORTED));
-      } catch {}
-      return messages;
-    }
-    
-    try {
-      controller.enqueue(encodeToolProgress(
-        TOOL_IDS.YOUTUBE,
-        'completed',
-        TOOL_ERROR_MESSAGES.YOUTUBE.FAILED_FALLBACK
-      ));
-    } catch {
-      console.error('[YouTube Tool] Failed to send error progress (controller closed)');
-    }
     return messages;
   }
 }

@@ -14,7 +14,7 @@ reviews:
   high_level_summary_instructions: |
     Summarize the actual changes in this Next.js app.
     - Call out security-sensitive changes first when `app/api/**`, `lib/auth*.ts`, `lib/tools/**`, `lib/encryption.ts`, `prisma/**`, or `.github/**` are touched.
-    - Mention user-facing behavior changes in chat, auth, uploads, sharing, memory, RAG, deep research, YouTube, or Google Workspace.
+    - Mention user-facing behavior changes in chat, auth, uploads, sharing, memory, RAG, deep research, or Google Workspace.
     - Flag migration, env var, or data model risks explicitly.
     - Use bullets only.
   poem: false
@@ -135,7 +135,7 @@ reviews:
 
     - path: "lib/tools/**"
       instructions: |
-        These are tool integrations for web search, deep research, YouTube, Google Workspace, and related orchestration.
+        These are tool integrations for web search, deep research, Google Workspace, and related orchestration.
 
         Review for:
         - Least-privilege auth and scope handling.

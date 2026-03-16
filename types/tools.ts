@@ -38,48 +38,6 @@ export interface WebSearchProgress {
   };
 }
 
-export interface YouTubeVideo {
-  id: string;
-  title: string;
-  duration?: string;
-  channelName?: string;
-  url: string;
-}
-
-export interface YouTubeChapter {
-  timestamp: string;
-  timeSeconds: number;
-  title: string;
-}
-
-export interface YouTubeTranscriptSegment {
-  text: string;
-  offset: number;
-  duration?: number;
-}
-
-export interface YouTubeProgress {
-  status: 'detecting' | 'extracting' | 'processing_chapters' | 'combining' | 'completed';
-  message: string;
-  details?: {
-    videoCount?: number;
-    currentVideo?: YouTubeVideo;
-    currentVideoId?: string;
-    processedCount?: number;
-    videos?: YouTubeVideo[];
-    failedCount?: number;
-    responseTime?: number;
-    step?: string;
-    transcriptSegments?: number;
-    chaptersFound?: number;
-    detectedUrls?: string[];
-    urls?: string[];
-    query?: string;
-    resultsCount?: number;
-    maxResults?: number;
-  };
-}
-
 export interface ResearchQuestion {
   question: string;
   rationale: string;

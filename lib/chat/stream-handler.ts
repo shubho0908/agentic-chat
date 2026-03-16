@@ -6,7 +6,7 @@ import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openai-errors';
 import { extractTextFromMessage } from './message-helpers';
-import { executeWebSearchTool, executeYouTubeTool, executeDeepResearchTool, executeGoogleSuiteTool } from './tool-executors';
+import { executeWebSearchTool, executeDeepResearchTool, executeGoogleSuiteTool } from './tool-executors';
 import {
   encodeMemoryStatus,
   encodeChatChunk,
@@ -81,10 +81,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         if (activeTool === TOOL_IDS.WEB_SEARCH) {
           enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal, searchDepth);
-        }
-        
-        if (activeTool === TOOL_IDS.YOUTUBE) {
-          enhancedMessages = await executeYouTubeTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal);
         }
 
         if (activeTool === TOOL_IDS.GOOGLE_SUITE) {

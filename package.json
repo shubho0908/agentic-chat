@@ -16,8 +16,7 @@
     "db:studio": "prisma studio",
     "test:audit": "node --import tsx --test tests/**/*.test.ts",
     "test:doc": "tsx scripts/test-doc-loader.ts",
-    "test:mime": "tsx scripts/test-mime-detection.ts",
-    "test:youtube-audio": "tsx scripts/test-youtube-audio.ts"
+    "test:mime": "tsx scripts/test-mime-detection.ts"
   },
   "dependencies": {
     "@langchain/community": "^0.3.57",
@@ -80,8 +79,6 @@
     "vaul": "^1.1.2",
     "word-extractor": "^1.0.4",
     "xlsx": "^0.18.5",
-    "youtube-transcript": "^1.3.0",
-    "youtubei.js": "^16.0.1",
     "zod": "^4.1.11"
   },
   "devDependencies": {

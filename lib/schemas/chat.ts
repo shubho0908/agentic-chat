@@ -49,7 +49,7 @@ export const toolActivitySchema = z.object({
     z.null(),
     z.array(z.union([z.string(), z.number(), z.boolean()])),
   ])),
-  result: z.string().optional(),
+  result: z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]).optional(),
   error: z.string().optional(),
   timestamp: z.number(),
 });

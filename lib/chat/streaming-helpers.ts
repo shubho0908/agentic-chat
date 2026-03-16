@@ -46,7 +46,7 @@ export function encodeToolCall(
 export function encodeToolResult(
   toolName: string,
   toolCallId: string,
-  result: string
+  result: string | Record<string, unknown> | unknown[]
 ): Uint8Array {
   return encodeSSEMessage({ 
     type: 'tool_result',
