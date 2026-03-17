@@ -3,7 +3,6 @@ import { TOOL_IDS } from "@/lib/tools/config";
 import { isToolActive } from "./utils";
 import { DeepResearchContext } from "./deepResearchContext";
 import { WebSearchContext } from "./webSearchContext";
-import { YouTubeContext } from "./youtubeContext";
 import { GoogleSuiteContext } from "./googleSuiteContext";
 import { VisionOnlyContext } from "./visionOnlyContext";
 import { ToolOnlyDefaultContext } from "./toolOnlyDefaultContext";
@@ -14,7 +13,6 @@ import type { ContextDetailsProps } from "./types";
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   const isWebSearch = isToolActive(memoryStatus, TOOL_IDS.WEB_SEARCH);
-  const isYouTube = isToolActive(memoryStatus, TOOL_IDS.YOUTUBE);
   const isDeepResearch = isToolActive(memoryStatus, TOOL_IDS.DEEP_RESEARCH);
   const isGoogleSuite = isToolActive(memoryStatus, TOOL_IDS.GOOGLE_SUITE);
 
@@ -56,10 +54,6 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   if (memoryStatus.routingDecision === RoutingDecision.ToolOnly) {
     if (isWebSearch) {
       return <WebSearchContext memoryStatus={memoryStatus} />;
-    }
-
-    if (isYouTube) {
-      return <YouTubeContext memoryStatus={memoryStatus} />;
     }
 
     if (isGoogleSuite) {

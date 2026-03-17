@@ -1,11 +1,11 @@
-import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { buildMultimodalContent } from "@/lib/content-utils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { updateUserMessage, saveAssistantMessage } from "./message-api";
+import { finalizeEditedMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
@@ -13,6 +13,14 @@ import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updat
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chat-hooks";
 import { persistConversationMemoryIfEligible } from "./memory-persistence";
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
 
 export async function handleEditMessage(
   messageId: string,
@@ -88,14 +96,8 @@ export async function handleEditMessage(
   ]);
 
   try {
-    let updatedMessageId = messageToEdit.id;
-    let updatedMessageData: { parentMessageId?: string | null } | null = null;
-    if (conversationId && messageToEdit.id) {
-      const updatedMessage = await updateUserMessage(conversationId, messageToEdit.id, messageContent, attachments, abortSignal);
-      if (updatedMessage?.id) {
-        updatedMessageId = updatedMessage.id;
-        updatedMessageData = { parentMessageId: updatedMessage.parentMessageId };
-      }
+    if (!messageToEdit.id) {
+      throw new Error("Message is missing an id");
     }
 
     const useCaching = shouldUseSemanticCache(
@@ -105,7 +107,7 @@ export async function handleEditMessage(
       deepResearchEnabled
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -153,7 +155,7 @@ export async function handleEditMessage(
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
             status: ToolStatus.Completed,
-            result: toolResult.result,
+            result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
           
@@ -244,24 +246,34 @@ export async function handleEditMessage(
 
       if (conversationId) {
         const conversationIdStr = conversationId;
-        const savedAssistantMessageId = await saveAssistantMessage(conversationIdStr, responseContent, messageMetadata);
-        
-        if (savedAssistantMessageId && updatedMessageId) {
-          const parentId = updatedMessageData?.parentMessageId || updatedMessageId;
-          const versions = await fetchMessageVersions(conversationIdStr, parentId);
-          
-          onMessagesUpdate((prev) =>
-            prev.map((msg) => {
-              if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
-                return updateMessageWithVersions(msg, updatedMessageId, versions);
-              }
-              if (msg.id === placeholderAssistantId) {
-                return { ...msg, id: savedAssistantMessageId, metadata: messageMetadata };
-              }
-              return msg;
-            })
-          );
-        }
+        const finalizedEdit = await finalizeEditedMessage(
+          conversationIdStr,
+          messageToEdit.id,
+          messageContent,
+          responseContent,
+          attachments,
+          messageMetadata,
+          abortSignal
+        );
+        const updatedMessageId = finalizedEdit.updatedMessage.id;
+        const parentId = finalizedEdit.updatedMessage.parentMessageId || updatedMessageId;
+        const versions = await fetchMessageVersions(conversationIdStr, parentId);
+
+        onMessagesUpdate((prev) =>
+          prev.map((msg) => {
+            if (msg.id === messageToEdit.id || msg.id === updatedMessageId) {
+              return updateMessageWithVersions(msg, updatedMessageId, versions);
+            }
+            if (msg.id === placeholderAssistantId) {
+              return {
+                ...msg,
+                id: finalizedEdit.assistantMessage.id,
+                metadata: messageMetadata,
+              };
+            }
+            return msg;
+          })
+        );
         
         queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
         queryClient.invalidateQueries({ queryKey: ['conversations'] });

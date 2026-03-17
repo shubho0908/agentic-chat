@@ -54,24 +54,13 @@ export function getContextualMessage(
     return AI_THINKING_MESSAGES.MEMORY_SYNTHESIS;
   }
 
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories && routing !== RoutingDecision.ToolOnly) {
+    return "Checked conversation history for relevant memories...";
+  }
+
   if (routing === RoutingDecision.ToolOnly) {
     const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
-    
-    if (memoryStatus?.activeToolName === TOOL_IDS.YOUTUBE && memoryStatus?.toolProgress) {
-      const status = memoryStatus.toolProgress.status;
-      const videoCount = memoryStatus.toolProgress.details?.videoCount || 0;
-      const processedCount = memoryStatus.toolProgress.details?.processedCount || 0;
-      
-      const statusMessages: Record<string, string> = {
-        'searching': 'Searching YouTube...',
-        'found': videoCount > 0 ? `Found ${videoCount} ${videoCount === 1 ? 'video' : 'videos'}` : 'Found videos',
-        'processing_sources': videoCount > 0 ? `Extracting transcripts (${processedCount}/${videoCount})...` : 'Processing videos...',
-        'completed': 'Analysis complete',
-      };
-      
-      return statusMessages[status] || `Analyzing YouTube ${videoCount > 1 ? "videos" : "video"}...`;
-    }
-    
+
     if (memoryStatus?.toolProgress?.message) {
       return memoryStatus.toolProgress.message;
     }
@@ -82,6 +71,7 @@ export function getContextualMessage(
   const contexts = [];
   if (memoryStatus?.hasDocuments) contexts.push("documents");
   if (memoryStatus?.hasMemories) contexts.push("memories");
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories) contexts.push("memory lookup");
 
   return contexts.length > 0
     ? `Synthesizing response with ${contexts.join(" and ")}...`

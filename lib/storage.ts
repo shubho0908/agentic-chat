@@ -12,6 +12,10 @@ const STORAGE_KEYS = {
 
 const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
 
+function logStorageError(operation: string, error: unknown): void {
+  console.warn(`[Storage] Failed to ${operation}:`, error);
+}
+
 function isLocalStorageAvailable(): boolean {
   try {
     const test = '__localStorage_test__';
@@ -61,7 +65,8 @@ export function removeModel(): void {
   if (!isLocalStorageAvailable()) return;
   try {
     localStorage.removeItem(STORAGE_KEYS.OPENAI_MODEL);
-  } catch {
+  } catch (error) {
+    logStorageError('remove stored model', error);
   }
 }
 
@@ -108,7 +113,8 @@ export function removeActiveTool(): void {
   if (!isLocalStorageAvailable()) return;
   try {
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
-  } catch {
+  } catch (error) {
+    logStorageError('remove active tool', error);
   }
 }
 
@@ -187,6 +193,7 @@ export function clearPendingGoogleWorkspaceQuery(): void {
   if (!isLocalStorageAvailable()) return;
   try {
     localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
-  } catch {
+  } catch (error) {
+    logStorageError('clear pending Google Workspace query', error);
   }
 }

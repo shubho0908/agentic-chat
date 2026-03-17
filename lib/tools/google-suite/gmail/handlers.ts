@@ -2,17 +2,25 @@ import { google, type gmail_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
 import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
 import { parseEmailContent } from '@/utils/google/email';
+import { formatEmailDate } from '@/utils/dateFormatter';
+
+const MAX_GMAIL_SEARCH_FETCHES = 10;
+
+function getHeaderValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
+  return headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value || '';
+}
 
 export async function handleGmailSearch(
   context: ToolHandlerContext,
   args: GmailSearchArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
+  const maxResults = Math.min(args.maxResults || 10, MAX_GMAIL_SEARCH_FETCHES);
   
   const response = await gmail.users.messages.list({
     userId: 'me',
     q: args.query,
-    maxResults: args.maxResults || 10,
+    maxResults,
   });
 
   if (!response.data.messages || response.data.messages.length === 0) {
@@ -20,26 +28,31 @@ export async function handleGmailSearch(
   }
 
   const messages = await Promise.all(
-    response.data.messages.map(async (msg) => {
-      const fullMsg = await gmail.users.messages.get({
+    response.data.messages.slice(0, MAX_GMAIL_SEARCH_FETCHES).map(async (msg) => {
+      const metadata = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id!,
-        format: 'full',
+        format: 'metadata',
+        metadataHeaders: ['From', 'Subject', 'Date'],
       });
-      return fullMsg.data;
+      return metadata.data;
     })
   );
 
   const formatted = messages.map((msg, idx) => {
-    const content = parseEmailContent(msg);
-    return `${idx + 1}. **From:** ${content.from}
-   **Subject:** ${content.subject}
-   **Date:** ${content.date}
-   **Snippet:** ${content.snippet}
+    const headers = msg.payload?.headers;
+    return `${idx + 1}. **From:** ${getHeaderValue(headers, 'From')}
+   **Subject:** ${getHeaderValue(headers, 'Subject')}
+   **Date:** ${formatEmailDate(getHeaderValue(headers, 'Date'))}
+   **Snippet:** ${msg.snippet || ''}
    **Message ID:** ${msg.id}`;
   });
 
-  return `Found ${messages.length} message(s):\n\n${formatted.join('\n\n')}`;
+  const truncatedNotice = response.data.resultSizeEstimate && response.data.resultSizeEstimate > messages.length
+    ? `\n\nShowing the first ${messages.length} message(s) to keep the search bounded.`
+    : '';
+
+  return `Found ${messages.length} message(s):\n\n${formatted.join('\n\n')}${truncatedNotice}`;
 }
 
 export async function handleGmailRead(

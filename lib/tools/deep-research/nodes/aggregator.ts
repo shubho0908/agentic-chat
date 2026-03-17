@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import { AGGREGATOR_SYSTEM_PROMPT } from '../prompts';
+import { getStageModel } from '@/lib/model-policy';
 
 export async function aggregatorNode(
   state: ResearchState,
@@ -19,7 +20,7 @@ export async function aggregatorNode(
   }
 
   const llm = new ChatOpenAI({
-    model: config.model,
+    model: getStageModel(config.model, 'research_aggregator'),
     apiKey: config.openaiApiKey,
   });
 
@@ -38,7 +39,7 @@ export async function aggregatorNode(
         { role: 'system', content: AGGREGATOR_SYSTEM_PROMPT },
         { 
           role: 'user', 
-          content: `**Original Research Question:** ${state.originalQuery}\n\n**Number of Research Questions:** ${completedTasks.length}\n\n**Research Findings to Synthesize:**\n\n${findingsText}\n\nCreate a comprehensive 5000-6000 word synthesis that deeply integrates ALL findings with expert-level analysis, thematic organization, and critical evaluation. This will be the foundation for an 8000-10000 word final report.`
+          content: `**Original Research Question:** ${state.originalQuery}\n\n**Number of Research Questions:** ${completedTasks.length}\n\n**Research Findings to Synthesize:**\n\n${findingsText}\n\nCreate a concise but complete synthesis of roughly 1200-1800 words. Focus on claims that are well supported, disagreements between sources, and the details needed to answer the user accurately.`
         },
       ],
       { signal: config.abortSignal }

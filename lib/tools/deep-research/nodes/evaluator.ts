@@ -1,9 +1,18 @@
 import { ChatOpenAI } from '@langchain/openai';
+import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
 import type { EvaluationResult, StrictnessLevel } from '@/types/deep-research';
-
-const MAX_ATTEMPTS = 3; // Total attempts allowed (1 initial + 2 retries)
+import { getStageModel } from '@/lib/model-policy';
+import { invokeStructuredOutput } from '../structured-output';
+import { DEEP_RESEARCH_MAX_ATTEMPTS } from '../constants';
+const evaluationResultSchema = z.object({
+  meetsStandards: z.boolean(),
+  isRelevant: z.boolean(),
+  feedback: z.string(),
+  rewrittenPrompt: z.string().optional(),
+  score: z.number(),
+});
 
 export async function evaluatorNode(
   state: ResearchState,
@@ -13,7 +22,7 @@ export async function evaluatorNode(
     throw new Error('Research aborted by user');
   }
   const llm = new ChatOpenAI({
-    model: config.model,
+    model: getStageModel(config.model, 'research_evaluator'),
     apiKey: config.openaiApiKey,
   });
 
@@ -39,34 +48,13 @@ export async function evaluatorNode(
       responseToEvaluate
     );
 
-    const response = await llm.invoke(
+    const evaluationResult: EvaluationResult = await invokeStructuredOutput(
+      llm,
+      evaluationResultSchema,
+      'DeepResearchEvaluation',
       [{ role: 'system', content: evaluationPrompt }],
-      { signal: config.abortSignal }
+      config.abortSignal
     );
-
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-    
-    if (!rawContent.trim()) {
-      return {
-        evaluationResult: {
-          meetsStandards: true,
-          isRelevant: true,
-          feedback: 'Unable to parse evaluation, proceeding',
-          score: 75,
-        },
-        currentAttempt,
-        strictnessLevel,
-      };
-    }
-
-    const evaluationResult: EvaluationResult = JSON.parse(rawContent);
     const evaluationFeedback = [
       ...(state.evaluationFeedback || []),
       `Attempt ${currentAttempt} (Level ${strictnessLevel}): ${evaluationResult.feedback}`,
@@ -81,7 +69,7 @@ export async function evaluatorNode(
       };
     }
 
-    if (currentAttempt < MAX_ATTEMPTS) {
+    if (currentAttempt < DEEP_RESEARCH_MAX_ATTEMPTS) {
       return {
         evaluationResult,
         currentAttempt: currentAttempt + 1,
@@ -94,10 +82,7 @@ export async function evaluatorNode(
     }
 
     return {
-      evaluationResult: {
-        ...evaluationResult,
-        meetsStandards: true, // Force pass to proceed
-      },
+      evaluationResult,
       currentAttempt,
       strictnessLevel,
       evaluationFeedback,
@@ -107,8 +92,8 @@ export async function evaluatorNode(
     console.error('[Evaluator Node] ❌ Error:', error);
     return {
       evaluationResult: {
-        meetsStandards: true,
-        isRelevant: true,
+        meetsStandards: false,
+        isRelevant: false,
         feedback: `Evaluation error: ${error}`,
         score: 0,
       },

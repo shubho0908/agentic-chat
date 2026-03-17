@@ -90,6 +90,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
           if (parsed.type === 'memory_status' && onMemoryStatus) {
             onMemoryStatus({
               hasMemories: parsed.hasMemories,
+              attemptedMemory: parsed.attemptedMemory,
               hasDocuments: parsed.hasDocuments,
               memoryCount: parsed.memoryCount,
               documentCount: parsed.documentCount || 0,

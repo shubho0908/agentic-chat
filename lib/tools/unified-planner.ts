@@ -1,12 +1,13 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type OpenAI from 'openai';
+import { z } from 'zod';
 import { UNIFIED_SYSTEM_PROMPT } from '@/lib/prompts';
 import { WEB_SEARCH_PLANNING_PROMPT } from '@/lib/tools/web-search/prompts';
 import { PLANNER_SYSTEM_PROMPT as DEEP_RESEARCH_PLANNING_PROMPT } from '@/lib/tools/deep-research/prompts';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
-import { YOUTUBE_PLANNING_PROMPT } from '@/lib/tools/youtube/prompts';
+import { getStageModel } from '@/lib/model-policy';
 
-type ToolType = 'web_search' | 'deep_research' | 'google_suite' | 'youtube';
+type ToolType = 'web_search' | 'deep_research' | 'google_suite';
 
 interface UnifiedPlannerConfig {
   query: string;
@@ -57,18 +58,38 @@ interface GoogleSuitePlan {
   reasoning: string;
 }
 
-export interface YouTubePlan {
-  mode: 'url_analysis' | 'search_and_analyze' | 'comparison';
-  urls?: string[];
-  searchQuery?: string;
-  maxResults: number;
-  analysisFocus: 'technical' | 'educational' | 'entertainment' | 'tutorial' | 'informational' | 'general';
-  analysisDepth: 'quick' | 'standard' | 'deep';
-  language: string;
-  reasoning: string;
-}
+type UnifiedPlan = WebSearchPlan | DeepResearchPlan | GoogleSuitePlan;
 
-type UnifiedPlan = WebSearchPlan | DeepResearchPlan | GoogleSuitePlan | YouTubePlan;
+const webSearchPlannerOutputSchema = z.object({
+  queryType: z.enum(['factual', 'comparative', 'analytical', 'exploratory', 'how-to', 'current-events']),
+  complexity: z.enum(['simple', 'moderate', 'complex']),
+  recommendedSearches: z.array(z.object({
+    query: z.string(),
+    rationale: z.string(),
+    expectedResultCount: z.number().int().min(1).max(20),
+    priority: z.enum(['high', 'medium', 'low']),
+  })).min(1),
+  reasoning: z.string(),
+});
+
+const deepResearchPlanSchema = z.object({
+  plan: z.array(z.object({
+    question: z.string(),
+    rationale: z.string(),
+    suggestedTools: z.array(z.string()).min(1),
+  })).min(1),
+});
+
+const googleSuitePlanSchema = z.object({
+  actions: z.array(z.object({
+    tool: z.string(),
+    description: z.string(),
+    args: z.record(z.string(), z.unknown()),
+    rationale: z.string(),
+    priority: z.enum(['high', 'medium', 'low']),
+  })),
+  reasoning: z.string(),
+});
 
 function getToolSpecificPrompt(toolType: ToolType): string {
   switch (toolType) {
@@ -78,9 +99,30 @@ function getToolSpecificPrompt(toolType: ToolType): string {
       return DEEP_RESEARCH_PLANNING_PROMPT;
     case 'google_suite':
       return GOOGLE_SUITE_PLANNING_PROMPT;
-    case 'youtube':
-      return YOUTUBE_PLANNING_PROMPT;
   }
+}
+
+function serializeMessageContent(content: OpenAI.Chat.Completions.ChatCompletionMessageParam['content']): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      if (part.type === 'text') {
+        return part.text;
+      }
+      if (part.type === 'image_url') {
+        return '[Image attached]';
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join(' ');
 }
 
 function buildUserPrompt(config: UnifiedPlannerConfig): string {
@@ -107,7 +149,7 @@ function buildUserPrompt(config: UnifiedPlannerConfig): string {
 
   if (config.conversationHistory && config.conversationHistory.length > 0) {
     const recentHistory = config.conversationHistory.slice(-3);
-    prompt += `\n\n## CONVERSATION CONTEXT:\n${recentHistory.map(m => `${m.role}: ${m.content}`).join('\n')}`;
+    prompt += `\n\n## CONVERSATION CONTEXT:\n${recentHistory.map(m => `${m.role}: ${serializeMessageContent(m.content)}`).join('\n')}`;
   }
 
   prompt += `\n\nCreate an optimal execution plan as JSON.`;
@@ -155,16 +197,6 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
           reasoning: 'Fallback: no actions planned',
         } as GoogleSuitePlan;
 
-      case 'youtube':
-        return {
-          mode: 'search_and_analyze',
-          searchQuery: config.query,
-          maxResults: 5,
-          analysisFocus: 'general',
-          analysisDepth: 'standard',
-          language: 'en',
-          reasoning: 'Fallback: standard search and analyze',
-        } as YouTubePlan;
     }
   };
 
@@ -192,40 +224,23 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
     }
 
     const llm = new ChatOpenAI({
-      model: config.model,
+      model: getStageModel(config.model, 'tool_planner'),
       apiKey: config.apiKey,
     });
 
     const systemPrompt = UNIFIED_SYSTEM_PROMPT + '\n\n' + getToolSpecificPrompt(config.toolType);
     const userPrompt = buildUserPrompt(config);
 
-    const response = await llm.invoke(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      { signal: config.abortSignal }
-    );
-
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter(
-            (part): part is { type: 'text'; text: string } =>
-              part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-
-    if (!rawContent.trim()) {
-      console.warn('[Unified Planner] Empty LLM response, using fallback');
-      return createFallbackPlan();
-    }
-
-    const parsed = JSON.parse(rawContent);
-
     if (config.toolType === 'web_search') {
-      const plan = parsed as WebSearchPlan;
+      const plan = await llm
+        .withStructuredOutput(webSearchPlannerOutputSchema)
+        .invoke(
+          [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          { signal: config.abortSignal }
+        ) as WebSearchPlan;
       
       if (!plan.recommendedSearches || plan.recommendedSearches.length === 0) {
         return createFallbackPlan();
@@ -253,9 +268,16 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
     }
 
     if (config.toolType === 'deep_research') {
-      // The LLM returns { "plan": [...] }, extract it
-      const rawPlan = parsed as { plan?: DeepResearchPlan['questions'] };
-      const questions = rawPlan.plan || [];
+      const parsed = await llm
+        .withStructuredOutput(deepResearchPlanSchema)
+        .invoke(
+          [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          { signal: config.abortSignal }
+        );
+      const questions = parsed.plan || [];
       
       if (questions.length === 0) {
         return createFallbackPlan();
@@ -286,26 +308,20 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
     }
 
     if (config.toolType === 'google_suite') {
-      const plan = parsed as GoogleSuitePlan;
-      return plan;
-    }
+      const plan = await llm
+        .withStructuredOutput(googleSuitePlanSchema)
+        .invoke(
+          [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          { signal: config.abortSignal }
+        ) as GoogleSuitePlan;
 
-    if (config.toolType === 'youtube') {
-      const plan = parsed as YouTubePlan;
-      
-      if (!plan.maxResults || plan.maxResults < 1) {
-        plan.maxResults = 5;
-      }
-      
-      if (plan.maxResults > 15) {
-        plan.maxResults = 15;
-      }
-      
-      plan.language = plan.language || 'en';
-      plan.analysisDepth = plan.analysisDepth || 'standard';
-      plan.analysisFocus = plan.analysisFocus || 'general';
-      
-      return plan;
+      return {
+        actions: plan.actions || [],
+        reasoning: plan.reasoning || 'Planned Google Workspace actions',
+      } as GoogleSuitePlan;
     }
 
     return createFallbackPlan();

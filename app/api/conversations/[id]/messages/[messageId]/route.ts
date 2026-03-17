@@ -1,11 +1,117 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateAttachments } from '@/lib/validation';
+import { isValidConversationId, validateAttachmentInputs } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
 import { messageMetadataSchema } from '@/lib/schemas/chat';
+import { isSupportedForRAG } from '@/lib/rag/utils';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+
+function getRagAttachmentIds(
+  attachments?: Array<{ id: string; fileType: string }>
+): string[] {
+  if (!attachments || attachments.length === 0) {
+    return [];
+  }
+
+  return attachments
+    .filter((attachment) => isSupportedForRAG(attachment.fileType))
+    .map((attachment) => attachment.id);
+}
+
+function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
+  if (attachmentIds.length === 0) {
+    return;
+  }
+
+  after(async () => {
+    const results = await Promise.allSettled(
+      attachmentIds.map((attachmentId) =>
+        runOrQueueDocumentProcessingJob(attachmentId, userId)
+      )
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn('[Message Version Route] Failed to schedule document processing:', {
+          attachmentId: attachmentIds[index],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
+  });
+}
+
+function buildAttachmentCreateInput(attachments?: AttachmentInput[] | null) {
+  if (!attachments || attachments.length === 0) {
+    return undefined;
+  }
+
+  return {
+    create: attachments.map((att) => ({
+      fileUrl: att.fileUrl,
+      fileName: att.fileName,
+      fileType: att.fileType,
+      fileSize: att.fileSize,
+    })),
+  };
+}
+
+async function getNextSiblingIndex(
+  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  parentId: string
+) {
+  const maxSibling = await tx.message.aggregate({
+    where: {
+      OR: [
+        { id: parentId },
+        { parentMessageId: parentId },
+      ],
+    },
+    _max: { siblingIndex: true },
+  });
+
+  return (maxSibling._max.siblingIndex ?? -1) + 1;
+}
+
+async function softDeleteDownstreamBranch(
+  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  conversationId: string,
+  messageId: string,
+  parentMessageId: string | null,
+  siblingIndex: number,
+  deletedAt: Date
+) {
+  if (parentMessageId) {
+    await tx.message.updateMany({
+      where: {
+        conversationId,
+        parentMessageId,
+        siblingIndex: { gt: siblingIndex },
+        isDeleted: false,
+      },
+      data: {
+        isDeleted: true,
+        deletedAt,
+      },
+    });
+    return;
+  }
+
+  await tx.message.updateMany({
+    where: {
+      conversationId,
+      parentMessageId: messageId,
+      isDeleted: false,
+    },
+    data: {
+      isDeleted: true,
+      deletedAt,
+    },
+  });
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -26,12 +132,13 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    
+
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    
-    const { content, attachments, metadata } = body;
+
+    const { content, attachments, metadata, assistantContent, assistantMetadata } = body;
+    let validatedAttachments: AttachmentInput[] | undefined;
 
     if (!content || typeof content !== 'string') {
       return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
@@ -44,29 +151,41 @@ export async function PATCH(
       }
     }
 
+    if (assistantMetadata !== undefined && assistantMetadata !== null) {
+      const assistantMetadataValidation = messageMetadataSchema.safeParse(assistantMetadata);
+      if (!assistantMetadataValidation.success) {
+        return errorResponse('Invalid assistant metadata structure', assistantMetadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+      }
+    }
+
     if (attachments !== undefined && attachments !== null) {
-      const attachmentValidation = validateAttachments(attachments);
+      const attachmentValidation = validateAttachmentInputs(attachments);
       if (!attachmentValidation.valid) {
         return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
       }
+
+      validatedAttachments = attachmentValidation.attachments;
+    }
+
+    if (assistantContent !== undefined && typeof assistantContent !== 'string') {
+      return errorResponse('Invalid assistantContent', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
     const existingMessage = await prisma.message.findFirst({
-      where: { 
+      where: {
         id: messageId,
         conversationId,
-        isDeleted: false
+        isDeleted: false,
       },
-      select: { 
-        conversationId: true, 
+      select: {
+        conversationId: true,
         role: true,
         parentMessageId: true,
         siblingIndex: true,
-        createdAt: true
-      }
+      },
     });
 
     if (!existingMessage) {
@@ -75,60 +194,76 @@ export async function PATCH(
 
     const parentId = existingMessage.parentMessageId || messageId;
     const now = new Date();
-    
-    const newVersion = await prisma.$transaction(async (tx) => {
-      await tx.message.updateMany({
-        where: {
+
+    if (existingMessage.role === 'USER' && assistantContent) {
+      const result = await prisma.$transaction(async (tx) => {
+        const siblingIndex = await getNextSiblingIndex(tx, parentId);
+
+        const updatedMessage = await tx.message.create({
+          data: {
+            conversationId,
+            role: existingMessage.role,
+            content,
+            parentMessageId: parentId,
+            siblingIndex,
+            ...(metadata && { metadata }),
+            attachments: buildAttachmentCreateInput(validatedAttachments),
+          },
+          include: {
+            attachments: true,
+          },
+        });
+
+        const assistantMessage = await tx.message.create({
+          data: {
+            conversationId,
+            role: 'ASSISTANT',
+            content: assistantContent,
+            ...(assistantMetadata && { metadata: assistantMetadata }),
+          },
+          include: {
+            attachments: true,
+          },
+        });
+
+        await softDeleteDownstreamBranch(
+          tx,
           conversationId,
-          createdAt: { gt: existingMessage.createdAt },
-          isDeleted: false
-        },
-        data: {
-          isDeleted: true,
-          deletedAt: now
-        }
+          messageId,
+          existingMessage.parentMessageId,
+          existingMessage.siblingIndex,
+          now
+        );
+
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: new Date() },
+        });
+
+        return {
+          updatedMessage,
+          assistantMessage,
+        };
       });
 
-      if (existingMessage.parentMessageId) {
-        await tx.message.updateMany({
-          where: {
-            conversationId,
-            parentMessageId: existingMessage.parentMessageId,
-            siblingIndex: { gt: existingMessage.siblingIndex },
-            isDeleted: false
-          },
-          data: {
-            isDeleted: true,
-            deletedAt: now
-          }
-        });
-      } else {
-        await tx.message.updateMany({
-          where: {
-            conversationId,
-            parentMessageId: messageId,
-            isDeleted: false
-          },
-          data: {
-            isDeleted: true,
-            deletedAt: now
-          }
-        });
-      }
+      scheduleDocumentProcessing(getRagAttachmentIds(result.updatedMessage.attachments), user.id);
 
-      const maxSibling = await tx.message.aggregate({
-        where: {
-          OR: [
-            { id: parentId },
-            { parentMessageId: parentId }
-          ]
-        },
-        _max: { siblingIndex: true }
-      });
+      return jsonResponse(result, HTTP_STATUS.OK);
+    }
 
-      const siblingIndex = (maxSibling._max.siblingIndex ?? -1) + 1;
+    const newVersion = await prisma.$transaction(async (tx) => {
+      const siblingIndex = await getNextSiblingIndex(tx, parentId);
 
-      const newVersion = await tx.message.create({
+      await softDeleteDownstreamBranch(
+        tx,
+        conversationId,
+        messageId,
+        existingMessage.parentMessageId,
+        existingMessage.siblingIndex,
+        now
+      );
+
+      const createdVersion = await tx.message.create({
         data: {
           conversationId,
           role: existingMessage.role,
@@ -136,27 +271,22 @@ export async function PATCH(
           parentMessageId: parentId,
           siblingIndex,
           ...(metadata && { metadata }),
-          attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
-            create: (attachments as AttachmentInput[]).map(att => ({
-              fileUrl: att.fileUrl,
-              fileName: att.fileName,
-              fileType: att.fileType,
-              fileSize: att.fileSize,
-            }))
-          } : undefined,
+          attachments: buildAttachmentCreateInput(validatedAttachments),
         },
         include: {
           attachments: true,
-        }
+        },
       });
 
       await tx.conversation.update({
         where: { id: conversationId },
-        data: { updatedAt: new Date() }
+        data: { updatedAt: new Date() },
       });
 
-      return newVersion;
+      return createdVersion;
     });
+
+    scheduleDocumentProcessing(getRagAttachmentIds(newVersion.attachments), user.id);
 
     return jsonResponse(newVersion, HTTP_STATUS.OK);
   } catch (error) {

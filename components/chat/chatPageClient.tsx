@@ -214,6 +214,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         onAuthRequired={() => setShowAuthModal(true)}
         tokenUsage={tokenUsage}
         conversationId={conversationId}
+        messages={messages}
       />
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>

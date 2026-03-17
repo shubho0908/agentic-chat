@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource, WebSearchProgress, WebSearchImage } from '@/types/tools';
+import { withRetry } from '@/lib/retry';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
@@ -73,14 +74,18 @@ export async function executeWebSearch(
         details: { query },
       });
 
-      const response = await client.search({
-        query,
-        max_results: clampedMaxResults,
-        search_depth: searchDepth,
-        include_answer: includeAnswer,
-        include_images: includeImages ?? true,
-        include_raw_content: false,
-      });
+      const response = await withRetry(
+        () =>
+          client.search({
+            query,
+            max_results: clampedMaxResults,
+            search_depth: searchDepth,
+            include_answer: includeAnswer,
+            include_images: includeImages ?? true,
+            include_raw_content: false,
+          }),
+        { signal: abortSignal }
+      );
 
       if (abortSignal?.aborted) {
         throw new Error('Search aborted by user');
@@ -161,7 +166,7 @@ export async function executeWebSearch(
         position: index + 1,
         title: result.title,
         url: result.url,
-        content: result.content,
+        content: result.content.substring(0, 280).replace(/\s+/g, ' ').trim(),
         score: parseFloat(result.score),
       }));
 
@@ -180,7 +185,7 @@ ${formattedResults
             (result) => `
 ${result.position}. ${result.title}
    URL: ${result.url}
-   Content: ${result.content}
+   Summary: ${result.content}${result.content.length >= 280 ? '...' : ''}
    Relevance Score: ${(result.score * 100).toFixed(1)}%
 `
           )

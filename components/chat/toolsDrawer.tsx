@@ -40,8 +40,8 @@ interface ToolsDrawerProps {
     authorized: boolean;
     loading: boolean;
     workspaceConnected: boolean;
+    hasWorkspaceAccess: boolean;
     grantedScopes: string[];
-    missingScopes: string[];
   };
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }

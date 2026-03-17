@@ -18,6 +18,7 @@ export function EmptyState({ onSend, isLoading, onStop, onAuthRequired, tokenUsa
       onAuthRequired={onAuthRequired}
       tokenUsage={tokenUsage}
       conversationId={null}
+      messages={[]}
       centered
     />
   );

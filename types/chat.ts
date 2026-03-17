@@ -1,5 +1,5 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
-import type { WebSearchSource, YouTubeVideo, ResearchTask } from './tools';
+import type { WebSearchSource, ResearchTask } from './tools';
 import type { GateDecision, EvaluationResult, Citation } from './deep-research';
 import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 
@@ -24,6 +24,7 @@ export interface TokenUsage {
   limit: number;
   remaining: number;
   percentage: number;
+  responseReserve: number;
   breakdown: {
     conversation: number;
     images: number;
@@ -32,6 +33,7 @@ export interface TokenUsage {
 
 export interface MemoryStatus {
   hasMemories: boolean;
+  attemptedMemory?: boolean;
   hasDocuments: boolean;
   memoryCount: number;
   documentCount: number;
@@ -42,6 +44,10 @@ export interface MemoryStatus {
   routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
   activeToolName?: string;
+  degradedContexts?: Array<{
+    source: string;
+    reason: string;
+  }>;
   tokenUsage?: TokenUsage;
   toolProgress?: {
     status: ToolProgressStatus | string;
@@ -57,12 +63,6 @@ export interface MemoryStatus {
       searchDepth?: SearchDepth;
       phase?: number;
       totalPhases?: number;
-
-      // YouTube fields
-      videoCount?: number;
-      videos?: YouTubeVideo[];
-      failedCount?: number;
-      currentVideo?: YouTubeVideo;
 
       // Google Suite fields
       operation?: string;
@@ -179,6 +179,11 @@ export interface UpdateMessageResponse {
   attachments: Attachment[];
 }
 
+export interface FinalizeEditedMessageResponse {
+  updatedMessage: UpdateMessageResponse;
+  assistantMessage: UpdateMessageResponse;
+}
+
 export interface ConversationResult {
   conversationId: string;
   userMessageId: string;
@@ -199,7 +204,7 @@ export interface ToolCallEvent {
 export interface ToolResultEvent {
   toolName: string;
   toolCallId: string;
-  result: string;
+  result: string | Record<string, unknown> | unknown[];
 }
 
 export interface ToolProgressEvent {

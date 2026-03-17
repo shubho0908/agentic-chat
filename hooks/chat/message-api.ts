@@ -1,6 +1,6 @@
 import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/content-utils";
-import type { UpdateMessageResponse } from "@/types/chat";
+import type { FinalizeEditedMessageResponse, UpdateMessageResponse } from "@/types/chat";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 
 interface SavedMessageWithAttachments {
@@ -9,6 +9,10 @@ interface SavedMessageWithAttachments {
     id: string;
     fileType: string;
   }>;
+}
+
+function logDocumentProcessingDispatchError(context: string, error: unknown): void {
+  console.warn(`[Message API] Failed to ${context}:`, error);
 }
 
 async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
@@ -21,8 +25,8 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentId: attachmentIds[0] }),
         keepalive: true,
-      }).catch(() => {
-        // Silent failure - processing will be retried if needed
+      }).catch((error) => {
+        logDocumentProcessingDispatchError('dispatch single document processing', error);
       });
     } else {
       fetch('/api/documents/process-batch', {
@@ -30,12 +34,12 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentIds }),
         keepalive: true,
-      }).catch(() => {
-        // Silent failure - processing will be retried if needed
+      }).catch((error) => {
+        logDocumentProcessingDispatchError('dispatch batch document processing', error);
       });
     }
-  } catch {
-    // Silent failure - processing will be retried if needed
+  } catch (error) {
+    logDocumentProcessingDispatchError('schedule document processing', error);
   }
 }
 
@@ -115,47 +119,46 @@ export async function saveAssistantMessage(
   }
 }
 
-export async function updateUserMessage(
+export async function finalizeEditedMessage(
   conversationId: string,
   messageId: string,
   content: string | MessageContentPart[],
+  assistantContent: string,
   attachments?: Attachment[],
+  assistantMetadata?: MessageMetadata,
   signal?: AbortSignal
-): Promise<UpdateMessageResponse> {
-  try {
-    const contentToSave = extractTextFromContent(content);
+): Promise<FinalizeEditedMessageResponse> {
+  const contentToSave = extractTextFromContent(content);
 
-    const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: contentToSave,
-        attachments: attachments || [],
-      }),
-      signal,
-    });
+  const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: contentToSave,
+      attachments: attachments || [],
+      assistantContent,
+      assistantMetadata,
+    }),
+    signal,
+  });
 
-    if (!response.ok) {
-      throw new Error(`Failed to update message: ${response.statusText}`);
-    }
-
-    const updatedMessage: UpdateMessageResponse = await response.json();
-    
-    if (updatedMessage.attachments && updatedMessage.attachments.length > 0) {
-      const documentAttachmentIds = updatedMessage.attachments
-        .filter((att) => att.id && isSupportedForRAG(att.fileType))
-        .map((att) => att.id as string);
-      
-      if (documentAttachmentIds.length > 0) {
-        processDocumentsAsync(documentAttachmentIds);
-      }
-    }
-
-    return updatedMessage;
-  } catch (err) {
-    console.error("Failed to update user message:", err);
-    throw err;
+  if (!response.ok) {
+    throw new Error(`Failed to finalize edited message: ${response.statusText}`);
   }
+
+  const finalized: FinalizeEditedMessageResponse = await response.json();
+
+  if (finalized.updatedMessage.attachments && finalized.updatedMessage.attachments.length > 0) {
+    const documentAttachmentIds = finalized.updatedMessage.attachments
+      .filter((att) => att.id && isSupportedForRAG(att.fileType))
+      .map((att) => att.id as string);
+
+    if (documentAttachmentIds.length > 0) {
+      processDocumentsAsync(documentAttachmentIds);
+    }
+  }
+
+  return finalized;
 }
 
 export async function updateAssistantMessage(
@@ -163,41 +166,21 @@ export async function updateAssistantMessage(
   messageId: string,
   content: string,
   metadata?: MessageMetadata
-): Promise<UpdateMessageResponse | null> {
-  try {
-    const body = {
-      content,
-      attachments: [],
-      ...(metadata && { metadata }),
-    };
+): Promise<UpdateMessageResponse> {
+  const body = {
+    content,
+    ...(metadata && { metadata }),
+  };
 
-    const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    
-    if (response.ok) {
-      return await response.json();
-    }
-    return null;
-  } catch (err) {
-    console.error("Failed to update assistant message:", err);
-    return null;
-  }
-}
+  const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
-export async function deleteMessagesAfter(
-  conversationId: string,
-  messageId: string
-): Promise<void> {
-  try {
-    await fetch(`/api/conversations/${conversationId}/messages/delete-after`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageId }),
-    });
-  } catch (err) {
-    console.error("Failed to delete messages:", err);
+  if (!response.ok) {
+    throw new Error(`Failed to update assistant message: ${response.statusText}`);
   }
+
+  return await response.json();
 }

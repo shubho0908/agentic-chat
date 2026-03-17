@@ -262,9 +262,9 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
         "group relative px-4 py-3 md:py-4 transition-colors w-screen md:w-full",
       )}
     >
-      <div className={cn("mx-auto max-w-3xl flex", isUser ? "justify-end" : "justify-start")}>
-        <div className={cn("flex gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "max-w-[90%] md:max-w-[85%]")}>
-          <div className={cn("flex flex-col gap-1 min-w-0", isUser ? "items-end" : "items-start")}>
+      <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
+        <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
+          <div className={cn("flex min-w-0 flex-col gap-1", isUser ? "items-end" : "w-full items-start")}>
             {!isUser && (
               <MessageHeader
                 isUser={false}
@@ -393,6 +393,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     const nextStatus = nextProps.memoryStatus;
 
     if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
+      prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
       prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||

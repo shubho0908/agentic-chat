@@ -1,4 +1,6 @@
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import { isTrustedAttachmentUrl } from '@/lib/network/ssrf';
+import type { AttachmentInput } from '@/lib/schemas/chat';
 
 function isValidCuid(id: string): boolean {
   if (!id || typeof id !== 'string') {
@@ -139,7 +141,7 @@ function isValidUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
     // Only allow http and https protocols
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    return (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') && !parsedUrl.username && !parsedUrl.password;
   } catch {
     return false;
   }
@@ -156,6 +158,9 @@ function validateAttachment(attachment: unknown): ValidationResult {
   }
   if (!isValidUrl(att.fileUrl)) {
     return { valid: false, error: 'Attachment fileUrl must be a valid HTTP/HTTPS URL' };
+  }
+  if (!isTrustedAttachmentUrl(att.fileUrl)) {
+    return { valid: false, error: 'Attachment fileUrl must point to trusted uploaded storage' };
   }
   if (typeof att.fileName !== 'string' || !att.fileName.trim()) {
     return { valid: false, error: 'Attachment fileName is required and must be a non-empty string' };
@@ -201,4 +206,39 @@ export function validateAttachments(attachments: unknown): ValidationResult {
   }
 
   return { valid: true };
+}
+
+export function validateAttachmentInputs(
+  attachments: unknown
+): { valid: true; attachments: AttachmentInput[] } | { valid: false; error: string } {
+  if (!Array.isArray(attachments)) {
+    return { valid: false, error: 'Attachments must be an array' };
+  }
+
+  if (attachments.length > VALIDATION_LIMITS.ATTACHMENT_MAX_COUNT) {
+    return {
+      valid: false,
+      error: `Too many attachments. Maximum ${VALIDATION_LIMITS.ATTACHMENT_MAX_COUNT} allowed`,
+    };
+  }
+
+  const validated: AttachmentInput[] = [];
+
+  for (let i = 0; i < attachments.length; i++) {
+    const attachment = attachments[i];
+    const result = validateAttachment(attachment);
+    if (!result.valid) {
+      return { valid: false, error: `Attachment ${i + 1}: ${result.error}` };
+    }
+
+    const typedAttachment = attachment as Record<string, unknown>;
+    validated.push({
+      fileUrl: typedAttachment.fileUrl as string,
+      fileName: typedAttachment.fileName as string,
+      fileType: typedAttachment.fileType as string,
+      fileSize: typedAttachment.fileSize as number,
+    });
+  }
+
+  return { valid: true, attachments: validated };
 }

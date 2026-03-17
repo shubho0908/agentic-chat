@@ -15,6 +15,7 @@ export function AIThinkingAnimation({ memoryStatus, isLoading }: AIThinkingAnima
     memoryStatus &&
     !researchSkipped &&
     (memoryStatus.hasMemories ||
+      memoryStatus.attemptedMemory ||
       memoryStatus.hasDocuments ||
       memoryStatus.hasImages ||
       memoryStatus.hasUrls ||

@@ -1,10 +1,47 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateMessageData, validateAttachments } from '@/lib/validation';
+import { isValidConversationId, validateMessageData, validateAttachmentInputs } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
+import { isSupportedForRAG } from '@/lib/rag/utils';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+
+function getRagAttachmentIds(
+  attachments?: Array<{ id: string; fileType: string }>
+): string[] {
+  if (!attachments || attachments.length === 0) {
+    return [];
+  }
+
+  return attachments
+    .filter((attachment) => isSupportedForRAG(attachment.fileType))
+    .map((attachment) => attachment.id);
+}
+
+function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
+  if (attachmentIds.length === 0) {
+    return;
+  }
+
+  after(async () => {
+    const results = await Promise.allSettled(
+      attachmentIds.map((attachmentId) =>
+        runOrQueueDocumentProcessingJob(attachmentId, userId)
+      )
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn('[Messages Route] Failed to schedule document processing:', {
+          attachmentId: attachmentIds[index],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
+  });
+}
 
 export async function POST(
   request: NextRequest,
@@ -26,6 +63,7 @@ export async function POST(
     }
     
     const { role, content, attachments, metadata } = body;
+    let validatedAttachments: AttachmentInput[] | undefined;
 
     const validation = validateMessageData(role, content);
     if (!validation.valid) {
@@ -33,10 +71,12 @@ export async function POST(
     }
 
     if (attachments !== undefined && attachments !== null) {
-      const attachmentValidation = validateAttachments(attachments);
+      const attachmentValidation = validateAttachmentInputs(attachments);
       if (!attachmentValidation.valid) {
         return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
       }
+
+      validatedAttachments = attachmentValidation.attachments;
     }
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
@@ -49,8 +89,8 @@ export async function POST(
           role,
           content,
           ...(metadata && { metadata }),
-          attachments: attachments && Array.isArray(attachments) && attachments.length > 0 ? {
-            create: (attachments as AttachmentInput[]).map(att => ({
+          attachments: validatedAttachments && validatedAttachments.length > 0 ? {
+            create: validatedAttachments.map(att => ({
               fileUrl: att.fileUrl,
               fileName: att.fileName,
               fileType: att.fileType,
@@ -67,6 +107,8 @@ export async function POST(
         data: { updatedAt: new Date() }
       })
     ]);
+
+    scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);
 
     return jsonResponse(message, HTTP_STATUS.CREATED);
   } catch (error) {

@@ -6,8 +6,10 @@ import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/api-utils';
 import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from '@/lib/langsmith-config';
+import { getEmbeddingModel } from '@/lib/env';
+import { withRetry } from '@/lib/retry';
 
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL as string;
+const EMBEDDING_MODEL = getEmbeddingModel();
 
 function getVectorType(): string {
   const FP32_MAX_DIMENSIONS = 2000;
@@ -27,10 +29,14 @@ async function getOpenAIClient(userId: string): Promise<OpenAI> {
 export async function generateEmbedding(text: string, userId: string): Promise<number[]> {
   try {
     const client = await getOpenAIClient(userId);
-    const embeddingResponse = await client.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: text,
-    });
+    const embeddingResponse = await withRetry(
+      () =>
+        client.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: text,
+        }),
+      { retries: 2 }
+    );
 
     return embeddingResponse.data[0].embedding;
   } catch (error) {
@@ -80,11 +86,31 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
     await ensurePgVectorTables();
     const pool = getPgPool();
     const vectorType = getVectorType();
+    const cutoffTimestamp = new Date(Date.now() - (CACHE_TTL_SECONDS * 1000));
+
+    await pool.query(
+      `DELETE FROM semantic_cache
+       WHERE user_id = $1
+         AND created_at <= $2`,
+      [userId, cutoffTimestamp]
+    );
 
     await pool.query(
       `INSERT INTO semantic_cache (user_id, question, answer, embedding)
        VALUES ($1, $2, $3, $4::${vectorType})`,
       [userId, userQuery, answer, JSON.stringify(queryEmbedding)]
+    );
+
+    await pool.query(
+      `DELETE FROM semantic_cache
+       WHERE user_id = $1
+         AND id NOT IN (
+           SELECT id FROM semantic_cache
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT 200
+         )`,
+      [userId]
     );
   } catch (error) {
     throw new RAGError(

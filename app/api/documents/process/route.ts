@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
-import { processDocument } from '@/lib/rag/indexing/processor';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
 
 const ProcessDocumentSchema = z.object({
   attachmentId: z.string().min(1, 'Attachment ID is required'),
@@ -54,7 +54,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await processDocument(attachmentId, user.id);
+    const result = await runOrQueueDocumentProcessingJob(attachmentId, user.id);
+
+    if (result.queued) {
+      return jsonResponse({
+        success: true,
+        queued: true,
+        jobId: result.jobId,
+        message: 'Document processing queued',
+        attachmentId,
+      }, 202);
+    }
 
     if (!result.success) {
       return jsonResponse(
@@ -67,6 +77,7 @@ export async function POST(req: NextRequest) {
       success: true,
       message: 'Document processed successfully',
       attachmentId,
+      jobId: result.jobId,
       stats: result.stats,
     });
   } catch (error) {

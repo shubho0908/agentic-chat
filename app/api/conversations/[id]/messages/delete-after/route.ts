@@ -44,9 +44,8 @@ export async function POST(
 
     return jsonResponse({ 
       deleted: result.total,
-      deletedAfter: result.deletedAfter,
       deletedSiblings: result.deletedSiblings,
-      message: `Deleted ${result.total} message(s) (${result.deletedAfter} after, ${result.deletedSiblings} sibling versions)`
+      message: `Deleted ${result.total} sibling version(s)`
     }, HTTP_STATUS.OK);
   } catch (error) {
     return errorResponse(

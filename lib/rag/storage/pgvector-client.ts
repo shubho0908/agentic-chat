@@ -1,7 +1,16 @@
 import { Pool } from 'pg';
 import { RAGError, RAGErrorCode } from '../common/errors';
+import { getCacheTtlSeconds, getEmbeddingDimensions } from '@/lib/env';
 
 let pool: Pool | null = null;
+
+function getPgPoolMax(): number {
+  const rawValue = Number(process.env.PGVECTOR_POOL_MAX ?? 10);
+  if (!Number.isInteger(rawValue) || rawValue <= 0) {
+    return 10;
+  }
+  return Math.min(rawValue, 10);
+}
 
 export function getPgPool(): Pool {
   if (!pool) {
@@ -16,7 +25,7 @@ export function getPgPool(): Pool {
     
     pool = new Pool({
       connectionString,
-      max: 20,
+      max: getPgPoolMax(),
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });
@@ -88,23 +97,5 @@ export async function ensurePgVectorExtension(): Promise<void> {
 }
 
 export const SIMILARITY_THRESHOLD = 0.85;
-export const CACHE_TTL_SECONDS = (() => {
-  const value = Number(process.env.CACHE_TTL_SECONDS);
-  if (isNaN(value) || value <= 0) {
-    throw new RAGError(
-      'CACHE_TTL_SECONDS must be a positive number',
-      RAGErrorCode.DATABASE_CONFIG_ERROR
-    );
-  }
-  return value;
-})();
-export const EMBEDDING_DIMENSIONS = (() => {
-  const value = Number(process.env.EMBEDDING_DIMENSIONS);
-  if (isNaN(value) || !Number.isInteger(value) || value <= 0) {
-    throw new RAGError(
-      'EMBEDDING_DIMENSIONS must be a positive integer',
-      RAGErrorCode.DATABASE_CONFIG_ERROR
-    );
-  }
-  return value;
-})();
+export const CACHE_TTL_SECONDS = getCacheTtlSeconds();
+export const EMBEDDING_DIMENSIONS = getEmbeddingDimensions();

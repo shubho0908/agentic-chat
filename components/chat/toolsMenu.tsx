@@ -111,8 +111,8 @@ export function ToolsMenu({
       authorized: googleSuiteStatus?.authorized ?? false,
       loading: googleSuiteLoading,
       workspaceConnected: googleSuiteStatus?.workspaceConnected ?? false,
+      hasWorkspaceAccess: googleSuiteStatus?.hasWorkspaceAccess ?? false,
       grantedScopes: googleSuiteStatus?.grantedScopes ?? [],
-      missingScopes: googleSuiteStatus?.missingScopes ?? [],
     },
     onToolSelect: handleToolSelect,
   };

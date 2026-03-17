@@ -33,6 +33,17 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
         />
       )}
 
+      {memoryStatus.attemptedMemory && !memoryStatus.hasMemories && !memoryStatus.skippedMemory && (
+        <ContextItem
+          icon={Brain}
+          label="Memories checked"
+          treeSymbol="└─"
+          note="(no relevant match found)"
+          iconClassName="text-gray-500 dark:text-gray-400"
+          labelClassName="text-gray-600 dark:text-gray-300"
+        />
+      )}
+
       {memoryStatus.skippedMemory && !memoryStatus.hasMemories && (
         <ContextItem
           icon={Brain}

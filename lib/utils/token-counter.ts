@@ -1,14 +1,15 @@
-import { encoding_for_model, type TiktokenModel } from 'tiktoken';
+import { encoding_for_model, get_encoding, type TiktokenModel } from 'tiktoken';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type { TokenUsage } from '@/types/chat';
 import { OPENAI_MODELS } from '@/constants/openai-models';
+import { getResponseTokenReserve } from '@/lib/model-policy';
 
 const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
   OPENAI_MODELS.map(model => [model.id, model.contextWindow])
 );
 
-const IMAGE_TOKEN_COST = 1700;
-const TOKENS_PER_MESSAGE = 3;
+const IMAGE_TOKEN_COST = 850;
+const TOKENS_PER_MESSAGE = 4;
 
 const encoderCache = new Map<string, ReturnType<typeof encoding_for_model>>();
 
@@ -23,7 +24,7 @@ function getEncoder(model: string) {
 
       encoderCache.set(model, encoding_for_model(tiktokenModel as TiktokenModel));
     } catch {
-      encoderCache.set(model, encoding_for_model('gpt-4o' as TiktokenModel));
+      encoderCache.set(model, get_encoding('o200k_base'));
     }
   }
   return encoderCache.get(model)!;
@@ -32,6 +33,37 @@ function getEncoder(model: string) {
 function countTokens(text: string, model: string): number {
   const encoder = getEncoder(model);
   return encoder.encode(text).length;
+}
+
+export function countTextTokens(text: string, model: string): number {
+  return countTokens(text, model);
+}
+
+export function truncateTextToTokenLimit(
+  text: string,
+  model: string,
+  maxTokens: number,
+  suffix = '\n\n[Context truncated to fit budget.]'
+): string {
+  if (maxTokens <= 0) {
+    return '';
+  }
+
+  const encoder = getEncoder(model);
+  const encoded = encoder.encode(text);
+
+  if (encoded.length <= maxTokens) {
+    return text;
+  }
+
+  const suffixTokens = encoder.encode(suffix);
+  if (suffixTokens.length >= maxTokens) {
+    return new TextDecoder().decode(encoder.decode(suffixTokens.slice(0, maxTokens)));
+  }
+  const availableTokens = Math.max(0, maxTokens - suffixTokens.length);
+  const truncatedTokens = encoded.slice(0, availableTokens);
+  const decoded = new TextDecoder().decode(encoder.decode(truncatedTokens));
+  return `${decoded}${suffix}`;
 }
 
 function countContentTokens(
@@ -76,14 +108,17 @@ export function calculateTokenUsage(
 
   conversationTokens += 3;
   const used = conversationTokens + imageTokens;
-  const remaining = Math.max(0, limit - used);
-  const percentage = Math.min(100, (used / limit) * 100);
+  const responseReserve = getResponseTokenReserve(model);
+  const effectiveUsed = used + responseReserve;
+  const remaining = Math.max(0, limit - effectiveUsed);
+  const percentage = Math.min(100, (effectiveUsed / limit) * 100);
 
   return {
     used,
     limit,
     remaining,
     percentage,
+    responseReserve,
     breakdown: {
       conversation: conversationTokens,
       images: imageTokens,

@@ -60,6 +60,13 @@ const GOOGLE_WORKSPACE_SCOPES = [
 
 export const ALL_GOOGLE_SUITE_SCOPES = [...GOOGLE_WORKSPACE_SCOPES];
 
+export type GoogleWorkspaceScopeResolutionSource = 'direct' | 'context' | 'unknown';
+
+export interface GoogleWorkspaceScopeResolution {
+  requiredScopes: string[];
+  source: GoogleWorkspaceScopeResolutionSource;
+}
+
 const IMPLIED_SCOPE_GRANTS: Record<string, string[]> = {
   [GOOGLE_SCOPES.GMAIL_READONLY]: [GOOGLE_SCOPES.GMAIL_MODIFY],
   [GOOGLE_SCOPES.DRIVE_READONLY]: [GOOGLE_SCOPES.DRIVE],
@@ -165,17 +172,57 @@ function addDetectedGoogleWorkspaceScopes(text: string, scopes: string[]) {
   }
 }
 
-export function inferGoogleWorkspaceScopes(query: string): string[] {
-  const text = query.toLowerCase();
+function detectGoogleWorkspaceScopes(text: string): string[] {
   const scopes = [...GOOGLE_CONNECTOR_SCOPES];
 
-  addDetectedGoogleWorkspaceScopes(text, scopes);
+  addDetectedGoogleWorkspaceScopes(text.toLowerCase(), scopes);
+
+  return uniqueScopes(scopes);
+}
+
+export function inferGoogleWorkspaceScopes(query: string): string[] {
+  const text = query.toLowerCase();
+  const scopes = detectGoogleWorkspaceScopes(text);
 
   if (scopes.length === GOOGLE_CONNECTOR_SCOPES.length) {
     return [...ALL_GOOGLE_SUITE_SCOPES];
   }
 
   return uniqueScopes(scopes);
+}
+
+export function resolveGoogleWorkspaceScopesForRequest(
+  query: string,
+  recentMessages: Iterable<string> = []
+): GoogleWorkspaceScopeResolution {
+  const directScopes = detectGoogleWorkspaceScopes(query);
+
+  if (directScopes.length > GOOGLE_CONNECTOR_SCOPES.length) {
+    return {
+      requiredScopes: directScopes,
+      source: 'direct',
+    };
+  }
+
+  const recentMessagesList = Array.from(recentMessages)
+    .map((message) => message.trim())
+    .filter(Boolean);
+
+  for (let index = recentMessagesList.length - 1; index >= 0; index -= 1) {
+    const contextualScopes = detectGoogleWorkspaceScopes(`${recentMessagesList[index]} ${query}`);
+
+    if (contextualScopes.length > GOOGLE_CONNECTOR_SCOPES.length) {
+      return {
+        requiredScopes: contextualScopes,
+        source: 'context',
+      };
+    }
+  }
+
+  return {
+    requiredScopes: [...GOOGLE_CONNECTOR_SCOPES],
+    source: 'unknown',
+  };
 }
 
 // Better Auth uses 'google' as the provider ID for Google OAuth

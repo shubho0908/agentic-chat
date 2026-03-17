@@ -1,7 +1,21 @@
 import { ChatOpenAI } from '@langchain/openai';
+import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
 import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
+import { getStageModel } from '@/lib/model-policy';
+import { invokeStructuredOutput } from '../structured-output';
+
+const gateDecisionSchema = z.object({
+  shouldResearch: z.boolean(),
+  reason: z.string(),
+  confidence: z.enum(['low', 'medium', 'high']),
+});
+
+const directResponseSchema = z.object({
+  answer: z.string(),
+  confidence: z.enum(['low', 'medium', 'high']),
+});
 
 export async function gateNode(
   state: ResearchState,
@@ -11,11 +25,22 @@ export async function gateNode(
     throw new Error('Research aborted by user');
   }
   const llm = new ChatOpenAI({
-    model: config.model,
+    model: getStageModel(config.model, 'research_gate'),
     apiKey: config.openaiApiKey,
   });
 
   try {
+    if (config.forceDeepResearch) {
+      return {
+        gateDecision: {
+          shouldResearch: true,
+          reason: 'Deep research was explicitly forced by the caller',
+          confidence: 'high',
+        },
+        skipped: false,
+      };
+    }
+
     let gateQuery = state.originalQuery;
     
     if (state.hasDocuments || state.hasImages) {
@@ -30,51 +55,17 @@ export async function gateNode(
       gateQuery = `${state.originalQuery}\n\n[NOTE: User has ${attachmentInfo.join(' and ')}. Consider that referential queries about attached content may benefit from research for comprehensive analysis.]`;
     }
     
-    const response = await llm.invoke(
+    const gateDecision: GateDecision = await invokeStructuredOutput(
+      llm,
+      gateDecisionSchema,
+      'DeepResearchGateDecision',
       [
         { role: 'system', content: RESEARCH_GATE_PROMPT },
         { role: 'user', content: gateQuery },
       ],
-      { signal: config.abortSignal }
+      config.abortSignal
     );
 
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-
-    if (!rawContent.trim()) {
-      if (config.forceDeepResearch) {
-        return {
-          gateDecision: {
-            shouldResearch: false,
-            reason: 'Unable to parse gate decision, treating as generic query',
-            confidence: 'low',
-          },
-          skipped: true,
-          directResponse: {
-            answer: 'I apologize, but I had trouble understanding your query. Could you please rephrase or provide more details?',
-            confidence: 'low',
-          },
-          finalResponse: 'I apologize, but I had trouble understanding your query. Could you please rephrase or provide more details?',
-        };
-      }
-      
-      return {
-        gateDecision: {
-          shouldResearch: true,
-          reason: 'Unable to parse gate decision, defaulting to research',
-          confidence: 'low',
-        },
-        skipped: false,
-      };
-    }
-
-    const gateDecision: GateDecision = JSON.parse(rawContent);
     if (!gateDecision.shouldResearch) {
       let enrichedQuery = state.originalQuery;
       
@@ -90,32 +81,16 @@ export async function gateNode(
         }
       }
       
-      const directResponse = await llm.invoke(
+      const directLLMResponse: DirectLLMResponse = await invokeStructuredOutput(
+        llm,
+        directResponseSchema,
+        'DeepResearchDirectResponse',
         [
           { role: 'system', content: DIRECT_LLM_PROMPT },
           { role: 'user', content: enrichedQuery },
         ],
-        { signal: config.abortSignal }
+        config.abortSignal
       );
-
-      const directRawContent = Array.isArray(directResponse.content)
-        ? directResponse.content
-            .filter((part): part is { type: 'text'; text: string } => 
-              part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-            )
-            .map((part) => part.text)
-            .join('\n')
-        : String(directResponse.content ?? '');
-      
-      let directLLMResponse: DirectLLMResponse;
-      try {
-        directLLMResponse = JSON.parse(directRawContent);
-      } catch {
-        directLLMResponse = {
-          answer: directRawContent,
-          confidence: 'medium',
-        };
-      }
 
       return {
         gateDecision,

@@ -1,16 +1,25 @@
-import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type JsonValue, type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
+import { updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
 import { persistConversationMemoryIfEligible } from "./memory-persistence";
+import { fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -69,10 +78,6 @@ export async function handleRegenerateResponse(
   onMessagesUpdate(() => [...messagesUpToAssistant, updatedAssistantMessage, ...messagesAfterAssistant]);
 
   try {
-    if (conversationId && assistantMessage.id) {
-      await deleteMessagesAfter(conversationId, assistantMessage.id);
-    }
-
     const useCaching = shouldUseSemanticCache(
       messagesUpToAssistant,
       previousUserMessage.attachments,
@@ -80,7 +85,7 @@ export async function handleRegenerateResponse(
       deepResearchEnabled
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -128,7 +133,7 @@ export async function handleRegenerateResponse(
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
             status: ToolStatus.Completed,
-            result: toolResult.result,
+            result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
           
@@ -218,12 +223,32 @@ export async function handleRegenerateResponse(
       }
 
       if (conversationId && assistantMessage.id) {
-        await updateAssistantMessage(conversationId, assistantMessage.id, responseContent, messageMetadata);
-        
+        const updatedAssistant = await updateAssistantMessage(
+          conversationId,
+          assistantMessage.id,
+          responseContent,
+          messageMetadata
+        );
+        const parentId = updatedAssistant.parentMessageId || updatedAssistant.id;
+        let versions: Message[] = [];
+
+        try {
+          versions = await fetchMessageVersions(conversationId, parentId);
+        } catch (versionError) {
+          console.warn('Failed to fetch message versions after regeneration:', versionError);
+        }
+
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
-              ? { ...msg, metadata: messageMetadata }
+              ? updateMessageWithVersions(
+                  {
+                    ...msg,
+                    metadata: messageMetadata,
+                  },
+                  updatedAssistant.id,
+                  versions
+                )
               : msg
           )
         );

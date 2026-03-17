@@ -13,13 +13,17 @@ import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
-import { calculateTokenUsage } from '@/lib/utils/token-counter';
+import { createRequestId, logError, logWarn } from '@/lib/observability';
+import { validateRequestedModel } from '@/lib/model-policy';
+import { withRetry } from '@/lib/retry';
+import { checkTokenBudget } from '@/lib/chat/token-budget';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for deep research & google suite tools
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId('chat');
   try {
     const { user: authUser, error } = await getAuthenticatedUser(await headers());
     if (error) {
@@ -42,6 +46,10 @@ export async function POST(request: NextRequest) {
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
+    const validatedModel = validateRequestedModel(model);
+    if (!validatedModel) {
+      return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
 
     const validation = validateChatMessages(messages);
     if (!validation.valid) {
@@ -51,6 +59,7 @@ export async function POST(request: NextRequest) {
     let enhancedMessages = messages;
     let memoryStatusInfo: MemoryStatus = { 
       hasMemories: false, 
+      attemptedMemory: false,
       hasDocuments: false, 
       memoryCount: 0, 
       documentCount: 0,
@@ -84,24 +93,56 @@ export async function POST(request: NextRequest) {
           activeTool,
           memoryEnabled,
           deepResearchEnabled,
-          model,
+          model: validatedModel,
         }
       );
 
       memoryStatusInfo = contextResult.metadata;
 
       if (contextResult.context) {
-        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context);
+        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
       }
     } catch (error) {
       console.error('[Context Routing Error]', error);
+      memoryStatusInfo.degradedContexts = [
+        ...(memoryStatusInfo.degradedContexts || []),
+        {
+          source: 'context_router',
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      ];
     }
 
     try {
-      const tokenUsage = calculateTokenUsage(enhancedMessages, model);
-      memoryStatusInfo.tokenUsage = tokenUsage;
+      const budgetCheck = checkTokenBudget(enhancedMessages, validatedModel);
+      memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
+      if (!budgetCheck.ok) {
+        logWarn({
+          event: 'chat_request_rejected_budget',
+          requestId,
+          model: validatedModel,
+          usedTokens: budgetCheck.tokenUsage.used,
+          limit: budgetCheck.tokenUsage.limit,
+          reserve: budgetCheck.tokenUsage.responseReserve,
+        });
+        return errorResponse(
+          budgetCheck.errorMessage ?? 'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
     } catch (error) {
-      console.error('[Token Counting Error]', error);
+      logError({
+        event: 'token_count_failed',
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      memoryStatusInfo.tokenUsage = undefined;
+      return errorResponse(
+        'Unable to validate request size. Please try again.',
+        undefined,
+        HTTP_STATUS.BAD_REQUEST
+      );
     }
 
     const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
@@ -114,7 +155,7 @@ export async function POST(request: NextRequest) {
         messages,
         activeTool,
         enhancedMessages,
-        model,
+        model: validatedModel,
         openai,
         apiKey,
         deepResearchEnabled,
@@ -122,6 +163,7 @@ export async function POST(request: NextRequest) {
         userId: authUser.id,
         conversationId,
         searchDepth,
+        requestId,
       });
       const readableStream = new ReadableStream({
         ...streamHandler,
@@ -141,11 +183,26 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      const completion = await openai.chat.completions.create({
-        model,
-        messages: enhancedMessages,
-        stream: false,
-      });
+      if (activeTool || deepResearchEnabled) {
+        return errorResponse(
+          'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      const completion = await withRetry(
+        () =>
+          openai.chat.completions.create(
+            {
+              model: validatedModel,
+              messages: enhancedMessages,
+              stream: false,
+            },
+            { signal: request.signal }
+          ),
+        { signal: request.signal }
+      );
 
       return new Response(
         JSON.stringify(completion),
@@ -153,6 +210,11 @@ export async function POST(request: NextRequest) {
       );
     }
   } catch (error) {
+    logError({
+      event: 'chat_route_failed',
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     const { message, statusCode } = parseOpenAIError(error);
     return errorResponse(message, undefined, statusCode);
   }

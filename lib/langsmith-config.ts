@@ -4,7 +4,7 @@ import { traceable } from 'langsmith/traceable';
 import type OpenAI from 'openai';
 
 const LANGSMITH_CONFIG = {
-  tracing: process.env.LANGSMITH_TRACING === 'true',
+  tracing: process.env.LANGSMITH_TRACING !== 'false',
   endpoint: process.env.LANGSMITH_ENDPOINT,
   apiKey: process.env.LANGSMITH_API_KEY,
   project: process.env.LANGSMITH_PROJECT,
@@ -12,7 +12,6 @@ const LANGSMITH_CONFIG = {
 
 function initializeLangSmith(): void {
   if (!LANGSMITH_CONFIG.tracing || !LANGSMITH_CONFIG.apiKey) {
-    console.error('[LangSmith] Tracing disabled or API key not configured');
     return;
   }
 

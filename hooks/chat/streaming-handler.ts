@@ -1,4 +1,4 @@
-import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "@/types/chat";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
@@ -37,6 +37,14 @@ interface StreamingResult {
   success: boolean;
   error?: string;
   assistantMessageId?: string;
+}
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
 function extractMetadataFromProgress(
@@ -182,7 +190,7 @@ export async function handleStreamingResponse(
 	      return { success: true, assistantMessageId };
 	    }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -269,7 +277,7 @@ export async function handleStreamingResponse(
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
             status: ToolStatus.Completed,
-            result: toolResult.result,
+            result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
 

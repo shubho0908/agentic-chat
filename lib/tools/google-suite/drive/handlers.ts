@@ -13,6 +13,8 @@ export async function handleDriveSearch(
     q: args.query,
     pageSize: args.maxResults || 10,
     fields: 'files(id, name, mimeType, createdTime, modifiedTime, size, webViewLink)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   if (!response.data.files || response.data.files.length === 0) {
@@ -43,6 +45,8 @@ export async function handleDriveListFolder(
       q: `name='${escapedFolderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       pageSize: 5,
       fields: 'files(id, name, webViewLink)',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
     });
     
     if (!searchResponse.data.files || searchResponse.data.files.length === 0) {
@@ -68,6 +72,8 @@ export async function handleDriveListFolder(
     pageSize: args.maxResults || 50,
     orderBy: 'folder,name',
     fields: 'files(id, name, mimeType, createdTime, modifiedTime, size, webViewLink, owners)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   if (!response.data.files || response.data.files.length === 0) {
@@ -161,6 +167,7 @@ export async function handleDriveCreateFile(
       body: args.content,
     },
     fields: 'id, name, webViewLink',
+    supportsAllDrives: true,
   });
 
   return `File created successfully!
@@ -187,6 +194,7 @@ export async function handleDriveCreateFolder(
   const response = await drive.files.create({
     requestBody: fileMetadata,
     fields: 'id, name, webViewLink',
+    supportsAllDrives: true,
   });
 
   return `Folder created successfully!
@@ -206,6 +214,7 @@ export async function handleDriveDelete(
       drive.files.update({
         fileId,
         requestBody: { trashed: true },
+        supportsAllDrives: true,
       })
     )
   );
@@ -222,6 +231,7 @@ export async function handleDriveMove(
   const file = await drive.files.get({
     fileId: args.fileId,
     fields: 'parents, name',
+    supportsAllDrives: true,
   });
 
   const previousParents = file.data.parents?.join(',') || '';
@@ -267,6 +277,7 @@ export async function handleDriveCopy(
     fileId: args.fileId,
     requestBody,
     fields: 'id, name, webViewLink',
+    supportsAllDrives: true,
   });
 
   return `File copied successfully!
@@ -285,6 +296,7 @@ export async function handleDriveShare(
     await drive.permissions.create({
       fileId: args.fileId,
       sendNotificationEmail: args.sendNotification ?? true,
+      supportsAllDrives: true,
       requestBody: {
         type: 'user',
         role: args.role || 'reader',
@@ -296,6 +308,7 @@ export async function handleDriveShare(
   } else {
     await drive.permissions.create({
       fileId: args.fileId,
+      supportsAllDrives: true,
       requestBody: {
         type: 'anyone',
         role: args.role || 'reader',
@@ -305,6 +318,7 @@ export async function handleDriveShare(
     const file = await drive.files.get({
       fileId: args.fileId,
       fields: 'webViewLink',
+      supportsAllDrives: true,
     });
 
     return `Successfully made public (${args.role || 'reader'} access).

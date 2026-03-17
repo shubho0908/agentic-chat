@@ -2,6 +2,12 @@ import { createResearchGraph } from './graph';
 import type { ResearchState } from './state';
 import type { DeepResearchProgress, WebSearchSource } from '@/types/tools';
 import type { Citation, GateDecision } from '@/types/deep-research';
+import { DEEP_RESEARCH_MAX_ATTEMPTS } from './constants';
+import {
+  createDeepResearchRun,
+  saveDeepResearchCheckpoint,
+  finishDeepResearchRun,
+} from '@/lib/orchestration/store';
 
 interface DeepResearchInput {
   query: string;
@@ -15,6 +21,7 @@ interface DeepResearchInput {
   attachmentIds?: string[];
   imageContext?: string;
   documentContextForPlanning?: string;
+  requestId?: string;
 }
 
 interface DeepResearchResult {
@@ -30,7 +37,7 @@ interface DeepResearchResult {
 export async function executeDeepResearch(
   input: DeepResearchInput
 ): Promise<DeepResearchResult> {
-  const { query, openaiApiKey, model, onProgress, forceDeepResearch = false, abortSignal, userId, conversationId, attachmentIds, imageContext, documentContextForPlanning } = input;
+  const { query, openaiApiKey, model, onProgress, forceDeepResearch = false, abortSignal, userId, conversationId, attachmentIds, imageContext, documentContextForPlanning, requestId } = input;
 
   onProgress?.({
     status: 'gate_check',
@@ -91,6 +98,12 @@ export async function executeDeepResearch(
   };
 
   let finalState = null as ResearchState | null;
+  const runId = await createDeepResearchRun({
+    userId,
+    conversationId,
+    query,
+    requestId,
+  });
 
   type NodeHandler = (state: Partial<ResearchState>) => void;
   
@@ -191,7 +204,6 @@ export async function executeDeepResearch(
       if (!state.evaluationResult) return;
       
       const attempt = state.currentAttempt || 1;
-      const MAX_ATTEMPTS = 2;
       
       if (state.evaluationResult.meetsStandards) {
         onProgress?.({
@@ -206,14 +218,14 @@ export async function executeDeepResearch(
             currentTaskIndex: state.currentTaskIndex,
           },
         });
-      } else if (attempt < MAX_ATTEMPTS) {
+      } else if (attempt < DEEP_RESEARCH_MAX_ATTEMPTS) {
         onProgress?.({
           status: 'retrying',
-          message: `Quality below standards - retrying (attempt ${attempt + 1}/${MAX_ATTEMPTS})`,
+          message: `Quality below standards - retrying (attempt ${attempt + 1}/${DEEP_RESEARCH_MAX_ATTEMPTS})`,
           details: {
             evaluationResult: state.evaluationResult,
             currentAttempt: attempt,
-            maxAttempts: MAX_ATTEMPTS,
+            maxAttempts: DEEP_RESEARCH_MAX_ATTEMPTS,
             strictnessLevel: state.strictnessLevel,
             researchPlan: state.researchPlan,
             completedTasks: state.completedTasks,
@@ -263,6 +275,19 @@ export async function executeDeepResearch(
       if (handler) {
         handler(state);
       }
+
+      if (runId) {
+        try {
+          await saveDeepResearchCheckpoint({
+            runId,
+            node: nodeKey,
+            state,
+            requestId,
+          });
+        } catch (checkpointError) {
+          console.error('[Deep Research] Failed to persist checkpoint:', checkpointError);
+        }
+      }
     }
 
     if (!finalState || !finalState.finalResponse) {
@@ -288,6 +313,23 @@ export async function executeDeepResearch(
       },
     });
 
+    if (runId) {
+      try {
+        await finishDeepResearchRun({
+          runId,
+          status: finalState.skipped ? 'completed' : 'completed',
+          result: {
+            skipped: finalState.skipped,
+            citations: finalState.citations || [],
+            followUpQuestions: finalState.followUpQuestions || [],
+          },
+          requestId,
+        });
+      } catch (finishError) {
+        console.error('[Deep Research] Failed to finalize successful run:', finishError);
+      }
+    }
+
     return {
       response: finalState.finalResponse,
       sources: allSources,
@@ -299,6 +341,19 @@ export async function executeDeepResearch(
 
   } catch (error) {
     console.error('[Deep Research] Error:', error);
+
+    if (runId) {
+      try {
+        await finishDeepResearchRun({
+          runId,
+          status: abortSignal?.aborted ? 'aborted' : 'failed',
+          error: error instanceof Error ? error.message : String(error),
+          requestId,
+        });
+      } catch (finishError) {
+        console.error('[Deep Research] Failed to finalize failed run:', finishError);
+      }
+    }
     
     if (error instanceof Error && error.message.includes('aborted')) {
       throw error;

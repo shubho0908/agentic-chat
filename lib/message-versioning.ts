@@ -35,7 +35,7 @@ export async function getMessageVersions(
 export async function deleteMessagesAfter(conversationId: string, messageId: string) {
   const targetMessage = await prisma.message.findFirst({
     where: { id: messageId, isDeleted: false, conversationId },
-    select: { createdAt: true, parentMessageId: true, siblingIndex: true }
+    select: { parentMessageId: true, siblingIndex: true }
   });
 
   if (!targetMessage) {
@@ -44,42 +44,28 @@ export async function deleteMessagesAfter(conversationId: string, messageId: str
 
   const now = new Date();
 
-  const [deleteAfterResult, deleteSiblingsResult] = await prisma.$transaction([
-    prisma.message.updateMany({
-      where: {
-        conversationId,
-        createdAt: { gt: targetMessage.createdAt },
-        isDeleted: false
-      },
-      data: {
-        isDeleted: true,
-        deletedAt: now
-      }
-    }),
-    prisma.message.updateMany({
-      where: targetMessage.parentMessageId
-        ? {
-            conversationId,
-            parentMessageId: targetMessage.parentMessageId,
-            siblingIndex: { gt: targetMessage.siblingIndex },
-            isDeleted: false
-          }
-        : {
-            conversationId,
-            parentMessageId: messageId,
-            isDeleted: false
-          },
-      data: {
-        isDeleted: true,
-        deletedAt: now
-      }
-    })
-  ]);
+  const deleteSiblingsResult = await prisma.message.updateMany({
+    where: targetMessage.parentMessageId
+      ? {
+          conversationId,
+          parentMessageId: targetMessage.parentMessageId,
+          siblingIndex: { gt: targetMessage.siblingIndex },
+          isDeleted: false
+        }
+      : {
+          conversationId,
+          parentMessageId: messageId,
+          isDeleted: false
+        },
+    data: {
+      isDeleted: true,
+      deletedAt: now
+    }
+  });
 
   return {
-    deletedAfter: deleteAfterResult.count,
     deletedSiblings: deleteSiblingsResult.count,
-    total: deleteAfterResult.count + deleteSiblingsResult.count
+    total: deleteSiblingsResult.count
   };
 }
 

@@ -16,6 +16,12 @@ interface CacheSaveResult {
   error?: string;
 }
 
+const MIN_CACHEABLE_QUERY_LENGTH = 80;
+
+function shouldUseSemanticCache(query: string): boolean {
+  return query.trim().length >= MIN_CACHEABLE_QUERY_LENGTH;
+}
+
 export async function checkSemanticCacheAction(query: string): Promise<CacheCheckResult> {
   const startTime = Date.now();
 
@@ -34,6 +40,13 @@ export async function checkSemanticCacheAction(query: string): Promise<CacheChec
         cached: false,
         error: 'Query is required',
         latency: Date.now() - startTime
+      };
+    }
+
+    if (!shouldUseSemanticCache(query)) {
+      return {
+        cached: false,
+        latency: Date.now() - startTime,
       };
     }
 
@@ -80,6 +93,9 @@ export async function saveToSemanticCacheAction(
     }
     if (!response || response.trim().length === 0) {
       return { success: false, error: 'Response is required' };
+    }
+    if (!shouldUseSemanticCache(query)) {
+      return { success: true };
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);

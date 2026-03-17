@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
-import { ImageOff, AlertCircle, Loader } from "lucide-react";
+import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
+import { useTheme } from "next-themes";
 import { ImageLightbox } from "./imageLightbox";
+import { getImageModalTheme } from "./imageModalTheme";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -18,6 +20,8 @@ interface SearchImagesProps {
   maxDisplay?: number;
 }
 
+type ImageStatus = "loaded" | "error";
+
 interface ImageCardProps {
   image: SearchImage;
   index: number;
@@ -25,40 +29,58 @@ interface ImageCardProps {
   showOverlay?: React.ReactNode;
   showDescription?: boolean;
   sizes?: string;
+  onStatusChange?: (url: string, status: ImageStatus) => void;
+  className?: string;
+  contentClassName?: string;
 }
 
 function getSearchImageKey(image: SearchImage) {
   return `${image.url}::${image.description ?? ""}`;
 }
 
-function ImageCard({ image, index, onClick, showOverlay, showDescription = true, sizes = "(max-width: 640px) 50vw, 25vw" }: ImageCardProps) {
+function ImageCard({
+  image,
+  index,
+  onClick,
+  showOverlay,
+  showDescription = true,
+  sizes = "(max-width: 640px) 50vw, 25vw",
+  onStatusChange,
+  className,
+  contentClassName,
+}: ImageCardProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const isOverflowTile = showOverlay !== undefined;
 
   const handleImageError = useCallback(() => {
     setHasError(true);
     setIsLoading(false);
-  }, []);
+    onStatusChange?.(image.url, "error");
+  }, [image.url, onStatusChange]);
 
   const handleImageLoad = useCallback(() => {
     setIsLoading(false);
-  }, []);
+    onStatusChange?.(image.url, "loaded");
+  }, [image.url, onStatusChange]);
 
   const handleClick = useCallback(() => {
-    if (!isLoading && !hasError) {
+    if (isOverflowTile || (!isLoading && !hasError)) {
       onClick();
     }
-  }, [isLoading, hasError, onClick]);
+  }, [hasError, isLoading, isOverflowTile, onClick]);
 
   return (
     <button
       type="button"
-      className={`group relative aspect-video rounded-lg overflow-hidden border border-border/60 bg-muted/30 transition-all duration-200 ease-out ${
-        !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]' : 'cursor-default'
-      }`}
+      className={`group relative aspect-video overflow-hidden rounded-lg border border-border/60 bg-muted/30 transition-all duration-200 ease-out ${
+        isOverflowTile || (!isLoading && !hasError)
+          ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]'
+          : 'cursor-default'
+      } ${className ?? ""}`}
       onClick={handleClick}
-      disabled={isLoading || hasError}
-      aria-label={image.description || `Open search result image ${index + 1}`}
+      disabled={!isOverflowTile && (isLoading || hasError)}
+      aria-label={isOverflowTile ? "Show all images" : image.description || `Open search result image ${index + 1}`}
     >
       {!hasError ? (
         <>
@@ -66,9 +88,10 @@ function ImageCard({ image, index, onClick, showOverlay, showDescription = true,
             src={image.url}
             alt={image.description || `Search result ${index + 1}`}
             fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            className={`absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-105 ${contentClassName ?? ""}`}
             sizes={sizes}
             unoptimized
+            referrerPolicy="no-referrer"
             onError={handleImageError}
             onLoad={handleImageLoad}
           />
@@ -119,11 +142,37 @@ function ImageCard({ image, index, onClick, showOverlay, showDescription = true,
 export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
   const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null);
   const [showAllImages, setShowAllImages] = useState(false);
+  const [pendingSelection, setPendingSelection] = useState<{ url: string; alt: string } | null>(null);
+  const [imageStatuses, setImageStatuses] = useState<Record<string, ImageStatus>>({});
   const isMobile = useIsMobile();
+  const { resolvedTheme } = useTheme();
+  const modalTheme = getImageModalTheme(resolvedTheme);
+  const mobilePanelClass = isMobile ? modalTheme.mobilePanel : modalTheme.panel;
+
+  const handleImageStatusChange = useCallback((url: string, status: ImageStatus) => {
+    setImageStatuses((current) => {
+      if (current[url] === status) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [url]: status,
+      };
+    });
+  }, []);
 
   const handleImageSelect = useCallback((url: string, description?: string) => {
-    setSelectedImage({ url, alt: description || "Search result image" });
-  }, []);
+    const nextSelection = { url, alt: description || "Search result image" };
+
+    if (showAllImages) {
+      setPendingSelection(nextSelection);
+      setShowAllImages(false);
+      return;
+    }
+
+    setSelectedImage(nextSelection);
+  }, [showAllImages]);
 
   const handleShowAll = useCallback(() => {
     setShowAllImages(true);
@@ -133,84 +182,179 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
     setSelectedImage(null);
   }, []);
 
+  useEffect(() => {
+    if (!showAllImages && pendingSelection) {
+      setSelectedImage(pendingSelection);
+      setPendingSelection(null);
+    }
+  }, [showAllImages, pendingSelection]);
+
   if (!images?.length) {
     return null;
   }
 
-  const displayImages = images.slice(0, maxDisplay);
-  const remainingCount = images.length - maxDisplay;
+  const availableImages = images.filter((image) => imageStatuses[image.url] !== "error");
+  const failedCount = images.length - availableImages.length;
+  const visibleImages = availableImages;
+  const hasAvailableImages = visibleImages.length > 0;
+  const displayImages = visibleImages.slice(0, maxDisplay);
+  const remainingCount = Math.max(visibleImages.length - maxDisplay, 0);
   const hasMoreImages = remainingCount > 0;
 
   return (
     <>
-      <div className="not-prose my-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          {displayImages.map((image, index) => {
-            const isLastImage = index === maxDisplay - 1;
-            const shouldShowOverlay = isLastImage && hasMoreImages;
-            
-            return (
-              <ImageCard
-                key={getSearchImageKey(image)}
-                image={image}
-                index={index}
-                onClick={() => shouldShowOverlay ? handleShowAll() : handleImageSelect(image.url, image.description)}
-                showDescription={!shouldShowOverlay}
-                showOverlay={
-                  shouldShowOverlay ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                      <span className="text-white text-lg font-semibold">
-                        +{remainingCount}
-                      </span>
-                    </div>
-                  ) : undefined
-                }
-              />
-            );
-          })}
-        </div>
+      <div className="not-prose my-4 w-full max-w-full self-stretch">
+        {hasAvailableImages ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            {displayImages.map((image, index) => {
+              const isLastImage = index === maxDisplay - 1;
+              const shouldShowOverlay = isLastImage && hasMoreImages;
+
+              return (
+                <ImageCard
+                  key={getSearchImageKey(image)}
+                  image={image}
+                  index={index}
+                  onClick={() => shouldShowOverlay ? handleShowAll() : handleImageSelect(image.url, image.description)}
+                  showDescription={!shouldShowOverlay}
+                  onStatusChange={handleImageStatusChange}
+                  showOverlay={
+                    shouldShowOverlay ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <span className="text-white text-lg font-semibold">
+                          +{remainingCount}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div className={`flex min-h-[180px] items-center justify-center rounded-2xl border border-dashed ${modalTheme.emptyState}`}>
+            <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
+              Search results returned image links, but none of them are loading reliably right now.
+            </p>
+          </div>
+        )}
         
         <p className="text-xs text-muted-foreground mt-2">
-          {images.length} {images.length === 1 ? 'image' : 'images'} from search results
+          {visibleImages.length} {visibleImages.length === 1 ? 'image' : 'images'} from search results
+          {failedCount > 0 ? ` • ${failedCount} unavailable hidden as they fail to load` : ""}
         </p>
       </div>
 
       {isMobile ? (
-        <Drawer open={showAllImages} onOpenChange={setShowAllImages}>
-          <DrawerContent className="max-h-[90vh]">
-            <DrawerTitle className="text-center py-4">
-              All Images ({images.length})
-            </DrawerTitle>
-            <div className="overflow-y-auto pb-4">
-              <div className="grid grid-cols-2 gap-4 px-4">
-                {images.map((image, index) => (
-                  <ImageCard
-                    key={getSearchImageKey(image)}
-                    image={image}
-                    index={index}
-                    onClick={() => handleImageSelect(image.url, image.description)}
-                    sizes="50vw"
-                  />
-                ))}
+        <Drawer open={showAllImages} onOpenChange={setShowAllImages} shouldScaleBackground={false}>
+          <DrawerContent
+            variant="bare"
+            showHandle={false}
+            className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+          >
+            <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-t-[28px] border border-b-0 ${mobilePanelClass}`}>
+              <div className="relative rounded-t-[inherit] px-4 py-3">
+                <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b ${modalTheme.border}`} />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <DrawerTitle className={`mt-1 text-left text-xl font-semibold ${modalTheme.title}`}>
+                      All Images
+                    </DrawerTitle>
+                    <p className={`mt-1 text-sm ${modalTheme.mutedText}`}>
+                      {visibleImages.length} results
+                      {failedCount > 0 ? ` • ${failedCount} unavailable hidden` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllImages(false)}
+                    className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 ${modalTheme.closeButton}`}
+                    aria-label="Close all images"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                {hasAvailableImages ? (
+                  <div className="grid grid-cols-2 gap-3 p-3">
+                    {visibleImages.map((image, index) => (
+                      <ImageCard
+                        key={getSearchImageKey(image)}
+                        image={image}
+                        index={index}
+                        onClick={() => handleImageSelect(image.url, image.description)}
+                        sizes="50vw"
+                        onStatusChange={handleImageStatusChange}
+                        className={`aspect-[4/5] rounded-2xl ${modalTheme.galleryCard}`}
+                        contentClassName="group-hover:scale-[1.03]"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`m-3 flex min-h-[220px] items-center justify-center rounded-3xl border border-dashed ${modalTheme.emptyState}`}>
+                    <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
+                      Search results returned image links, but none of them are loading reliably right now.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </DrawerContent>
         </Drawer>
       ) : (
         <Dialog open={showAllImages} onOpenChange={setShowAllImages}>
-          <DialogContent className="max-h-[70vh] overflow-hidden flex flex-col p-6">
-            <DialogTitle>All Images ({images.length})</DialogTitle>
-            <div className="overflow-y-auto flex-1 -mx-2">
-              <div className="grid grid-cols-2 gap-4 px-2">
-                {images.map((image, index) => (
-                  <ImageCard
-                    key={getSearchImageKey(image)}
-                    image={image}
-                    index={index}
-                    onClick={() => handleImageSelect(image.url, image.description)}
-                    sizes="(max-width: 1024px) 33vw, 25vw"
-                  />
-                ))}
+          <DialogContent
+            variant="bare"
+            className="max-h-[92vh] w-[min(96vw,1240px)] max-w-[96vw] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+            showCloseButton={false}
+          >
+            <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border ${modalTheme.panel}`}>
+              <div className="relative rounded-t-[inherit] px-4 py-3 sm:px-5">
+                <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b sm:inset-x-5 ${modalTheme.border}`} />
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <DialogTitle className={`mt-1 text-2xl font-semibold ${modalTheme.title}`}>
+                      All Images
+                    </DialogTitle>
+                    <p className={`mt-1 text-sm ${modalTheme.mutedText}`}>
+                      {visibleImages.length} results
+                      {failedCount > 0 ? ` • ${failedCount} unavailable hidden` : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllImages(false)}
+                    className={`inline-flex size-10 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 ${modalTheme.closeButton}`}
+                    aria-label="Close all images"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                {hasAvailableImages ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {visibleImages.map((image, index) => (
+                      <ImageCard
+                        key={getSearchImageKey(image)}
+                        image={image}
+                        index={index}
+                        onClick={() => handleImageSelect(image.url, image.description)}
+                        sizes="(max-width: 768px) 90vw, (max-width: 1280px) 42vw, 30vw"
+                        onStatusChange={handleImageStatusChange}
+                        className={`aspect-[16/10] rounded-[22px] ${modalTheme.galleryCard}`}
+                        contentClassName="group-hover:scale-[1.03]"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`flex min-h-[280px] items-center justify-center rounded-3xl border border-dashed ${modalTheme.emptyState}`}>
+                    <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
+                      Search results returned image links, but none of them are loading reliably right now.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </DialogContent>

@@ -7,7 +7,6 @@ Visual walkthroughs showcasing the key capabilities of Agentic Chat.
 | Feature | Description
 |---------|-------------|
 | [Web Search](#web-search) | Real-time internet search with AI planning |
-| [YouTube Analysis](#youtube-analysis) | Transcript extraction & video intelligence |
 | [RAG Document Intelligence](#rag-document-intelligence) | Multi-format document processing with semantic search |
 | [Deep Research](#deep-research) | Autonomous multi-step research workflows |
 | [URL Scraping](#url-scraping) | Automatic web page content extraction |
@@ -26,29 +25,6 @@ Real-time internet search powered by Tavily API with intelligent query planning.
 - Source deduplication and relevance scoring
 
 https://github.com/user-attachments/assets/062a477c-f577-4ca6-ad3c-c3a1aafa60da
-
----
-
-## YouTube Analysis
-
-Extract transcripts, parse chapters, and analyze video content.
-
-**Key Features:**
-- Multi-language transcript extraction
-- Automatic chapter parsing from descriptions
-- Video search and batch processing
-- Metadata enrichment via YouTube Data API
-
-**Demos:**
-- Search and analyze videos
-  
-https://github.com/user-attachments/assets/60163e7e-f414-4295-9d00-302418b3757e
-
-
-- Transcript extraction & analysis
-
-https://github.com/user-attachments/assets/151f3774-c3bb-45cc-80c7-a57eeb526390
-
 
 ---
 
