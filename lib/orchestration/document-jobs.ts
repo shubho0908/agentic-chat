@@ -1,15 +1,21 @@
-import { processDocument } from '@/lib/rag/indexing/processor';
+import { processDocument } from "@/lib/rag/indexing/processor";
 import {
   claimNextQueuedJobWithinCapacity,
   enqueueOrStartJobWithinCapacity,
   heartbeatOrchestrationJobLease,
   resolveOrchestrationJobRun,
-} from './store';
+} from "./store";
 import {
   DEFAULT_JOB_MAX_ATTEMPTS,
   isRetryableDocumentError,
-} from './retry-policy';
-import { logError, logInfo, logMetric, logWarn, measureLatencyMs } from '@/lib/observability';
+} from "./retry-policy";
+import {
+  logError,
+  logInfo,
+  logMetric,
+  logWarn,
+  measureLatencyMs,
+} from "@/lib/observability";
 
 const MAX_CONCURRENT_DOCUMENT_JOBS = 3;
 const DOCUMENT_JOB_LEASE_MS = 15 * 60 * 1000;
@@ -42,43 +48,45 @@ interface RunClaimedDocumentJobResult {
 }
 
 function clampDrainBatchSize(maxJobs: number | undefined): number {
-  const safeValue = Number.isFinite(maxJobs) ? Number(maxJobs) : DEFAULT_DRAIN_BATCH_SIZE;
+  const safeValue = Number.isFinite(maxJobs)
+    ? Number(maxJobs)
+    : DEFAULT_DRAIN_BATCH_SIZE;
   const normalized = Math.max(1, Math.floor(safeValue));
   return Math.min(normalized, MAX_DRAIN_BATCH_SIZE);
 }
 
 function extractAttachmentId(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') {
+  if (!payload || typeof payload !== "object") {
     return null;
   }
 
   const value = (payload as { attachmentId?: unknown }).attachmentId;
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 async function runClaimedDocumentJob(
   job: ClaimedDocumentJob,
-  leaseOwner: string
+  leaseOwner: string,
 ): Promise<RunClaimedDocumentJobResult> {
   const runStartedAt = Date.now();
   const attachmentId = extractAttachmentId(job.payload);
   if (!attachmentId) {
     logError({
-      event: 'document_job_invalid_payload',
+      event: "document_job_invalid_payload",
       jobId: job.id,
       userId: job.userId,
-      error: 'Missing attachmentId payload',
+      error: "Missing attachmentId payload",
     });
     await resolveOrchestrationJobRun({
       jobId: job.id,
       succeeded: false,
-      error: 'Missing attachmentId payload',
+      error: "Missing attachmentId payload",
       retryable: false,
     });
     return {
       success: false,
       retried: false,
-      error: 'Missing attachmentId payload',
+      error: "Missing attachmentId payload",
     };
   }
 
@@ -89,7 +97,7 @@ async function runClaimedDocumentJob(
       leaseMs: DOCUMENT_JOB_LEASE_MS,
     }).catch((error) => {
       logWarn({
-        event: 'document_job_lease_heartbeat_failed',
+        event: "document_job_lease_heartbeat_failed",
         jobId: job.id,
         userId: job.userId,
         attachmentId,
@@ -111,9 +119,9 @@ async function runClaimedDocumentJob(
     });
 
     logMetric({
-      metric: 'document_job_run_latency_ms',
+      metric: "document_job_run_latency_ms",
       value: measureLatencyMs(runStartedAt),
-      unit: 'ms',
+      unit: "ms",
       userId: job.userId,
       jobId: job.id,
       attachmentId,
@@ -137,9 +145,9 @@ async function runClaimedDocumentJob(
     });
 
     logMetric({
-      metric: 'document_job_run_latency_ms',
+      metric: "document_job_run_latency_ms",
       value: measureLatencyMs(runStartedAt),
-      unit: 'ms',
+      unit: "ms",
       userId: job.userId,
       jobId: job.id,
       attachmentId,
@@ -166,7 +174,7 @@ export async function drainQueuedDocumentJobs(options?: {
   const baseLeaseOwner =
     options?.leaseOwner && options.leaseOwner.length > 0
       ? options.leaseOwner
-      : 'document-job-drain';
+      : "document-job-drain";
 
   const summary: DrainQueuedDocumentJobsResult = {
     processed: 0,
@@ -179,7 +187,7 @@ export async function drainQueuedDocumentJobs(options?: {
   for (let index = 0; index < maxJobs; index += 1) {
     const leaseOwner = `${baseLeaseOwner}-${Date.now()}-${index}`;
     const claimed = await claimNextQueuedJobWithinCapacity({
-      type: 'document_process',
+      type: "document_process",
       maxRunning: MAX_CONCURRENT_DOCUMENT_JOBS,
       leaseOwner,
       leaseMs: DOCUMENT_JOB_LEASE_MS,
@@ -200,7 +208,7 @@ export async function drainQueuedDocumentJobs(options?: {
         userId: claimed.job.userId,
         payload: claimed.job.payload,
       },
-      leaseOwner
+      leaseOwner,
     );
 
     summary.processed += 1;
@@ -214,15 +222,15 @@ export async function drainQueuedDocumentJobs(options?: {
   }
 
   logInfo({
-    event: 'document_job_drain_finished',
+    event: "document_job_drain_finished",
     maxJobs,
     ...summary,
     latencyMs: measureLatencyMs(drainStartedAt),
   });
   logMetric({
-    metric: 'document_job_drain_latency_ms',
+    metric: "document_job_drain_latency_ms",
     value: measureLatencyMs(drainStartedAt),
-    unit: 'ms',
+    unit: "ms",
     maxJobs,
     processed: summary.processed,
     completed: summary.completed,
@@ -236,7 +244,7 @@ export async function drainQueuedDocumentJobs(options?: {
 
 export async function runOrQueueDocumentProcessingJob(
   attachmentId: string,
-  userId: string
+  userId: string,
 ): Promise<{
   jobId: string;
   queued: boolean;
@@ -249,7 +257,7 @@ export async function runOrQueueDocumentProcessingJob(
 }> {
   const leaseOwner = `attachment_${attachmentId}`;
   const reservation = await enqueueOrStartJobWithinCapacity({
-    type: 'document_process',
+    type: "document_process",
     userId,
     payload: { attachmentId },
     dedupeKey: attachmentId,
@@ -261,11 +269,11 @@ export async function runOrQueueDocumentProcessingJob(
   const { job, started } = reservation;
 
   if (!job) {
-    throw new Error('Document processing job reservation failed');
+    throw new Error("Document processing job reservation failed");
   }
 
   logInfo({
-    event: 'document_job_reserved',
+    event: "document_job_reserved",
     jobId: job.id,
     userId,
     attachmentId,
@@ -275,11 +283,17 @@ export async function runOrQueueDocumentProcessingJob(
   });
 
   if (!started) {
-    const queued = job.status === 'queued' || job.status === 'running';
+    const queued = job.status === "queued" || job.status === "running";
+
+    await drainQueuedDocumentJobs({
+      maxJobs: DEFAULT_DRAIN_BATCH_SIZE,
+      leaseOwner: `document-job-drain-${Date.now()}`,
+    });
+
     return {
       jobId: job.id,
       queued,
-      success: job.status === 'completed',
+      success: job.status === "completed",
       error: job.error ?? undefined,
     };
   }
@@ -290,12 +304,12 @@ export async function runOrQueueDocumentProcessingJob(
       userId,
       payload: { attachmentId },
     },
-    leaseOwner
+    leaseOwner,
   );
 
   await drainQueuedDocumentJobs({
     maxJobs: DEFAULT_DRAIN_BATCH_SIZE,
-    leaseOwner: 'document-job-drain',
+    leaseOwner: "document-job-drain",
   });
 
   return {
