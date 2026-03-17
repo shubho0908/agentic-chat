@@ -1,4 +1,4 @@
-type LogLevel = 'info' | 'warn' | 'error';
+type LogLevel = "info" | "warn" | "error";
 
 export interface LogPayload {
   event: string;
@@ -11,12 +11,18 @@ export interface LogPayload {
   [key: string]: unknown;
 }
 
-export function isObservabilityLoggingEnabled(): boolean {
-  return process.env.NODE_ENV === 'development';
+export function isObservabilityLoggingEnabled(
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): boolean {
+  return nodeEnv === "development";
 }
 
-function write(level: LogLevel, payload: LogPayload): void {
-  if (!isObservabilityLoggingEnabled()) {
+function write(
+  level: LogLevel,
+  payload: LogPayload,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): void {
+  if (!isObservabilityLoggingEnabled(nodeEnv)) {
     return;
   }
 
@@ -28,12 +34,12 @@ function write(level: LogLevel, payload: LogPayload): void {
 
   const serialized = JSON.stringify(record);
 
-  if (level === 'error') {
+  if (level === "error") {
     console.error(serialized);
     return;
   }
 
-  if (level === 'warn') {
+  if (level === "warn") {
     console.warn(serialized);
     return;
   }
@@ -41,33 +47,36 @@ function write(level: LogLevel, payload: LogPayload): void {
   console.info(serialized);
 }
 
-export function logInfo(payload: LogPayload): void {
-  write('info', payload);
+export function logInfo(payload: LogPayload, nodeEnv?: string): void {
+  write("info", payload, nodeEnv);
 }
 
-export function logWarn(payload: LogPayload): void {
-  write('warn', payload);
+export function logWarn(payload: LogPayload, nodeEnv?: string): void {
+  write("warn", payload, nodeEnv);
 }
 
-export function logError(payload: LogPayload): void {
-  write('error', payload);
+export function logError(payload: LogPayload, nodeEnv?: string): void {
+  write("error", payload, nodeEnv);
 }
 
-export function measureLatencyMs(startedAt: number, endedAt: number = Date.now()): number {
+export function measureLatencyMs(
+  startedAt: number,
+  endedAt: number = Date.now(),
+): number {
   return Math.max(0, endedAt - startedAt);
 }
 
 export function logMetric(payload: {
   metric: string;
   value: number;
-  unit?: 'ms' | 'count' | 'bytes';
+  unit?: "ms" | "count" | "bytes";
   requestId?: string;
   userId?: string;
   [key: string]: unknown;
 }): void {
   logInfo({
-    event: 'metric',
-    unit: payload.unit ?? 'count',
+    event: "metric",
+    unit: payload.unit ?? "count",
     ...payload,
   });
 }
@@ -83,37 +92,41 @@ interface AttachmentLifecyclePayload {
   error?: string;
 }
 
-export function logAttachmentSaveStart(payload: AttachmentLifecyclePayload): void {
+export function logAttachmentSaveStart(
+  payload: AttachmentLifecyclePayload,
+): void {
   logInfo({
-    event: 'attachment_save_started',
+    event: "attachment_save_started",
     ...payload,
   });
   logMetric({
-    metric: 'attachment_save_started_total',
+    metric: "attachment_save_started_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     requestId: payload.requestId,
     userId: payload.userId,
   });
 }
 
-export function logAttachmentSaveSuccess(payload: AttachmentLifecyclePayload): void {
+export function logAttachmentSaveSuccess(
+  payload: AttachmentLifecyclePayload,
+): void {
   logInfo({
-    event: 'attachment_save_completed',
+    event: "attachment_save_completed",
     ...payload,
   });
   logMetric({
-    metric: 'attachment_save_completed_total',
+    metric: "attachment_save_completed_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     requestId: payload.requestId,
     userId: payload.userId,
   });
-  if (typeof payload.latencyMs === 'number') {
+  if (typeof payload.latencyMs === "number") {
     logMetric({
-      metric: 'attachment_save_latency_ms',
+      metric: "attachment_save_latency_ms",
       value: payload.latencyMs,
-      unit: 'ms',
+      unit: "ms",
       requestId: payload.requestId,
       userId: payload.userId,
       fileType: payload.fileType,
@@ -121,15 +134,17 @@ export function logAttachmentSaveSuccess(payload: AttachmentLifecyclePayload): v
   }
 }
 
-export function logAttachmentSaveFailure(payload: AttachmentLifecyclePayload): void {
+export function logAttachmentSaveFailure(
+  payload: AttachmentLifecyclePayload,
+): void {
   logError({
-    event: 'attachment_save_failed',
+    event: "attachment_save_failed",
     ...payload,
   });
   logMetric({
-    metric: 'attachment_save_failed_total',
+    metric: "attachment_save_failed_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     requestId: payload.requestId,
     userId: payload.userId,
     fileType: payload.fileType,
@@ -151,62 +166,70 @@ interface OrchestrationJobLifecyclePayload {
   error?: string;
 }
 
-export function logOrchestrationJobEnqueue(payload: OrchestrationJobLifecyclePayload): void {
+export function logOrchestrationJobEnqueue(
+  payload: OrchestrationJobLifecyclePayload,
+): void {
   logInfo({
-    event: 'orchestration_job_enqueued',
+    event: "orchestration_job_enqueued",
     ...payload,
   });
   logMetric({
-    metric: 'orchestration_job_enqueued_total',
+    metric: "orchestration_job_enqueued_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     userId: payload.userId,
     jobType: payload.jobType,
     atCapacity: payload.atCapacity,
   });
 }
 
-export function logOrchestrationJobStart(payload: OrchestrationJobLifecyclePayload): void {
+export function logOrchestrationJobStart(
+  payload: OrchestrationJobLifecyclePayload,
+): void {
   logInfo({
-    event: 'orchestration_job_started',
+    event: "orchestration_job_started",
     ...payload,
   });
   logMetric({
-    metric: 'orchestration_job_started_total',
+    metric: "orchestration_job_started_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     userId: payload.userId,
     jobType: payload.jobType,
   });
 }
 
-export function logOrchestrationJobFinish(payload: OrchestrationJobLifecyclePayload): void {
+export function logOrchestrationJobFinish(
+  payload: OrchestrationJobLifecyclePayload,
+): void {
   const hasError = Boolean(payload.error);
   if (hasError) {
     logError({
-      event: 'orchestration_job_finished',
+      event: "orchestration_job_finished",
       ...payload,
     });
   } else {
     logInfo({
-      event: 'orchestration_job_finished',
+      event: "orchestration_job_finished",
       ...payload,
     });
   }
 
   logMetric({
-    metric: hasError ? 'orchestration_job_failed_total' : 'orchestration_job_completed_total',
+    metric: hasError
+      ? "orchestration_job_failed_total"
+      : "orchestration_job_completed_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     userId: payload.userId,
     jobType: payload.jobType,
   });
 
-  if (typeof payload.latencyMs === 'number') {
+  if (typeof payload.latencyMs === "number") {
     logMetric({
-      metric: 'orchestration_job_duration_ms',
+      metric: "orchestration_job_duration_ms",
       value: payload.latencyMs,
-      unit: 'ms',
+      unit: "ms",
       userId: payload.userId,
       jobType: payload.jobType,
     });
@@ -225,47 +248,53 @@ interface DocumentProcessingLifecyclePayload {
   error?: string;
 }
 
-export function logDocumentProcessingStart(payload: DocumentProcessingLifecyclePayload): void {
+export function logDocumentProcessingStart(
+  payload: DocumentProcessingLifecyclePayload,
+): void {
   logInfo({
-    event: 'document_processing_started',
+    event: "document_processing_started",
     ...payload,
   });
   logMetric({
-    metric: 'document_processing_started_total',
+    metric: "document_processing_started_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     userId: payload.userId,
     fileType: payload.fileType,
   });
 }
 
-export function logDocumentProcessingFinish(payload: DocumentProcessingLifecyclePayload): void {
+export function logDocumentProcessingFinish(
+  payload: DocumentProcessingLifecyclePayload,
+): void {
   const hasError = Boolean(payload.error);
   if (hasError) {
     logError({
-      event: 'document_processing_finished',
+      event: "document_processing_finished",
       ...payload,
     });
   } else {
     logInfo({
-      event: 'document_processing_finished',
+      event: "document_processing_finished",
       ...payload,
     });
   }
 
   logMetric({
-    metric: hasError ? 'document_processing_failed_total' : 'document_processing_completed_total',
+    metric: hasError
+      ? "document_processing_failed_total"
+      : "document_processing_completed_total",
     value: 1,
-    unit: 'count',
+    unit: "count",
     userId: payload.userId,
     fileType: payload.fileType,
   });
 
-  if (typeof payload.latencyMs === 'number') {
+  if (typeof payload.latencyMs === "number") {
     logMetric({
-      metric: 'document_processing_latency_ms',
+      metric: "document_processing_latency_ms",
       value: payload.latencyMs,
-      unit: 'ms',
+      unit: "ms",
       userId: payload.userId,
       fileType: payload.fileType,
     });
