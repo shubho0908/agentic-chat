@@ -3,7 +3,9 @@
 import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
+import { useTheme } from "next-themes";
 import { ImageLightbox } from "./imageLightbox";
+import { getImageModalTheme } from "./imageModalTheme";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -140,6 +142,9 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
   const [pendingSelection, setPendingSelection] = useState<{ url: string; alt: string } | null>(null);
   const [imageStatuses, setImageStatuses] = useState<Record<string, ImageStatus>>({});
   const isMobile = useIsMobile();
+  const { resolvedTheme } = useTheme();
+  const modalTheme = getImageModalTheme(resolvedTheme);
+  const mobilePanelClass = isMobile ? modalTheme.mobilePanel : modalTheme.panel;
 
   const handleImageStatusChange = useCallback((url: string, status: ImageStatus) => {
     setImageStatuses((current) => {
@@ -229,16 +234,21 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
       </div>
 
       {isMobile ? (
-        <Drawer open={showAllImages} onOpenChange={setShowAllImages}>
-          <DrawerContent className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 text-white shadow-none">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-t-[28px] border border-white/10 border-b-0 bg-neutral-950/92 text-white shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="border-b border-white/10 px-4 py-3">
+        <Drawer open={showAllImages} onOpenChange={setShowAllImages} shouldScaleBackground={false}>
+          <DrawerContent
+            variant="bare"
+            showHandle={false}
+            className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+          >
+            <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-t-[28px] border border-b-0 ${mobilePanelClass}`}>
+              <div className="relative rounded-t-[inherit] px-4 py-3">
+                <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b ${modalTheme.border}`} />
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <DrawerTitle className="mt-1 text-left text-xl font-semibold text-white">
+                    <DrawerTitle className={`mt-1 text-left text-xl font-semibold ${modalTheme.title}`}>
                       All Images
                     </DrawerTitle>
-                    <p className="mt-1 text-sm text-white/60">
+                    <p className={`mt-1 text-sm ${modalTheme.mutedText}`}>
                       {visibleImages.length} results
                       {failedCount > 0 ? ` • ${failedCount} unavailable hidden` : ""}
                     </p>
@@ -246,7 +256,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                   <button
                     type="button"
                     onClick={() => setShowAllImages(false)}
-                    className="inline-flex shrink-0 items-center justify-center p-0 text-white/70 transition hover:text-white"
+                    className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 ${modalTheme.closeButton}`}
                     aria-label="Close all images"
                   >
                     <X className="size-4" />
@@ -263,7 +273,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                     onClick={() => handleImageSelect(image.url, image.description)}
                     sizes="50vw"
                     onStatusChange={handleImageStatusChange}
-                    className="aspect-[4/5] rounded-2xl border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(0,0,0,0.25)]"
+                    className={`aspect-[4/5] rounded-2xl ${modalTheme.galleryCard}`}
                     contentClassName="group-hover:scale-[1.03]"
                   />
                 ))}
@@ -279,14 +289,15 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
             className="max-h-[92vh] w-[min(96vw,1240px)] max-w-[96vw] overflow-hidden border-0 bg-transparent p-0 shadow-none"
             showCloseButton={false}
           >
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/10 bg-neutral-950/92 text-white shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-              <div className="border-b border-white/10 px-4 py-3 sm:px-5">
+            <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border ${modalTheme.panel}`}>
+              <div className="relative rounded-t-[inherit] px-4 py-3 sm:px-5">
+                <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b sm:inset-x-5 ${modalTheme.border}`} />
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <DialogTitle className="mt-1 text-2xl font-semibold text-white">
+                    <DialogTitle className={`mt-1 text-2xl font-semibold ${modalTheme.title}`}>
                       All Images
                     </DialogTitle>
-                    <p className="mt-1 text-sm text-white/60">
+                    <p className={`mt-1 text-sm ${modalTheme.mutedText}`}>
                       {visibleImages.length} results
                       {failedCount > 0 ? ` • ${failedCount} unavailable hidden` : ""}
                     </p>
@@ -294,7 +305,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                   <button
                     type="button"
                     onClick={() => setShowAllImages(false)}
-                    className="inline-flex items-center justify-center p-0 text-white/70 transition hover:text-white"
+                    className={`inline-flex size-10 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 ${modalTheme.closeButton}`}
                     aria-label="Close all images"
                   >
                     <X className="size-5" />
@@ -312,14 +323,14 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                         onClick={() => handleImageSelect(image.url, image.description)}
                         sizes="(max-width: 768px) 90vw, (max-width: 1280px) 42vw, 30vw"
                         onStatusChange={handleImageStatusChange}
-                        className="aspect-[16/10] rounded-[22px] border-white/10 bg-white/[0.03] shadow-[0_18px_40px_rgba(0,0,0,0.3)]"
+                        className={`aspect-[16/10] rounded-[22px] ${modalTheme.galleryCard}`}
                         contentClassName="group-hover:scale-[1.03]"
                       />
                     ))}
                   </div>
                 ) : (
-                  <div className="flex min-h-[280px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-white/[0.03]">
-                    <p className="max-w-sm text-center text-sm text-white/60">
+                  <div className={`flex min-h-[280px] items-center justify-center rounded-3xl border border-dashed ${modalTheme.emptyState}`}>
+                    <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
                       Search results returned image links, but none of them are loading reliably right now.
                     </p>
                   </div>

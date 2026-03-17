@@ -3,9 +3,11 @@
 import { useState, useCallback } from "react";
 import Image from "next/image";
 import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getImageModalTheme, type ImageModalTheme } from "./imageModalTheme";
 
 interface ImageLightboxProps {
   imageUrl: string;
@@ -20,11 +22,13 @@ interface LightboxStageProps {
   caption: string;
   isMobile: boolean;
   onClose: () => void;
+  theme: ImageModalTheme;
 }
 
-function LightboxStage({ imageUrl, alt, caption, isMobile, onClose }: LightboxStageProps) {
+function LightboxStage({ imageUrl, alt, caption, isMobile, onClose, theme }: LightboxStageProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const panelClass = isMobile ? theme.mobilePanel : theme.panel;
 
   const handleImageError = useCallback(() => {
     setHasError(true);
@@ -36,25 +40,32 @@ function LightboxStage({ imageUrl, alt, caption, isMobile, onClose }: LightboxSt
   }, []);
 
   return (
-    <div className={`flex min-h-0 flex-col overflow-hidden border border-white/10 bg-neutral-950/92 text-white shadow-[0_20px_80px_rgba(0,0,0,0.45)] ${isMobile ? "h-full rounded-t-[28px] border-b-0" : "w-fit max-w-[96vw] rounded-[24px]"}`}>
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 sm:px-5">
-        <div className="min-w-0">
-          <p className="truncate text-sm text-white/80">
-            {caption}
-          </p>
+    <div
+      className={`flex min-h-0 flex-col overflow-hidden border ${panelClass} ${isMobile ? "h-full rounded-t-[28px] border-b-0" : "w-fit max-w-[96vw] rounded-[24px]"}`}
+    >
+      <div className="relative rounded-t-[inherit] px-4 py-3 sm:px-5">
+        <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b sm:inset-x-5 ${theme.border}`} />
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className={`truncate text-sm ${theme.mutedText}`}>
+              {caption}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 ${theme.closeButton}`}
+            aria-label="Close image viewer"
+          >
+            <X className="size-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center justify-center p-0 text-white/80 transition hover:text-white"
-          aria-label="Close image viewer"
-        >
-          <X className="size-4" />
-        </button>
       </div>
 
       {!hasError ? (
-        <div className={`relative flex items-center justify-center ${isMobile ? "min-h-0 flex-1 p-3" : "p-2 sm:p-3"}`}>
+        <div
+          className={`relative flex items-center justify-center ${theme.imageFrame} ${isMobile ? "min-h-0 flex-1 p-3" : "p-2 sm:p-3"}`}
+        >
           <Image
             src={imageUrl}
             alt={alt}
@@ -72,27 +83,29 @@ function LightboxStage({ imageUrl, alt, caption, isMobile, onClose }: LightboxSt
             onLoad={handleImageLoad}
           />
           {isLoading && (
-            <div className={`absolute flex items-center justify-center rounded-2xl bg-black/35 backdrop-blur-sm ${isMobile ? "inset-3" : "inset-2 sm:inset-3"}`}>
-              <Loader className="size-5 animate-spin text-white" />
+            <div
+              className={`absolute flex items-center justify-center rounded-2xl ${theme.loadingOverlay} ${isMobile ? "inset-3" : "inset-2 sm:inset-3"}`}
+            >
+              <Loader className={`size-5 animate-spin ${theme.loader}`} />
             </div>
           )}
         </div>
       ) : (
         <div className="relative flex flex-1 items-center justify-center p-8">
-          <div className="flex max-w-md flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-8 text-center backdrop-blur-sm">
+          <div className={`flex max-w-md flex-col items-center gap-4 rounded-2xl border p-8 text-center backdrop-blur-sm ${theme.errorCard}`}>
             <div className="relative">
-              <ImageOff className="size-16 text-white/35" />
-              <AlertCircle className="absolute -top-2 -right-2 size-6 text-amber-300/75" />
+              <ImageOff className={`size-16 ${theme.errorIcon}`} />
+              <AlertCircle className={`absolute -top-2 -right-2 size-6 ${theme.errorAccent}`} />
             </div>
             <div className="space-y-2">
-              <p className="text-lg font-semibold text-white">
+              <p className={`text-lg font-semibold ${theme.title}`}>
                 Image Unavailable
               </p>
-              <p className="text-sm text-white/65">
+              <p className={`text-sm ${theme.errorMutedText}`}>
                 The image could not be loaded. It may have been removed or the link is broken.
               </p>
               {alt && alt !== "Search result image" && (
-                <p className="mt-4 text-xs italic text-white/50">
+                <p className={`mt-4 text-xs italic ${theme.mutedText}`}>
                   {alt}
                 </p>
               )}
@@ -106,7 +119,9 @@ function LightboxStage({ imageUrl, alt, caption, isMobile, onClose }: LightboxSt
 
 export function ImageLightbox({ imageUrl, alt, open, onClose }: ImageLightboxProps) {
   const isMobile = useIsMobile();
+  const { resolvedTheme } = useTheme();
   const hasImage = open && !!imageUrl;
+  const theme = getImageModalTheme(resolvedTheme);
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
     if (!newOpen) {
@@ -118,8 +133,12 @@ export function ImageLightbox({ imageUrl, alt, open, onClose }: ImageLightboxPro
   
   if (isMobile) {
     return (
-      <Drawer open={hasImage} onOpenChange={handleOpenChange}>
-        <DrawerContent className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none">
+      <Drawer open={hasImage} onOpenChange={handleOpenChange} shouldScaleBackground={false}>
+        <DrawerContent
+          variant="bare"
+          showHandle={false}
+          className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+        >
           <DrawerTitle className="sr-only">{alt}</DrawerTitle>
           {imageUrl && (
             <LightboxStage
@@ -129,6 +148,7 @@ export function ImageLightbox({ imageUrl, alt, open, onClose }: ImageLightboxPro
               caption={caption}
               isMobile={isMobile}
               onClose={onClose}
+              theme={theme}
             />
           )}
         </DrawerContent>
@@ -152,6 +172,7 @@ export function ImageLightbox({ imageUrl, alt, open, onClose }: ImageLightboxPro
             caption={caption}
             isMobile={isMobile}
             onClose={onClose}
+            theme={theme}
           />
         )}
       </DialogContent>
