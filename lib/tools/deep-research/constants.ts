@@ -1,0 +1,5 @@
+export const DEEP_RESEARCH_MAX_ATTEMPTS = 3;
+export const DEEP_RESEARCH_MAX_RETRIES = 2;
+export const MAX_PARALLEL_RESEARCH_TASKS = 2;
+export const MAX_PREVIOUS_FINDINGS = 3;
+export const MAX_RESULT_SNIPPET = 800;

@@ -7,7 +7,10 @@ import {
   buildGoogleWorkspaceApprovalBarrierMessage,
   hasExplicitGoogleWorkspaceApproval,
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
+  createGoogleWorkspaceApprovalReceipt,
 } from '@/lib/tools/google-suite/safety';
+import { getAvailableGoogleWorkspaceTools } from '@/lib/tools/google-suite/tool-access';
+import { validateGoogleToolArgs } from '@/lib/tools/google-suite/tool-schemas';
 import { validateRequestedModel, getStageModel, getSupportedTemperature } from '@/lib/model-policy';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { shouldPersistConversationMemory } from '@/lib/chat/memory-policy';
@@ -15,6 +18,34 @@ import {
   buildMemoryLookupQueries,
   mediateMemoryIntent,
 } from '@/lib/chat/request-mediator';
+import { GOOGLE_SCOPES } from '@/lib/tools/google-suite/scopes';
+import { shouldRetryOrFormat } from '@/lib/tools/deep-research/graph';
+import { DEEP_RESEARCH_MAX_ATTEMPTS } from '@/lib/tools/deep-research/constants';
+import { getNextPendingTaskIndex } from '@/lib/tools/deep-research/nodes/worker';
+import {
+  uploadResponsesToAttachments,
+  filterDocumentAttachments,
+  filterImageAttachments,
+} from '@/lib/attachment-utils';
+import { isSupportedForRAG } from '@/lib/rag/utils';
+import {
+  createRequestId,
+  isObservabilityLoggingEnabled,
+  logInfo,
+  measureLatencyMs,
+} from '@/lib/observability';
+import {
+  computeNextRetryAt,
+  computeRetryBackoffMs,
+  isLeaseExpired,
+  isRetryableDocumentError,
+  shouldRetryJob,
+} from '@/lib/orchestration/retry-policy';
+import {
+  computeAdaptiveSimilarityThreshold,
+  diversifyCandidates,
+  extractQueryTerms,
+} from '@/lib/rag/retrieval/hybrid';
 
 test('SSRF guard rejects private network addresses', () => {
   assert.equal(isPrivateAddress('127.0.0.1'), true);
@@ -62,14 +93,169 @@ test('shared conversation redaction removes metadata and attachments', () => {
   assert.deepEqual(redacted.messages[0].versions[0].attachments, []);
 });
 
-test('google workspace destructive actions require explicit approval', () => {
+test('google workspace destructive actions require explicit approval', async () => {
   assert.equal(DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS.has('gmail_send'), true);
-  assert.equal(hasExplicitGoogleWorkspaceApproval('send the email now'), false);
-  assert.equal(hasExplicitGoogleWorkspaceApproval('approve these Google Workspace actions'), true);
+  const destructivePlan = [
+    {
+      toolName: 'gmail_send',
+      args: {
+        to: 'person@example.com',
+        subject: 'Hello',
+        body: 'World',
+      },
+    },
+  ];
+  const approvalToken = await createGoogleWorkspaceApprovalReceipt(destructivePlan, {
+    userId: 'user_1',
+  });
+
+  assert.equal(
+    await hasExplicitGoogleWorkspaceApproval('send the email now', destructivePlan, { userId: 'user_1' }),
+    false
+  );
+  assert.equal(
+    await hasExplicitGoogleWorkspaceApproval(
+      `Please continue with GOOGLE_WORKSPACE_APPROVAL:${approvalToken}`,
+      destructivePlan,
+      { userId: 'user_1' }
+    ),
+    true
+  );
+  assert.equal(
+    await hasExplicitGoogleWorkspaceApproval(
+      `Please continue with GOOGLE_WORKSPACE_APPROVAL:${approvalToken}`,
+      [
+        {
+          toolName: 'gmail_send',
+          args: {
+            to: 'other@example.com',
+            subject: 'Hello',
+            body: 'World',
+          },
+        },
+      ],
+      { userId: 'user_1' }
+    ),
+    false
+  );
+  assert.equal(
+    await hasExplicitGoogleWorkspaceApproval(
+      `Please continue with GOOGLE_WORKSPACE_APPROVAL:${approvalToken}`,
+      destructivePlan,
+      { userId: 'user_1' }
+    ),
+    false
+  );
+  assert.equal(
+    await hasExplicitGoogleWorkspaceApproval(
+      `Please continue with GOOGLE_WORKSPACE_APPROVAL:${approvalToken}`,
+      destructivePlan,
+      { userId: 'user_2' }
+    ),
+    false
+  );
   assert.match(
-    buildGoogleWorkspaceApprovalBarrierMessage(['gmail_send', 'drive_share']),
+    await buildGoogleWorkspaceApprovalBarrierMessage(
+      [
+        { toolName: 'gmail_send', args: { to: 'person@example.com', subject: 'Hello', body: 'World' } },
+        { toolName: 'drive_share', args: { fileId: 'file_123', email: 'person@example.com' } },
+      ],
+      { userId: 'user_1' }
+    ),
     /Approval required/
   );
+});
+
+test('google workspace only exposes tools allowed by granted scopes', () => {
+  const gmailReadTools = getAvailableGoogleWorkspaceTools([GOOGLE_SCOPES.GMAIL_READONLY]);
+  const toolNames = gmailReadTools
+    .filter((tool) => tool.type === 'function')
+    .map((tool) => tool.function.name);
+
+  assert.equal(toolNames.includes('gmail_read'), true);
+  assert.equal(toolNames.includes('gmail_send'), false);
+  assert.equal(toolNames.includes('drive_read_file'), false);
+});
+
+test('google workspace tool args are validated at dispatch time', () => {
+  assert.throws(
+    () =>
+      validateGoogleToolArgs('gmail_send', {
+        to: 'person@example.com',
+        subject: 'Hi',
+        body: 'Hello',
+        unexpected: true,
+      }),
+    /unrecognized key/i
+  );
+});
+
+test('deep research exhaustion now formats instead of terminating empty', () => {
+  const nextNode = shouldRetryOrFormat({
+    evaluationResult: { meetsStandards: false, confidenceScore: 0.2, weaknesses: ['missing citations'] },
+    currentAttempt: DEEP_RESEARCH_MAX_ATTEMPTS,
+  } as never);
+
+  assert.equal(nextNode, 'formatter');
+});
+
+test('deep research worker retries resume from the next pending task', () => {
+  assert.equal(
+    getNextPendingTaskIndex([
+      { id: '1', question: 'done', tools: ['web_search'], status: 'completed', retries: 0 },
+      { id: '2', question: 'retry', tools: ['web_search'], status: 'pending', retries: 1 },
+      { id: '3', question: 'later', tools: ['web_search'], status: 'pending', retries: 0 },
+    ]),
+    1
+  );
+
+  assert.equal(
+    getNextPendingTaskIndex([
+      { id: '1', question: 'done', tools: ['web_search'], status: 'completed', retries: 0 },
+      { id: '2', question: 'failed', tools: ['web_search'], status: 'failed', retries: 2 },
+    ]),
+    2
+  );
+});
+
+test('orchestration retry policy uses bounded exponential backoff', () => {
+  assert.equal(computeRetryBackoffMs(1), 2000);
+  assert.equal(computeRetryBackoffMs(2), 4000);
+  assert.equal(computeRetryBackoffMs(8), 60000);
+});
+
+test('orchestration retry decision respects retryability and max attempts', () => {
+  assert.equal(
+    shouldRetryJob({ attempts: 1, maxAttempts: 3, retryable: true }),
+    true
+  );
+  assert.equal(
+    shouldRetryJob({ attempts: 3, maxAttempts: 3, retryable: true }),
+    false
+  );
+  assert.equal(
+    shouldRetryJob({ attempts: 1, maxAttempts: 3, retryable: false }),
+    false
+  );
+});
+
+test('orchestration next retry timestamp is deterministic from now + backoff', () => {
+  const next = computeNextRetryAt(2, Date.parse('2026-01-01T00:00:00.000Z'));
+  assert.equal(next.toISOString(), '2026-01-01T00:00:04.000Z');
+});
+
+test('orchestration lease expiration helper handles null and stale leases', () => {
+  const now = Date.parse('2026-01-01T00:00:10.000Z');
+  assert.equal(isLeaseExpired(null, now), false);
+  assert.equal(isLeaseExpired('2026-01-01T00:00:11.000Z', now), false);
+  assert.equal(isLeaseExpired('2026-01-01T00:00:09.999Z', now), true);
+});
+
+test('document error retryability keeps permanent failures out of retry loop', () => {
+  assert.equal(isRetryableDocumentError('Unsupported file type for RAG: image/png'), false);
+  assert.equal(isRetryableDocumentError('Unauthorized'), false);
+  assert.equal(isRetryableDocumentError('Attachment not found'), false);
+  assert.equal(isRetryableDocumentError('Request timeout - upstream unavailable'), true);
 });
 
 test('server model policy rejects unknown models and downshifts orchestration stages', () => {
@@ -94,6 +280,39 @@ test('untrusted context is no longer injected into the system role', () => {
   assert.equal(messages[0].role, 'system');
   assert.match(String(messages[1].content), /reference_context/);
   assert.equal(messages[2].role, 'user');
+});
+
+test('upload attachments infer a document MIME type from filename when upload metadata is missing', () => {
+  const [attachment] = uploadResponsesToAttachments([
+    {
+      url: 'https://demo.ufs.sh/f/resume',
+      name: 'resume.pdf',
+      size: 1234,
+    },
+  ]);
+
+  assert.equal(attachment.fileType, 'application/pdf');
+  assert.equal(isSupportedForRAG(attachment.fileType), true);
+});
+
+test('attachment classification keeps document files out of the image path', () => {
+  const attachments = uploadResponsesToAttachments([
+    {
+      url: 'https://demo.ufs.sh/f/resume',
+      name: 'resume.pdf',
+      size: 1234,
+    },
+    {
+      url: 'https://demo.ufs.sh/f/photo',
+      name: 'photo.png',
+      size: 5678,
+      type: 'image/png',
+    },
+  ]);
+
+  assert.equal(filterDocumentAttachments(attachments).map((file) => file.fileName).includes('resume.pdf'), true);
+  assert.equal(filterImageAttachments(attachments).map((file) => file.fileName).includes('resume.pdf'), false);
+  assert.equal(filterImageAttachments(attachments).map((file) => file.fileName).includes('photo.png'), true);
 });
 
 test('explicit recall prompts always trigger memory mediation without AI fallback', async () => {
@@ -167,4 +386,118 @@ test('personal identity facts remain eligible for memory persistence', () => {
   });
 
   assert.equal(shouldPersist, true);
+});
+
+test('observability request IDs preserve the provided prefix', () => {
+  const requestId = createRequestId('upload');
+  assert.match(requestId, /^upload_/);
+});
+
+test('observability latency helper never returns negative durations', () => {
+  assert.equal(measureLatencyMs(1000, 1500), 500);
+  assert.equal(measureLatencyMs(1500, 1000), 0);
+});
+
+test('observability logger is enabled only in development', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalInfo = console.info;
+  const writes: string[] = [];
+
+  console.info = ((message?: unknown) => {
+    writes.push(String(message ?? ''));
+  }) as typeof console.info;
+
+  try {
+    process.env.NODE_ENV = 'production';
+    assert.equal(isObservabilityLoggingEnabled(), false);
+    logInfo({ event: 'prod_should_not_log' });
+    assert.equal(writes.length, 0);
+
+    process.env.NODE_ENV = 'development';
+    assert.equal(isObservabilityLoggingEnabled(), true);
+    logInfo({ event: 'dev_should_log' });
+    assert.equal(writes.length, 1);
+    assert.match(writes[0], /dev_should_log/);
+  } finally {
+    process.env.NODE_ENV = originalNodeEnv;
+    console.info = originalInfo;
+  }
+});
+
+test('hybrid retrieval query terms remove stop words and short tokens', () => {
+  const terms = extractQueryTerms(
+    'What are the Q4 revenue trends for ACME and how did EBITDA change in 2025?',
+    8
+  );
+
+  assert.deepEqual(terms, [
+    'q4',
+    'revenue',
+    'trends',
+    'acme',
+    'did',
+    'ebitda',
+    'change',
+    '2025',
+  ]);
+});
+
+test('hybrid retrieval adaptive threshold relaxes when semantic pool is sparse', () => {
+  const denseThreshold = computeAdaptiveSimilarityThreshold({
+    baseThreshold: 0.7,
+    minThreshold: 0.35,
+    candidateCount: 20,
+    limit: 5,
+  });
+  const sparseThreshold = computeAdaptiveSimilarityThreshold({
+    baseThreshold: 0.7,
+    minThreshold: 0.35,
+    candidateCount: 2,
+    limit: 6,
+  });
+
+  assert.equal(denseThreshold, 0.7);
+  assert.ok(sparseThreshold < denseThreshold);
+  assert.ok(sparseThreshold >= 0.35);
+});
+
+test('hybrid retrieval diversification preserves attachment coverage and caps dominance', () => {
+  const candidates = [
+    {
+      content: 'A-1',
+      score: 0.98,
+      metadata: { attachmentId: 'A', fileName: 'alpha.pdf', page: 1 },
+    },
+    {
+      content: 'A-2',
+      score: 0.96,
+      metadata: { attachmentId: 'A', fileName: 'alpha.pdf', page: 2 },
+    },
+    {
+      content: 'A-3',
+      score: 0.94,
+      metadata: { attachmentId: 'A', fileName: 'alpha.pdf', page: 3 },
+    },
+    {
+      content: 'B-1',
+      score: 0.78,
+      metadata: { attachmentId: 'B', fileName: 'beta.pdf', page: 1 },
+    },
+    {
+      content: 'C-1',
+      score: 0.72,
+      metadata: { attachmentId: 'C', fileName: 'gamma.pdf', page: 1 },
+    },
+  ];
+
+  const diversified = diversifyCandidates(candidates, {
+    limit: 4,
+    maxPerAttachment: 2,
+    minPerAttachment: 1,
+  });
+
+  assert.equal(diversified.length, 4);
+  assert.equal(diversified.filter((item) => item.metadata.attachmentId === 'A').length, 2);
+  assert.ok(diversified.some((item) => item.metadata.attachmentId === 'B'));
+  assert.ok(diversified.some((item) => item.metadata.attachmentId === 'C'));
 });

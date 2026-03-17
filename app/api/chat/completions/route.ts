@@ -13,10 +13,10 @@ import type { Message } from '@/lib/schemas/chat';
 import { injectContextToMessages } from '@/lib/chat/message-helpers';
 import { createChatStreamHandler } from '@/lib/chat/stream-handler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
-import { calculateTokenUsage } from '@/lib/utils/token-counter';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { getResponseTokenReserve, validateRequestedModel } from '@/lib/model-policy';
+import { validateRequestedModel } from '@/lib/model-policy';
 import { withRetry } from '@/lib/retry';
+import { checkTokenBudget } from '@/lib/chat/token-budget';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -100,27 +100,33 @@ export async function POST(request: NextRequest) {
       memoryStatusInfo = contextResult.metadata;
 
       if (contextResult.context) {
-        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context);
+        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
       }
     } catch (error) {
       console.error('[Context Routing Error]', error);
+      memoryStatusInfo.degradedContexts = [
+        ...(memoryStatusInfo.degradedContexts || []),
+        {
+          source: 'context_router',
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      ];
     }
 
     try {
-      const tokenUsage = calculateTokenUsage(enhancedMessages, validatedModel);
-      memoryStatusInfo.tokenUsage = tokenUsage;
-      const reserve = getResponseTokenReserve(validatedModel);
-      if (tokenUsage.used + reserve > tokenUsage.limit) {
+      const budgetCheck = checkTokenBudget(enhancedMessages, validatedModel);
+      memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
+      if (!budgetCheck.ok) {
         logWarn({
           event: 'chat_request_rejected_budget',
           requestId,
           model: validatedModel,
-          usedTokens: tokenUsage.used,
-          limit: tokenUsage.limit,
-          reserve,
+          usedTokens: budgetCheck.tokenUsage.used,
+          limit: budgetCheck.tokenUsage.limit,
+          reserve: budgetCheck.tokenUsage.responseReserve,
         });
         return errorResponse(
-          'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
+          budgetCheck.errorMessage ?? 'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
           undefined,
           HTTP_STATUS.BAD_REQUEST
         );
@@ -151,6 +157,7 @@ export async function POST(request: NextRequest) {
         userId: authUser.id,
         conversationId,
         searchDepth,
+        requestId,
       });
       const readableStream = new ReadableStream({
         ...streamHandler,
@@ -170,6 +177,14 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
+      if (activeTool || deepResearchEnabled) {
+        return errorResponse(
+          'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(

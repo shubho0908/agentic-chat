@@ -55,7 +55,6 @@
     "framer-motion": "^12.36.0",
     "gaxios": "^7.1.4",
     "googleapis": "^171.4.0",
-    "highlight.js": "^11.11.1",
     "jose": "^6.2.1",
     "langsmith": "^0.3.78",
     "linkedom": "^0.18.12",
@@ -93,6 +92,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
+    "postcss": "^8.5.8",
     "prisma": "^6.19.2",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
@@ -108,5 +108,11 @@
     "zod-to-json-schema": {
       "zod": "$zod"
     }
+  },
+  "knip": {
+    "ignoreDependencies": [
+      "dotenv",
+      "eslint-config-next"
+    ]
   }
 }

@@ -4,13 +4,14 @@ import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { deleteMessagesAfter, updateAssistantMessage } from "./message-api";
+import { updateAssistantMessage } from "./message-api";
 import { streamChatCompletion } from "./streaming-api";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cache-handler";
 import { buildMessagesForAPI } from "./conversation-manager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
 import { persistConversationMemoryIfEligible } from "./memory-persistence";
+import { fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -69,10 +70,6 @@ export async function handleRegenerateResponse(
   onMessagesUpdate(() => [...messagesUpToAssistant, updatedAssistantMessage, ...messagesAfterAssistant]);
 
   try {
-    if (conversationId && assistantMessage.id) {
-      await deleteMessagesAfter(conversationId, assistantMessage.id);
-    }
-
     const useCaching = shouldUseSemanticCache(
       messagesUpToAssistant,
       previousUserMessage.attachments,
@@ -218,12 +215,26 @@ export async function handleRegenerateResponse(
       }
 
       if (conversationId && assistantMessage.id) {
-        await updateAssistantMessage(conversationId, assistantMessage.id, responseContent, messageMetadata);
-        
+        const updatedAssistant = await updateAssistantMessage(
+          conversationId,
+          assistantMessage.id,
+          responseContent,
+          messageMetadata
+        );
+        const parentId = updatedAssistant.parentMessageId || updatedAssistant.id;
+        const versions = await fetchMessageVersions(conversationId, parentId);
+
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
-              ? { ...msg, metadata: messageMetadata }
+              ? updateMessageWithVersions(
+                  {
+                    ...msg,
+                    metadata: messageMetadata,
+                  },
+                  updatedAssistant.id,
+                  versions
+                )
               : msg
           )
         );

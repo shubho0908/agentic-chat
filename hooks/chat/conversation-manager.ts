@@ -5,26 +5,14 @@ import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { saveUserMessage, saveAssistantMessage } from "./message-api";
 import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
+import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referential-query";
 
 function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
 }
 
 function isReferentialQuery(content: string | MessageContentPart[]): boolean {
-  const textQuery = typeof content === 'string' 
-    ? content 
-    : content.filter(p => typeof p === 'object' && 'type' in p && p.type === 'text' && 'text' in p && p.text).map(p => 'text' in p ? p.text : '').join(' ');
-
-  const normalized = textQuery.toLowerCase().trim();
-
-  const patterns = [
-    /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
-    /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
-    /\b(summarize|explain|analyze|describe)\s+(this|that|the|it)/i,
-    /^(summarize|summary|explain|analyze|describe)$/i,
-  ];
-
-  return patterns.some(p => p.test(normalized));
+  return isReferentialTextQuery(extractTextQuery(content));
 }
 
 function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): boolean {

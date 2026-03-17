@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';
 import type { AttachmentStatus } from '@/types/rag';
 import { partitionByStatus, extractIds } from './status-helpers';
+import { logWarn } from '@/lib/observability';
 
 export async function getAttachmentStatuses(
   attachmentIds: string[]
@@ -55,9 +56,14 @@ export async function waitForDocumentProcessing(
     }
 
     if (Date.now() - startedAt >= timeoutMs) {
-      console.warn(
-        `[RAG] Timed out waiting for ${stillProcessing.length} document(s) after ${timeoutMs}ms`
-      );
+      logWarn({
+        event: 'rag_processing_wait_timeout',
+        attachmentCount: attachmentIds.length,
+        completedCount: completedIds.length,
+        pendingCount: stillProcessing.length,
+        timeoutMs,
+        waitedMs: Date.now() - startedAt,
+      });
       return completedIds;
     }
 

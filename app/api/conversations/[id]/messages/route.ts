@@ -1,10 +1,47 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateMessageData, validateAttachments } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
+import { isSupportedForRAG } from '@/lib/rag/utils';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+
+function getRagAttachmentIds(
+  attachments?: Array<{ id: string; fileType: string }>
+): string[] {
+  if (!attachments || attachments.length === 0) {
+    return [];
+  }
+
+  return attachments
+    .filter((attachment) => isSupportedForRAG(attachment.fileType))
+    .map((attachment) => attachment.id);
+}
+
+function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
+  if (attachmentIds.length === 0) {
+    return;
+  }
+
+  after(async () => {
+    const results = await Promise.allSettled(
+      attachmentIds.map((attachmentId) =>
+        runOrQueueDocumentProcessingJob(attachmentId, userId)
+      )
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.warn('[Messages Route] Failed to schedule document processing:', {
+          attachmentId: attachmentIds[index],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
+  });
+}
 
 export async function POST(
   request: NextRequest,
@@ -67,6 +104,8 @@ export async function POST(
         data: { updatedAt: new Date() }
       })
     ]);
+
+    scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);
 
     return jsonResponse(message, HTTP_STATUS.CREATED);
   } catch (error) {

@@ -6,6 +6,7 @@ import { workerNode } from './nodes/worker';
 import { aggregatorNode } from './nodes/aggregator';
 import { evaluatorNode } from './nodes/evaluator';
 import { formatterNode } from './nodes/formatter';
+import { DEEP_RESEARCH_MAX_ATTEMPTS } from './constants';
 
 interface GraphConfig {
   openaiApiKey: string;
@@ -34,23 +35,22 @@ function shouldContinueWorker(state: ResearchState): string {
   return 'worker';
 }
 
-function shouldRetryOrFormat(state: ResearchState): string {
+export function shouldRetryOrFormat(state: ResearchState): string {
   const { evaluationResult, currentAttempt = 1 } = state;
-  const MAX_ATTEMPTS = 3; // Allow 3 total attempts (1 initial + 2 retries)
-  
+
   if (!evaluationResult) {
     return 'formatter';
   }
-  
+
   if (evaluationResult.meetsStandards) {
     return 'formatter';
   }
-  
-  if (currentAttempt < MAX_ATTEMPTS) {
+
+  if (currentAttempt < DEEP_RESEARCH_MAX_ATTEMPTS) {
     return 'planner';
   }
-  
-  return END;
+
+  return 'formatter';
 }
 
 export function createResearchGraph(config: GraphConfig) {
@@ -75,7 +75,6 @@ export function createResearchGraph(config: GraphConfig) {
     .addConditionalEdges('evaluator', shouldRetryOrFormat, {
       planner: 'planner',
       formatter: 'formatter',
-      [END]: END,
     })
     .addEdge('formatter', END);
   return workflow.compile();

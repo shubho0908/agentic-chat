@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { GOOGLE_WORKSPACE_TOOLS } from '@/lib/tools/google-suite/definitions';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient, isAuthRevokedError } from '@/lib/tools/google-suite/client';
 import { getToolDisplayName } from '@/utils/google/tool-names';
@@ -14,7 +13,12 @@ import {
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
   hasExplicitGoogleWorkspaceApproval,
   buildGoogleWorkspaceApprovalBarrierMessage,
+  type GoogleWorkspacePlannedAction,
 } from '@/lib/tools/google-suite/safety';
+import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '@/lib/tools/google-suite/tool-access';
+import { validateGoogleToolArgs } from '@/lib/tools/google-suite/tool-schemas';
+import { countTextTokens } from '@/lib/utils/token-counter';
+import { OPENAI_MODELS } from '@/constants/openai-models';
 import type {
   HandlerArgs,
   GmailSearchArgs,
@@ -103,6 +107,65 @@ interface GoogleWorkspaceExecutorOptions {
   conversationHistory?: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
   onProgress?: GoogleWorkspaceProgressCallback;
   abortSignal?: AbortSignal;
+}
+
+function getGoogleWorkspaceInputBudget(model: string): number {
+  const contextWindow = OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ?? 128000;
+  return Math.min(120000, Math.max(12000, Math.floor(contextWindow * 0.25)));
+}
+
+function estimateWorkspaceMessageTokens(
+  message: OpenAI.Chat.Completions.ChatCompletionMessageParam,
+  model: string
+): number {
+  const textParts: string[] = [];
+
+  if (typeof message.content === 'string') {
+    textParts.push(message.content);
+  } else if (Array.isArray(message.content)) {
+    textParts.push(
+      message.content
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join('\n')
+    );
+  }
+
+  if ('tool_calls' in message && message.tool_calls) {
+    textParts.push(JSON.stringify(message.tool_calls));
+  }
+
+  if ('tool_call_id' in message && typeof message.tool_call_id === 'string') {
+    textParts.push(message.tool_call_id);
+  }
+
+  return countTextTokens(textParts.join('\n'), model) + 4;
+}
+
+function trimWorkspaceMessagesToBudget(
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+  model: string
+): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  if (messages.length <= 2) {
+    return messages;
+  }
+
+  const preserved = messages.slice(0, 2);
+  const recent = [...messages.slice(2)];
+  const budget = getGoogleWorkspaceInputBudget(model);
+
+  const estimateTotal = () =>
+    [...preserved, ...recent].reduce((total, message) => total + estimateWorkspaceMessageTokens(message, model), 0);
+
+  while (recent.length > 1 && estimateTotal() > budget) {
+    recent.shift();
+
+    while (recent[0]?.role === 'tool') {
+      recent.shift();
+    }
+  }
+
+  return [...preserved, ...recent];
 }
 
 async function executeToolCall(
@@ -196,9 +259,14 @@ export async function executeGoogleWorkspace(
       message: 'Initializing Google Workspace connection...',
     });
 
-    const { oauth2Client } = await createGoogleSuiteClient(userId);
+    const { oauth2Client, grantedScopes } = await createGoogleSuiteClient(userId);
     const context: ToolHandlerContext = { userId, oauth2Client };
     const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
+    const availableTools = getAvailableGoogleWorkspaceTools(grantedScopes);
+
+    if (availableTools.length === 0) {
+      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+    }
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
@@ -255,7 +323,7 @@ export async function executeGoogleWorkspace(
             {
               model: getStageModel(model, 'workspace_agent'),
               messages,
-              tools: GOOGLE_WORKSPACE_TOOLS,
+              tools: availableTools,
               tool_choice: 'auto',
             },
             { signal: abortSignal }
@@ -317,15 +385,40 @@ export async function executeGoogleWorkspace(
         tool_calls: message.tool_calls,
       });
 
-      const plannedToolNames = message.tool_calls
-        .filter((toolCall) => toolCall.type === 'function')
-        .map((toolCall) => toolCall.function.name);
+      const toolResults: Array<{ tool_call_id: string; content: string }> = [];
+      const plannedActions = new Map<string, GoogleWorkspacePlannedAction>();
 
-      if (!hasExplicitGoogleWorkspaceApproval(query) && plannedToolNames.some((toolName) => DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS.has(toolName))) {
-        return buildGoogleWorkspaceApprovalBarrierMessage(plannedToolNames);
+      for (const toolCall of message.tool_calls) {
+        if (toolCall.type !== 'function') {
+          continue;
+        }
+
+        try {
+          const parsedArgs = JSON.parse(toolCall.function.arguments) as HandlerArgs;
+          const validatedArgs = validateGoogleToolArgs(toolCall.function.name, parsedArgs);
+          plannedActions.set(toolCall.id, {
+            toolName: toolCall.function.name,
+            args: validatedArgs,
+          });
+        } catch (error) {
+          console.warn(
+            '[Google Workspace Executor] Failed to pre-validate planned action:',
+            toolCall.function.name,
+            error
+          );
+        }
       }
 
-      const toolResults: Array<{ tool_call_id: string; content: string }> = [];
+      const destructiveActions = Array.from(plannedActions.values()).filter((action) =>
+        DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS.has(action.toolName)
+      );
+
+      if (
+        destructiveActions.length > 0 &&
+        !(await hasExplicitGoogleWorkspaceApproval(query, destructiveActions, { userId }))
+      ) {
+        return await buildGoogleWorkspaceApprovalBarrierMessage(destructiveActions, { userId });
+      }
 
       for (const toolCall of message.tool_calls) {
           if (toolCall.type !== 'function') {
@@ -338,7 +431,11 @@ export async function executeGoogleWorkspace(
           let args: HandlerArgs;
           
           try {
-            args = JSON.parse(toolCall.function.arguments) as HandlerArgs;
+            const plannedAction = plannedActions.get(toolCall.id);
+            if (!plannedAction) {
+              throw new Error('Tool arguments failed validation');
+            }
+            args = plannedAction.args as HandlerArgs;
           } catch {
             console.error('[Google Workspace Executor] Failed to parse arguments:', toolCall.function.arguments);
             toolResults.push({
@@ -361,6 +458,16 @@ export async function executeGoogleWorkspace(
           };
           
           allTasks.push(currentTask);
+
+          if (!isGoogleWorkspaceToolAllowed(functionName, grantedScopes)) {
+            currentTask.status = 'failed';
+            currentTask.error = TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU,
+            });
+            continue;
+          }
           
           onProgress?.({
             status: 'task_start',
@@ -472,30 +579,10 @@ export async function executeGoogleWorkspace(
         });
       }
 
-      if (messages.length > 40) {
-        const systemMsg = messages[0];
-        const userMsg = messages[1];
-        let sliceStart = messages.length - 35;
-        
-        while (sliceStart > 2) {
-          const msgAtStart = messages[sliceStart];
-          const prevMsg = messages[sliceStart - 1];
-          
-          if (msgAtStart?.role === 'tool') {
-            sliceStart--;
-            continue;
-          }
-          
-          if (prevMsg?.role === 'assistant' && 'tool_calls' in prevMsg && prevMsg.tool_calls) {
-            sliceStart--;
-            continue;
-          }
-          break;
-        }
-        
-        const recentMessages = messages.slice(sliceStart);
+      const trimmedMessages = trimWorkspaceMessagesToBudget(messages, model);
+      if (trimmedMessages.length !== messages.length) {
         messages.length = 0;
-        messages.push(systemMsg!, userMsg!, ...recentMessages);
+        messages.push(...trimmedMessages);
       }
     }
 

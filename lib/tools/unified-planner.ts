@@ -60,7 +60,7 @@ interface GoogleSuitePlan {
 
 type UnifiedPlan = WebSearchPlan | DeepResearchPlan | GoogleSuitePlan;
 
-export const webSearchPlannerOutputSchema = z.object({
+const webSearchPlannerOutputSchema = z.object({
   queryType: z.enum(['factual', 'comparative', 'analytical', 'exploratory', 'how-to', 'current-events']),
   complexity: z.enum(['simple', 'moderate', 'complex']),
   recommendedSearches: z.array(z.object({
@@ -72,7 +72,7 @@ export const webSearchPlannerOutputSchema = z.object({
   reasoning: z.string(),
 });
 
-export const deepResearchPlanSchema = z.object({
+const deepResearchPlanSchema = z.object({
   plan: z.array(z.object({
     question: z.string(),
     rationale: z.string(),
@@ -80,7 +80,7 @@ export const deepResearchPlanSchema = z.object({
   })).min(1),
 });
 
-export const googleSuitePlanSchema = z.object({
+const googleSuitePlanSchema = z.object({
   actions: z.array(z.object({
     tool: z.string(),
     description: z.string(),

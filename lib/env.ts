@@ -1,6 +1,6 @@
 type EnvSeverity = 'error' | 'warning';
 
-export interface EnvIssue {
+interface EnvIssue {
   key: string;
   severity: EnvSeverity;
   message: string;
@@ -46,7 +46,7 @@ function parsePositiveInteger(
   return parsed;
 }
 
-export function getServerEnvIssues(): EnvIssue[] {
+function getServerEnvIssues(): EnvIssue[] {
   const issues: EnvIssue[] = [];
 
   const requiredKeys = [
@@ -80,7 +80,7 @@ export function getServerEnvIssues(): EnvIssue[] {
   return issues;
 }
 
-export function logServerEnvIssues(): void {
+function logServerEnvIssues(): void {
   if (typeof window !== 'undefined') {
     return;
   }

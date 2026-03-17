@@ -3,16 +3,19 @@ import type { ToolHandlerContext } from '../types';
 import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
 import { parseEmailContent } from '@/utils/google/email';
 
+const MAX_GMAIL_SEARCH_FETCHES = 10;
+
 export async function handleGmailSearch(
   context: ToolHandlerContext,
   args: GmailSearchArgs
 ): Promise<string> {
   const gmail = google.gmail({ version: 'v1', auth: context.oauth2Client });
+  const maxResults = Math.min(args.maxResults || 10, MAX_GMAIL_SEARCH_FETCHES);
   
   const response = await gmail.users.messages.list({
     userId: 'me',
     q: args.query,
-    maxResults: args.maxResults || 10,
+    maxResults,
   });
 
   if (!response.data.messages || response.data.messages.length === 0) {
@@ -20,7 +23,7 @@ export async function handleGmailSearch(
   }
 
   const messages = await Promise.all(
-    response.data.messages.map(async (msg) => {
+    response.data.messages.slice(0, MAX_GMAIL_SEARCH_FETCHES).map(async (msg) => {
       const fullMsg = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id!,
@@ -39,7 +42,11 @@ export async function handleGmailSearch(
    **Message ID:** ${msg.id}`;
   });
 
-  return `Found ${messages.length} message(s):\n\n${formatted.join('\n\n')}`;
+  const truncatedNotice = response.data.resultSizeEstimate && response.data.resultSizeEstimate > messages.length
+    ? `\n\nShowing the first ${messages.length} message(s) to keep the search bounded.`
+    : '';
+
+  return `Found ${messages.length} message(s):\n\n${formatted.join('\n\n')}${truncatedNotice}`;
 }
 
 export async function handleGmailRead(

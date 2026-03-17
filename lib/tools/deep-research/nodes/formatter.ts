@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ResearchState } from '../state';
 import type { Citation } from '@/types/deep-research';
 import { getStageModel } from '@/lib/model-policy';
+import { invokeStructuredOutput } from '../structured-output';
 
 const formatterSchema = z.object({
   response: z.string(),
@@ -82,7 +83,10 @@ export async function formatterNode(
   });
 
   try {
-    const response = await llm.invoke(
+    const formatted = await invokeStructuredOutput(
+      llm,
+      formatterSchema,
+      'DeepResearchFinalResponse',
       [
         { role: 'system', content: ENHANCED_FORMATTER_PROMPT },
         {
@@ -90,38 +94,11 @@ export async function formatterNode(
           content: `**Original Question:** ${originalQuery}\n\n**Research Findings:**\n${contentToFormat}\n\nCreate the final answer with clean markdown, grounded citations, and concise follow-up questions when they add value.`,
         },
       ],
-      { signal: config.abortSignal }
+      config.abortSignal
     );
-
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-    
-    if (!rawContent.trim()) {
-      return {
-        finalResponse: rawContent,
-        citations: extractCitationsFromTaskSources(state.completedTasks || []),
-        followUpQuestions: [],
-      };
-    }
-
-    const parsed = formatterSchema.safeParse(JSON.parse(rawContent));
-    if (!parsed.success) {
-      return {
-        finalResponse: contentToFormat,
-        citations: extractCitationsFromTaskSources(state.completedTasks || []),
-        followUpQuestions: [],
-      };
-    }
-
-    const finalResponse = parsed.data.response || rawContent;
-    const citations: Citation[] = parsed.data.citations || [];
-    const followUpQuestions: string[] = parsed.data.followUpQuestions || [];
+    const finalResponse = formatted.response || contentToFormat;
+    const citations: Citation[] = formatted.citations || [];
+    const followUpQuestions: string[] = formatted.followUpQuestions || [];
 
     if (citations.length === 0 && state.completedTasks) {
       citations.push(...extractCitationsFromTaskSources(state.completedTasks));

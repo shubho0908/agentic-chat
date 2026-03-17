@@ -56,7 +56,7 @@ export async function checkDeepResearchUsage(userId: string): Promise<DeepResear
   };
 }
 
-export async function incrementDeepResearchUsage(userId: string): Promise<DeepResearchUsageInfo> {
+export async function reserveDeepResearchUsage(userId: string): Promise<DeepResearchUsageInfo> {
   const { year, month } = getCurrentMonthYear();
 
   const result = await prisma.deepResearchUsage.updateMany({
@@ -134,4 +134,30 @@ export async function incrementDeepResearchUsage(userId: string): Promise<DeepRe
     canUse: remaining > 0,
     resetDate: getResetDate(),
   };
+}
+
+export async function releaseDeepResearchUsageReservation(userId: string): Promise<DeepResearchUsageInfo> {
+  const { year, month } = getCurrentMonthYear();
+
+  const result = await prisma.deepResearchUsage.updateMany({
+    where: {
+      userId,
+      year,
+      month,
+      usageCount: {
+        gt: 0,
+      },
+    },
+    data: {
+      usageCount: {
+        decrement: 1,
+      },
+    },
+  });
+
+  if (result.count === 0) {
+    return checkDeepResearchUsage(userId);
+  }
+
+  return checkDeepResearchUsage(userId);
 }

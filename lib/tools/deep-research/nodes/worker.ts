@@ -14,11 +14,12 @@ import { executeMultiSearch } from '../../web-search/search-planner';
 import { createUnifiedPlan, type WebSearchPlan } from '../../unified-planner';
 import { withTrace } from '@/lib/langsmith-config';
 import { getStageModel } from '@/lib/model-policy';
-
-const MAX_RETRIES = 2;
-const MAX_PARALLEL_RESEARCH_TASKS = 2;
-const MAX_PREVIOUS_FINDINGS = 3;
-const MAX_RESULT_SNIPPET = 800;
+import {
+  DEEP_RESEARCH_MAX_RETRIES,
+  MAX_PARALLEL_RESEARCH_TASKS,
+  MAX_PREVIOUS_FINDINGS,
+  MAX_RESULT_SNIPPET,
+} from '../constants';
 
 interface WorkerConfig {
   openaiApiKey: string;
@@ -28,6 +29,11 @@ interface WorkerConfig {
   userId?: string;
   conversationId?: string;
   attachmentIds?: string[];
+}
+
+export function getNextPendingTaskIndex(taskQueue: ResearchTask[]): number {
+  const nextPendingIndex = taskQueue.findIndex((task) => task.status === 'pending');
+  return nextPendingIndex === -1 ? taskQueue.length : nextPendingIndex;
 }
 
 async function executeSingleTask(
@@ -290,7 +296,7 @@ export async function workerNode(
         latestTask = await executeSingleTask(task, index, completed, state, config);
       } catch (error) {
         console.error('[Worker Node] ❌ Error:', error);
-        if (task.retries < MAX_RETRIES) {
+        if (task.retries < DEEP_RESEARCH_MAX_RETRIES) {
           latestTask = {
             ...task,
             retries: task.retries + 1,
@@ -321,6 +327,6 @@ export async function workerNode(
   return {
     taskQueue: updatedTaskQueue,
     completedTasks: completed,
-    currentTaskIndex: taskQueue.length,
+    currentTaskIndex: getNextPendingTaskIndex(updatedTaskQueue),
   };
 }

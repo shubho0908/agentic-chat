@@ -18,6 +18,12 @@ interface MemoryLookupOptions {
   recentConversation?: string;
 }
 
+interface MemoryContextResult {
+  context: string;
+  failed: boolean;
+  error?: string;
+}
+
 interface MemorySearchRecord {
   id?: string;
   memory?: string;
@@ -106,13 +112,13 @@ export async function storeConversationMemory(
   }
 }
 
-export async function getMemoryContext(
+export async function getMemoryContextResult(
   query: string,
   userId: string,
   options?: MemoryLookupOptions
-): Promise<string> {
+): Promise<MemoryContextResult> {
   if (!MEM0_API_KEY) {
-    return '';
+    return { context: '', failed: false };
   }
 
   try {
@@ -135,15 +141,22 @@ export async function getMemoryContext(
 
     const records = dedupeMemorySearchRecords(searchResults.flat()).slice(0, 6);
     if (records.length > 0) {
-      return formatMemoryContext(records);
+      return { context: formatMemoryContext(records), failed: false };
     }
 
-    return await retrieveMemories(query, {
+    return {
+      context: await retrieveMemories(query, {
       user_id: userId,
       mem0ApiKey: MEM0_API_KEY,
-    }) || '';
+      }) || '',
+      failed: false,
+    };
   } catch (error) {
     console.error('[Mem0] Error retrieving memory context:', error);
-    return '';
+    return {
+      context: '',
+      failed: true,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }

@@ -16,10 +16,29 @@ import {
 import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
 import { withTrace } from '@/lib/langsmith-config';
 import { getPgPool } from '../storage/pgvector-client';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
 
 interface ResolvedAttachmentScope {
   attachmentIds: string[];
   attachmentCount: number;
+}
+
+function selectOverviewRows<T>(rows: T[], maxPerAttachment: number): T[] {
+  if (rows.length <= maxPerAttachment) {
+    return rows;
+  }
+
+  const selectedIndexes = new Set<number>();
+  selectedIndexes.add(0);
+  selectedIndexes.add(rows.length - 1);
+  selectedIndexes.add(Math.floor((rows.length - 1) / 2));
+
+  const orderedIndexes = Array.from(selectedIndexes)
+    .filter((index) => index >= 0 && index < rows.length)
+    .sort((a, b) => a - b)
+    .slice(0, maxPerAttachment);
+
+  return orderedIndexes.map((index) => rows[index]);
 }
 
 function formatRetrievedContext(
@@ -47,6 +66,7 @@ function formatRetrievedContext(
 }
 
 async function resolveCompletedAttachmentScope(
+  userId: string,
   options: RAGContextOptions = {}
 ): Promise<ResolvedAttachmentScope | null> {
   const {
@@ -85,6 +105,15 @@ async function resolveCompletedAttachmentScope(
     const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
 
     if (processingIds.length > 0 && waitForProcessing) {
+      for (const attachmentId of extractIds(partitioned.pending)) {
+        void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
+          console.warn('[RAG] Failed to kick off pending document processing:', {
+            attachmentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+
       const newlyCompleted = await waitForDocumentProcessing(processingIds);
       attachmentIds = [...completedIds, ...newlyCompleted];
     } else {
@@ -106,6 +135,15 @@ async function resolveCompletedAttachmentScope(
     const alreadyCompleted = extractIds(partitioned.completed);
 
     if (needProcessing.length > 0) {
+      for (const attachmentId of extractIds(partitioned.pending)) {
+        void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
+          console.warn('[RAG] Failed to kick off provided document processing:', {
+            attachmentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+
       const newlyCompleted = await waitForDocumentProcessing(needProcessing);
       completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
     } else {
@@ -133,7 +171,7 @@ export async function getDocumentOverviewContext(
     'rag-document-overview',
     async () => {
       try {
-        const scope = await resolveCompletedAttachmentScope(options);
+        const scope = await resolveCompletedAttachmentScope(userId, options);
         if (!scope) {
           return null;
         }
@@ -157,7 +195,7 @@ export async function getDocumentOverviewContext(
              AND ($2::text IS NULL OR metadata->>'conversationId' = $2)
              AND metadata->>'attachmentId' = ANY($3::text[])
            ORDER BY created_at ASC
-           LIMIT 40`,
+           LIMIT 120`,
           [userId, options.conversationId ?? null, scope.attachmentIds]
         );
 
@@ -165,16 +203,18 @@ export async function getDocumentOverviewContext(
           return null;
         }
 
-        const perAttachmentBudget = 2;
-        const chunksByAttachment = new Map<string, number>();
-        const selected = result.rows.filter((row) => {
-          const currentCount = chunksByAttachment.get(row.attachment_id) ?? 0;
-          if (currentCount >= perAttachmentBudget) {
-            return false;
-          }
-          chunksByAttachment.set(row.attachment_id, currentCount + 1);
-          return true;
-        });
+        const perAttachmentBudget = 3;
+        const rowsByAttachment = new Map<string, typeof result.rows>();
+
+        for (const row of result.rows) {
+          const attachmentRows = rowsByAttachment.get(row.attachment_id) ?? [];
+          attachmentRows.push(row);
+          rowsByAttachment.set(row.attachment_id, attachmentRows);
+        }
+
+        const selected = Array.from(rowsByAttachment.values()).flatMap((attachmentRows) =>
+          selectOverviewRows(attachmentRows, perAttachmentBudget)
+        );
 
         if (selected.length === 0) {
           return null;
@@ -194,7 +234,8 @@ export async function getDocumentOverviewContext(
           ...overviewContext,
           documentCount: scope.attachmentCount,
         };
-      } catch {
+      } catch (error) {
+        console.error('[RAG] Document overview context retrieval failed:', error);
         return null;
       }
     },
@@ -221,7 +262,7 @@ export async function getRAGContext(
       scoreThreshold = RAG_CONFIG.search.scoreThreshold,
     } = options;
 
-    const scope = await resolveCompletedAttachmentScope(options);
+    const scope = await resolveCompletedAttachmentScope(userId, options);
     if (!scope) {
       return null;
     }
@@ -240,7 +281,8 @@ export async function getRAGContext(
     }
 
         return formatRetrievedContext(results);
-      } catch {
+      } catch (error) {
+        console.error('[RAG] Context retrieval failed:', error);
         return null;
       }
     },

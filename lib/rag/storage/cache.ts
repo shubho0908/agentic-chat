@@ -86,11 +86,31 @@ export async function addToSemanticCache(userQuery: string, answer: string, quer
     await ensurePgVectorTables();
     const pool = getPgPool();
     const vectorType = getVectorType();
+    const cutoffTimestamp = new Date(Date.now() - (CACHE_TTL_SECONDS * 1000));
+
+    await pool.query(
+      `DELETE FROM semantic_cache
+       WHERE user_id = $1
+         AND created_at <= $2`,
+      [userId, cutoffTimestamp]
+    );
 
     await pool.query(
       `INSERT INTO semantic_cache (user_id, question, answer, embedding)
        VALUES ($1, $2, $3, $4::${vectorType})`,
       [userId, userQuery, answer, JSON.stringify(queryEmbedding)]
+    );
+
+    await pool.query(
+      `DELETE FROM semantic_cache
+       WHERE user_id = $1
+         AND id NOT IN (
+           SELECT id FROM semantic_cache
+           WHERE user_id = $1
+           ORDER BY created_at DESC
+           LIMIT 200
+         )`,
+      [userId]
     );
   } catch (error) {
     throw new RAGError(

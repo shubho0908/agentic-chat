@@ -1,6 +1,6 @@
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 
-export type ModelStage =
+type ModelStage =
   | 'chat'
   | 'vision'
   | 'tool_planner'
@@ -27,7 +27,7 @@ const STAGE_MODEL_FALLBACKS: Record<ModelStage, string> = {
   workspace_agent: 'gpt-5-mini',
 };
 
-export function isAllowedModel(model: string): boolean {
+function isAllowedModel(model: string): boolean {
   return ALLOWED_MODELS.has(model);
 }
 
@@ -49,7 +49,7 @@ export function getStageModel(requestedModel: string, stage: ModelStage): string
   return validateRequestedModel(fallbackModel) ?? validatedRequestedModel ?? DEFAULT_MODEL;
 }
 
-export function supportsCustomTemperature(model: string): boolean {
+function supportsCustomTemperature(model: string): boolean {
   return !model.trim().toLowerCase().startsWith('gpt-5');
 }
 
@@ -61,7 +61,7 @@ export function getSupportedTemperature(model: string, temperature?: number): nu
   return supportsCustomTemperature(model) ? temperature : undefined;
 }
 
-export function getModelContextWindow(model: string): number {
+function getModelContextWindow(model: string): number {
   return ALLOWED_MODELS.get(model)?.contextWindow ?? 128000;
 }
 

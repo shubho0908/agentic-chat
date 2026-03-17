@@ -8,6 +8,12 @@ import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@prisma/client';
 import { safeFetch } from '@/lib/network/safe-fetch';
+import {
+  logDocumentProcessingFinish,
+  logDocumentProcessingStart,
+  logError,
+  measureLatencyMs,
+} from '@/lib/observability';
 
 interface ProcessDocumentResult {
   success: boolean;
@@ -37,6 +43,11 @@ export async function processDocument(
   attachmentId: string,
   userId: string
 ): Promise<ProcessDocumentResult> {
+  const startedAt = Date.now();
+  let fileType: string | undefined;
+  let fileName: string | undefined;
+  let conversationId: string | undefined;
+
   try {
     const attachment = await prisma.attachment.findUnique({
       where: { id: attachmentId },
@@ -62,7 +73,17 @@ export async function processDocument(
       throw new RAGError('Unauthorized', RAGErrorCode.UNAUTHORIZED);
     }
 
-    const conversationId = attachment.message.conversationId;
+    conversationId = attachment.message.conversationId;
+    fileType = attachment.fileType;
+    fileName = attachment.fileName;
+
+    logDocumentProcessingStart({
+      attachmentId,
+      userId,
+      conversationId,
+      fileType,
+      fileName,
+    });
 
     if (!isSupportedForRAG(attachment.fileType)) {
       await prisma.attachment.update({
@@ -73,10 +94,21 @@ export async function processDocument(
         },
       });
 
+      const error = `Unsupported file type for RAG: ${attachment.fileType}`;
+      logDocumentProcessingFinish({
+        attachmentId,
+        userId,
+        conversationId,
+        fileType,
+        fileName,
+        latencyMs: measureLatencyMs(startedAt),
+        error,
+      });
+
       return {
         success: false,
         attachmentId,
-        error: `Unsupported file type for RAG: ${attachment.fileType}`,
+        error,
       };
     }
 
@@ -126,6 +158,17 @@ export async function processDocument(
       },
     });
 
+    logDocumentProcessingFinish({
+      attachmentId,
+      userId,
+      conversationId,
+      fileType,
+      fileName,
+      chunkCount: chunkResult.stats?.totalChunks || 0,
+      tokenCount: chunkResult.stats?.totalTokens || 0,
+      latencyMs: measureLatencyMs(startedAt),
+    });
+
     return {
       success: true,
       attachmentId,
@@ -152,17 +195,34 @@ export async function processDocument(
         },
       });
     } catch (statusUpdateError) {
-      console.error(
-        '[RAG] Failed to persist attachment failure status:',
-        statusUpdateError
-      );
+      logError({
+        event: 'document_processing_failure_status_persist_failed',
+        attachmentId,
+        userId,
+        error: statusUpdateError instanceof Error ? statusUpdateError.message : String(statusUpdateError),
+      });
     }
 
     try {
       await deleteDocumentChunks(attachmentId);
-    } catch {
-      // Cleanup failed, but document is already marked as failed
+    } catch (cleanupError) {
+      logError({
+        event: 'document_processing_cleanup_failed',
+        attachmentId,
+        userId,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
     }
+
+    logDocumentProcessingFinish({
+      attachmentId,
+      userId,
+      conversationId,
+      fileType,
+      fileName,
+      latencyMs: measureLatencyMs(startedAt),
+      error: errorMessage,
+    });
 
     return {
       success: false,

@@ -9,6 +9,7 @@ import { appBaseUrl } from '@/lib/appUrl';
 interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
   userId: string;
+  grantedScopes: string[];
 }
 
 interface SynchronizedGoogleAccount {
@@ -376,7 +377,11 @@ export async function createGoogleSuiteClient(userId: string): Promise<GoogleSui
     }
   });
 
-  return { oauth2Client, userId };
+  return {
+    oauth2Client,
+    userId,
+    grantedScopes: account.grantedScopes,
+  };
 }
 
 export async function revokeGoogleWorkspaceAccess(userId: string): Promise<void> {

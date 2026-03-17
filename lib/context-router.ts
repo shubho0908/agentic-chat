@@ -1,6 +1,6 @@
 'use server';
 
-import { getMemoryContext } from './memory';
+import { getMemoryContextResult } from './memory';
 import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
@@ -12,6 +12,8 @@ import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForCont
 import { extractTextFromMessage } from './chat/message-helpers';
 import { mediateMemoryIntent } from './chat/request-mediator';
 import { estimateMemoryEntryCount } from './chat/memory-policy';
+import { extractTextQuery, isReferentialQuery } from './chat/referential-query';
+import { logWarn } from './observability';
 
 interface ContextRoutingMetadata {
   hasMemories: boolean;
@@ -26,6 +28,10 @@ interface ContextRoutingMetadata {
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
+  degradedContexts?: Array<{
+    source: string;
+    reason: string;
+  }>;
 }
 
 interface ContextRoutingResult {
@@ -33,28 +39,11 @@ interface ContextRoutingResult {
   metadata: ContextRoutingMetadata;
 }
 
-function extractTextQuery(query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): string {
-  return typeof query === 'string' 
-    ? query 
-    : query.filter(p => p.type === 'text' && p.text).map(p => p.text).join(' ');
-}
-
-const REFERENTIAL_PATTERNS = [
-  /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
-  /\bwhat('s|\s+is)?\s+(in|about)\s+(this|that|the|it)/i,
-  /\b(summarize|explain|analyze|describe)\s+(this|that|the|it)/i,
-  /^(summarize|summary|explain|analyze|describe)$/i,
-] as const;
-
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
   if (!Array.isArray(content)) return 0;
   return content.filter(part => 
     typeof part === 'object' && part !== null && 'image_url' in part
   ).length;
-}
-
-function isReferentialQuery(normalized: string): boolean {
-  return REFERENTIAL_PATTERNS.some(p => p.test(normalized));
 }
 
 function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
@@ -159,9 +148,29 @@ function buildMissingDocumentContext(query: string): string {
   );
 }
 
+function logMissingDocumentRetrieval(params: {
+  userId: string;
+  conversationId?: string;
+  query: string;
+  documentCount: number;
+  isReferential: boolean;
+  hadOverviewFallback: boolean;
+}): void {
+  logWarn({
+    event: 'rag_context_missing_with_attachments',
+    userId: params.userId,
+    conversationId: params.conversationId,
+    queryLength: params.query.trim().length,
+    documentCount: params.documentCount,
+    isReferential: params.isReferential,
+    hadOverviewFallback: params.hadOverviewFallback,
+  });
+}
+
 async function getAttachmentInfo(conversationId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
+  documentCount: number;
 }> {
   try {
     const messages = await prisma.message.findMany({
@@ -183,7 +192,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     const allAttachments = messages.flatMap(m => m.attachments);
 
     if (allAttachments.length === 0) {
-      return { hasDocuments: false, hasAny: false };
+      return { hasDocuments: false, hasAny: false, documentCount: 0 };
     }
 
     const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
@@ -193,9 +202,10 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     return {
       hasDocuments: documentAttachments.length > 0,
       hasAny: true,
+      documentCount: documentAttachments.length,
     };
   } catch {
-    return { hasDocuments: false, hasAny: false };
+    return { hasDocuments: false, hasAny: false, documentCount: 0 };
   }
 }
 
@@ -212,10 +222,9 @@ export async function routeContext(
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
-  const normalized = textQuery.toLowerCase().trim();
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
-  const isReferential = isReferentialQuery(normalized);
+  const isReferential = isReferentialQuery(textQuery);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
 
   const metadata: ContextRoutingMetadata = {
@@ -229,6 +238,14 @@ export async function routeContext(
     imageCount,
     urlCount: 0,
     skippedMemory: !memoryEnabled,
+    degradedContexts: [],
+  };
+
+  const addDegradedContext = (source: string, reason: string) => {
+    metadata.degradedContexts = [
+      ...(metadata.degradedContexts || []),
+      { source, reason },
+    ];
   };
 
 
@@ -241,6 +258,7 @@ export async function routeContext(
       const attachmentInfo = await getAttachmentInfo(conversationId);
       if (attachmentInfo.hasDocuments) {
         metadata.hasDocuments = true;
+        metadata.documentCount = attachmentInfo.documentCount;
       }
     }
 
@@ -258,6 +276,7 @@ export async function routeContext(
         }
       } catch (error) {
         console.error('[Context Router] Deep research URL scraping failed:', error);
+        addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
       }
     }
 
@@ -295,13 +314,14 @@ export async function routeContext(
       }
     } catch (error) {
       console.error('[Context Router] URL scraping failed:', error);
+      addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
       // Continue with normal flow if URL scraping fails
     }
   }
 
   const attachmentInfoPromise = conversationId
     ? getAttachmentInfo(conversationId)
-    : Promise.resolve({ hasDocuments: false, hasAny: false });
+    : Promise.resolve({ hasDocuments: false, hasAny: false, documentCount: 0 });
 
   const ragPromise = resolveDocumentContext(retrievalQueries, userId, {
     conversationId,
@@ -338,6 +358,7 @@ export async function routeContext(
     }
 
     if (attachmentInfo.hasDocuments) {
+      metadata.documentCount = attachmentInfo.documentCount;
       const overviewContext = await getDocumentOverviewContext(userId, {
         conversationId,
         waitForProcessing: false,
@@ -350,6 +371,14 @@ export async function routeContext(
       }
 
       metadata.hasDocuments = true;
+      logMissingDocumentRetrieval({
+        userId,
+        conversationId,
+        query: textQuery,
+        documentCount: attachmentInfo.documentCount,
+        isReferential,
+        hadOverviewFallback: false,
+      });
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
@@ -376,6 +405,7 @@ export async function routeContext(
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
     metadata.hasDocuments = true;
+    metadata.documentCount = attachmentInfo.documentCount;
 
     const overviewContext = await getDocumentOverviewContext(userId, {
       conversationId,
@@ -387,6 +417,14 @@ export async function routeContext(
       return { context: overviewContext.context, metadata };
     }
 
+    logMissingDocumentRetrieval({
+      userId,
+      conversationId,
+      query: textQuery,
+      documentCount: attachmentInfo.documentCount,
+      isReferential,
+      hadOverviewFallback: false,
+    });
     return { context: buildMissingDocumentContext(textQuery), metadata };
   }
 
@@ -413,15 +451,20 @@ export async function routeContext(
 
   metadata.attemptedMemory = true;
 
-  const memoryContext = await getMemoryContext(textQuery, userId, {
+  const memoryContextResult = await getMemoryContextResult(textQuery, userId, {
     recentConversation,
   });
 
-  if (memoryContext) {
+  if (memoryContextResult.failed) {
+    addDegradedContext('memory', memoryContextResult.error || 'Memory retrieval failed');
+    return { context: '', metadata };
+  }
+
+  if (memoryContextResult.context) {
     metadata.hasMemories = true;
-    metadata.memoryCount = estimateMemoryEntryCount(memoryContext);
+    metadata.memoryCount = estimateMemoryEntryCount(memoryContextResult.context);
     metadata.routingDecision = RoutingDecision.MemoryOnly;
-    return { context: memoryContext, metadata };
+    return { context: memoryContextResult.context, metadata };
   }
 
   return { context: '', metadata };

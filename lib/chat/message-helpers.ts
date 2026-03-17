@@ -1,8 +1,10 @@
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type OpenAI from 'openai';
+import { truncateTextToTokenLimit } from '@/lib/utils/token-counter';
 
 type MessageContent = string | MessageContentPart[];
 const MAX_CONTEXT_MESSAGE_LENGTH = 12000;
+const MAX_CONTEXT_MESSAGE_TOKENS = 3000;
 
 export function extractTextFromMessage(content: MessageContent): string {
   if (typeof content === 'string') {
@@ -14,15 +16,17 @@ export function extractTextFromMessage(content: MessageContent): string {
     .join(' ');
 }
 
-export function injectContextToMessages(messages: Message[], context: string): Message[] {
+export function injectContextToMessages(messages: Message[], context: string, model?: string): Message[] {
   const trimmedContext = context.trim();
   if (!trimmedContext) {
     return messages;
   }
 
-  const safeContext = trimmedContext.length > MAX_CONTEXT_MESSAGE_LENGTH
-    ? `${trimmedContext.substring(0, MAX_CONTEXT_MESSAGE_LENGTH)}\n\n[Context truncated to fit budget.]`
-    : trimmedContext;
+  const safeContext = model
+    ? truncateTextToTokenLimit(trimmedContext, model, MAX_CONTEXT_MESSAGE_TOKENS)
+    : trimmedContext.length > MAX_CONTEXT_MESSAGE_LENGTH
+      ? `${trimmedContext.substring(0, MAX_CONTEXT_MESSAGE_LENGTH)}\n\n[Context truncated to fit budget.]`
+      : trimmedContext;
 
   const contextMessage: Message = {
     role: 'user',

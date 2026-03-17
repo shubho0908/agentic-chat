@@ -13,15 +13,21 @@ import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
 import { executeMultiSearch } from '../tools/web-search/search-planner';
 import { createUnifiedPlan, type WebSearchPlan } from '../tools/unified-planner';
+import { truncateTextToTokenLimit } from '@/lib/utils/token-counter';
 
-const MAX_TOOL_CONTEXT_LENGTH = 6000;
+const MAX_TOOL_CONTEXT_TOKENS = 1600;
 
-function truncateContext(text: string, maxLength: number = MAX_TOOL_CONTEXT_LENGTH): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
+function logToolWriteFailure(toolLabel: string, context: string, error: unknown): void {
+  console.warn(`[${toolLabel}] Failed to ${context}:`, error);
+}
 
-  return `${text.substring(0, maxLength)}\n\n[Tool context truncated to stay within the prompt budget.]`;
+function truncateContext(text: string, model: string, maxTokens: number = MAX_TOOL_CONTEXT_TOKENS): string {
+  return truncateTextToTokenLimit(
+    text,
+    model,
+    maxTokens,
+    '\n\n[Tool context truncated to stay within the prompt budget.]'
+  );
 }
 
 export async function executeWebSearchTool(
@@ -42,7 +48,9 @@ export async function executeWebSearchTool(
     if (abortSignal?.aborted) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
-      } catch {}
+      } catch (error) {
+        logToolWriteFailure('Web Search Tool', 'send aborted message', error);
+      }
       return messages;
     }
     const useIntelligentPlanning = searchDepth === 'advanced' && apiKey && model;
@@ -294,16 +302,18 @@ export async function executeWebSearchTool(
     }
     
     const webSearchInstructions = getWebSearchInstructions(searchDepth);
-    const searchContext = `## Web Search Context\n\n${truncateContext(searchResults)}\n\n${webSearchInstructions}`;
+    const searchContext = `## Web Search Context\n\n${truncateContext(searchResults, model || 'gpt-4o')}\n\n${webSearchInstructions}`;
     
-    return injectContextToMessages(messages, searchContext);
+    return injectContextToMessages(messages, searchContext, model);
   } catch (error) {
     console.error('[Chat API] Web search error:', error);
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.WEB_SEARCH.ABORTED));
-      } catch {}
+      } catch (enqueueError) {
+        logToolWriteFailure('Web Search Tool', 'send aborted fallback', enqueueError);
+      }
       return messages;
     }
     
@@ -313,7 +323,9 @@ export async function executeWebSearchTool(
         'completed',
         TOOL_ERROR_MESSAGES.WEB_SEARCH.FAILED_FALLBACK
       ));
-    } catch {}
+    } catch (enqueueError) {
+      logToolWriteFailure('Web Search Tool', 'send failure fallback', enqueueError);
+    }
     
     return messages;
   }
@@ -331,7 +343,8 @@ export async function executeDeepResearchTool(
   conversationId?: string,
   imageContext?: string,
   attachmentIds?: string[],
-  documentContextForPlanning?: string
+  documentContextForPlanning?: string,
+  requestId?: string
 ): Promise<{ messages: Message[]; failed: boolean; skipped?: boolean; finalResponse?: string; citations?: Citation[]; followUpQuestions?: string[] }> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
@@ -340,7 +353,9 @@ export async function executeDeepResearchTool(
     if (abortSignal?.aborted) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
-      } catch {}
+      } catch (error) {
+        logToolWriteFailure('Deep Research Tool', 'send aborted message', error);
+      }
       return { messages, failed: false, skipped: false };
     }
     
@@ -386,13 +401,16 @@ export async function executeDeepResearchTool(
       imageContext,
       attachmentIds,
       documentContextForPlanning,
+      requestId,
     });
     
     if (streamClosed || abortSignal?.aborted) {
       if (abortSignal?.aborted) {
         try {
           controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
-        } catch {}
+        } catch (error) {
+          logToolWriteFailure('Deep Research Tool', 'send aborted post-run message', error);
+        }
       }
       return { messages, failed: false, skipped: result.skipped };
     }
@@ -432,10 +450,10 @@ export async function executeDeepResearchTool(
       }
     }
     
-    const researchContext = `## Deep Research Results\n\n${truncateContext(formattedResult, 8000)}`;
+    const researchContext = `## Deep Research Results\n\n${truncateContext(formattedResult, model, 2200)}`;
     
     return {
-      messages: injectContextToMessages(messages, researchContext),
+      messages: injectContextToMessages(messages, researchContext, model),
       failed: false,
       skipped: result.skipped,
       finalResponse: result.response,
@@ -449,7 +467,9 @@ export async function executeDeepResearchTool(
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.ABORTED));
-      } catch {}
+      } catch (enqueueError) {
+        logToolWriteFailure('Deep Research Tool', 'send aborted fallback', enqueueError);
+      }
       return { messages, failed: false, skipped: false };
     }
     
@@ -488,7 +508,9 @@ export async function executeGoogleSuiteTool(
     if (abortSignal?.aborted) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
-      } catch {}
+      } catch (error) {
+        logToolWriteFailure('Google Workspace Tool', 'send aborted message', error);
+      }
       return messages;
     }
 
@@ -535,16 +557,18 @@ export async function executeGoogleSuiteTool(
       }
     }
 
-    const workspaceContext = `## Google Workspace Context\n\n${truncateContext(workspaceResults)}`;
+    const workspaceContext = `## Google Workspace Context\n\n${truncateContext(workspaceResults, model, 1400)}`;
 
-    return injectContextToMessages(messages, workspaceContext);
+    return injectContextToMessages(messages, workspaceContext, model);
   } catch (error) {
     console.error('[Chat API] Google Workspace error:', error);
 
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
         controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
-      } catch {}
+      } catch (enqueueError) {
+        logToolWriteFailure('Google Workspace Tool', 'send aborted fallback', enqueueError);
+      }
       return messages;
     }
 
@@ -554,7 +578,9 @@ export async function executeGoogleSuiteTool(
         'completed',
         TOOL_ERROR_MESSAGES.GOOGLE_SUITE.FAILED_FALLBACK
       ));
-    } catch {}
+    } catch (enqueueError) {
+      logToolWriteFailure('Google Workspace Tool', 'send failure fallback', enqueueError);
+    }
 
     return messages;
   }

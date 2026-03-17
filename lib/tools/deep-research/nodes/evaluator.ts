@@ -4,8 +4,8 @@ import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
 import type { EvaluationResult, StrictnessLevel } from '@/types/deep-research';
 import { getStageModel } from '@/lib/model-policy';
-
-const MAX_ATTEMPTS = 3; // Total attempts allowed (1 initial + 2 retries)
+import { invokeStructuredOutput } from '../structured-output';
+import { DEEP_RESEARCH_MAX_ATTEMPTS } from '../constants';
 const evaluationResultSchema = z.object({
   meetsStandards: z.boolean(),
   isRelevant: z.boolean(),
@@ -48,38 +48,13 @@ export async function evaluatorNode(
       responseToEvaluate
     );
 
-    const response = await llm.invoke(
+    const evaluationResult: EvaluationResult = await invokeStructuredOutput(
+      llm,
+      evaluationResultSchema,
+      'DeepResearchEvaluation',
       [{ role: 'system', content: evaluationPrompt }],
-      { signal: config.abortSignal }
+      config.abortSignal
     );
-
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-    
-    if (!rawContent.trim()) {
-      return {
-        evaluationResult: {
-          meetsStandards: false,
-          isRelevant: false,
-          feedback: 'Evaluator returned an empty payload',
-          score: 0,
-        },
-        currentAttempt,
-        strictnessLevel,
-      };
-    }
-
-    const parsedEvaluationResult = evaluationResultSchema.safeParse(JSON.parse(rawContent));
-    if (!parsedEvaluationResult.success) {
-      throw new Error('Invalid evaluation payload');
-    }
-    const evaluationResult: EvaluationResult = parsedEvaluationResult.data;
     const evaluationFeedback = [
       ...(state.evaluationFeedback || []),
       `Attempt ${currentAttempt} (Level ${strictnessLevel}): ${evaluationResult.feedback}`,
@@ -94,7 +69,7 @@ export async function evaluatorNode(
       };
     }
 
-    if (currentAttempt < MAX_ATTEMPTS) {
+    if (currentAttempt < DEEP_RESEARCH_MAX_ATTEMPTS) {
       return {
         evaluationResult,
         currentAttempt: currentAttempt + 1,

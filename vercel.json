@@ -4,5 +4,11 @@
     "app/**/*.{ts,tsx}": {
       "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/internal/orchestration/drain",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }

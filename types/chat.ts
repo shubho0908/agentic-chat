@@ -44,6 +44,10 @@ export interface MemoryStatus {
   routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
   activeToolName?: string;
+  degradedContexts?: Array<{
+    source: string;
+    reason: string;
+  }>;
   tokenUsage?: TokenUsage;
   toolProgress?: {
     status: ToolProgressStatus | string;
@@ -173,6 +177,11 @@ export interface UpdateMessageResponse {
   parentMessageId: string | null;
   siblingIndex: number;
   attachments: Attachment[];
+}
+
+export interface FinalizeEditedMessageResponse {
+  updatedMessage: UpdateMessageResponse;
+  assistantMessage: UpdateMessageResponse;
 }
 
 export interface ConversationResult {

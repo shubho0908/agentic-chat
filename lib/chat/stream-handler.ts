@@ -14,7 +14,10 @@ import {
   encodeDone,
   shouldSendMemoryStatus,
 } from './streaming-helpers';
-import { incrementDeepResearchUsage, checkDeepResearchUsage } from '@/lib/deep-research-usage';
+import {
+  reserveDeepResearchUsage,
+  releaseDeepResearchUsageReservation,
+} from '@/lib/deep-research-usage';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
 import { filterDocumentAttachments, partitionByStatus, extractIds } from '@/lib/rag/retrieval/status-helpers';
@@ -23,6 +26,13 @@ import { getRAGContext } from '@/lib/rag/retrieval/context';
 import { withRetry } from '@/lib/retry';
 import { getStageModel } from '@/lib/model-policy';
 import { extractUrlsFromMessage, formatScrapedContentForContext, scrapeMultipleUrls } from '@/lib/url-scraper/scraper';
+import { checkTokenBudget } from '@/lib/chat/token-budget';
+import {
+  enqueueOrStartJobWithinCapacity,
+  finishOrchestrationJob,
+} from '@/lib/orchestration/store';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+import { logWarn } from '@/lib/observability';
 
 interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
@@ -37,36 +47,100 @@ interface StreamHandlerOptions {
   userId?: string;
   conversationId?: string;
   searchDepth?: SearchDepth;
+  requestId?: string;
 }
 
 function toOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
   return messages as ChatCompletionMessageParam[];
 }
 
+function logStreamWriteFailure(context: string, error: unknown): void {
+  console.warn(`[Stream Handler] Failed to ${context}:`, error);
+}
+
 export function createChatStreamHandler(options: StreamHandlerOptions) {
-  const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId, searchDepth = 'basic' } = options;
+  const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId, searchDepth = 'basic', requestId } = options;
   let { enhancedMessages } = options;
 
   return {
     async start(controller: ReadableStreamDefaultController) {
       let streamClosed = false;
+      let deepResearchReservationActive = false;
+      let reservedUsageInfo: { usageCount: number; remaining: number; limit: number } | null = null;
+      let deepResearchJobId: string | null = null;
       
       const safeClose = () => {
         if (!streamClosed) {
           try {
             controller.close();
             streamClosed = true;
-          } catch {
-            // Already closed
+          } catch (error) {
+            logStreamWriteFailure('close stream controller', error);
           }
         }
+      };
+
+      const releaseDeepResearchReservation = async () => {
+        if (!deepResearchReservationActive || !userId) {
+          return;
+        }
+
+        try {
+          await releaseDeepResearchUsageReservation(userId);
+        } catch (error) {
+          console.error('[Stream Handler] Failed to release deep research reservation:', error);
+        } finally {
+          deepResearchReservationActive = false;
+        }
+      };
+
+      const finishDeepResearchJob = async (
+        status: 'completed' | 'failed',
+        payload?: { result?: unknown; error?: string }
+      ) => {
+        if (!deepResearchJobId) {
+          return;
+        }
+
+        try {
+          await finishOrchestrationJob(deepResearchJobId, status, payload);
+        } catch (error) {
+          console.error('[Stream Handler] Failed to finish deep research job:', error);
+        } finally {
+          deepResearchJobId = null;
+        }
+      };
+
+      const ensurePromptBudget = async () => {
+        const budgetCheck = checkTokenBudget(enhancedMessages, model);
+        memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
+
+        if (budgetCheck.ok) {
+          return true;
+        }
+
+        try {
+          controller.enqueue(encodeError(budgetCheck.errorMessage ?? 'Request exceeds the server token budget.'));
+          controller.enqueue(encodeDone());
+        } catch (error) {
+          logStreamWriteFailure('send prompt budget error', error);
+        }
+
+        await releaseDeepResearchReservation();
+        await finishDeepResearchJob('failed', {
+          error: budgetCheck.errorMessage ?? 'prompt_budget_exceeded',
+        });
+        safeClose();
+        return false;
       };
       
       try {
         if (abortSignal?.aborted) {
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch {}
+          } catch (error) {
+            logStreamWriteFailure('send aborted request message', error);
+          }
           safeClose();
           return;
         }
@@ -81,15 +155,23 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         if (activeTool === TOOL_IDS.WEB_SEARCH) {
           enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal, searchDepth);
+          if (!(await ensurePromptBudget())) {
+            return;
+          }
         }
 
         if (activeTool === TOOL_IDS.GOOGLE_SUITE) {
           if (!userId) {
             try {
               controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REQUIRED));
-            } catch {}
+            } catch (error) {
+              logStreamWriteFailure('send Google auth required message', error);
+            }
           } else {
             enhancedMessages = await executeGoogleSuiteTool(textQuery, controller, enhancedMessages, userId, apiKey, model, abortSignal);
+            if (!(await ensurePromptBudget())) {
+              return;
+            }
           }
         }
         
@@ -104,13 +186,46 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             }
           } else {
             try {
-              const usageInfo = await checkDeepResearchUsage(userId);
-              if (!usageInfo.canUse) {
-                const resetDate = new Date(usageInfo.resetDate);
+              const deepResearchReservation = await enqueueOrStartJobWithinCapacity({
+                type: 'deep_research',
+                userId,
+                payload: { query: textQuery, conversationId, requestId },
+                maxRunning: 2,
+                leaseOwner: requestId,
+                persistIfAtCapacity: false,
+              });
+
+              if (deepResearchReservation.atCapacity) {
+                controller.enqueue(encodeChatChunk('Deep research is temporarily busy. Please retry in a moment.'));
+                controller.enqueue(encodeDone());
+                safeClose();
+                return;
+              }
+
+              deepResearchJobId = deepResearchReservation.job?.id ?? null;
+              if (!deepResearchReservation.started) {
+                controller.enqueue(encodeChatChunk('Deep research is already running for this request. Please wait for it to finish.'));
+                controller.enqueue(encodeDone());
+                safeClose();
+                return;
+              }
+
+              try {
+                const usageInfo = await reserveDeepResearchUsage(userId);
+                reservedUsageInfo = {
+                  usageCount: usageInfo.usageCount,
+                  remaining: usageInfo.remaining,
+                  limit: usageInfo.limit,
+                };
+                deepResearchReservationActive = true;
+              } catch (usageCheckError) {
+                const message =
+                  usageCheckError instanceof Error
+                    ? usageCheckError.message
+                    : TOOL_ERROR_MESSAGES.DEEP_RESEARCH.TECHNICAL_ERROR;
+
                 try {
-                  controller.enqueue(encodeChatChunk(
-                    `Deep research limit reached. You have used all ${usageInfo.limit} requests this month. Resets on ${resetDate.toLocaleDateString()}.`
-                  ));
+                  controller.enqueue(encodeChatChunk(message));
                 } catch {
                   console.error('[Stream Handler] Could not send limit error message (controller closed)');
                 }
@@ -119,26 +234,11 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 } catch {
                   console.error('[Stream Handler] Could not enqueue done (controller closed)');
                 }
+                await finishDeepResearchJob('failed', { error: message });
                 safeClose();
                 return;
               }
-            } catch (usageCheckError) {
-              console.error('[Stream Handler] Failed to check deep research usage:', usageCheckError);
-              try {
-                controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.TECHNICAL_ERROR));
-              } catch {
-                console.error('[Stream Handler] Could not send error message (controller closed)');
-              }
-              try {
-                controller.enqueue(encodeDone());
-              } catch {
-                console.error('[Stream Handler] Could not enqueue done (controller closed)');
-              }
-              safeClose();
-              return;
-            }
-            
-            try {
+
               let attachmentIds: string[] = [];
               if (conversationId) {
                 try {
@@ -174,6 +274,14 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
                     
                     if (processingIds.length > 0) {
+                      if (userId) {
+                        await Promise.allSettled(
+                          extractIds(partitioned.pending).map((attachmentId) =>
+                            runOrQueueDocumentProcessingJob(attachmentId, userId)
+                          )
+                        );
+                      }
+
                       controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
                         type: 'tool_progress',
                         toolId: TOOL_IDS.DEEP_RESEARCH,
@@ -226,6 +334,15 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   
                   if (ragContext) {
                     documentContextForPlanning = ragContext.context;
+                  } else {
+                    logWarn({
+                      event: 'deep_research_rag_context_missing',
+                      requestId,
+                      userId,
+                      conversationId,
+                      attachmentCount: attachmentIds.length,
+                      queryLength: textQuery.trim().length,
+                    });
                   }
                 } catch (docContextError) {
                   console.error('[Stream Handler] Document context retrieval for planning error:', docContextError);
@@ -318,29 +435,29 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   conversationId,
                   imageContext,
                   attachmentIds,
-                  documentContextForPlanning
+                  documentContextForPlanning,
+                  requestId
                 );
                 enhancedMessages = result.messages;
                 researchFailed = result.failed;
                 
                 if (!researchFailed && !abortSignal?.aborted) {
-                  try {
-                    if (!result.skipped) {
-                      const updatedUsage = await incrementDeepResearchUsage(userId);
+                  if (result.skipped) {
+                    await releaseDeepResearchReservation();
+                  } else {
+                    deepResearchReservationActive = false;
+                    if (reservedUsageInfo) {
                       try {
                         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
                           type: 'usage_updated',
-                          usageCount: updatedUsage.usageCount,
-                          remaining: updatedUsage.remaining,
-                          limit: updatedUsage.limit,
+                          usageCount: reservedUsageInfo.usageCount,
+                          remaining: reservedUsageInfo.remaining,
+                          limit: reservedUsageInfo.limit,
                         })}\n\n`));
                       } catch {
                         console.error('[Stream Handler] Could not send usage update event (controller closed)');
                       }
                     }
-                  } catch (usageError) {
-                    console.error('[Stream Handler] Failed to increment usage after successful research:', usageError);
-                    // Continue anyway - research was successful, this is just a tracking issue
                   }
 
                   if (result.finalResponse) {
@@ -351,11 +468,21 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                       console.error('[Stream Handler] Could not enqueue direct research response (controller closed)');
                     }
                     safeClose();
+                    await finishDeepResearchJob('completed', {
+                      result: {
+                        skipped: result.skipped,
+                        finalResponse: Boolean(result.finalResponse),
+                      },
+                    });
                     return;
                   }
                 }
               } catch (researchError) {
                 console.error('[Stream Handler] ❌ Deep research execution error:', researchError);
+                await releaseDeepResearchReservation();
+                await finishDeepResearchJob('failed', {
+                  error: researchError instanceof Error ? researchError.message : String(researchError),
+                });
                 try {
                   controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.EXECUTION_ERROR));
                 } catch {
@@ -365,6 +492,10 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               }
             } catch (error) {
               console.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
+              await releaseDeepResearchReservation();
+              await finishDeepResearchJob('failed', {
+                error: error instanceof Error ? error.message : String(error),
+              });
               try {
                 controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.TECHNICAL_ERROR));
               } catch {
@@ -375,13 +506,19 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         }
         
         if (abortSignal?.aborted) {
+          await releaseDeepResearchReservation();
+          await finishDeepResearchJob('failed', { error: 'aborted' });
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch {}
+          } catch (error) {
+            logStreamWriteFailure('send aborted request fallback', error);
+          }
           safeClose();
           return;
         }
         if (researchFailed) {
+          await releaseDeepResearchReservation();
+          await finishDeepResearchJob('failed', { error: 'research_failed_fallback' });
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_FALLBACK));
           } catch {
@@ -389,6 +526,10 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             safeClose();
             return;
           }
+        }
+
+        if (!(await ensurePromptBudget())) {
+          return;
         }
         
         const streamResponse = await withRetry(
@@ -421,23 +562,34 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         } catch {
           console.error('[Stream Handler] Could not enqueue done (controller closed)');
         }
+        await finishDeepResearchJob('completed', {
+          result: { continuedWithStandardCompletion: true },
+        });
         safeClose();
       } catch (error) {
         if (error instanceof Error && (error.message.includes('aborted by user') || abortSignal?.aborted)) {
           console.error('🛑 [Stream Handler] Request aborted, closing stream cleanly');
+          await releaseDeepResearchReservation();
+          await finishDeepResearchJob('failed', { error: 'aborted' });
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch {}
+          } catch (error) {
+            logStreamWriteFailure('send aborted request terminal message', error);
+          }
           safeClose();
           return;
         }
 
         const { message } = parseOpenAIError(error);
+        await releaseDeepResearchReservation();
+        await finishDeepResearchJob('failed', { error: message });
         
         try {
           controller.enqueue(encodeError(message));
           controller.enqueue(encodeDone());
-        } catch {}
+        } catch (error) {
+          logStreamWriteFailure('send terminal stream error', error);
+        }
         safeClose();
       }
     },

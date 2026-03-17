@@ -4,6 +4,7 @@ import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
 import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
 import { getStageModel } from '@/lib/model-policy';
+import { invokeStructuredOutput } from '../structured-output';
 
 const gateDecisionSchema = z.object({
   shouldResearch: z.boolean(),
@@ -43,50 +44,16 @@ export async function gateNode(
       gateQuery = `${state.originalQuery}\n\n[NOTE: User has ${attachmentInfo.join(' and ')}. Consider that referential queries about attached content may benefit from research for comprehensive analysis.]`;
     }
     
-    const response = await llm.invoke(
+    const gateDecision: GateDecision = await invokeStructuredOutput(
+      llm,
+      gateDecisionSchema,
+      'DeepResearchGateDecision',
       [
         { role: 'system', content: RESEARCH_GATE_PROMPT },
         { role: 'user', content: gateQuery },
       ],
-      { signal: config.abortSignal }
+      config.abortSignal
     );
-
-    const rawContent = Array.isArray(response.content)
-      ? response.content
-          .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-          )
-          .map((part) => part.text)
-          .join('\n')
-      : String(response.content ?? '');
-
-    if (!rawContent.trim()) {
-      if (config.forceDeepResearch) {
-        return {
-          gateDecision: {
-            shouldResearch: true,
-            reason: 'Forced deep research request bypassed an empty gate response',
-            confidence: 'low',
-          },
-          skipped: false,
-        };
-      }
-      
-      return {
-        gateDecision: {
-          shouldResearch: true,
-          reason: 'Unable to parse gate decision, defaulting to research',
-          confidence: 'low',
-        },
-        skipped: false,
-      };
-    }
-
-    const parsedGateDecision = gateDecisionSchema.safeParse(JSON.parse(rawContent));
-    if (!parsedGateDecision.success) {
-      throw new Error('Invalid gate decision payload');
-    }
-    const gateDecision: GateDecision = parsedGateDecision.data;
 
     if (config.forceDeepResearch) {
       return {
@@ -114,32 +81,16 @@ export async function gateNode(
         }
       }
       
-      const directResponse = await llm.invoke(
+      const directLLMResponse: DirectLLMResponse = await invokeStructuredOutput(
+        llm,
+        directResponseSchema,
+        'DeepResearchDirectResponse',
         [
           { role: 'system', content: DIRECT_LLM_PROMPT },
           { role: 'user', content: enrichedQuery },
         ],
-        { signal: config.abortSignal }
+        config.abortSignal
       );
-
-      const directRawContent = Array.isArray(directResponse.content)
-        ? directResponse.content
-            .filter((part): part is { type: 'text'; text: string } => 
-              part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
-            )
-            .map((part) => part.text)
-            .join('\n')
-        : String(directResponse.content ?? '');
-      
-      let directLLMResponse: DirectLLMResponse;
-      try {
-        directLLMResponse = directResponseSchema.parse(JSON.parse(directRawContent));
-      } catch {
-        directLLMResponse = {
-          answer: directRawContent,
-          confidence: 'medium',
-        };
-      }
 
       return {
         gateDecision,

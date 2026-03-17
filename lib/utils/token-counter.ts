@@ -35,6 +35,30 @@ function countTokens(text: string, model: string): number {
   return encoder.encode(text).length;
 }
 
+export function countTextTokens(text: string, model: string): number {
+  return countTokens(text, model);
+}
+
+export function truncateTextToTokenLimit(
+  text: string,
+  model: string,
+  maxTokens: number,
+  suffix = '\n\n[Context truncated to fit budget.]'
+): string {
+  const encoder = getEncoder(model);
+  const encoded = encoder.encode(text);
+
+  if (encoded.length <= maxTokens) {
+    return text;
+  }
+
+  const suffixTokens = encoder.encode(suffix);
+  const availableTokens = Math.max(0, maxTokens - suffixTokens.length);
+  const truncatedTokens = encoded.slice(0, availableTokens);
+  const decoded = new TextDecoder().decode(encoder.decode(truncatedTokens));
+  return `${decoded}${suffix}`;
+}
+
 function countContentTokens(
   content: string | MessageContentPart[],
   model: string
