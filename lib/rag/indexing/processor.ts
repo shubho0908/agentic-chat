@@ -25,10 +25,13 @@ interface ProcessDocumentResult {
   };
 }
 
+const MAX_DOCUMENT_DOWNLOAD_BYTES = 16 * 1024 * 1024;
+
 async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
   const response = await safeFetch(fileUrl, {
     timeoutMs: 15000,
     retries: 2,
+    maxResponseBytes: MAX_DOCUMENT_DOWNLOAD_BYTES,
   });
   if (!response.ok) {
     throw new Error(`Failed to download file: ${response.statusText}`);
@@ -44,6 +47,7 @@ export async function processDocument(
   userId: string
 ): Promise<ProcessDocumentResult> {
   const startedAt = Date.now();
+  let canMutateAttachment = false;
   let fileType: string | undefined;
   let fileName: string | undefined;
   let conversationId: string | undefined;
@@ -73,6 +77,7 @@ export async function processDocument(
       throw new RAGError('Unauthorized', RAGErrorCode.UNAUTHORIZED);
     }
 
+    canMutateAttachment = true;
     conversationId = attachment.message.conversationId;
     fileType = attachment.fileType;
     fileName = attachment.fileName;
@@ -187,13 +192,15 @@ export async function processDocument(
     }
 
     try {
-      await prisma.attachment.updateMany({
-        where: { id: attachmentId },
-        data: {
-          processingStatus: 'FAILED' as ProcessingStatus,
-          processingError: errorMessage,
-        },
-      });
+      if (canMutateAttachment) {
+        await prisma.attachment.updateMany({
+          where: { id: attachmentId },
+          data: {
+            processingStatus: 'FAILED' as ProcessingStatus,
+            processingError: errorMessage,
+          },
+        });
+      }
     } catch (statusUpdateError) {
       logError({
         event: 'document_processing_failure_status_persist_failed',
@@ -204,7 +211,9 @@ export async function processDocument(
     }
 
     try {
-      await deleteDocumentChunks(attachmentId);
+      if (canMutateAttachment) {
+        await deleteDocumentChunks(attachmentId);
+      }
     } catch (cleanupError) {
       logError({
         event: 'document_processing_cleanup_failed',

@@ -9,7 +9,10 @@ import {
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
   createGoogleWorkspaceApprovalReceipt,
 } from "@/lib/tools/google-suite/safety";
-import { getAvailableGoogleWorkspaceTools } from "@/lib/tools/google-suite/tool-access";
+import {
+  getAvailableGoogleWorkspaceTools,
+  isGoogleWorkspaceToolAllowed,
+} from "@/lib/tools/google-suite/tool-access";
 import { validateGoogleToolArgs } from "@/lib/tools/google-suite/tool-schemas";
 import {
   validateRequestedModel,
@@ -22,7 +25,11 @@ import {
   buildMemoryLookupQueries,
   mediateMemoryIntent,
 } from "@/lib/chat/request-mediator";
-import { GOOGLE_SCOPES } from "@/lib/tools/google-suite/scopes";
+import {
+  GOOGLE_SCOPES,
+  GOOGLE_SIGN_IN_SCOPES,
+  resolveGoogleWorkspaceScopesForRequest,
+} from "@/lib/tools/google-suite/scopes";
 import { shouldRetryOrFormat } from "@/lib/tools/deep-research/graph";
 import { DEEP_RESEARCH_MAX_ATTEMPTS } from "@/lib/tools/deep-research/constants";
 import { getNextPendingTaskIndex } from "@/lib/tools/deep-research/nodes/worker";
@@ -38,6 +45,11 @@ import {
   logInfo,
   measureLatencyMs,
 } from "@/lib/observability";
+import {
+  calculateTokenUsage,
+  countTextTokens,
+  truncateTextToTokenLimit,
+} from "@/lib/utils/token-counter";
 import {
   computeNextRetryAt,
   computeRetryBackoffMs,
@@ -202,6 +214,60 @@ test("google workspace only exposes tools allowed by granted scopes", () => {
   assert.equal(toolNames.includes("drive_read_file"), false);
 });
 
+test("google workspace narrows exposed tools to request-relevant services when known", () => {
+  const driveTools = getAvailableGoogleWorkspaceTools(
+    [GOOGLE_SCOPES.DRIVE, GOOGLE_SCOPES.DOCS],
+    [GOOGLE_SCOPES.DRIVE]
+  );
+  const toolNames = driveTools
+    .filter((tool) => tool.type === "function")
+    .map((tool) => tool.function.name);
+
+  assert.equal(toolNames.includes("drive_search"), true);
+  assert.equal(toolNames.includes("docs_create"), false);
+});
+
+test("google workspace denies tools without explicit scope mappings", () => {
+  assert.equal(
+    isGoogleWorkspaceToolAllowed("unknown_google_tool", [GOOGLE_SCOPES.DRIVE]),
+    false,
+  );
+});
+
+test("google workspace schema rejects invalid time zones and allows blank sheet cells", () => {
+  assert.throws(
+    () =>
+      validateGoogleToolArgs("calendar_create_event", {
+        summary: "Planning",
+        startTime: "2026-01-20T09:00:00Z",
+        endTime: "2026-01-20T10:00:00Z",
+        timeZone: "Mars/Olympus",
+      }),
+    /Invalid IANA time zone/,
+  );
+
+  const writeArgs = validateGoogleToolArgs("sheets_write", {
+    spreadsheetId: "sheet_123",
+    range: "Sheet1!A1:B1",
+    values: [["hello", ""]],
+  });
+
+  assert.deepEqual((writeArgs as { values: string[][] }).values, [["hello", ""]]);
+});
+
+test("google workspace keeps Drive discovery tools for Docs-family requests", () => {
+  const tools = getAvailableGoogleWorkspaceTools(
+    [GOOGLE_SCOPES.DRIVE, GOOGLE_SCOPES.DOCS],
+    [GOOGLE_SCOPES.DOCS]
+  );
+  const toolNames = tools
+    .filter((tool) => tool.type === "function")
+    .map((tool) => tool.function.name);
+
+  assert.equal(toolNames.includes("docs_create"), true);
+  assert.equal(toolNames.includes("drive_search"), true);
+});
+
 test("google workspace tool args are validated at dispatch time", () => {
   assert.throws(
     () =>
@@ -213,6 +279,35 @@ test("google workspace tool args are validated at dispatch time", () => {
       }),
     /unrecognized key/i,
   );
+});
+
+test("google workspace follows conversation context for ambiguous follow-up requests", () => {
+  const resolution = resolveGoogleWorkspaceScopesForRequest("share links of them", [
+    "do I have any resume in drive?",
+  ]);
+
+  assert.equal(resolution.source, "context");
+  assert.equal(resolution.requiredScopes.includes(GOOGLE_SCOPES.DRIVE), true);
+});
+
+test("google workspace does not escalate unknown follow-ups to every app scope", () => {
+  const resolution = resolveGoogleWorkspaceScopesForRequest("share links of them");
+
+  assert.equal(resolution.source, "unknown");
+  assert.deepEqual(resolution.requiredScopes, GOOGLE_SIGN_IN_SCOPES);
+});
+
+test("google workspace approval barrier includes batch item identifiers", async () => {
+  const message = await buildGoogleWorkspaceApprovalBarrierMessage([
+    {
+      toolName: "drive_delete",
+      args: { fileIds: ["file-1", "file-2", "file-3", "file-4"] },
+    },
+  ], {
+    userId: "user_1",
+  });
+
+  assert.match(message, /fileIds: \[file-1, file-2, file-3, \+1 more\]/);
 });
 
 test("deep research exhaustion now formats instead of terminating empty", () => {
@@ -331,6 +426,23 @@ test("server model policy rejects unknown models and downshifts orchestration st
   assert.equal(getSupportedTemperature("gpt-5.4", 0.1), undefined);
   assert.equal(getSupportedTemperature("gpt-5-mini", 0), undefined);
   assert.equal(getSupportedTemperature("gpt-4.1", 0.1), 0.1);
+});
+
+test("token counter includes reserve in percentage and bounds suffix-only truncation", () => {
+  const truncated = truncateTextToTokenLimit(
+    "alpha beta gamma",
+    "gpt-5-mini",
+    2,
+    "very long suffix"
+  );
+  assert.equal(countTextTokens(truncated, "gpt-5-mini") <= 2, true);
+
+  const usage = calculateTokenUsage(
+    [{ role: "user", content: "hello world" }],
+    "gpt-5-mini",
+  );
+  assert.equal(usage.percentage <= 100, true);
+  assert.equal(usage.remaining >= 0, true);
 });
 
 test("untrusted context is no longer injected into the system role", () => {

@@ -4,9 +4,11 @@ import * as cheerio from "cheerio";
 import { getAuthenticatedUser } from '@/lib/api-utils';
 import { validateUrl } from '@/lib/url-scraper/scraper';
 import { safeFetch } from '@/lib/network/safe-fetch';
+import { logWarn } from '@/lib/observability';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const MAX_LINK_PREVIEW_BYTES = 5 * 1024 * 1024;
 
 interface LinkMetadata {
   url: string;
@@ -94,6 +96,7 @@ export async function GET(request: NextRequest) {
     const response = await safeFetch(validation.url!.href, {
       timeoutMs: 10000,
       retries: 2,
+      maxResponseBytes: MAX_LINK_PREVIEW_BYTES,
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; LinkPreviewBot/1.0)",
       },
@@ -116,7 +119,12 @@ export async function GET(request: NextRequest) {
         "Cache-Control": "private, no-store",
       },
     });
-  } catch {
+  } catch (error) {
+    logWarn({
+      event: 'link_preview_failed',
+      url: validation.url?.href || url || '',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return NextResponse.json(
       { url: validation.url?.href || url || '', domain: extractDomain(validation.url?.href || url || '') },
       { status: 200 }

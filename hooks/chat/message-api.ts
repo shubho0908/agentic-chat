@@ -169,7 +169,6 @@ export async function updateAssistantMessage(
 ): Promise<UpdateMessageResponse> {
   const body = {
     content,
-    attachments: [],
     ...(metadata && { metadata }),
   };
 

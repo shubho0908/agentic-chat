@@ -1,6 +1,7 @@
 import { type ClipboardEvent, useEffect, useReducer } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import type { Message } from "@/lib/schemas/chat";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
@@ -14,7 +15,12 @@ import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/auth-client";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
-import { getMissingGoogleScopes, inferGoogleWorkspaceScopes } from "@/lib/tools/google-suite/scopes";
+import { extractTextFromMessage } from "@/lib/chat/message-helpers";
+import {
+  GOOGLE_SIGN_IN_SCOPES,
+  getMissingGoogleScopes,
+  resolveGoogleWorkspaceScopesForRequest,
+} from "@/lib/tools/google-suite/scopes";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
@@ -40,6 +46,7 @@ interface UseChatInputControllerProps {
   onAuthRequired?: () => void;
   tokenUsage?: TokenUsage;
   conversationId?: string | null;
+  messages?: Message[];
 }
 
 interface ChatInputUiState {
@@ -62,7 +69,7 @@ type ChatInputUiAction =
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
   activeTool: null,
-  memoryEnabled: true,
+  memoryEnabled: false,
   deepResearchEnabled: false,
   searchDepth: "basic",
 };
@@ -75,7 +82,7 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
       return {
         ...state,
         activeTool: null,
-        memoryEnabled: true,
+        memoryEnabled: false,
         deepResearchEnabled: false,
       };
     case "set-sending":
@@ -125,6 +132,7 @@ export function useChatInputController({
   onAuthRequired,
   tokenUsage,
   conversationId,
+  messages = [],
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
   const { isSending, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = uiState;
@@ -206,6 +214,10 @@ export function useChatInputController({
 
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
   const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
+  const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
+  const hasWorkspaceAccess = (googleSuiteStatus?.hasWorkspaceAccess ?? false) || (googleSuiteStatus?.grantedScopes ?? []).some(
+    (scope) => !signInScopes.has(scope)
+  );
 
   function activateTool(toolId: ToolId, selectedDepth?: SearchDepth) {
     if (!session) {
@@ -303,17 +315,37 @@ export function useChatInputController({
         return;
       }
 
-      const requiredScopes = inferGoogleWorkspaceScopes(input);
+      const recentMessages = messages
+        .slice(-6)
+        .map((message) => extractTextFromMessage(message.content))
+        .filter((messageText) => messageText.trim().length > 0);
+      const scopeResolution = resolveGoogleWorkspaceScopesForRequest(input, recentMessages);
       const missingRequiredScopes = getMissingGoogleScopes(
-        requiredScopes,
+        scopeResolution.requiredScopes,
         googleSuiteStatus?.grantedScopes ?? []
       );
+
+      if (!hasWorkspaceAccess) {
+        setPendingGoogleWorkspaceQuery(input);
+        toast.error("Google Workspace access needed", {
+          description:
+            "Open Settings > Google Workspace to enable at least one Google app before sending Workspace requests.",
+          action: {
+            label: "Open settings",
+            onClick: () => router.push("/settings/google-workspace"),
+          },
+          duration: 6000,
+        });
+        return;
+      }
 
       if (missingRequiredScopes.length > 0) {
         setPendingGoogleWorkspaceQuery(input);
         toast.error("Google Workspace access needed", {
           description:
-            "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
+            scopeResolution.source === "context"
+              ? "This follow-up needs broader Google Workspace access than your current selection. Open Settings > Google Workspace to add it."
+              : "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
           action: {
             label: "Open settings",
             onClick: () => router.push("/settings/google-workspace"),
@@ -342,7 +374,7 @@ export function useChatInputController({
         input,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         activeTool,
-        memoryEnabled,
+        !!session && memoryEnabled,
         finalDeepResearchEnabled,
         searchDepth
       );

@@ -4,6 +4,7 @@ import { HTTP_STATUS } from '@/constants/errors';
 import {
   drainQueuedDocumentJobs,
 } from '@/lib/orchestration/document-jobs';
+import { logWarn } from '@/lib/observability';
 
 const DEFAULT_DRAIN_BATCH_SIZE = 5;
 const MAX_DRAIN_BATCH_SIZE = 25;
@@ -32,8 +33,9 @@ export async function POST(request: NextRequest) {
   }
 
   let maxJobs = DEFAULT_DRAIN_BATCH_SIZE;
+  const hasBody = request.headers.get('content-length') !== '0';
   try {
-    if (request.headers.get('content-length') !== '0') {
+    if (hasBody) {
       const body = await request.json() as { maxJobs?: unknown };
       if (typeof body.maxJobs === 'number' && Number.isFinite(body.maxJobs)) {
         maxJobs = Math.min(
@@ -42,8 +44,15 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-  } catch {
-    maxJobs = DEFAULT_DRAIN_BATCH_SIZE;
+  } catch (error) {
+    logWarn({
+      event: 'document_job_drain_invalid_body',
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    if (hasBody) {
+      return errorResponse('Invalid JSON body', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
   }
 
   const result = await drainQueuedDocumentJobs({

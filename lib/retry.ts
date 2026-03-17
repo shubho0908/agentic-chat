@@ -8,6 +8,14 @@ interface RetryOptions {
   shouldRetry?: (error: unknown, attempt: number) => boolean;
 }
 
+type AbortableOperation<T> = (signal?: AbortSignal) => Promise<T>;
+
+function createAbortError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+}
+
 function defaultShouldRetry(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false;
@@ -47,6 +55,10 @@ function defaultShouldRetry(error: unknown): boolean {
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError('Operation aborted'));
+  }
+
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       signal?.removeEventListener('abort', onAbort);
@@ -56,7 +68,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = () => {
       clearTimeout(timeoutId);
       signal?.removeEventListener('abort', onAbort);
-      reject(new Error('Operation aborted'));
+      reject(createAbortError('Operation aborted'));
     };
 
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -64,32 +76,66 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 async function runWithTimeout<T>(
-  operation: () => Promise<T>,
+  operation: AbortableOperation<T>,
   timeoutMs?: number,
   signal?: AbortSignal
 ): Promise<T> {
   if (!timeoutMs || timeoutMs <= 0) {
-    return operation();
+    return operation(signal);
+  }
+
+  if (signal?.aborted) {
+    throw createAbortError('Operation aborted');
   }
 
   const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort(createAbortError('Operation timed out'));
+  }, timeoutMs);
+  const combinedController = new AbortController();
+
+  const abortCombined = (reason: unknown) => {
+    if (!combinedController.signal.aborted) {
+      combinedController.abort(
+        reason instanceof Error ? reason : createAbortError(String(reason ?? 'Operation aborted'))
+      );
+    }
+  };
+
+  const onTimeoutAbort = () => {
+    abortCombined(timeoutController.signal.reason ?? createAbortError('Operation timed out'));
+  };
+  const onSignalAbort = () => {
+    abortCombined(signal?.reason ?? createAbortError('Operation aborted'));
+  };
+
+  timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true });
+  signal?.addEventListener('abort', onSignalAbort, { once: true });
 
   const abortPromise = new Promise<never>((_, reject) => {
-    const onAbort = () => reject(new Error('Operation timed out'));
-    timeoutController.signal.addEventListener('abort', onAbort, { once: true });
-    signal?.addEventListener('abort', onAbort, { once: true });
+    const onAbort = () => {
+      combinedController.signal.removeEventListener('abort', onAbort);
+      reject(
+        combinedController.signal.reason instanceof Error
+          ? combinedController.signal.reason
+          : createAbortError('Operation aborted')
+      );
+    };
+
+    combinedController.signal.addEventListener('abort', onAbort, { once: true });
   });
 
   try {
-    return await Promise.race([operation(), abortPromise]);
+    return await Promise.race([operation(combinedController.signal), abortPromise]);
   } finally {
     clearTimeout(timeoutId);
+    timeoutController.signal.removeEventListener('abort', onTimeoutAbort);
+    signal?.removeEventListener('abort', onSignalAbort);
   }
 }
 
 export async function withRetry<T>(
-  operation: () => Promise<T>,
+  operation: AbortableOperation<T>,
   options: RetryOptions = {}
 ): Promise<T> {
   const {
@@ -106,7 +152,7 @@ export async function withRetry<T>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (signal?.aborted) {
-      throw new Error('Operation aborted');
+      throw createAbortError('Operation aborted');
     }
 
     try {

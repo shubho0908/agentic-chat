@@ -2,6 +2,8 @@ export interface GoogleAuthorizationStatus {
   authorized: boolean;
   connected?: boolean;
   workspaceConnected?: boolean;
+  hasWorkspaceAccess?: boolean;
+  accessLevel?: 'none' | 'partial' | 'full';
   oauthConsentReady?: boolean;
   oauthConsentMessage?: string;
   configuredScopes?: string[];

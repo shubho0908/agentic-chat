@@ -2,6 +2,7 @@ import { ChatInputHeader } from "./chatInputHeader";
 import { ChatInputFooter } from "./chatInputFooter";
 import { ChatInputForm } from "./chatInputForm";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
+import type { Message } from "@/lib/schemas/chat";
 import { useChatInputController } from "@/hooks/chat/useChatInputController";
 
 interface ChatInputProps {
@@ -14,6 +15,7 @@ interface ChatInputProps {
   onAuthRequired?: () => void;
   tokenUsage?: TokenUsage;
   conversationId?: string | null;
+  messages?: Message[];
 }
 
 export function ChatInput({
@@ -26,6 +28,7 @@ export function ChatInput({
   onAuthRequired,
   tokenUsage,
   conversationId,
+  messages,
 }: ChatInputProps) {
   const {
     centered: isCentered,
@@ -44,10 +47,11 @@ export function ChatInput({
     placeholder,
     disabled,
     centered,
-    onAuthRequired,
-    tokenUsage,
-    conversationId,
-  });
+      onAuthRequired,
+      tokenUsage,
+      conversationId,
+      messages,
+    });
 
   if (isCentered) {
     return (

@@ -45,6 +45,10 @@ export function truncateTextToTokenLimit(
   maxTokens: number,
   suffix = '\n\n[Context truncated to fit budget.]'
 ): string {
+  if (maxTokens <= 0) {
+    return '';
+  }
+
   const encoder = getEncoder(model);
   const encoded = encoder.encode(text);
 
@@ -53,6 +57,9 @@ export function truncateTextToTokenLimit(
   }
 
   const suffixTokens = encoder.encode(suffix);
+  if (suffixTokens.length >= maxTokens) {
+    return new TextDecoder().decode(encoder.decode(suffixTokens.slice(0, maxTokens)));
+  }
   const availableTokens = Math.max(0, maxTokens - suffixTokens.length);
   const truncatedTokens = encoded.slice(0, availableTokens);
   const decoded = new TextDecoder().decode(encoder.decode(truncatedTokens));
@@ -102,8 +109,9 @@ export function calculateTokenUsage(
   conversationTokens += 3;
   const used = conversationTokens + imageTokens;
   const responseReserve = getResponseTokenReserve(model);
-  const remaining = Math.max(0, limit - used - responseReserve);
-  const percentage = Math.min(100, (used / limit) * 100);
+  const effectiveUsed = used + responseReserve;
+  const remaining = Math.max(0, limit - effectiveUsed);
+  const percentage = Math.min(100, (effectiveUsed / limit) * 100);
 
   return {
     used,

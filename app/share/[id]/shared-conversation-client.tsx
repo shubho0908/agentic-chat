@@ -82,7 +82,7 @@ export default function SharedConversationClient({
   }
 
   if (error) {
-    const errorMessage = (error as Error).message;
+    const errorMessage = error instanceof Error ? error.message : "FAILED_TO_FETCH";
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-md px-6">

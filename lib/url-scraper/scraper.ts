@@ -18,6 +18,7 @@ interface ScrapedContent {
 const MAX_CONTENT_LENGTH = 6000;
 const MAX_CONTEXT_LENGTH = 1800;
 const REQUEST_TIMEOUT = 10000;
+const MAX_SCRAPE_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 export function validateUrl(url: string): { isValid: boolean; url?: URL; error?: string } {
   if (!url || typeof url !== "string") {
@@ -124,6 +125,7 @@ async function scrapeUrlCore(url: string): Promise<ScrapedContent> {
     const response = await safeFetch(url, {
       timeoutMs: REQUEST_TIMEOUT,
       retries: 2,
+      maxResponseBytes: MAX_SCRAPE_RESPONSE_BYTES,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

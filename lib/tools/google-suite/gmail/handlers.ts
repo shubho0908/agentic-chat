@@ -2,8 +2,13 @@ import { google, type gmail_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
 import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
 import { parseEmailContent } from '@/utils/google/email';
+import { formatEmailDate } from '@/utils/dateFormatter';
 
 const MAX_GMAIL_SEARCH_FETCHES = 10;
+
+function getHeaderValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
+  return headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value || '';
+}
 
 export async function handleGmailSearch(
   context: ToolHandlerContext,
@@ -24,21 +29,22 @@ export async function handleGmailSearch(
 
   const messages = await Promise.all(
     response.data.messages.slice(0, MAX_GMAIL_SEARCH_FETCHES).map(async (msg) => {
-      const fullMsg = await gmail.users.messages.get({
+      const metadata = await gmail.users.messages.get({
         userId: 'me',
         id: msg.id!,
-        format: 'full',
+        format: 'metadata',
+        metadataHeaders: ['From', 'Subject', 'Date'],
       });
-      return fullMsg.data;
+      return metadata.data;
     })
   );
 
   const formatted = messages.map((msg, idx) => {
-    const content = parseEmailContent(msg);
-    return `${idx + 1}. **From:** ${content.from}
-   **Subject:** ${content.subject}
-   **Date:** ${content.date}
-   **Snippet:** ${content.snippet}
+    const headers = msg.payload?.headers;
+    return `${idx + 1}. **From:** ${getHeaderValue(headers, 'From')}
+   **Subject:** ${getHeaderValue(headers, 'Subject')}
+   **Date:** ${formatEmailDate(getHeaderValue(headers, 'Date'))}
+   **Snippet:** ${msg.snippet || ''}
    **Message ID:** ${msg.id}`;
   });
 

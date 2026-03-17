@@ -132,12 +132,23 @@ export async function getMemoryContextResult(
     };
 
     const lookupQueries = buildMemoryLookupQueries(query, options?.recentConversation);
-    const searchResults = await Promise.all(
+    const settledSearchResults = await Promise.allSettled(
       lookupQueries.map(async (lookupQuery) => {
         const result = await searchMemories(lookupQuery, searchConfig);
         return extractMemorySearchRecords(result);
       })
     );
+    const searchResults = settledSearchResults.flatMap((result, index) => {
+      if (result.status === 'fulfilled') {
+        return [result.value];
+      }
+
+      console.warn('[Mem0] Memory search query failed:', {
+        query: lookupQueries[index],
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+      return [];
+    });
 
     const records = dedupeMemorySearchRecords(searchResults.flat()).slice(0, 6);
     if (records.length > 0) {

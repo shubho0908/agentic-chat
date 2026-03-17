@@ -84,12 +84,19 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       ? getMissingGoogleWorkspaceScopes(scope)
       : getMissingGoogleWorkspaceScopes(null);
     const hasWorkspaceScopes = hasAnyGoogleWorkspaceScopes(scope);
+    const accessLevel = !workspaceConnected || !hasWorkspaceScopes
+      ? 'none'
+      : missingScopes.length > 0
+        ? 'partial'
+        : 'full';
 
     if (!synchronizedAccount?.accessToken || !synchronizedAccount?.refreshToken) {
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         connected: true,
         workspaceConnected: false,
+        hasWorkspaceAccess: hasWorkspaceScopes,
+        accessLevel: 'none',
         oauthConsentReady: oauthReadiness.ready,
         oauthConsentMessage: oauthReadiness.message,
         reason: 'no_tokens',
@@ -102,17 +109,17 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       });
     }
 
-    if (missingScopes.length > 0) {
+    if (!hasWorkspaceScopes) {
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         connected: true,
         workspaceConnected,
+        hasWorkspaceAccess: false,
+        accessLevel,
         oauthConsentReady: oauthReadiness.ready,
         oauthConsentMessage: oauthReadiness.message,
         reason: 'permissions_needed',
-        message: hasWorkspaceScopes
-          ? 'Some Google Workspace permissions are still missing. Update them in Settings whenever you need broader access.'
-          : 'Choose Google Workspace permissions in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides.',
+        message: 'Choose Google Workspace permissions in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides.',
         missingScopes,
         grantedScopes,
         configuredScopes,
@@ -123,8 +130,15 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       authorized: true,
       connected: true,
       workspaceConnected,
+      hasWorkspaceAccess: true,
+      accessLevel,
       oauthConsentReady: oauthReadiness.ready,
       oauthConsentMessage: oauthReadiness.message,
+      message:
+        accessLevel === 'full'
+          ? 'Google Workspace access is ready for all supported apps.'
+          : 'Google Workspace access is ready for the apps you selected.',
+      missingScopes,
       grantedScopes,
       configuredScopes,
     });

@@ -37,17 +37,105 @@ const TOOL_SCOPE_REQUIREMENTS: Record<string, string[]> = {
   slides_add_slide: [GOOGLE_SCOPES.SLIDES],
 };
 
+const TOOL_SERVICE_PREFIXES = {
+  gmail: 'gmail_',
+  drive: 'drive_',
+  docs: 'docs_',
+  calendar: 'calendar_',
+  sheets: 'sheets_',
+  slides: 'slides_',
+} as const;
+
+const SCOPE_SERVICE_MAP: Record<string, keyof typeof TOOL_SERVICE_PREFIXES> = {
+  [GOOGLE_SCOPES.GMAIL_READONLY]: 'gmail',
+  [GOOGLE_SCOPES.GMAIL_SEND]: 'gmail',
+  [GOOGLE_SCOPES.GMAIL_MODIFY]: 'gmail',
+  [GOOGLE_SCOPES.GMAIL_LABELS]: 'gmail',
+  [GOOGLE_SCOPES.DRIVE_READONLY]: 'drive',
+  [GOOGLE_SCOPES.DRIVE]: 'drive',
+  [GOOGLE_SCOPES.CALENDAR_READONLY]: 'calendar',
+  [GOOGLE_SCOPES.CALENDAR]: 'calendar',
+  [GOOGLE_SCOPES.DOCS_READONLY]: 'docs',
+  [GOOGLE_SCOPES.DOCS]: 'docs',
+  [GOOGLE_SCOPES.SHEETS_READONLY]: 'sheets',
+  [GOOGLE_SCOPES.SHEETS]: 'sheets',
+  [GOOGLE_SCOPES.SLIDES_READONLY]: 'slides',
+  [GOOGLE_SCOPES.SLIDES]: 'slides',
+};
+
+const TOOL_SERVICE_DEPENDENCIES: Partial<Record<keyof typeof TOOL_SERVICE_PREFIXES, Array<keyof typeof TOOL_SERVICE_PREFIXES>>> = {
+  docs: ['drive'],
+  sheets: ['drive'],
+  slides: ['drive'],
+};
+
+function getToolService(toolName: string): keyof typeof TOOL_SERVICE_PREFIXES | null {
+  for (const [service, prefix] of Object.entries(TOOL_SERVICE_PREFIXES) as Array<
+    [keyof typeof TOOL_SERVICE_PREFIXES, string]
+  >) {
+    if (toolName.startsWith(prefix)) {
+      return service;
+    }
+  }
+
+  return null;
+}
+
+export function getGoogleWorkspaceServicesForScopes(scopes: Iterable<string>): Set<keyof typeof TOOL_SERVICE_PREFIXES> {
+  const services = new Set<keyof typeof TOOL_SERVICE_PREFIXES>();
+
+  for (const scope of scopes) {
+    const service = SCOPE_SERVICE_MAP[scope];
+    if (service) {
+      services.add(service);
+    }
+  }
+
+  return services;
+}
+
+function expandRequestedServices(
+  services: Set<keyof typeof TOOL_SERVICE_PREFIXES>
+): Set<keyof typeof TOOL_SERVICE_PREFIXES> {
+  const expanded = new Set(services);
+
+  for (const service of services) {
+    for (const dependency of TOOL_SERVICE_DEPENDENCIES[service] ?? []) {
+      expanded.add(dependency);
+    }
+  }
+
+  return expanded;
+}
+
 export function isGoogleWorkspaceToolAllowed(
   toolName: string,
   grantedScopes: Iterable<string>
 ): boolean {
-  return getMissingGoogleScopes(TOOL_SCOPE_REQUIREMENTS[toolName] ?? [], grantedScopes).length === 0;
+  const requiredScopes = TOOL_SCOPE_REQUIREMENTS[toolName];
+  if (!requiredScopes) {
+    return false;
+  }
+
+  return getMissingGoogleScopes(requiredScopes, grantedScopes).length === 0;
 }
 
 export function getAvailableGoogleWorkspaceTools(
-  grantedScopes: Iterable<string>
+  grantedScopes: Iterable<string>,
+  requestedScopes?: Iterable<string>
 ): ChatCompletionTool[] {
+  const requestedServices = requestedScopes
+    ? expandRequestedServices(getGoogleWorkspaceServicesForScopes(requestedScopes))
+    : null;
+
   return GOOGLE_WORKSPACE_TOOLS.filter((tool) =>
-    tool.type === 'function' && isGoogleWorkspaceToolAllowed(tool.function.name, grantedScopes)
+    tool.type === 'function' &&
+    isGoogleWorkspaceToolAllowed(tool.function.name, grantedScopes) &&
+    (
+      !requestedServices ||
+      requestedServices.size === 0 ||
+      (getToolService(tool.function.name) !== null &&
+        requestedServices.has(getToolService(tool.function.name)!))
+    )
   );
 }

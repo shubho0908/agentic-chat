@@ -69,6 +69,7 @@ export const CALENDAR_TOOLS: ChatCompletionTool[] = [
           timeZone: {
             type: 'string',
             description: 'IANA time zone for the event times (optional)',
+            pattern: '^[A-Za-z_]+(?:/[A-Za-z0-9_+.-]+)+$',
           },
           calendarId: {
             type: 'string',

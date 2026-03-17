@@ -78,7 +78,7 @@ export const ourFileRouter = {
 
       const fileOverrides = files.map((file) => ({
         ...file,
-        customId: `${userId}/${timestamp}-${file.name}`,
+        customId: `${userId}/${timestamp}-${file.name.replace(/[\\/:"*?<>|]+/g, "_")}`,
       }));
 
       return {

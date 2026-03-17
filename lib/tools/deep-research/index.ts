@@ -277,12 +277,16 @@ export async function executeDeepResearch(
       }
 
       if (runId) {
-        await saveDeepResearchCheckpoint({
-          runId,
-          node: nodeKey,
-          state,
-          requestId,
-        });
+        try {
+          await saveDeepResearchCheckpoint({
+            runId,
+            node: nodeKey,
+            state,
+            requestId,
+          });
+        } catch (checkpointError) {
+          console.error('[Deep Research] Failed to persist checkpoint:', checkpointError);
+        }
       }
     }
 
@@ -310,16 +314,20 @@ export async function executeDeepResearch(
     });
 
     if (runId) {
-      await finishDeepResearchRun({
-        runId,
-        status: finalState.skipped ? 'completed' : 'completed',
-        result: {
-          skipped: finalState.skipped,
-          citations: finalState.citations || [],
-          followUpQuestions: finalState.followUpQuestions || [],
-        },
-        requestId,
-      });
+      try {
+        await finishDeepResearchRun({
+          runId,
+          status: finalState.skipped ? 'completed' : 'completed',
+          result: {
+            skipped: finalState.skipped,
+            citations: finalState.citations || [],
+            followUpQuestions: finalState.followUpQuestions || [],
+          },
+          requestId,
+        });
+      } catch (finishError) {
+        console.error('[Deep Research] Failed to finalize successful run:', finishError);
+      }
     }
 
     return {
@@ -335,12 +343,16 @@ export async function executeDeepResearch(
     console.error('[Deep Research] Error:', error);
 
     if (runId) {
-      await finishDeepResearchRun({
-        runId,
-        status: abortSignal?.aborted ? 'aborted' : 'failed',
-        error: error instanceof Error ? error.message : String(error),
-        requestId,
-      });
+      try {
+        await finishDeepResearchRun({
+          runId,
+          status: abortSignal?.aborted ? 'aborted' : 'failed',
+          error: error instanceof Error ? error.message : String(error),
+          requestId,
+        });
+      } catch (finishError) {
+        console.error('[Deep Research] Failed to finalize failed run:', finishError);
+      }
     }
     
     if (error instanceof Error && error.message.includes('aborted')) {

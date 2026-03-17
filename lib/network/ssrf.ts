@@ -28,13 +28,22 @@ const BLOCKED_IPV6_PREFIXES = [
   '::ffff:127.',
 ] as const;
 
+export interface SafeResolvedUrl {
+  url: URL;
+  hostname: string;
+  resolvedAddresses: Array<{
+    address: string;
+    family: 4 | 6;
+  }>;
+}
+
 function ipv4ToNumber(ip: string): number {
-  return ip.split('.').reduce((value, octet) => (value << 8) + Number(octet), 0);
+  return ip.split('.').reduce((value, octet) => (((value << 8) >>> 0) + Number(octet)) >>> 0, 0) >>> 0;
 }
 
 function isIpv4InRange(ip: string, range: readonly [string, number]): boolean {
   const [baseIp, prefixLength] = range;
-  const mask = prefixLength === 0 ? 0 : (~0 << (32 - prefixLength)) >>> 0;
+  const mask = prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0;
   return (ipv4ToNumber(ip) & mask) === (ipv4ToNumber(baseIp) & mask);
 }
 
@@ -58,8 +67,8 @@ export async function assertSafePublicUrl(
   options?: {
     allowHosts?: string[];
   }
-): Promise<URL> {
-  const url = typeof input === 'string' ? new URL(input) : input;
+): Promise<SafeResolvedUrl> {
+  const url = new URL(typeof input === 'string' ? input : input.toString());
 
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new Error('Only HTTP and HTTPS URLs are allowed');
@@ -80,7 +89,11 @@ export async function assertSafePublicUrl(
     if (isPrivateAddress(hostname) && !allowHosts.has(hostname)) {
       throw new Error('Requests to private network addresses are not allowed');
     }
-    return url;
+    return {
+      url,
+      hostname,
+      resolvedAddresses: [{ address: hostname, family: net.isIP(hostname) as 4 | 6 }],
+    };
   }
 
   const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
@@ -94,7 +107,14 @@ export async function assertSafePublicUrl(
     }
   }
 
-  return url;
+  return {
+    url,
+    hostname,
+    resolvedAddresses: addresses.map((address) => ({
+      address: address.address,
+      family: address.family as 4 | 6,
+    })),
+  };
 }
 
 function matchesHostPattern(hostname: string, pattern: string): boolean {

@@ -32,6 +32,25 @@ export const messageContentPartSchema = z.union([
   }),
 ]);
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
+);
+
 const messageHistoryEntrySchema = z.object({
   content: z.union([z.string(), z.array(messageContentPartSchema)]),
   attachments: z.array(attachmentSchema).optional(),
@@ -49,7 +68,7 @@ export const toolActivitySchema = z.object({
     z.null(),
     z.array(z.union([z.string(), z.number(), z.boolean()])),
   ])),
-  result: z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]).optional(),
+  result: jsonValueSchema.optional(),
   error: z.string().optional(),
   timestamp: z.number(),
 });

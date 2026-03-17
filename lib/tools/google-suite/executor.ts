@@ -19,6 +19,7 @@ import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '
 import { validateGoogleToolArgs } from '@/lib/tools/google-suite/tool-schemas';
 import { countTextTokens } from '@/lib/utils/token-counter';
 import { OPENAI_MODELS } from '@/constants/openai-models';
+import { resolveGoogleWorkspaceScopesForRequest } from '@/lib/tools/google-suite/scopes';
 import type {
   HandlerArgs,
   GmailSearchArgs,
@@ -150,22 +151,56 @@ function trimWorkspaceMessagesToBudget(
     return messages;
   }
 
-  const preserved = messages.slice(0, 2);
-  const recent = [...messages.slice(2)];
-  const budget = getGoogleWorkspaceInputBudget(model);
-
-  const estimateTotal = () =>
-    [...preserved, ...recent].reduce((total, message) => total + estimateWorkspaceMessageTokens(message, model), 0);
-
-  while (recent.length > 1 && estimateTotal() > budget) {
-    recent.shift();
-
-    while (recent[0]?.role === 'tool') {
-      recent.shift();
+  const preservedIndexes = new Set<number>([0]);
+  for (let index = messages.length - 1; index >= 1; index -= 1) {
+    if (messages[index]?.role === 'user') {
+      preservedIndexes.add(index);
+      break;
     }
   }
 
-  return [...preserved, ...recent];
+  const preservedEntries = messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ index }) => preservedIndexes.has(index));
+  const recentEntries = messages
+    .map((message, index) => ({ message, index }))
+    .filter(({ index }) => !preservedIndexes.has(index));
+  const budget = getGoogleWorkspaceInputBudget(model);
+
+  const estimateTotal = () =>
+    [...preservedEntries, ...recentEntries].reduce(
+      (total, { message }) => total + estimateWorkspaceMessageTokens(message, model),
+      0
+    );
+
+  while (recentEntries.length > 1 && estimateTotal() > budget) {
+    recentEntries.shift();
+
+    while (recentEntries[0]?.message.role === 'tool') {
+      recentEntries.shift();
+    }
+  }
+
+  return [...preservedEntries, ...recentEntries]
+    .sort((left, right) => left.index - right.index)
+    .map(({ message }) => message);
+}
+
+function extractTextContent(
+  message: OpenAI.Chat.Completions.ChatCompletionMessageParam
+): string {
+  if (typeof message.content === 'string') {
+    return message.content;
+  }
+
+  if (Array.isArray(message.content)) {
+    return message.content
+      .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n');
+  }
+
+  return '';
 }
 
 async function executeToolCall(
@@ -243,6 +278,43 @@ async function executeToolCall(
   }
 }
 
+function getSingleToolCallMessage(
+  message: OpenAI.Chat.Completions.ChatCompletionMessage,
+  availableToolNames: Set<string>
+): {
+  message: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam;
+  skippedToolCalls: number;
+} {
+  const functionToolCalls = (message.tool_calls ?? []).filter(
+    (toolCall): toolCall is OpenAI.Chat.Completions.ChatCompletionMessageToolCall & { type: 'function' } =>
+      toolCall.type === 'function'
+  );
+
+  if (functionToolCalls.length === 0) {
+    return {
+      message: {
+        role: 'assistant',
+        content: message.content,
+        tool_calls: message.tool_calls,
+      },
+      skippedToolCalls: 0,
+    };
+  }
+
+  const firstAllowedToolCall =
+    functionToolCalls.find((toolCall) => availableToolNames.has(toolCall.function.name)) ??
+    functionToolCalls[0];
+
+  return {
+    message: {
+      role: 'assistant',
+      content: message.content,
+      tool_calls: [firstAllowedToolCall],
+    },
+    skippedToolCalls: Math.max(0, functionToolCalls.length - 1),
+  };
+}
+
 export async function executeGoogleWorkspace(
   options: GoogleWorkspaceExecutorOptions
 ): Promise<string> {
@@ -254,27 +326,39 @@ export async function executeGoogleWorkspace(
       try {
     if (abortSignal?.aborted) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.OPERATION_ABORTED_BY_USER);
 
-    onProgress?.({
-      status: 'initializing',
-      message: 'Initializing Google Workspace connection...',
-    });
+	    onProgress?.({
+	      status: 'initializing',
+	      message: 'Initializing Google Workspace connection...',
+	    });
 
-    const { oauth2Client, grantedScopes } = await createGoogleSuiteClient(userId);
-    const context: ToolHandlerContext = { userId, oauth2Client };
-    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
-    const availableTools = getAvailableGoogleWorkspaceTools(grantedScopes);
+	    const { oauth2Client, grantedScopes } = await createGoogleSuiteClient(userId);
+	    const context: ToolHandlerContext = { userId, oauth2Client };
+	    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
+      const workspaceModel = getStageModel(model, 'workspace_agent');
+      const recentContext = (conversationHistory ?? [])
+        .map((message) => extractTextContent(message))
+        .filter((content) => content.trim().length > 0);
+      const scopeResolution = resolveGoogleWorkspaceScopesForRequest(query, recentContext);
+	    const availableTools = getAvailableGoogleWorkspaceTools(
+        grantedScopes,
+        scopeResolution.source === 'unknown' ? undefined : scopeResolution.requiredScopes
+      );
+      const availableToolNames = new Set(
+        availableTools
+          .filter((tool): tool is OpenAI.Chat.Completions.ChatCompletionTool & { type: 'function' } => tool.type === 'function')
+          .map((tool) => tool.function.name)
+      );
 
-    if (availableTools.length === 0) {
-      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
-    }
+	    if (availableTools.length === 0) {
+	      return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+	    }
 
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
-      { role: 'user', content: `Original user request: ${query}` },
-    ];
+	    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+	      { role: 'system', content: GOOGLE_WORKSPACE_SYSTEM_PROMPT },
+	    ];
 
-    if (conversationHistory && conversationHistory.length > 0) {
-      messages.push(...conversationHistory);
+	    if (conversationHistory && conversationHistory.length > 0) {
+	      messages.push(...conversationHistory);
     }
 
     messages.push({ role: 'user', content: query });
@@ -321,7 +405,7 @@ export async function executeGoogleWorkspace(
         () =>
           openai.chat.completions.create(
             {
-              model: getStageModel(model, 'workspace_agent'),
+              model: workspaceModel,
               messages,
               tools: availableTools,
               tool_choice: 'auto',
@@ -379,19 +463,17 @@ export async function executeGoogleWorkspace(
         });
       }
 
-      messages.push({
-        role: 'assistant',
-        content: message.content,
-        tool_calls: message.tool_calls,
-      });
+        const singleToolCallMessage = getSingleToolCallMessage(message, availableToolNames);
 
-      const toolResults: Array<{ tool_call_id: string; content: string }> = [];
-      const plannedActions = new Map<string, GoogleWorkspacePlannedAction>();
+	      messages.push(singleToolCallMessage.message);
 
-      for (const toolCall of message.tool_calls) {
-        if (toolCall.type !== 'function') {
-          continue;
-        }
+	      const toolResults: Array<{ tool_call_id: string; content: string }> = [];
+	      const plannedActions = new Map<string, GoogleWorkspacePlannedAction>();
+
+	      for (const toolCall of singleToolCallMessage.message.tool_calls ?? []) {
+	        if (toolCall.type !== 'function') {
+	          continue;
+	        }
 
         try {
           const parsedArgs = JSON.parse(toolCall.function.arguments) as HandlerArgs;
@@ -420,10 +502,21 @@ export async function executeGoogleWorkspace(
         return await buildGoogleWorkspaceApprovalBarrierMessage(destructiveActions, { userId });
       }
 
-      for (const toolCall of message.tool_calls) {
-          if (toolCall.type !== 'function') {
-            console.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
-            toolResults.push({ tool_call_id: toolCall.id, content: 'Invalid tool call type' });
+        if (singleToolCallMessage.skippedToolCalls > 0) {
+          onProgress?.({
+            status: 'planning',
+            message: `Executing one action at a time and deferring ${singleToolCallMessage.skippedToolCalls} additional planned step(s).`,
+            details: {
+              iteration,
+              skippedToolCalls: singleToolCallMessage.skippedToolCalls,
+            },
+          });
+        }
+
+	      for (const toolCall of singleToolCallMessage.message.tool_calls ?? []) {
+	          if (toolCall.type !== 'function') {
+	            console.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
+	            toolResults.push({ tool_call_id: toolCall.id, content: 'Invalid tool call type' });
             continue;
           }
 
@@ -436,11 +529,18 @@ export async function executeGoogleWorkspace(
               throw new Error('Tool arguments failed validation');
             }
             args = plannedAction.args as HandlerArgs;
-          } catch {
-            console.error('[Google Workspace Executor] Failed to parse arguments:', toolCall.function.arguments);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Tool arguments failed validation';
+            console.error('[Google Workspace Executor] Failed to validate arguments:', {
+              functionName,
+              error: errorMessage,
+            });
             toolResults.push({
               tool_call_id: toolCall.id,
-              content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_JSON_ARGS,
+              content:
+                errorMessage === 'Tool arguments failed validation'
+                  ? 'Tool arguments failed validation'
+                  : TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_JSON_ARGS,
             });
             continue;
           }
@@ -459,10 +559,10 @@ export async function executeGoogleWorkspace(
           
           allTasks.push(currentTask);
 
-          if (!isGoogleWorkspaceToolAllowed(functionName, grantedScopes)) {
-            currentTask.status = 'failed';
-            currentTask.error = TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
-            toolResults.push({
+	          if (!availableToolNames.has(functionName) || !isGoogleWorkspaceToolAllowed(functionName, grantedScopes)) {
+	            currentTask.status = 'failed';
+	            currentTask.error = TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU;
+	            toolResults.push({
               tool_call_id: toolCall.id,
               content: TOOL_ERROR_MESSAGES.GOOGLE_SUITE.NOT_AUTHORIZED_MENU,
             });
@@ -560,26 +660,21 @@ export async function executeGoogleWorkspace(
         });
       });
 
-      if (iteration >= 1) {
-        const completedInIteration = allTasks.filter(t => t.iteration === iteration && t.status === 'completed').length;
-        
-        onProgress?.({
+	      if (iteration >= 1) {
+	        const completedInIteration = allTasks.filter(t => t.iteration === iteration && t.status === 'completed').length;
+	        
+	        onProgress?.({
           status: 'validating',
           message: `Validating results from iteration ${iteration}...`,
           details: {
             iteration,
             completedInIteration,
-            totalCompleted: allTasks.filter(t => t.status === 'completed').length,
-          },
-        });
-        
-        messages.push({
-          role: 'user',
-          content: `✓ Step ${taskCount} complete. VALIDATION: Analyze the result above and:\n1. Extract any IDs, links, or data needed for remaining steps\n2. Decide: Execute next step OR finish if task is complete\n\nReminder: Continue until ALL parts of the original request are satisfied.`,
-        });
-      }
+	            totalCompleted: allTasks.filter(t => t.status === 'completed').length,
+	          },
+	        });
+	      }
 
-      const trimmedMessages = trimWorkspaceMessagesToBudget(messages, model);
+      const trimmedMessages = trimWorkspaceMessagesToBudget(messages, workspaceModel);
       if (trimmedMessages.length !== messages.length) {
         messages.length = 0;
         messages.push(...trimmedMessages);

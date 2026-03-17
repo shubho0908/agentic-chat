@@ -30,6 +30,17 @@ export async function gateNode(
   });
 
   try {
+    if (config.forceDeepResearch) {
+      return {
+        gateDecision: {
+          shouldResearch: true,
+          reason: 'Deep research was explicitly forced by the caller',
+          confidence: 'high',
+        },
+        skipped: false,
+      };
+    }
+
     let gateQuery = state.originalQuery;
     
     if (state.hasDocuments || state.hasImages) {
@@ -54,17 +65,6 @@ export async function gateNode(
       ],
       config.abortSignal
     );
-
-    if (config.forceDeepResearch) {
-      return {
-        gateDecision: {
-          shouldResearch: true,
-          reason: 'Deep research was explicitly forced by the caller',
-          confidence: 'high',
-        },
-        skipped: false,
-      };
-    }
 
     if (!gateDecision.shouldResearch) {
       let enrichedQuery = state.originalQuery;

@@ -16,8 +16,8 @@ export interface ToolMenuGoogleSuiteStatus {
   authorized: boolean;
   loading: boolean;
   workspaceConnected: boolean;
+  hasWorkspaceAccess: boolean;
   grantedScopes: string[];
-  missingScopes: string[];
 }
 
 interface UseToolMenuItemStateArgs {
@@ -39,7 +39,7 @@ export function useToolMenuItemState({
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
   const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
-  const hasWorkspaceAccess = (googleSuiteStatus?.grantedScopes ?? []).some(
+  const hasWorkspaceAccess = googleSuiteStatus?.hasWorkspaceAccess ?? (googleSuiteStatus?.grantedScopes ?? []).some(
     (scope) => !signInScopes.has(scope)
   );
   const googleSuiteNeedsSetup =
@@ -55,7 +55,7 @@ export function useToolMenuItemState({
     isGoogleSuite &&
     isAuthenticated &&
     !googleSuiteStatus?.loading &&
-    (!hasWorkspaceAccess || (googleSuiteStatus?.missingScopes?.length ?? 0) > 0);
+    !hasWorkspaceAccess;
   const googleWorkspaceSelections = resolveGoogleWorkspaceSelections(
     googleSuiteStatus?.grantedScopes ?? []
   );
@@ -64,9 +64,7 @@ export function useToolMenuItemState({
     : googleSuiteNeedsSetup
       ? "Enable at least one Google app in Settings before using Google Suite."
       : needsPermissions
-        ? hasWorkspaceAccess
-          ? "Some Google permissions are missing. Update them in Settings before broader Workspace tasks."
-          : "Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides."
+        ? "Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides."
         : tool.description;
 
   const openGoogleSettings = () => {

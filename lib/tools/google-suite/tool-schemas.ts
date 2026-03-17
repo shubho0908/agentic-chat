@@ -7,6 +7,14 @@ const nonEmptyStringArray = z.array(nonEmptyString).min(1);
 const emailString = z.string().trim().email();
 const booleanDefaultTrue = z.boolean().default(true);
 const booleanDefaultFalse = z.boolean().default(false);
+const optionalTimeZone = z.string().trim().refine((value) => {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Invalid IANA time zone').optional();
 
 export const GOOGLE_TOOL_SCHEMAS = {
   gmail_search: z.object({
@@ -112,7 +120,7 @@ export const GOOGLE_TOOL_SCHEMAS = {
     description: optionalNonEmptyString,
     location: optionalNonEmptyString,
     attendees: z.array(emailString).optional(),
-    timeZone: optionalNonEmptyString,
+    timeZone: optionalTimeZone,
     calendarId: optionalNonEmptyString,
   }).strict(),
   calendar_update_event: z.object({
@@ -138,12 +146,12 @@ export const GOOGLE_TOOL_SCHEMAS = {
   sheets_write: z.object({
     spreadsheetId: nonEmptyString,
     range: nonEmptyString,
-    values: z.array(z.array(nonEmptyString).min(1)).min(1),
+    values: z.array(z.array(z.string()).min(1)).min(1),
   }).strict(),
   sheets_append: z.object({
     spreadsheetId: nonEmptyString,
     range: nonEmptyString,
-    values: z.array(z.array(nonEmptyString).min(1)).min(1),
+    values: z.array(z.array(z.string()).min(1)).min(1),
   }).strict(),
   sheets_clear: z.object({
     spreadsheetId: nonEmptyString,

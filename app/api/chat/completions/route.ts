@@ -137,6 +137,12 @@ export async function POST(request: NextRequest) {
         requestId,
         error: error instanceof Error ? error.message : String(error),
       });
+      memoryStatusInfo.tokenUsage = undefined;
+      return errorResponse(
+        'Unable to validate request size. Please try again.',
+        undefined,
+        HTTP_STATUS.BAD_REQUEST
+      );
     }
 
     const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));

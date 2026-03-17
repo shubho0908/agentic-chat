@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/api-utils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateAttachments } from '@/lib/validation';
+import { isValidConversationId, validateAttachmentInputs } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
 import { messageMetadataSchema } from '@/lib/schemas/chat';
 import { isSupportedForRAG } from '@/lib/rag/utils';
@@ -82,21 +82,8 @@ async function softDeleteDownstreamBranch(
   messageId: string,
   parentMessageId: string | null,
   siblingIndex: number,
-  createdAt: Date,
   deletedAt: Date
 ) {
-  await tx.message.updateMany({
-    where: {
-      conversationId,
-      createdAt: { gt: createdAt },
-      isDeleted: false,
-    },
-    data: {
-      isDeleted: true,
-      deletedAt,
-    },
-  });
-
   if (parentMessageId) {
     await tx.message.updateMany({
       where: {
@@ -151,6 +138,7 @@ export async function PATCH(
     }
 
     const { content, attachments, metadata, assistantContent, assistantMetadata } = body;
+    let validatedAttachments: AttachmentInput[] | undefined;
 
     if (!content || typeof content !== 'string') {
       return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
@@ -171,10 +159,12 @@ export async function PATCH(
     }
 
     if (attachments !== undefined && attachments !== null) {
-      const attachmentValidation = validateAttachments(attachments);
+      const attachmentValidation = validateAttachmentInputs(attachments);
       if (!attachmentValidation.valid) {
         return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
       }
+
+      validatedAttachments = attachmentValidation.attachments;
     }
 
     if (assistantContent !== undefined && typeof assistantContent !== 'string') {
@@ -195,7 +185,6 @@ export async function PATCH(
         role: true,
         parentMessageId: true,
         siblingIndex: true,
-        createdAt: true,
       },
     });
 
@@ -218,7 +207,7 @@ export async function PATCH(
             parentMessageId: parentId,
             siblingIndex,
             ...(metadata && { metadata }),
-            attachments: buildAttachmentCreateInput(attachments as AttachmentInput[] | undefined),
+            attachments: buildAttachmentCreateInput(validatedAttachments),
           },
           include: {
             attachments: true,
@@ -243,7 +232,6 @@ export async function PATCH(
           messageId,
           existingMessage.parentMessageId,
           existingMessage.siblingIndex,
-          existingMessage.createdAt,
           now
         );
 
@@ -272,7 +260,6 @@ export async function PATCH(
         messageId,
         existingMessage.parentMessageId,
         existingMessage.siblingIndex,
-        existingMessage.createdAt,
         now
       );
 
@@ -284,7 +271,7 @@ export async function PATCH(
           parentMessageId: parentId,
           siblingIndex,
           ...(metadata && { metadata }),
-          attachments: buildAttachmentCreateInput(attachments as AttachmentInput[] | undefined),
+          attachments: buildAttachmentCreateInput(validatedAttachments),
         },
         include: {
           attachments: true,

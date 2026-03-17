@@ -204,7 +204,8 @@ async function getAttachmentInfo(conversationId: string): Promise<{
       hasAny: true,
       documentCount: documentAttachments.length,
     };
-  } catch {
+  } catch (error) {
+    console.warn('[Context Router] Failed to get attachment info:', error);
     return { hasDocuments: false, hasAny: false, documentCount: 0 };
   }
 }

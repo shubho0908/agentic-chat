@@ -51,6 +51,7 @@ function ImageCard({
 }: ImageCardProps) {
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const isOverflowTile = showOverlay !== undefined;
 
   const handleImageError = useCallback(() => {
     setHasError(true);
@@ -64,20 +65,22 @@ function ImageCard({
   }, [image.url, onStatusChange]);
 
   const handleClick = useCallback(() => {
-    if (!isLoading && !hasError) {
+    if (isOverflowTile || (!isLoading && !hasError)) {
       onClick();
     }
-  }, [isLoading, hasError, onClick]);
+  }, [hasError, isLoading, isOverflowTile, onClick]);
 
   return (
     <button
       type="button"
       className={`group relative aspect-video overflow-hidden rounded-lg border border-border/60 bg-muted/30 transition-all duration-200 ease-out ${
-        !isLoading && !hasError ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]' : 'cursor-default'
+        isOverflowTile || (!isLoading && !hasError)
+          ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]'
+          : 'cursor-default'
       } ${className ?? ""}`}
       onClick={handleClick}
-      disabled={isLoading || hasError}
-      aria-label={image.description || `Open search result image ${index + 1}`}
+      disabled={!isOverflowTile && (isLoading || hasError)}
+      aria-label={isOverflowTile ? "Show all images" : image.description || `Open search result image ${index + 1}`}
     >
       {!hasError ? (
         <>
@@ -192,40 +195,49 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
 
   const availableImages = images.filter((image) => imageStatuses[image.url] !== "error");
   const failedCount = images.length - availableImages.length;
-  const visibleImages = availableImages.length > 0 ? availableImages : images;
+  const visibleImages = availableImages;
+  const hasAvailableImages = visibleImages.length > 0;
   const displayImages = visibleImages.slice(0, maxDisplay);
-  const remainingCount = visibleImages.length - maxDisplay;
+  const remainingCount = Math.max(visibleImages.length - maxDisplay, 0);
   const hasMoreImages = remainingCount > 0;
 
   return (
     <>
       <div className="not-prose my-4 w-full max-w-full self-stretch">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          {displayImages.map((image, index) => {
-            const isLastImage = index === maxDisplay - 1;
-            const shouldShowOverlay = isLastImage && hasMoreImages;
-            
-            return (
-              <ImageCard
-                key={getSearchImageKey(image)}
-                image={image}
-                index={index}
-                onClick={() => shouldShowOverlay ? handleShowAll() : handleImageSelect(image.url, image.description)}
-                showDescription={!shouldShowOverlay}
-                onStatusChange={handleImageStatusChange}
-                showOverlay={
-                  shouldShowOverlay ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                      <span className="text-white text-lg font-semibold">
-                        +{remainingCount}
-                      </span>
-                    </div>
-                  ) : undefined
-                }
-              />
-            );
-          })}
-        </div>
+        {hasAvailableImages ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+            {displayImages.map((image, index) => {
+              const isLastImage = index === maxDisplay - 1;
+              const shouldShowOverlay = isLastImage && hasMoreImages;
+
+              return (
+                <ImageCard
+                  key={getSearchImageKey(image)}
+                  image={image}
+                  index={index}
+                  onClick={() => shouldShowOverlay ? handleShowAll() : handleImageSelect(image.url, image.description)}
+                  showDescription={!shouldShowOverlay}
+                  onStatusChange={handleImageStatusChange}
+                  showOverlay={
+                    shouldShowOverlay ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <span className="text-white text-lg font-semibold">
+                          +{remainingCount}
+                        </span>
+                      </div>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div className={`flex min-h-[180px] items-center justify-center rounded-2xl border border-dashed ${modalTheme.emptyState}`}>
+            <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
+              Search results returned image links, but none of them are loading reliably right now.
+            </p>
+          </div>
+        )}
         
         <p className="text-xs text-muted-foreground mt-2">
           {visibleImages.length} {visibleImages.length === 1 ? 'image' : 'images'} from search results
@@ -264,21 +276,29 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-                <div className="grid grid-cols-2 gap-3 p-3">
-                {visibleImages.map((image, index) => (
-                  <ImageCard
-                    key={getSearchImageKey(image)}
-                    image={image}
-                    index={index}
-                    onClick={() => handleImageSelect(image.url, image.description)}
-                    sizes="50vw"
-                    onStatusChange={handleImageStatusChange}
-                    className={`aspect-[4/5] rounded-2xl ${modalTheme.galleryCard}`}
-                    contentClassName="group-hover:scale-[1.03]"
-                  />
-                ))}
+                {hasAvailableImages ? (
+                  <div className="grid grid-cols-2 gap-3 p-3">
+                    {visibleImages.map((image, index) => (
+                      <ImageCard
+                        key={getSearchImageKey(image)}
+                        image={image}
+                        index={index}
+                        onClick={() => handleImageSelect(image.url, image.description)}
+                        sizes="50vw"
+                        onStatusChange={handleImageStatusChange}
+                        className={`aspect-[4/5] rounded-2xl ${modalTheme.galleryCard}`}
+                        contentClassName="group-hover:scale-[1.03]"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`m-3 flex min-h-[220px] items-center justify-center rounded-3xl border border-dashed ${modalTheme.emptyState}`}>
+                    <p className={`max-w-sm text-center text-sm ${modalTheme.mutedText}`}>
+                      Search results returned image links, but none of them are loading reliably right now.
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
             </div>
           </DrawerContent>
         </Drawer>
@@ -313,7 +333,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                {visibleImages.length > 0 ? (
+                {hasAvailableImages ? (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {visibleImages.map((image, index) => (
                       <ImageCard

@@ -196,18 +196,54 @@ function summarizeArgs(args: unknown): string {
     return '';
   }
 
-  const preferredKeys = ['to', 'subject', 'summary', 'title', 'email', 'name', 'fileId', 'documentId', 'eventId', 'spreadsheetId', 'presentationId'];
-  const parts = preferredKeys
-    .filter((key) => key in (args as Record<string, unknown>))
-    .map((key) => {
-      const value = (args as Record<string, unknown>)[key];
-      if (typeof value !== 'string' || !value.trim()) {
-        return null;
-      }
+  const preferredKeys = [
+    'to',
+    'subject',
+    'summary',
+    'title',
+    'email',
+    'name',
+    'fileId',
+    'fileIds',
+    'messageId',
+    'messageIds',
+    'documentId',
+    'eventId',
+    'spreadsheetId',
+    'presentationId',
+    'targetFolderId',
+    'parentFolderId',
+  ];
+  const parts = preferredKeys.flatMap((key) => {
+    if (!(key in (args as Record<string, unknown>))) {
+      return [];
+    }
+
+    const value = (args as Record<string, unknown>)[key];
+    if (typeof value === 'string') {
       const trimmed = value.trim();
-      return `${key}: ${trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed}`;
-    })
-    .filter((value): value is string => Boolean(value));
+      if (!trimmed) {
+        return [];
+      }
+      return [`${key}: ${trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed}`];
+    }
+
+    if (Array.isArray(value)) {
+      const items = value
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => item.trim());
+
+      if (items.length === 0) {
+        return [];
+      }
+
+      const preview = items.slice(0, 3).join(', ');
+      const suffix = items.length > 3 ? `, +${items.length - 3} more` : '';
+      return [`${key}: [${preview}${suffix}]`];
+    }
+
+    return [];
+  });
 
   return parts.length > 0 ? ` (${parts.join(', ')})` : '';
 }

@@ -54,7 +54,7 @@ export function getContextualMessage(
     return AI_THINKING_MESSAGES.MEMORY_SYNTHESIS;
   }
 
-  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories) {
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories && routing !== RoutingDecision.ToolOnly) {
     return "Checked conversation history for relevant memories...";
   }
 

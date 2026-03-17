@@ -121,9 +121,18 @@ export async function formatterNode(
 }
 
 function extractCitationsFromTaskSources(tasks: ResearchState['completedTasks']): Citation[] {
+  const seenKeys = new Set<string>();
   const uniqueSources = tasks
     .flatMap((task) => task.sources || [])
-    .filter((source, index, self) => index === self.findIndex((item) => item.url === source.url));
+    .filter((source, index) => {
+      const key = source.url ?? `${source.title ?? 'untitled'}::${index}`;
+      if (seenKeys.has(key)) {
+        return false;
+      }
+
+      seenKeys.add(key);
+      return true;
+    });
 
   return uniqueSources.map((source, index) => ({
     id: `cite${index + 1}`,

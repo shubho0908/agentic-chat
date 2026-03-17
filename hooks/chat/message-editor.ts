@@ -1,4 +1,4 @@
-import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { buildMultimodalContent } from "@/lib/content-utils";
@@ -13,6 +13,14 @@ import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updat
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chat-hooks";
 import { persistConversationMemoryIfEligible } from "./memory-persistence";
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
 
 export async function handleEditMessage(
   messageId: string,
@@ -147,7 +155,7 @@ export async function handleEditMessage(
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
             status: ToolStatus.Completed,
-            result: toolResult.result,
+            result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
           

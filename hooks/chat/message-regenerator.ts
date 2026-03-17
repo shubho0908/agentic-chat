@@ -1,4 +1,4 @@
-import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type JsonValue, type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/web-search.tools";
 import { getModel } from "@/lib/storage";
@@ -12,6 +12,14 @@ import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chat-hooks";
 import { persistConversationMemoryIfEligible } from "./memory-persistence";
 import { fetchMessageVersions, updateMessageWithVersions } from "./version-manager";
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -125,7 +133,7 @@ export async function handleRegenerateResponse(
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
             status: ToolStatus.Completed,
-            result: toolResult.result,
+            result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
           
@@ -222,7 +230,13 @@ export async function handleRegenerateResponse(
           messageMetadata
         );
         const parentId = updatedAssistant.parentMessageId || updatedAssistant.id;
-        const versions = await fetchMessageVersions(conversationId, parentId);
+        let versions: Message[] = [];
+
+        try {
+          versions = await fetchMessageVersions(conversationId, parentId);
+        } catch (versionError) {
+          console.warn('Failed to fetch message versions after regeneration:', versionError);
+        }
 
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
