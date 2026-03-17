@@ -1,20 +1,10 @@
-import type { Message, MessageContentPart } from '@/lib/schemas/chat';
+import type { Message } from '@/lib/schemas/chat';
 import type OpenAI from 'openai';
 import { truncateTextToTokenLimit } from '@/lib/utils/token-counter';
+import { extractTextFromMessage } from './message-content';
 
-type MessageContent = string | MessageContentPart[];
 const MAX_CONTEXT_MESSAGE_LENGTH = 12000;
 const MAX_CONTEXT_MESSAGE_TOKENS = 3000;
-
-export function extractTextFromMessage(content: MessageContent): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  return content
-    .filter((p) => p.type === 'text')
-    .map((p) => p.type === 'text' ? p.text : '')
-    .join(' ');
-}
 
 export function injectContextToMessages(messages: Message[], context: string, model?: string): Message[] {
   const trimmedContext = context.trim();

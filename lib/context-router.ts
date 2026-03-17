@@ -9,7 +9,7 @@ import { filterDocumentAttachments } from './rag/retrieval/status-helpers';
 import { isSupportedDocumentExtension } from './file-validation';
 import { TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
-import { extractTextFromMessage } from './chat/message-helpers';
+import { extractTextFromMessage } from './chat/message-content';
 import { mediateMemoryIntent } from './chat/request-mediator';
 import { estimateMemoryEntryCount } from './chat/memory-policy';
 import { extractTextQuery, isReferentialQuery } from './chat/referential-query';

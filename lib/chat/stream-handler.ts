@@ -5,7 +5,7 @@ import type { MemoryStatus } from '@/types/chat';
 import type { SearchDepth } from '@/lib/schemas/web-search.tools';
 import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openai-errors';
-import { extractTextFromMessage } from './message-helpers';
+import { extractTextFromMessage } from './message-content';
 import { executeWebSearchTool, executeDeepResearchTool, executeGoogleSuiteTool } from './tool-executors';
 import {
   encodeMemoryStatus,

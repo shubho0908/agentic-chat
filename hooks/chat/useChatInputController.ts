@@ -15,7 +15,7 @@ import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/auth-client";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
-import { extractTextFromMessage } from "@/lib/chat/message-helpers";
+import { extractTextFromMessage } from "@/lib/chat/message-content";
 import {
   GOOGLE_SIGN_IN_SCOPES,
   getMissingGoogleScopes,
