@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+delete process.env.DATABASE_URL;
+delete process.env.DIRECT_DATABASE_URL;
+
 import { isPrivateAddress, isTrustedAttachmentUrl } from "@/lib/network/ssrf";
 import { redactSharedConversation } from "@/lib/share/redaction";
 import {
@@ -12,19 +15,21 @@ import {
 import {
   getAvailableGoogleWorkspaceTools,
   isGoogleWorkspaceToolAllowed,
-} from "@/lib/tools/google-suite/tool-access";
-import { validateGoogleToolArgs } from "@/lib/tools/google-suite/tool-schemas";
+} from "@/lib/tools/google-suite/toolAccess";
+import { validateGoogleToolArgs } from "@/lib/tools/google-suite/toolSchemas";
 import {
   validateRequestedModel,
   getStageModel,
   getSupportedTemperature,
-} from "@/lib/model-policy";
-import { injectContextToMessages } from "@/lib/chat/message-helpers";
-import { shouldPersistConversationMemory } from "@/lib/chat/memory-policy";
+} from "@/lib/modelPolicy";
+import { getRequiredEnv } from "@/lib/env";
+import { setObservabilityLogSinkForTests } from "@/lib/observability";
+import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { shouldPersistConversationMemory } from "@/lib/chat/memoryPolicy";
 import {
   buildMemoryLookupQueries,
   mediateMemoryIntent,
-} from "@/lib/chat/request-mediator";
+} from "@/lib/chat/requestMediator";
 import {
   GOOGLE_SCOPES,
   GOOGLE_SIGN_IN_SCOPES,
@@ -37,7 +42,7 @@ import {
   uploadResponsesToAttachments,
   filterDocumentAttachments,
   filterImageAttachments,
-} from "@/lib/attachment-utils";
+} from "@/lib/attachmentUtils";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 import {
   createRequestId,
@@ -49,14 +54,14 @@ import {
   calculateTokenUsage,
   countTextTokens,
   truncateTextToTokenLimit,
-} from "@/lib/utils/token-counter";
+} from "@/lib/utils/tokenCounter";
 import {
   computeNextRetryAt,
   computeRetryBackoffMs,
   isLeaseExpired,
   isRetryableDocumentError,
   shouldRetryJob,
-} from "@/lib/orchestration/retry-policy";
+} from "@/lib/orchestration/retryPolicy";
 import {
   computeAdaptiveSimilarityThreshold,
   diversifyCandidates,
@@ -217,7 +222,7 @@ test("google workspace only exposes tools allowed by granted scopes", () => {
 test("google workspace narrows exposed tools to request-relevant services when known", () => {
   const driveTools = getAvailableGoogleWorkspaceTools(
     [GOOGLE_SCOPES.DRIVE, GOOGLE_SCOPES.DOCS],
-    [GOOGLE_SCOPES.DRIVE]
+    [GOOGLE_SCOPES.DRIVE],
   );
   const toolNames = driveTools
     .filter((tool) => tool.type === "function")
@@ -252,13 +257,15 @@ test("google workspace schema rejects invalid time zones and allows blank sheet 
     values: [["hello", ""]],
   });
 
-  assert.deepEqual((writeArgs as { values: string[][] }).values, [["hello", ""]]);
+  assert.deepEqual((writeArgs as { values: string[][] }).values, [
+    ["hello", ""],
+  ]);
 });
 
 test("google workspace keeps Drive discovery tools for Docs-family requests", () => {
   const tools = getAvailableGoogleWorkspaceTools(
     [GOOGLE_SCOPES.DRIVE, GOOGLE_SCOPES.DOCS],
-    [GOOGLE_SCOPES.DOCS]
+    [GOOGLE_SCOPES.DOCS],
   );
   const toolNames = tools
     .filter((tool) => tool.type === "function")
@@ -282,30 +289,36 @@ test("google workspace tool args are validated at dispatch time", () => {
 });
 
 test("google workspace follows conversation context for ambiguous follow-up requests", () => {
-  const resolution = resolveGoogleWorkspaceScopesForRequest("share links of them", [
-    "do I have any resume in drive?",
-  ]);
+  const resolution = resolveGoogleWorkspaceScopesForRequest(
+    "share links of them",
+    ["do I have any resume in drive?"],
+  );
 
   assert.equal(resolution.source, "context");
   assert.equal(resolution.requiredScopes.includes(GOOGLE_SCOPES.DRIVE), true);
 });
 
 test("google workspace does not escalate unknown follow-ups to every app scope", () => {
-  const resolution = resolveGoogleWorkspaceScopesForRequest("share links of them");
+  const resolution = resolveGoogleWorkspaceScopesForRequest(
+    "share links of them",
+  );
 
   assert.equal(resolution.source, "unknown");
   assert.deepEqual(resolution.requiredScopes, GOOGLE_SIGN_IN_SCOPES);
 });
 
 test("google workspace approval barrier includes batch item identifiers", async () => {
-  const message = await buildGoogleWorkspaceApprovalBarrierMessage([
+  const message = await buildGoogleWorkspaceApprovalBarrierMessage(
+    [
+      {
+        toolName: "drive_delete",
+        args: { fileIds: ["file-1", "file-2", "file-3", "file-4"] },
+      },
+    ],
     {
-      toolName: "drive_delete",
-      args: { fileIds: ["file-1", "file-2", "file-3", "file-4"] },
+      userId: "user_1",
     },
-  ], {
-    userId: "user_1",
-  });
+  );
 
   assert.match(message, /fileIds: \[file-1, file-2, file-3, \+1 more\]/);
 });
@@ -433,7 +446,7 @@ test("token counter includes reserve in percentage and bounds suffix-only trunca
     "alpha beta gamma",
     "gpt-5-mini",
     2,
-    "very long suffix"
+    "very long suffix",
   );
   assert.equal(countTextTokens(truncated, "gpt-5-mini") <= 2, true);
 
@@ -596,12 +609,10 @@ test("observability logger is enabled only in development", () => {
   assert.equal(isObservabilityLoggingEnabled("test"), false);
   assert.equal(isObservabilityLoggingEnabled("development"), true);
 
-  const originalInfo = console.info;
   const writes: string[] = [];
-
-  console.info = ((message?: unknown) => {
-    writes.push(String(message ?? ""));
-  }) as typeof console.info;
+  setObservabilityLogSinkForTests((_level, serialized) => {
+    writes.push(serialized);
+  });
 
   try {
     logInfo({ event: "prod_should_not_log" }, "production");
@@ -611,7 +622,46 @@ test("observability logger is enabled only in development", () => {
     assert.equal(writes.length, 1);
     assert.match(writes[0], /dev_should_log/);
   } finally {
-    console.info = originalInfo;
+    setObservabilityLogSinkForTests(null);
+  }
+});
+
+test("environment warnings stay silent outside development", () => {
+  const originalEnv = process.env.NODE_ENV;
+  const env = process.env as Record<string, string | undefined>;
+  const writes: string[] = [];
+  setObservabilityLogSinkForTests((_level, serialized) => {
+    writes.push(serialized);
+  });
+
+  try {
+    env.NODE_ENV = "production";
+    assert.equal(
+      getRequiredEnv("TEST_ENV_ONLY_PROD", {
+        fallback: "prod-fallback",
+        description: "Test env only production",
+      }),
+      "prod-fallback",
+    );
+    assert.equal(writes.length, 0);
+
+    env.NODE_ENV = "development";
+    assert.equal(
+      getRequiredEnv("TEST_ENV_ONLY_DEV", {
+        fallback: "dev-fallback",
+        description: "Test env only development",
+      }),
+      "dev-fallback",
+    );
+    assert.equal(writes.length, 1);
+    assert.match(writes[0], /Test env only development/);
+  } finally {
+    if (originalEnv === undefined) {
+      delete env.NODE_ENV;
+    } else {
+      env.NODE_ENV = originalEnv;
+    }
+    setObservabilityLogSinkForTests(null);
   }
 });
 

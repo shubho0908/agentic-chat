@@ -1,23 +1,24 @@
 import OpenAI from 'openai';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient, isAuthRevokedError } from '@/lib/tools/google-suite/client';
-import { getToolDisplayName } from '@/utils/google/tool-names';
+import { getToolDisplayName } from '@/utils/google/toolNames';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
-import type { GoogleWorkspaceProgressCallback } from '@/types/google-suite';
+import type { GoogleWorkspaceProgressCallback } from '@/types/googleSuite';
 import type { GoogleSuiteTask } from '@/types/tools';
-import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
-import { getStageModel } from '@/lib/model-policy';
+import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
+import { getStageModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import {
+
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
   hasExplicitGoogleWorkspaceApproval,
   buildGoogleWorkspaceApprovalBarrierMessage,
   type GoogleWorkspacePlannedAction,
 } from '@/lib/tools/google-suite/safety';
-import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '@/lib/tools/google-suite/tool-access';
-import { validateGoogleToolArgs } from '@/lib/tools/google-suite/tool-schemas';
-import { countTextTokens } from '@/lib/utils/token-counter';
+import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '@/lib/tools/google-suite/toolAccess';
+import { validateGoogleToolArgs } from '@/lib/tools/google-suite/toolSchemas';
+import { countTextTokens } from '@/lib/utils/tokenCounter';
 import { OPENAI_MODELS } from '@/constants/openai-models';
 import { resolveGoogleWorkspaceScopesForRequest } from '@/lib/tools/google-suite/scopes';
 import type {
@@ -54,7 +55,7 @@ import type {
   SlidesCreateArgs,
   SlidesReadArgs,
   SlidesAddSlideArgs,
-} from '@/lib/tools/google-suite/types/handler-types';
+} from '@/lib/tools/google-suite/types/handlerTypes';
 import {
   handleGmailSearch,
   handleGmailRead,
@@ -100,6 +101,7 @@ import {
   handleSlidesAddSlide,
 } from '@/lib/tools/google-suite/slides/handlers';
 
+import { logger } from "@/lib/logger";
 interface GoogleWorkspaceExecutorOptions {
   query: string;
   userId: string;
@@ -392,7 +394,7 @@ export async function executeGoogleWorkspace(
             }
           }
           if (!foundToolCalls) {
-            console.error('[Google Workspace Executor] Invalid message structure at iteration', iteration, ':', {
+            logger.error('[Google Workspace Executor] Invalid message structure at iteration', iteration, ':', {
               index: i,
               messageRoles: messages.map((m, idx) => ({ idx, role: m?.role, hasToolCalls: m?.role === 'assistant' && 'tool_calls' in m })),
             });
@@ -483,7 +485,7 @@ export async function executeGoogleWorkspace(
             args: validatedArgs,
           });
         } catch (error) {
-          console.warn(
+          logger.warn(
             '[Google Workspace Executor] Failed to pre-validate planned action:',
             toolCall.function.name,
             error
@@ -515,7 +517,7 @@ export async function executeGoogleWorkspace(
 
 	      for (const toolCall of singleToolCallMessage.message.tool_calls ?? []) {
 	          if (toolCall.type !== 'function') {
-	            console.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
+	            logger.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
 	            toolResults.push({ tool_call_id: toolCall.id, content: 'Invalid tool call type' });
             continue;
           }
@@ -531,7 +533,7 @@ export async function executeGoogleWorkspace(
             args = plannedAction.args as HandlerArgs;
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Tool arguments failed validation';
-            console.error('[Google Workspace Executor] Failed to validate arguments:', {
+            logger.error('[Google Workspace Executor] Failed to validate arguments:', {
               functionName,
               error: errorMessage,
             });
@@ -623,7 +625,7 @@ export async function executeGoogleWorkspace(
             currentTask.error = error instanceof Error ? error.message : 'Unknown error';
             
             if (isAuthRevokedError(error)) {
-              console.error(`[Google Workspace Executor] ✗ Authorization revoked for ${functionName}`);
+              logger.error(`[Google Workspace Executor] ✗ Authorization revoked for ${functionName}`);
               onProgress?.({
                 status: 'auth_required',
                 message: 'Google Workspace authorization has been revoked or expired',
@@ -637,8 +639,8 @@ export async function executeGoogleWorkspace(
 
             consecutiveErrors++;
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`[Google Workspace Executor] ✗ ${functionName} failed:`, errorMessage);
-            console.error('[Google Workspace Executor] Error details:', error);
+            logger.error(`[Google Workspace Executor] ✗ ${functionName} failed:`, errorMessage);
+            logger.error('[Google Workspace Executor] Error details:', error);
             toolResults.push({
               tool_call_id: toolCall.id,
               content: `Error: ${errorMessage}`,
@@ -648,7 +650,7 @@ export async function executeGoogleWorkspace(
       }
 
       if (consecutiveErrors >= 3) {
-        console.error('[Google Workspace Executor] Too many consecutive errors, aborting');
+        logger.error('[Google Workspace Executor] Too many consecutive errors, aborting');
         return TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MULTIPLE_ERRORS;
       }
 
@@ -683,7 +685,7 @@ export async function executeGoogleWorkspace(
 
       return finalResponse || TOOL_ERROR_MESSAGES.GOOGLE_SUITE.MAX_ITERATIONS_REACHED;
     } catch (error) {
-      console.error('[Google Workspace] Error:', error);
+      logger.error('[Google Workspace] Error:', error);
 
       if (isAuthRevokedError(error)) {
         onProgress?.({

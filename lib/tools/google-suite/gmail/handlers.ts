@@ -1,11 +1,13 @@
 import { google, type gmail_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
+import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handlerTypes';
 import { parseEmailContent } from '@/utils/google/email';
 import { formatEmailDate } from '@/utils/dateFormatter';
 
+
 const MAX_GMAIL_SEARCH_FETCHES = 10;
 
+import { logger } from "@/lib/logger";
 function getHeaderValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
   return headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
@@ -212,7 +214,7 @@ export async function handleGmailModify(
     });
     
     if (notFound.length > 0) {
-      console.warn(`[Gmail] Labels not found and will be skipped: ${notFound.join(', ')}`);
+      logger.warn(`[Gmail] Labels not found and will be skipped: ${notFound.join(', ')}`);
     }
     
     return translatedIds;

@@ -1,8 +1,10 @@
 import { google } from 'googleapis';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '../types';
-import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handler-types';
+import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handlerTypes';
 
+
+import { logger } from "@/lib/logger";
 export async function handleCalendarListEvents(
   context: ToolHandlerContext,
   args: CalendarListEventsArgs
@@ -40,17 +42,17 @@ export async function handleCalendarCreateEvent(
   
   const startDate = new Date(args.startTime);
   if (isNaN(startDate.getTime())) {
-    console.error('[Calendar Handler] Invalid startTime:', args.startTime);
+    logger.error('[Calendar Handler] Invalid startTime:', args.startTime);
     throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_START_TIME(args.startTime));
   }
   const endDate = new Date(args.endTime);
   if (isNaN(endDate.getTime())) {
-    console.error('[Calendar Handler] Invalid endTime:', args.endTime);
+    logger.error('[Calendar Handler] Invalid endTime:', args.endTime);
     throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_END_TIME(args.endTime));
   }
   
   if (endDate.getTime() <= startDate.getTime()) {
-    console.error('[Calendar Handler] endTime must be after startTime');
+    logger.error('[Calendar Handler] endTime must be after startTime');
     throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.END_TIME_BEFORE_START(args.startTime, args.endTime));
   }
   
@@ -92,8 +94,8 @@ export async function handleCalendarCreateEvent(
 **End:** ${args.endTime}
 ${args.attendees ? `**Attendees:** ${args.attendees.join(', ')}\n` : ''}**Link:** ${response.data.htmlLink}`;
   } catch (error) {
-    console.error('[Calendar Handler] ✗ Failed to create event');
-    console.error('[Calendar Handler] Error:', error);
+    logger.error('[Calendar Handler] ✗ Failed to create event');
+    logger.error('[Calendar Handler] Error:', error);
     throw error;
   }
 }

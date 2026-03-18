@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/web-search.tools";
+import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { Session } from "@/lib/auth";
 import { ToolMenuItemDrawer } from "./toolMenuItemDrawer";
 import { MemoryToggle } from "./memoryToggle";

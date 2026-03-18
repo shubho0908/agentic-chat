@@ -2,9 +2,10 @@ import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
-import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
-import { getStageModel } from '@/lib/model-policy';
-import { invokeStructuredOutput } from '../structured-output';
+import type { GateDecision, DirectLLMResponse } from '@/types/deepResearch';
+import { getStageModel } from '@/lib/modelPolicy';
+import { invokeStructuredOutput } from '../structuredOutput';
+
 
 const gateDecisionSchema = z.object({
   shouldResearch: z.boolean(),
@@ -12,6 +13,7 @@ const gateDecisionSchema = z.object({
   confidence: z.enum(['low', 'medium', 'high']),
 });
 
+import { logger } from "@/lib/logger";
 const directResponseSchema = z.object({
   answer: z.string(),
   confidence: z.enum(['low', 'medium', 'high']),
@@ -106,7 +108,7 @@ export async function gateNode(
     };
 
   } catch (error) {
-    console.error('[Gate Node] ❌ Error:', error);
+    logger.error('[Gate Node] ❌ Error:', error);
     return {
       gateDecision: {
         shouldResearch: true,

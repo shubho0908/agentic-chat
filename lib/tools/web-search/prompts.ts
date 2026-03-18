@@ -1,4 +1,4 @@
-import type { SearchDepth } from '@/lib/schemas/web-search.tools';
+import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
 const WEB_SEARCH_BASIC_INSTRUCTIONS = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

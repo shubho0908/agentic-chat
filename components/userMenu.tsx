@@ -4,13 +4,14 @@ import { useState, type RefObject } from "react";
 import { LogOut, Moon, Settings2, SlidersHorizontal, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { signOut, useSession } from "@/lib/auth-client";
+import { signOut, useSession } from "@/lib/authClient";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
@@ -35,7 +36,7 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
       router.push("/");
       toast.success(TOAST_SUCCESS_MESSAGES.LOGGED_OUT);
     } catch (error) {
-      console.error("Logout error:", error);
+      logger.error("Logout error:", error);
       toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_LOGOUT, {
         description: TOAST_ERROR_MESSAGES.AUTH.FAILED_LOGOUT_DESCRIPTION,
       });
@@ -158,3 +159,5 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
     </Popover>
   );
 }
+
+import { logger } from "@/lib/logger";

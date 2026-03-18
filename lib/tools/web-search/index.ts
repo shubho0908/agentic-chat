@@ -1,14 +1,18 @@
 import { TavilyClient } from 'tavily';
 import { z } from 'zod';
-import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
+import { webSearchParamsSchema } from '@/lib/schemas/webSearchTools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource, WebSearchProgress, WebSearchImage } from '@/types/tools';
 import { withRetry } from '@/lib/retry';
+import { logError, logWarn } from '@/lib/observability';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
 if (!TAVILY_API_KEY) {
-  console.warn('[Web Search] TAVILY_API_KEY not configured. Web search tool will be disabled.');
+  logWarn({
+    event: 'web_search_disabled',
+    message: 'TAVILY_API_KEY not configured. Web search tool will be disabled.',
+  });
 }
 
 const client = TAVILY_API_KEY ? new TavilyClient({ apiKey: TAVILY_API_KEY }) : null;
@@ -28,14 +32,20 @@ export async function executeWebSearch(
     try {
       validatedInput = webSearchParamsSchema.parse(input);
     } catch (error) {
-      console.error('[Web Search] Validation error:', error);
+      logError({
+        event: 'web_search_validation_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search parameters');
     }
 
     const { query: rawQuery, maxResults, searchDepth, includeAnswer, includeImages } = validatedInput;
 
     if (!rawQuery || rawQuery.trim().length === 0) {
-      console.error('[Web Search] Invalid query: empty');
+      logError({
+        event: 'web_search_invalid_query',
+        query: rawQuery,
+      });
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Query is empty or invalid');
     }
 
@@ -45,7 +55,11 @@ export async function executeWebSearch(
     let query = rawQuery.trim();
     
     if (query.length > MAX_QUERY_LENGTH) {
-      console.warn(`[Web Search] Query too long (${query.length} chars), truncating to ${MAX_QUERY_LENGTH}`);
+      logWarn({
+        event: 'web_search_query_truncated',
+        queryLength: query.length,
+        maxQueryLength: MAX_QUERY_LENGTH,
+      });
       query = query.substring(0, MAX_QUERY_LENGTH);
       const lastPeriod = query.lastIndexOf('.');
       const lastSpace = query.lastIndexOf(' ');
@@ -207,17 +221,26 @@ ${result.position}. ${result.title}
 
       return formattedOutput;
     } catch (error) {
-      console.error('[Web Search] Error:', error instanceof Error ? error.message : String(error));
+      logError({
+        event: 'web_search_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
       
       if (error && typeof error === 'object') {
         const errorObj = error as Record<string, unknown>;
         if ('response' in errorObj) {
           const response = errorObj.response as Record<string, unknown> | undefined;
-          console.error('[Web Search] API Response Status:', response?.status);
+          logError({
+            event: 'web_search_failed_response',
+            status: response?.status,
+          });
         }
         if ('request' in errorObj) {
           const request = errorObj.request as Record<string, unknown> | undefined;
-          console.error('[Web Search] Request method:', request?.method);
+          logError({
+            event: 'web_search_failed_request',
+            method: request?.method,
+          });
         }
       }
 
@@ -225,7 +248,10 @@ ${result.position}. ${result.title}
       
       if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
         const safePreview = typeof rawQuery === 'string' ? rawQuery.slice(0, 50) + '...' : '';
-        console.warn('[Web Search] 400 Bad Request. Query preview (truncated):', safePreview);
+        logWarn({
+          event: 'web_search_bad_request',
+          queryPreview: safePreview,
+        });
         return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Invalid search query. The query may be too complex or contain unsupported characters.');
       }
 

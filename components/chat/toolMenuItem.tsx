@@ -8,12 +8,12 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/web-search.tools";
-import { GOOGLE_SUITE_SERVICES } from "@/components/icons/google-suite-icons";
-import { getGoogleWorkspaceLevel } from "@/lib/tools/google-suite/access-levels";
+import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import { GOOGLE_SUITE_SERVICES } from "@/components/icons/googleSuiteIcons";
+import { getGoogleWorkspaceLevel } from "@/lib/tools/google-suite/accessLevels";
 import {
   useToolMenuItemState,
   type ToolMenuDeepResearchUsage,

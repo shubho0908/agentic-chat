@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
-import { getPgPool } from '@/lib/rag/storage/pgvector-client';
-import { logError } from '@/lib/observability';
-import { getToolDisplayName } from '@/utils/google/tool-names';
+import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
+import { logError, logWarn } from '@/lib/observability';
+import { getToolDisplayName } from '@/utils/google/toolNames';
 
 export interface GoogleWorkspacePlannedAction {
   toolName: string;
@@ -49,11 +49,56 @@ const APPROVAL_TOKEN_PREFIX = 'GOOGLE_WORKSPACE_APPROVAL:';
 const APPROVAL_TTL_MS = 15 * 60 * 1000;
 
 const inMemoryApprovals = new Map<string, ApprovalRecord>();
+type ApprovalStoreMode = 'memory' | 'durable';
+let approvalStoreMode: ApprovalStoreMode | null = null;
+let approvalStoreProbePromise: Promise<ApprovalStoreMode> | null = null;
 let approvalTableInitialized = false;
 let approvalTablePromise: Promise<void> | null = null;
 
-function shouldUseDurableApprovalStore(): boolean {
-  return Boolean(process.env.DATABASE_URL);
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function markApprovalStoreAsMemory(reason: string): void {
+  approvalStoreMode = 'memory';
+  approvalTableInitialized = false;
+  approvalTablePromise = null;
+
+  logWarn({
+    event: 'google_workspace_approval_store_fallback',
+    reason,
+  });
+}
+
+async function resolveApprovalStoreMode(): Promise<ApprovalStoreMode> {
+  if (approvalStoreMode) {
+    return approvalStoreMode;
+  }
+
+  if (!process.env.DATABASE_URL) {
+    approvalStoreMode = 'memory';
+    return approvalStoreMode;
+  }
+
+  if (approvalStoreProbePromise) {
+    return approvalStoreProbePromise;
+  }
+
+  approvalStoreProbePromise = (async () => {
+    try {
+      const pool = getPgPool();
+      await pool.query('SELECT 1');
+      approvalStoreMode = 'durable';
+      return approvalStoreMode;
+    } catch (error) {
+      markApprovalStoreAsMemory(getErrorMessage(error));
+      return 'memory';
+    } finally {
+      approvalStoreProbePromise = null;
+    }
+  })();
+
+  return approvalStoreProbePromise;
 }
 
 function stableStringify(value: unknown): string {
@@ -82,13 +127,19 @@ function createPlanHash(actions: GoogleWorkspacePlannedAction[]): string {
     .digest('hex');
 }
 
-async function ensureApprovalTable(): Promise<void> {
-  if (!shouldUseDurableApprovalStore() || approvalTableInitialized) {
-    return;
+async function ensureApprovalTable(): Promise<boolean> {
+  const storeMode = await resolveApprovalStoreMode();
+  if (storeMode !== 'durable' || approvalTableInitialized) {
+    return storeMode === 'durable';
   }
 
   if (approvalTablePromise) {
-    return approvalTablePromise;
+    try {
+      await approvalTablePromise;
+      return approvalTableInitialized;
+    } catch {
+      return false;
+    }
   }
 
   approvalTablePromise = (async () => {
@@ -113,7 +164,15 @@ async function ensureApprovalTable(): Promise<void> {
     approvalTableInitialized = true;
   })();
 
-  return approvalTablePromise;
+  try {
+    await approvalTablePromise;
+    return true;
+  } catch (error) {
+    markApprovalStoreAsMemory(getErrorMessage(error));
+    return false;
+  } finally {
+    approvalTablePromise = null;
+  }
 }
 
 function cleanupExpiredInMemoryApprovals(now: number): void {
@@ -124,24 +183,63 @@ function cleanupExpiredInMemoryApprovals(now: number): void {
   }
 }
 
+function isMatchingApprovalRecord(
+  existing: ApprovalRecord | undefined,
+  expected: ApprovalRecord,
+  now: number,
+): existing is ApprovalRecord {
+  return Boolean(
+    existing &&
+      existing.userId === expected.userId &&
+      existing.planHash === expected.planHash &&
+      existing.expiresAt >= now &&
+      !existing.consumedAt,
+  );
+}
+
+function storeApprovalInMemory(approvalId: string, record: ApprovalRecord): void {
+  cleanupExpiredInMemoryApprovals(record.expiresAt - APPROVAL_TTL_MS);
+  inMemoryApprovals.set(approvalId, record);
+}
+
+function consumeApprovalInMemory(
+  approvalId: string,
+  expected: ApprovalRecord,
+  now: number,
+): boolean {
+  cleanupExpiredInMemoryApprovals(now);
+  const existing = inMemoryApprovals.get(approvalId);
+
+  if (!isMatchingApprovalRecord(existing, expected, now)) {
+    return false;
+  }
+
+  existing.consumedAt = now;
+  inMemoryApprovals.set(approvalId, existing);
+  return true;
+}
+
 async function createApprovalRecord(
   approvalId: string,
   record: ApprovalRecord
 ): Promise<void> {
-  if (!shouldUseDurableApprovalStore()) {
-    cleanupExpiredInMemoryApprovals(record.expiresAt - APPROVAL_TTL_MS);
-    inMemoryApprovals.set(approvalId, record);
+  if (!(await ensureApprovalTable())) {
+    storeApprovalInMemory(approvalId, record);
     return;
   }
 
-  await ensureApprovalTable();
-  await getPgPool().query(
-    `
-      INSERT INTO google_workspace_approval (id, user_id, plan_hash, expires_at)
-      VALUES ($1, $2, $3, to_timestamp($4 / 1000.0))
-    `,
-    [approvalId, record.userId, record.planHash, record.expiresAt]
-  );
+  try {
+    await getPgPool().query(
+      `
+        INSERT INTO google_workspace_approval (id, user_id, plan_hash, expires_at)
+        VALUES ($1, $2, $3, to_timestamp($4 / 1000.0))
+      `,
+      [approvalId, record.userId, record.planHash, record.expiresAt]
+    );
+  } catch (error) {
+    markApprovalStoreAsMemory(getErrorMessage(error));
+    storeApprovalInMemory(approvalId, record);
+  }
 }
 
 async function consumeApprovalRecord(
@@ -149,41 +247,30 @@ async function consumeApprovalRecord(
   expected: ApprovalRecord,
   now: number
 ): Promise<boolean> {
-  if (!shouldUseDurableApprovalStore()) {
-    cleanupExpiredInMemoryApprovals(now);
-    const existing = inMemoryApprovals.get(approvalId);
-
-    if (
-      !existing ||
-      existing.userId !== expected.userId ||
-      existing.planHash !== expected.planHash ||
-      existing.expiresAt < now ||
-      existing.consumedAt
-    ) {
-      return false;
-    }
-
-    existing.consumedAt = now;
-    inMemoryApprovals.set(approvalId, existing);
-    return true;
+  if (!(await ensureApprovalTable())) {
+    return consumeApprovalInMemory(approvalId, expected, now);
   }
 
-  await ensureApprovalTable();
-  const result = await getPgPool().query(
-    `
-      UPDATE google_workspace_approval
-      SET consumed_at = NOW()
-      WHERE id = $1
-        AND user_id = $2
-        AND plan_hash = $3
-        AND consumed_at IS NULL
-        AND expires_at >= NOW()
-      RETURNING id
-    `,
-    [approvalId, expected.userId, expected.planHash]
-  );
+  try {
+    const result = await getPgPool().query(
+      `
+        UPDATE google_workspace_approval
+        SET consumed_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND plan_hash = $3
+          AND consumed_at IS NULL
+          AND expires_at >= NOW()
+        RETURNING id
+      `,
+      [approvalId, expected.userId, expected.planHash]
+    );
 
-  return (result.rowCount ?? 0) > 0;
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    markApprovalStoreAsMemory(getErrorMessage(error));
+    return consumeApprovalInMemory(approvalId, expected, now);
+  }
 }
 
 function extractApprovalToken(query: string): string | null {

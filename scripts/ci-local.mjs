@@ -1,10 +1,16 @@
 import { spawn } from "node:child_process";
 import { prepareCiEnv } from "./prepare-ci-env.mjs";
+import logger from "./logger.mjs";
 
 const steps = [
-  { name: "Validate Prisma schema", command: "pnpm", args: ["run", "prisma:validate"] },
+  {
+    name: "Validate Prisma schema",
+    command: "pnpm",
+    args: ["run", "prisma:validate"],
+  },
   { name: "Typecheck", command: "pnpm", args: ["run", "typecheck"] },
   { name: "Lint", command: "pnpm", args: ["run", "lint"] },
+  { name: "Test", command: "pnpm", args: ["run", "test"] },
   { name: "Build", command: "pnpm", args: ["run", "build"] },
 ];
 
@@ -79,14 +85,14 @@ try {
   restoreEnv = prepared.restore;
 
   for (const step of steps) {
-    console.log(`\n==> ${step.name}`);
+    logger.log(`\n==> ${step.name}`);
     await runStep(step);
   }
 
-  console.log("\nLocal CI passed.");
+  logger.log("\nLocal CI passed.");
 } catch (error) {
-  console.error(
-    `\nLocal CI failed: ${(error instanceof Error && error.message) || String(error)}`
+  logger.error(
+    `\nLocal CI failed: ${(error instanceof Error && error.message) || String(error)}`,
   );
   process.exitCode = 1;
 } finally {

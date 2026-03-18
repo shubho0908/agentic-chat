@@ -60,9 +60,9 @@ const GOOGLE_WORKSPACE_SCOPES = [
 
 export const ALL_GOOGLE_SUITE_SCOPES = [...GOOGLE_WORKSPACE_SCOPES];
 
-export type GoogleWorkspaceScopeResolutionSource = 'direct' | 'context' | 'unknown';
+type GoogleWorkspaceScopeResolutionSource = 'direct' | 'context' | 'unknown';
 
-export interface GoogleWorkspaceScopeResolution {
+interface GoogleWorkspaceScopeResolution {
   requiredScopes: string[];
   source: GoogleWorkspaceScopeResolutionSource;
 }
@@ -176,17 +176,6 @@ function detectGoogleWorkspaceScopes(text: string): string[] {
   const scopes = [...GOOGLE_CONNECTOR_SCOPES];
 
   addDetectedGoogleWorkspaceScopes(text.toLowerCase(), scopes);
-
-  return uniqueScopes(scopes);
-}
-
-export function inferGoogleWorkspaceScopes(query: string): string[] {
-  const text = query.toLowerCase();
-  const scopes = detectGoogleWorkspaceScopes(text);
-
-  if (scopes.length === GOOGLE_CONNECTOR_SCOPES.length) {
-    return [...ALL_GOOGLE_SUITE_SCOPES];
-  }
 
   return uniqueScopes(scopes);
 }

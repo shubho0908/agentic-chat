@@ -2,12 +2,13 @@
 
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { ensurePgVectorTables } from '../storage/pgvector-init';
+import { ensurePgVectorTables } from '../storage/pgvectorInit';
 import { RAG_CONFIG } from '../config';
-import { getUserApiKey } from '@/lib/api-utils';
+import { getUserApiKey } from '@/lib/apiUtils';
 import { rerankDocuments } from './reranker';
-import { getPgPool } from '../storage/pgvector-client';
+import { getPgPool } from '../storage/pgvectorClient';
 import {
+
   computeAdaptiveSimilarityThreshold,
   countUniqueAttachments,
   dedupeCandidates,
@@ -16,6 +17,7 @@ import {
   type RetrievalCandidate,
 } from './hybrid';
 
+import { logger } from "@/lib/logger";
 async function getEmbeddings(userId: string) {
   const apiKey = await getUserApiKey(userId);
   return new OpenAIEmbeddings({
@@ -68,7 +70,7 @@ export async function searchDocumentChunks(
   } = options;
 
   if (!conversationId && !attachmentIds) {
-    console.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
+    logger.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
   }
 
   const embeddings = await getEmbeddings(userId);
@@ -278,7 +280,7 @@ async function searchLexicalFallback(params: {
       };
     });
   } catch (error) {
-    console.warn('[RAG Search] Lexical fallback failed:', {
+    logger.warn('[RAG Search] Lexical fallback failed:', {
       error: error instanceof Error ? error.message : String(error),
     });
     return [];

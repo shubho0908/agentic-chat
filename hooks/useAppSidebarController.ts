@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useStreaming } from "@/contexts/streaming-context";
 import { useConversations } from "@/hooks/useConversations";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 
 interface SidebarSelectionState {
   selectionMode: boolean;

@@ -1,8 +1,9 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import * as cheerio from "cheerio";
-import { safeFetch } from '@/lib/network/safe-fetch';
+import { safeFetch } from '@/lib/network/safeFetch';
 import { logError, logInfo } from '@/lib/observability';
+
 
 interface ScrapedContent {
   url: string;
@@ -16,6 +17,7 @@ interface ScrapedContent {
 }
 
 const MAX_CONTENT_LENGTH = 6000;
+import { logger } from "@/lib/logger";
 const MAX_CONTEXT_LENGTH = 1800;
 const REQUEST_TIMEOUT = 10000;
 const MAX_SCRAPE_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -60,7 +62,7 @@ function extractWithReadability(html: string, url: string): ScrapedContent | nul
       publishedTime: article.publishedTime || undefined,
     };
   } catch (error) {
-    console.error("[Readability] Extraction failed:", error);
+    logger.error("[Readability] Extraction failed:", error);
     return null;
   }
 }

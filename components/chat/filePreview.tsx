@@ -1,12 +1,12 @@
 "use client";
 
 import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/file-validation";
+import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
 
 interface FilePreviewProps {
   files: File[];
@@ -34,8 +34,8 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
     const container = scrollContainerRef.current;
     if (container) {
       checkScroll();
-      container.addEventListener("scroll", checkScroll);
-      window.addEventListener("resize", checkScroll);
+      container.addEventListener("scroll", checkScroll, { passive: true });
+      window.addEventListener("resize", checkScroll, { passive: true });
 
       return () => {
         container.removeEventListener("scroll", checkScroll);
@@ -101,9 +101,9 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
   };
 
   return (
-    <AnimatePresence>
+    <LazyMotion features={domAnimation}>
       {files.length > 0 && (
-        <motion.div
+        <m.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
@@ -129,7 +129,7 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
                 <ChevronRight className="size-4 text-foreground" />
               </Button>
             )}
-            <div 
+            <div
               ref={scrollContainerRef}
               className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -137,8 +137,8 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
               {files.map((file, index) => {
                 const preview = getFilePreview(file);
                 return (
-                  <motion.div
-                    key={`${file.name}-${index}`}
+                  <m.div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.8, opacity: 0 }}
@@ -151,6 +151,7 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
                           src={preview}
                           alt={file.name}
                           fill
+                          sizes="40px"
                           className="object-cover"
                           unoptimized
                           onError={() => handleImageError(index)}
@@ -188,13 +189,13 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
                     >
                       <X className="size-3" />
                     </Button>
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </div>
           </div>
-        </motion.div>
+        </m.div>
       )}
-    </AnimatePresence>
+    </LazyMotion>
   );
 }

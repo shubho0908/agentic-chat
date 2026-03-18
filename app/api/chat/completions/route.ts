@@ -1,23 +1,23 @@
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, errorResponse } from '@/lib/api-utils';
+import { getAuthenticatedUser, errorResponse } from '@/lib/apiUtils';
 import { prisma } from '@/lib/prisma';
 import { decryptApiKey } from '@/lib/encryption';
 import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
-import { parseOpenAIError } from '@/lib/openai-errors';
-import { routeContext } from '@/lib/context-router';
+import { parseOpenAIError } from '@/lib/openaiErrors';
+import { routeContext } from '@/lib/contextRouter';
 import type { MemoryStatus } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
-import { injectContextToMessages } from '@/lib/chat/message-helpers';
-import { createChatStreamHandler } from '@/lib/chat/stream-handler';
-import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
+import { injectContextToMessages } from '@/lib/chat/messageHelpers';
+import { createChatStreamHandler } from '@/lib/chat/streamHandler';
+import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel } from '@/lib/model-policy';
+import { validateRequestedModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
-import { checkTokenBudget } from '@/lib/chat/token-budget';
-
+import { checkTokenBudget } from '@/lib/chat/tokenBudget';
+import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for deep research & google suite tools
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
       }
     } catch (error) {
-      console.error('[Context Routing Error]', error);
+      logger.error('[Context Routing Error]', error);
       memoryStatusInfo.degradedContexts = [
         ...(memoryStatusInfo.degradedContexts || []),
         {

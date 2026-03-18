@@ -6,12 +6,16 @@ import {
   searchMemories,
   type Mem0ConfigSettings,
 } from '@mem0/vercel-ai-provider';
-import { buildMemoryLookupQueries } from '@/lib/chat/request-mediator';
+import { buildMemoryLookupQueries } from '@/lib/chat/requestMediator';
+import { logError, logWarn } from '@/lib/observability';
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 
 if (!MEM0_API_KEY) {
-  console.warn('[Mem0] MEM0_API_KEY not configured - memory features disabled');
+  logWarn({
+    event: 'mem0_disabled',
+    message: 'MEM0_API_KEY not configured - memory features disabled',
+  });
 }
 
 interface MemoryLookupOptions {
@@ -108,7 +112,10 @@ export async function storeConversationMemory(
       mem0ApiKey: MEM0_API_KEY,
     });
   } catch (error) {
-    console.error('[Mem0] Error storing memory:', error);
+    logError({
+      event: 'mem0_store_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -143,7 +150,8 @@ export async function getMemoryContextResult(
         return [result.value];
       }
 
-      console.warn('[Mem0] Memory search query failed:', {
+      logWarn({
+        event: 'mem0_memory_search_failed',
         query: lookupQueries[index],
         error: result.reason instanceof Error ? result.reason.message : String(result.reason),
       });
@@ -163,7 +171,10 @@ export async function getMemoryContextResult(
       failed: false,
     };
   } catch (error) {
-    console.error('[Mem0] Error retrieving memory context:', error);
+    logError({
+      event: 'mem0_retrieve_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       context: '',
       failed: true,

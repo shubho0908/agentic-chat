@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import type { DriveSearchArgs, DriveListFolderArgs, DriveReadFileArgs, DriveCreateFileArgs, DriveCreateFolderArgs, DriveDeleteArgs, DriveMoveArgs, DriveCopyArgs, DriveShareArgs } from '../types/handler-types';
+import type { DriveSearchArgs, DriveListFolderArgs, DriveReadFileArgs, DriveCreateFileArgs, DriveCreateFolderArgs, DriveDeleteArgs, DriveMoveArgs, DriveCopyArgs, DriveShareArgs } from '../types/handlerTypes';
 import { formatFileSize, formatMimeType, formatDate } from '@/utils/google/formatters';
 
 export async function handleDriveSearch(

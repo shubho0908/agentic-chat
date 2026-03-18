@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, m, domAnimation } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { DragState } from "@/hooks/useDragAndDrop";
 
@@ -39,9 +39,9 @@ export function DropZone({
     >
       {children}
 
-      <AnimatePresence>
-        {isDraggingOver && !disabled && (
-          <motion.div
+      {isDraggingOver && !disabled && (
+        <LazyMotion features={domAnimation}>
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -49,9 +49,9 @@ export function DropZone({
             className="absolute inset-0 z-50 pointer-events-none rounded-2xl"
           >
             <div className="absolute inset-0 rounded-2xl border-2 border-dashed border-primary/30 bg-primary/5" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </m.div>
+        </LazyMotion>
+      )}
     </div>
   );
 }

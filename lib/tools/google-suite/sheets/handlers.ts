@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import type { SheetsCreateArgs, SheetsReadArgs, SheetsWriteArgs, SheetsAppendArgs, SheetsClearArgs } from '../types/handler-types';
+import type { SheetsCreateArgs, SheetsReadArgs, SheetsWriteArgs, SheetsAppendArgs, SheetsClearArgs } from '../types/handlerTypes';
 
 export async function handleSheetsCreate(
   context: ToolHandlerContext,

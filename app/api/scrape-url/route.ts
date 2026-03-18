@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from 'next/headers';
-import { getAuthenticatedUser } from '@/lib/api-utils';
+import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { scrapeUrl, validateUrl } from '@/lib/url-scraper/scraper';
 
+
+import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[URL Scraper API] Error:", error);
+    logger.error("[URL Scraper API] Error:", error);
 
     return NextResponse.json(
       {

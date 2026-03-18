@@ -3,6 +3,7 @@
 import { CohereClientV2 } from 'cohere-ai';
 import { RAG_CONFIG } from '../config';
 import type { RerankDocument, RerankResult } from '@/types/rag';
+import { logError, logWarn } from '@/lib/observability';
 
 export async function rerankDocuments(
   query: string,
@@ -14,7 +15,10 @@ export async function rerankDocuments(
   const apiKey = process.env.COHERE_API_KEY;
   
   if (!apiKey) {
-    console.warn('[Reranker] ⚠️ COHERE_API_KEY not set, skipping reranking');
+    logWarn({
+      event: 'reranker_disabled',
+      message: 'COHERE_API_KEY not set, skipping reranking',
+    });
     return documents.map(doc => ({
       ...doc,
       originalScore: doc.score,
@@ -40,7 +44,10 @@ export async function rerankDocuments(
     });
 
     if (!response.results || response.results.length === 0) {
-      console.warn('[Reranker] ⚠️ No results from reranking, returning original order');
+      logWarn({
+        event: 'reranker_empty_results',
+        message: 'No results from reranking, returning original order',
+      });
       return documents.map(doc => ({
         ...doc,
         originalScore: doc.score,
@@ -59,7 +66,10 @@ export async function rerankDocuments(
 
     return rerankedResults;
   } catch (error) {
-    console.error('[Reranker] ✗ Error during reranking:', error instanceof Error ? error.message : String(error));
+    logError({
+      event: 'reranker_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return documents.map(doc => ({
       ...doc,
       originalScore: doc.score,

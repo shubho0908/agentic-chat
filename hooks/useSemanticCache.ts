@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { saveToSemanticCacheAction } from "@/lib/rag/storage/cache-actions";
+import { saveToSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
+
 
 interface CacheSavePayload {
   query: string;
@@ -26,7 +27,9 @@ export function useSaveToCache() {
       });
     },
     onError: (error) => {
-      console.error("Cache save error:", error);
+      logger.error("Cache save error:", error);
     },
   });
 }
+
+import { logger } from "@/lib/logger";

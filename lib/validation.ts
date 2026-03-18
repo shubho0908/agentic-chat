@@ -189,25 +189,6 @@ function validateAttachment(attachment: unknown): ValidationResult {
   return { valid: true };
 }
 
-export function validateAttachments(attachments: unknown): ValidationResult {
-  if (!Array.isArray(attachments)) {
-    return { valid: false, error: 'Attachments must be an array' };
-  }
-
-  if (attachments.length > VALIDATION_LIMITS.ATTACHMENT_MAX_COUNT) {
-    return { valid: false, error: `Too many attachments. Maximum ${VALIDATION_LIMITS.ATTACHMENT_MAX_COUNT} allowed` };
-  }
-
-  for (let i = 0; i < attachments.length; i++) {
-    const result = validateAttachment(attachments[i]);
-    if (!result.valid) {
-      return { valid: false, error: `Attachment ${i + 1}: ${result.error}` };
-    }
-  }
-
-  return { valid: true };
-}
-
 export function validateAttachmentInputs(
   attachments: unknown
 ): { valid: true; attachments: AttachmentInput[] } | { valid: false; error: string } {

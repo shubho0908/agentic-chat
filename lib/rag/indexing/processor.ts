@@ -7,7 +7,7 @@ import { chunkDocuments, getOptimalChunkSize } from './chunker';
 import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
 import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
 import type { ProcessingStatus } from '@prisma/client';
-import { safeFetch } from '@/lib/network/safe-fetch';
+import { safeFetch } from '@/lib/network/safeFetch';
 import {
   logDocumentProcessingFinish,
   logDocumentProcessingStart,

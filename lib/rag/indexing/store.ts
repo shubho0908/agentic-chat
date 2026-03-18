@@ -3,12 +3,12 @@
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import type { Document } from '@langchain/core/documents';
-import { ensurePgVectorTables } from '../storage/pgvector-init';
-import { getPgPool } from '../storage/pgvector-client';
+import { ensurePgVectorTables } from '../storage/pgvectorInit';
+import { getPgPool } from '../storage/pgvectorClient';
 import { RAG_CONFIG } from '../config';
 import { RAGError, RAGErrorCode } from '../common/errors';
-import { getUserApiKey } from '@/lib/api-utils';
-import { withTrace } from '@/lib/langsmith-config';
+import { getUserApiKey } from '@/lib/apiUtils';
+import { withTrace } from '@/lib/langsmithConfig';
 
 async function getEmbeddings(userId: string) {
   const apiKey = await getUserApiKey(userId);

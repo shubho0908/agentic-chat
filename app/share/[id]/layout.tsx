@@ -2,8 +2,10 @@ import { Metadata } from "next";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
+
 export const dynamic = 'force-dynamic';
 
+import { logger } from "@/lib/logger";
 async function getSharedConversation(id: string) {
   try {
     const conversation = await prisma.conversation.findUnique({
@@ -59,7 +61,7 @@ async function getSharedConversation(id: string) {
       },
     };
   } catch (error) {
-    console.error('Error fetching shared conversation for metadata:', error);
+    logger.error('Error fetching shared conversation for metadata:', error);
     return null;
   }
 }

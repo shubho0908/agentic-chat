@@ -1,3 +1,5 @@
+
+import { logger } from "@/lib/logger";
 export class RAGError extends Error {
   constructor(
     message: string,
@@ -21,7 +23,7 @@ export enum RAGErrorCode {
 }
 
 export function logRAGError(error: RAGError, context: string): void {
-  console.error(`[RAG Error] ${context}`, {
+  logger.error(`[RAG Error] ${context}`, {
     code: error.code,
     message: error.message,
     details: error.details,

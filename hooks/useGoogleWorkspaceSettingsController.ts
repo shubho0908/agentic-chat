@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
+import { authorizeGoogleWorkspace, useSession } from "@/lib/authClient";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import {
+
   compareGoogleWorkspaceSelections,
   countEnabledGoogleWorkspaceServices,
   DEFAULT_GOOGLE_WORKSPACE_SELECTIONS,
@@ -13,8 +14,9 @@ import {
   resolveGoogleWorkspaceSelections,
   type GoogleWorkspaceServiceId,
   type GoogleWorkspaceServiceSelections,
-} from "@/lib/tools/google-suite/access-levels";
+} from "@/lib/tools/google-suite/accessLevels";
 
+import { logger } from "@/lib/logger";
 function getConnectionTone(status: {
   connected?: boolean;
   workspaceConnected?: boolean;
@@ -199,7 +201,7 @@ export function useGoogleWorkspaceSettingsController() {
       await authorizeGoogleWorkspace("/settings/google-workspace", selectedScopes);
       setIsApplying(false);
     } catch (error) {
-      console.error("Google Workspace settings error:", error);
+      logger.error("Google Workspace settings error:", error);
       await refetch();
       setIsApplying(false);
       toast.error("Unable to update Google Workspace access", {

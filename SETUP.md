@@ -26,7 +26,7 @@ cp .env.example .env
 Edit `.env` and set:
 
 ```bash
-# Encryption (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+# Encryption (generate with: node -p "require('crypto').randomBytes(32).toString('hex')")
 ENCRYPTION_KEY=your-64-character-hex-key
 
 # Database

@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -115,6 +116,47 @@
 
   .prose a {
     @apply text-blue-600 dark:text-blue-400 underline underline-offset-4 decoration-current/30 hover:decoration-current transition-colors;
+  }
+
+  .prose-edward .katex {
+    color: inherit;
+  }
+
+  .prose-edward .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.125rem 0;
+  }
+
+  .prose-edward .katex-display > .katex {
+    max-width: 100%;
+  }
+
+  .prose-edward .mermaidPreview-svg svg {
+    display: block;
+    max-width: none;
+    height: auto;
+    margin-inline: auto;
+  }
+
+  .prose-edward .mermaidPreview-viewport {
+    width: fit-content;
+    max-width: 100%;
+    max-height: min(70vh, 36rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .prose-edward .mermaidPreview-svg {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    justify-content: center;
+    padding: 0.75rem;
+  }
+
+  .prose-edward .mermaidPreview-svg svg[width] {
+    min-width: min-content;
   }
 
   .hljs-comment,

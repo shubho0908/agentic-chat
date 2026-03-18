@@ -4,7 +4,7 @@ import type { MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { TOOL_IDS, type ToolConfig } from "@/lib/tools/config";
 import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
-import { resolveGoogleWorkspaceSelections } from "@/lib/tools/google-suite/access-levels";
+import { resolveGoogleWorkspaceSelections } from "@/lib/tools/google-suite/accessLevels";
 
 export interface ToolMenuDeepResearchUsage {
   remaining: number;

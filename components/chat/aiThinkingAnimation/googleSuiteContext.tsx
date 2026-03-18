@@ -1,7 +1,7 @@
 import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt, Lightbulb, CheckCheck, ListChecks, ListTodo } from "lucide-react";
 import { GoogleSuiteStatus, type GoogleSuiteTask } from "@/types/tools";
-import { GoogleIcon } from "@/components/icons/google-icon";
-import { getToolDisplayName } from "@/utils/google/tool-names";
+import { GoogleIcon } from "@/components/icons/googleIcon";
+import { getToolDisplayName } from "@/utils/google/toolNames";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
@@ -180,6 +180,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   const showPlanningDetails = planning && status === GoogleSuiteStatus.PLANNING;
   const showThinkingDetails = thinking && status === GoogleSuiteStatus.THINKING;
   const hasSubItems = showTaskDetails || showPlanningDetails || showThinkingDetails;
+  const planningToolKeys = new Map<string, number>();
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -198,9 +199,11 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         <div className="flex flex-col gap-1 ml-4">
           {planning.toolsToUse.map((toolName, index) => {
             const isLast = index === planning.toolsToUse.length - 1;
+            const keyCount = planningToolKeys.get(toolName) ?? 0;
+            planningToolKeys.set(toolName, keyCount + 1);
             const serviceColor = getServiceColorForTool(toolName);
             return (
-              <div key={index} className="flex items-center gap-2">
+              <div key={keyCount === 0 ? toolName : `${toolName}-${keyCount}`} className="flex items-center gap-2">
                 <span className="text-foreground/40 font-mono text-[10px] select-none">
                   {isLast ? "└─" : "├─"}
                 </span>

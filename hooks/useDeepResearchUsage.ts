@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { DeepResearchUsageInfo } from "@/lib/deep-research-usage";
+import type { DeepResearchUsageInfo } from "@/lib/deepResearchUsage";
 
 interface UseDeepResearchUsageOptions {
   enabled?: boolean;
@@ -11,7 +11,7 @@ interface UseDeepResearchUsageOptions {
  */
 export function useDeepResearchUsage({ enabled = true }: UseDeepResearchUsageOptions = {}) {
   return useQuery<DeepResearchUsageInfo>({
-    queryKey: ['deep-research-usage'],
+    queryKey: ['deepResearchUsage'],
     queryFn: async () => {
       const response = await fetch('/api/deep-research/usage');
       

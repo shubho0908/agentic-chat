@@ -1,3 +1,5 @@
+import { isObservabilityLoggingEnabled, logWarn } from "@/lib/observability";
+
 type EnvSeverity = 'error' | 'warning';
 
 interface EnvIssue {
@@ -14,7 +16,10 @@ function warnOnce(message: string): void {
   }
 
   envWarnings.add(message);
-  console.warn(message);
+  logWarn({
+    event: "env_warning",
+    message,
+  });
 }
 
 function parsePositiveInteger(
@@ -82,6 +87,10 @@ function getServerEnvIssues(): EnvIssue[] {
 
 function logServerEnvIssues(): void {
   if (typeof window !== 'undefined') {
+    return;
+  }
+
+  if (!isObservabilityLoggingEnabled()) {
     return;
   }
 

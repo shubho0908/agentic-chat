@@ -8,15 +8,16 @@ import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
-import { extractImagesFromClipboard } from "@/lib/file-validation";
+import { extractImagesFromClipboard } from "@/lib/fileValidation";
 import { isValidToolId, TOOL_IDS, type ToolId } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/web-search.tools";
+import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
-import { extractTextFromMessage } from "@/lib/chat/message-content";
+import { extractTextFromMessage } from "@/lib/chat/messageContent";
 import {
+
   GOOGLE_SIGN_IN_SCOPES,
   getMissingGoogleScopes,
   resolveGoogleWorkspaceScopesForRequest,
@@ -36,6 +37,7 @@ import {
   clearPendingGoogleWorkspaceQuery,
 } from "@/lib/storage";
 
+import { logger } from "@/lib/logger";
 interface UseChatInputControllerProps {
   onSend: MessageSendHandler;
   isLoading: boolean;
@@ -379,7 +381,7 @@ export function useChatInputController({
         searchDepth
       );
     } catch (error) {
-      console.error("Error sending message:", error);
+      logger.error("Error sending message:", error);
       dispatchUi({ type: "set-sending", isSending: false });
     } finally {
       if (conversationId) {

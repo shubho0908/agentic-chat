@@ -1,7 +1,7 @@
 "use client";
 
 import { SidebarTriggerWithShortcut } from "@/components/sidebarTriggerWithShortcut";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 
 export function AuthSidebarTrigger() {
   const { data: session } = useSession();

@@ -3,7 +3,7 @@ import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { Response } from "../ai-elements/response";
-import { extractTextFromContent } from "@/lib/content-utils";
+import { extractTextFromContent } from "@/lib/contentUtils";
 import { MessageHeader } from "./messageHeader";
 import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";

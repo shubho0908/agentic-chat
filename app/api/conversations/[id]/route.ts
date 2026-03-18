@@ -1,14 +1,15 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/api-utils';
+import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
-import { calculateTokenUsage } from '@/lib/utils/token-counter';
+import { calculateTokenUsage } from '@/lib/utils/tokenCounter';
 import type { TokenUsage } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
+
 
 interface MessageAttachment {
   id: string;
@@ -36,6 +37,7 @@ interface MessageWithAttachments extends BaseMessage {
 
 type VersionMessage = BaseMessage;
 
+import { logger } from "@/lib/logger";
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -173,7 +175,7 @@ export async function GET(
       const model = searchParams.get('model') as string;
       tokenUsage = calculateTokenUsage(transformedMessages as Message[], model);
     } catch (error) {
-      console.error('[Token Calculation Error]', error);
+      logger.error('[Token Calculation Error]', error);
       // Continue without token usage if calculation fails
     }
 

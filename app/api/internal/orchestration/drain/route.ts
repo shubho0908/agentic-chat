@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
-import { jsonResponse, errorResponse } from '@/lib/api-utils';
+import { jsonResponse, errorResponse } from '@/lib/apiUtils';
 import { HTTP_STATUS } from '@/constants/errors';
 import {
   drainQueuedDocumentJobs,
-} from '@/lib/orchestration/document-jobs';
+} from '@/lib/orchestration/documentJobs';
 import { logWarn } from '@/lib/observability';
 
 const DEFAULT_DRAIN_BATCH_SIZE = 5;

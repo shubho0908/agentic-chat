@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+
   getGoogleWorkspaceAuthErrorCode,
   GOOGLE_ACCOUNT_LINKED_ERROR,
   GOOGLE_ACCOUNT_MISMATCH_ERROR,
   persistGoogleWorkspaceGrant,
 } from "@/lib/tools/google-suite/client";
-import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauth-state";
+import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
 export const runtime = "nodejs";
+import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 
 function buildReturnUrl(origin: string, returnTo: string, status: "success" | "error", reason?: string) {
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
   try {
     verifiedState = verifyGoogleWorkspaceOAuthState(state);
   } catch (error) {
-    console.error("[Google Workspace OAuth] Invalid state:", error);
+    logger.error("[Google Workspace OAuth] Invalid state:", error);
     return NextResponse.redirect(
       buildReturnUrl(origin, "/settings/google-workspace", "error", "invalid_state")
     );
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(buildReturnUrl(origin, verifiedState.returnTo, "success"));
   } catch (error) {
-    console.error("[Google Workspace OAuth] Failed to persist grant:", error);
+    logger.error("[Google Workspace OAuth] Failed to persist grant:", error);
     const errorCode = getGoogleWorkspaceAuthErrorCode(error);
     const reason =
       errorCode === GOOGLE_ACCOUNT_MISMATCH_ERROR

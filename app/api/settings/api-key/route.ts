@@ -5,7 +5,7 @@ import { encryptApiKey, decryptApiKey, maskApiKey } from '@/lib/encryption';
 import { headers } from 'next/headers';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { VALIDATION_LIMITS } from '@/constants/validation';
-import { errorResponse, jsonResponse } from '@/lib/api-utils';
+import { errorResponse, jsonResponse } from '@/lib/apiUtils';
 
 export async function POST(request: NextRequest) {
   try {

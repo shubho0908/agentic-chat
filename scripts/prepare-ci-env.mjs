@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { copyFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import logger from "./logger.mjs";
 
 const ENV_FILE = ".env";
 const ENV_LOCAL_FILE = ".env.local";
@@ -119,7 +120,7 @@ const allowDirectMutation =
 
 if (isDirectRun) {
   if (!allowDirectMutation) {
-    console.error(
+    logger.error(
       "Refusing to mutate local env files directly. Use `pnpm run ci:local` for local checks or pass `--write` explicitly."
     );
     process.exit(1);

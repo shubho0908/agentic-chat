@@ -7,12 +7,13 @@ import { useTheme } from "next-themes";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
+
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { signInWithGoogle } from "@/lib/auth-client";
+import { signInWithGoogle } from "@/lib/authClient";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 
@@ -38,7 +39,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
 
       await signInWithGoogle(resolvedCallbackURL);
     } catch (error) {
-      console.error("Sign in error:", error);
+      logger.error("Sign in error:", error);
       toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
         description: TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN_DESCRIPTION,
       });
@@ -147,3 +148,5 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
     </Dialog>
   );
 }
+
+import { logger } from "@/lib/logger";

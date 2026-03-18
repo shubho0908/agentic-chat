@@ -1,10 +1,12 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import type { ResearchState } from '../state';
-import type { Citation } from '@/types/deep-research';
-import { getStageModel } from '@/lib/model-policy';
-import { invokeStructuredOutput } from '../structured-output';
+import type { Citation } from '@/types/deepResearch';
+import { getStageModel } from '@/lib/modelPolicy';
+import { invokeStructuredOutput } from '../structuredOutput';
 
+
+import { logger } from "@/lib/logger";
 const formatterSchema = z.object({
   response: z.string(),
   citations: z.array(z.object({
@@ -111,7 +113,7 @@ export async function formatterNode(
     };
 
   } catch (error) {
-    console.error('[Formatter Node] ❌ Error:', error);
+    logger.error('[Formatter Node] ❌ Error:', error);
     return {
       finalResponse: contentToFormat || 'Error generating research response.',
       citations: extractCitationsFromTaskSources(state.completedTasks || []),

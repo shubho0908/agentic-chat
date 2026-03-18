@@ -1,4 +1,4 @@
-import { OpenAIIcon } from "@/components/icons/openai-icon";
+import { OpenAIIcon } from "@/components/icons/openaiIcon";
 
 const OPENAI_API_KEY_REGEX = /^sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}$/;
 

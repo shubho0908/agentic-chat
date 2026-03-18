@@ -1,6 +1,8 @@
-import type { SearchDepth } from './schemas/web-search.tools';
+import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 
+
+import { logger } from "@/lib/logger";
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
   ACTIVE_TOOL: 'agentic-chat-active-tool',
@@ -13,7 +15,7 @@ const STORAGE_KEYS = {
 const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
 
 function logStorageError(operation: string, error: unknown): void {
-  console.warn(`[Storage] Failed to ${operation}:`, error);
+  logger.warn(`[Storage] Failed to ${operation}:`, error);
 }
 
 function isLocalStorageAvailable(): boolean {
@@ -166,7 +168,7 @@ export function clearUserStorage(): void {
     localStorage.removeItem(STORAGE_KEYS.SEARCH_DEPTH);
     localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
   } catch (error) {
-    console.error('Error clearing user storage:', error);
+    logger.error('Error clearing user storage:', error);
   }
 }
 

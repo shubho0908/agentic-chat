@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import type { SlidesCreateArgs, SlidesReadArgs, SlidesAddSlideArgs } from '../types/handler-types';
+import type { SlidesCreateArgs, SlidesReadArgs, SlidesAddSlideArgs } from '../types/handlerTypes';
 
 export async function handleSlidesCreate(
   context: ToolHandlerContext,

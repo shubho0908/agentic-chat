@@ -1,6 +1,6 @@
 import { SourcesSheet } from "./sourcesSheet";
-import type { Citation } from "@/types/deep-research";
-import { OpenAIIcon } from "@/components/icons/openai-icon";
+import type { Citation } from "@/types/deepResearch";
+import { OpenAIIcon } from "@/components/icons/openaiIcon";
 
 const EMPTY_CITATIONS: Citation[] = [];
 

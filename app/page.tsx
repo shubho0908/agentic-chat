@@ -1,137 +1,36 @@
-"use client";
-
-import { useState, useRef, Suspense } from "react";
+import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Loader } from "lucide-react";
-import { useChat } from "@/hooks/useChat";
-import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
-import { ChatContainer } from "@/components/chat/chatContainer";
-import { ChatInput } from "@/components/chat/chatInput";
-import { ChatHeader } from "@/components/chatHeader";
-import { EmptyState } from "@/components/emptyState";
-import { AuthModal } from "@/components/authModal";
-import { useSession } from "@/lib/auth-client";
-import { toast } from "sonner";
-import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
-import type { Attachment } from "@/lib/schemas/chat";
-import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
+import { HomeContent } from "@/components/homeContent";
+import { appBaseUrl } from "@/lib/appUrl";
 
-function HomeContent() {
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
-  const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({ memoryStatus });
-  const [isConfigured, setIsConfigured] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const byokTriggerRef = useRef<HTMLButtonElement>(null);
-  const { data: session, isPending } = useSession();
-
-  const hasMessages = messages.length > 0;
-  
-  const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = getActiveTool();
-    const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
-  };
-
-  const handleRegenerate = (messageId: string) => {
-    const activeTool = getActiveTool();
-    const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
-  };
-
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {
-    if (isPending) {
-      return;
-    }
-
-    if (!session) {
-      setShowAuthModal(true);
-      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
-      });
-      return;
-    }
-
-    if (!isConfigured) {
-      toast.error(TOAST_ERROR_MESSAGES.API_KEY.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.API_KEY.REQUIRED_DESCRIPTION,
-      });
-      byokTriggerRef.current?.click();
-      return;
-    }
-    const searchDepth = getSearchDepth();
-    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
-  };
-
-  const handleFollowUpQuestion = async (question: string) => {
-    if (!session || !isConfigured) {
-      return;
-    }
-    const activeTool = getActiveTool();
-    const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    const searchDepth = getSearchDepth();
-    await sendMessage({ 
-      content: question, 
-      session, 
-      activeTool, 
-      memoryEnabled, 
-      deepResearchEnabled,
-      searchDepth 
-    });
-  };
-
-  if (!hasMessages) {
-    return (
-      <>
-        <ChatHeader 
-          onConfigured={setIsConfigured}
-          onNewChat={clearChat}
-          byokTriggerRef={byokTriggerRef}
-          autoOpenByok={true}
-        />
-        <EmptyState
-          onSend={handleSendMessage}
-          isLoading={isLoading}
-          onStop={stopGeneration}
-          onAuthRequired={() => setShowAuthModal(true)}
-          tokenUsage={tokenUsage}
-        />
-        <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
-      </>
-    );
-  }
-
-  return (
-    <div className="flex h-screen flex-col">
-      <ChatHeader 
-        onConfigured={setIsConfigured}
-        onNewChat={clearChat}
-        byokTriggerRef={byokTriggerRef}
-      />
-      <ChatContainer
-        messages={messages}
-        isLoading={isLoading}
-        userName={session?.user?.name}
-        onEditMessage={handleEdit}
-        onRegenerateMessage={handleRegenerate}
-        onSendMessage={handleFollowUpQuestion}
-        memoryStatus={mergedMemoryStatus}
-        onNewChat={clearChat}
-      />
-      <ChatInput
-        onSend={handleSendMessage}
-        isLoading={isLoading}
-        onStop={stopGeneration}
-        onAuthRequired={() => setShowAuthModal(true)}
-        tokenUsage={tokenUsage}
-        conversationId={null}
-        messages={messages}
-      />
-      <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
-    </div>
-  );
-}
+export const metadata: Metadata = {
+  title: "Agentic Chat - Intelligent Conversations",
+  description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
+  metadataBase: new URL(appBaseUrl),
+  openGraph: {
+    title: "Agentic Chat - Intelligent Conversations",
+    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
+    url: '/',
+    siteName: "Agentic Chat",
+    images: [
+      {
+        url: '/api/og/home',
+        width: 1200,
+        height: 630,
+        alt: "Agentic Chat - Intelligent Conversations",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Agentic Chat - Intelligent Conversations",
+    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
+    images: ['/api/og/home'],
+  },
+};
 
 export default function Home() {
   return (

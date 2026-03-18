@@ -1,14 +1,16 @@
 import { createResearchGraph } from './graph';
 import type { ResearchState } from './state';
 import type { DeepResearchProgress, WebSearchSource } from '@/types/tools';
-import type { Citation, GateDecision } from '@/types/deep-research';
+import type { Citation, GateDecision } from '@/types/deepResearch';
 import { DEEP_RESEARCH_MAX_ATTEMPTS } from './constants';
 import {
+
   createDeepResearchRun,
   saveDeepResearchCheckpoint,
   finishDeepResearchRun,
 } from '@/lib/orchestration/store';
 
+import { logger } from "@/lib/logger";
 interface DeepResearchInput {
   query: string;
   openaiApiKey: string;
@@ -285,7 +287,7 @@ export async function executeDeepResearch(
             requestId,
           });
         } catch (checkpointError) {
-          console.error('[Deep Research] Failed to persist checkpoint:', checkpointError);
+          logger.error('[Deep Research] Failed to persist checkpoint:', checkpointError);
         }
       }
     }
@@ -326,7 +328,7 @@ export async function executeDeepResearch(
           requestId,
         });
       } catch (finishError) {
-        console.error('[Deep Research] Failed to finalize successful run:', finishError);
+        logger.error('[Deep Research] Failed to finalize successful run:', finishError);
       }
     }
 
@@ -340,7 +342,7 @@ export async function executeDeepResearch(
     };
 
   } catch (error) {
-    console.error('[Deep Research] Error:', error);
+    logger.error('[Deep Research] Error:', error);
 
     if (runId) {
       try {
@@ -351,7 +353,7 @@ export async function executeDeepResearch(
           requestId,
         });
       } catch (finishError) {
-        console.error('[Deep Research] Failed to finalize failed run:', finishError);
+        logger.error('[Deep Research] Failed to finalize failed run:', finishError);
       }
     }
     
@@ -364,7 +366,7 @@ export async function executeDeepResearch(
         message: error instanceof Error ? `Research failed: ${error.message}` : 'Research failed',
       });
     } catch {
-      console.error('[Deep Research] Could not send error progress (stream likely closed)');
+      logger.error('[Deep Research] Could not send error progress (stream likely closed)');
     }
     
     throw error;

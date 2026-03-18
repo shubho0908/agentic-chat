@@ -14,9 +14,9 @@ import type {
   RegenerateMessageOptions,
   ContinueConversationOptions,
 } from "@/types/chat";
-import { handleSendMessage, continueIncompleteConversation } from "./chat/message-sender";
-import { handleEditMessage } from "./chat/message-editor";
-import { handleRegenerateResponse } from "./chat/message-regenerator";
+import { handleSendMessage, continueIncompleteConversation } from "./chat/messageSender";
+import { handleEditMessage } from "./chat/messageEditor";
+import { handleRegenerateResponse } from "./chat/messageRegenerator";
 import { useStreaming } from "@/contexts/streaming-context";
 
 function isAbortError(error: unknown): boolean {

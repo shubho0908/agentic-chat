@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import type {
+
   ResearchTask,
   WebSearchProgress,
   WebSearchSource,
@@ -10,10 +11,10 @@ import type {
 import { createWorkerPrompt } from '../prompts';
 import { executeWebSearch } from '../../web-search';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
-import { executeMultiSearch } from '../../web-search/search-planner';
-import { createUnifiedPlan, type WebSearchPlan } from '../../unified-planner';
-import { withTrace } from '@/lib/langsmith-config';
-import { getStageModel } from '@/lib/model-policy';
+import { executeMultiSearch } from '../../web-search/searchPlanner';
+import { createUnifiedPlan, type WebSearchPlan } from '../../unifiedPlanner';
+import { withTrace } from '@/lib/langsmithConfig';
+import { getStageModel } from '@/lib/modelPolicy';
 import {
   DEEP_RESEARCH_MAX_RETRIES,
   MAX_PARALLEL_RESEARCH_TASKS,
@@ -21,6 +22,7 @@ import {
   MAX_RESULT_SNIPPET,
 } from '../constants';
 
+import { logger } from "@/lib/logger";
 interface WorkerConfig {
   openaiApiKey: string;
   model: string;
@@ -98,7 +100,7 @@ async function executeSingleTask(
         });
       }
     } catch (error) {
-      console.error('[Worker Node] RAG retrieval error:', error);
+      logger.error('[Worker Node] RAG retrieval error:', error);
       config.onProgress?.(taskIndex, {
         toolName: 'rag',
         status: 'failed',
@@ -295,7 +297,7 @@ export async function workerNode(
       try {
         latestTask = await executeSingleTask(task, index, completed, state, config);
       } catch (error) {
-        console.error('[Worker Node] ❌ Error:', error);
+        logger.error('[Worker Node] ❌ Error:', error);
         if (task.retries < DEEP_RESEARCH_MAX_RETRIES) {
           latestTask = {
             ...task,

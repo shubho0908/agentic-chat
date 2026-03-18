@@ -1,6 +1,8 @@
 import type { ResearchState } from '../state';
 import type { ResearchTask, ResearchQuestion } from '@/types/tools';
-import { createUnifiedPlan, type DeepResearchPlan } from '@/lib/tools/unified-planner';
+import { createUnifiedPlan, type DeepResearchPlan } from '@/lib/tools/unifiedPlanner';
+import { logger } from "@/lib/logger";
+
 
 export async function plannerNode(
   state: ResearchState,
@@ -60,7 +62,7 @@ export async function plannerNode(
       currentTaskIndex: 0,
     };
   } catch (error) {
-    console.error('[Planner Node] ❌ Error:', error);
+    logger.error('[Planner Node] ❌ Error:', error);
     const defaultTools = state.hasDocuments ? ['rag', 'web_search'] : ['web_search'];
     const fallbackPlan: ResearchQuestion[] = [{
       question: state.originalQuery,
