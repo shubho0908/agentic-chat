@@ -2,9 +2,14 @@ import { spawn } from "node:child_process";
 import { prepareCiEnv } from "./prepare-ci-env.mjs";
 
 const steps = [
-  { name: "Validate Prisma schema", command: "pnpm", args: ["run", "prisma:validate"] },
+  {
+    name: "Validate Prisma schema",
+    command: "pnpm",
+    args: ["run", "prisma:validate"],
+  },
   { name: "Typecheck", command: "pnpm", args: ["run", "typecheck"] },
   { name: "Lint", command: "pnpm", args: ["run", "lint"] },
+  { name: "Test", command: "pnpm", args: ["run", "test"] },
   { name: "Build", command: "pnpm", args: ["run", "build"] },
 ];
 
@@ -86,7 +91,7 @@ try {
   console.log("\nLocal CI passed.");
 } catch (error) {
   console.error(
-    `\nLocal CI failed: ${(error instanceof Error && error.message) || String(error)}`
+    `\nLocal CI failed: ${(error instanceof Error && error.message) || String(error)}`,
   );
   process.exitCode = 1;
 } finally {
