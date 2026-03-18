@@ -70,3 +70,11 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
 export function isValidToolId(id: string): id is ToolId {
   return Object.values(TOOL_IDS).includes(id as ToolId);
 }
+
+export function parseToolId(id: string | null | undefined): ToolId | null {
+  if (!id) {
+    return null;
+  }
+
+  return isValidToolId(id) ? id : null;
+}

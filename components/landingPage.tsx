@@ -37,9 +37,6 @@ export function LandingPage({ onAuthRequired }: LandingPageProps) {
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-x-clip bg-background font-sans selection:bg-foreground selection:text-background">
-      {/* Ambient Depth Orb */}
-      <div className="pointer-events-none absolute left-1/2 top-[-8rem] h-[25rem] w-[32rem] -translate-x-1/2 rounded-full bg-primary/5 blur-[80px] dark:bg-primary/10 sm:top-[-10rem] sm:h-[34rem] sm:w-[44rem] sm:blur-[110px] lg:top-[-18%] lg:h-[40rem] lg:w-[52rem] lg:blur-[130px]" />
-
       {/* Floating Glass Header */}
       <motion.header
         initial={prefersReducedMotion ? false : { opacity: 0, y: -18, scale: 0.985 }}

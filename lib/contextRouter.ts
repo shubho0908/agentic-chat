@@ -7,7 +7,7 @@ import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
 import { isSupportedDocumentExtension } from './fileValidation';
-import { TOOL_IDS } from './tools/config';
+import { parseToolId, TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { extractTextFromMessage } from './chat/messageContent';
 import { mediateMemoryIntent } from './chat/requestMediator';
@@ -110,6 +110,7 @@ async function resolveDocumentContext(
   userId: string,
   options: {
     conversationId?: string;
+    attachmentIds?: string[];
     waitForProcessing?: boolean;
   }
 ) {
@@ -123,6 +124,7 @@ async function resolveDocumentContext(
   for (const attempt of attempts) {
     const result = await getRAGContext(attempt.query, userId, {
       conversationId: options.conversationId,
+      attachmentIds: options.attachmentIds,
       limit: attempt.limit,
       scoreThreshold: attempt.scoreThreshold,
       waitForProcessing: attempt.waitForProcessing,
@@ -173,6 +175,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
   documentCount: number;
+  documentAttachmentIds: string[];
 }> {
   try {
     const messages = await prisma.message.findMany({
@@ -194,7 +197,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     const allAttachments = messages.flatMap(m => m.attachments);
 
     if (allAttachments.length === 0) {
-      return { hasDocuments: false, hasAny: false, documentCount: 0 };
+      return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
     }
 
     const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
@@ -205,10 +208,11 @@ async function getAttachmentInfo(conversationId: string): Promise<{
       hasDocuments: documentAttachments.length > 0,
       hasAny: true,
       documentCount: documentAttachments.length,
+      documentAttachmentIds: documentAttachments.map((attachment) => attachment.id),
     };
   } catch (error) {
     logger.warn('[Context Router] Failed to get attachment info:', error);
-    return { hasDocuments: false, hasAny: false, documentCount: 0 };
+    return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
   }
 }
 
@@ -229,6 +233,7 @@ export async function routeContext(
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(textQuery);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
+  const sanitizedActiveTool = parseToolId(activeTool);
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
@@ -250,6 +255,16 @@ export async function routeContext(
       { source, reason },
     ];
   };
+
+  if (activeTool && !sanitizedActiveTool) {
+    addDegradedContext('tool_validation', `Ignored invalid active tool: ${activeTool}`);
+    logWarn({
+      event: 'context_router_invalid_active_tool_ignored',
+      conversationId,
+      userId,
+      requestedTool: activeTool,
+    });
+  }
 
 
   if (deepResearchEnabled) {
@@ -286,10 +301,10 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  if (activeTool) {
+  if (sanitizedActiveTool) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
-    metadata.activeToolName = activeTool;
+    metadata.activeToolName = sanitizedActiveTool;
     return { context: '', metadata };
   }
 
@@ -322,48 +337,43 @@ export async function routeContext(
     }
   }
 
-  const attachmentInfoPromise = conversationId
-    ? getAttachmentInfo(conversationId)
-    : Promise.resolve({ hasDocuments: false, hasAny: false, documentCount: 0 });
-
-  const ragPromise = resolveDocumentContext(retrievalQueries, userId, {
-    conversationId,
-    waitForProcessing: true,
-  });
-
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: '', metadata };
   }
 
+  const attachmentInfo = conversationId
+    ? await getAttachmentInfo(conversationId)
+    : { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
+
   if (isReferential) {
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
-    const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
-    if (ragResult) {
-      metadata.hasDocuments = true;
-      metadata.documentCount = ragResult.documentCount;
-      
-      if (hasImages) {
-        metadata.routingDecision = RoutingDecision.Hybrid;
+    if (attachmentInfo.hasDocuments) {
+      const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
+        conversationId,
+        attachmentIds: attachmentInfo.documentAttachmentIds,
+        waitForProcessing: true,
+      });
+
+      if (ragResult) {
+        metadata.hasDocuments = true;
+        metadata.documentCount = ragResult.documentCount;
+        
+        if (hasImages) {
+          metadata.routingDecision = RoutingDecision.Hybrid;
+          return { context: ragResult.context, metadata };
+        }
+        
         return { context: ragResult.context, metadata };
       }
-      
-      return { context: ragResult.context, metadata };
-    }
 
-    // If no RAG results but has images, treat as VisionOnly
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.VisionOnly;
-      return { context: '', metadata };
-    }
-
-    if (attachmentInfo.hasDocuments) {
       metadata.documentCount = attachmentInfo.documentCount;
       const overviewContext = await getDocumentOverviewContext(userId, {
         conversationId,
+        attachmentIds: attachmentInfo.documentAttachmentIds,
         waitForProcessing: false,
       });
 
@@ -385,33 +395,43 @@ export async function routeContext(
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
+    // If no document context but has images, treat as VisionOnly
+    if (hasImages) {
+      metadata.routingDecision = RoutingDecision.VisionOnly;
+      return { context: '', metadata };
+    }
+
     return { context: '', metadata };
   }
 
-  const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
+  if (attachmentInfo.hasDocuments) {
+    const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
+      conversationId,
+      attachmentIds: attachmentInfo.documentAttachmentIds,
+      waitForProcessing: true,
+    });
 
-  if (ragResult) {
-    metadata.hasDocuments = true;
-    metadata.documentCount = ragResult.documentCount;
-    metadata.skippedMemory = true;
-
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.Hybrid;
+    if (ragResult) {
+      metadata.hasDocuments = true;
+      metadata.documentCount = ragResult.documentCount;
+      
+      if (hasImages) {
+        metadata.routingDecision = RoutingDecision.Hybrid;
+        return { context: ragResult.context, metadata };
+      }
+      
+      metadata.routingDecision = RoutingDecision.DocumentsOnly;
       return { context: ragResult.context, metadata };
     }
 
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
-    return { context: ragResult.context, metadata };
-  }
-
-  if (attachmentInfo.hasDocuments) {
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
+    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.hasDocuments = true;
     metadata.documentCount = attachmentInfo.documentCount;
 
     const overviewContext = await getDocumentOverviewContext(userId, {
       conversationId,
+      attachmentIds: attachmentInfo.documentAttachmentIds,
       waitForProcessing: false,
     });
 

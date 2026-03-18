@@ -56,7 +56,7 @@ export function ChatInput({
   if (isCentered) {
     return (
       <>
-        <div className="flex min-h-screen flex-col items-center justify-center p-6 pt-24 md:pt-6">
+        <div className="flex min-h-screen flex-col items-center justify-center p-6 pt-24 md:pr-20 md:pt-12 xl:pr-6 xl:pt-6">
           <div className="w-full max-w-2xl space-y-6 md:space-y-8">
             <ChatInputHeader />
 
@@ -81,7 +81,7 @@ export function ChatInput({
 
   return (
     <div className="sticky bottom-0 pb-4 md:pb-6 bg-gradient-to-t from-background via-background/80 to-transparent pt-6 pointer-events-none">
-      <div className="mx-auto max-w-3xl px-4 pointer-events-auto">
+      <div className="mx-auto max-w-3xl px-4 pointer-events-auto md:pr-20 xl:pr-4">
         <ChatInputForm
           state={formState}
           handlers={formHandlers}

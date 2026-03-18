@@ -9,7 +9,7 @@ import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
-import { isValidToolId, TOOL_IDS, type ToolId } from "@/lib/tools/config";
+import { TOOL_IDS, type ToolId } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
@@ -169,7 +169,7 @@ export function useChatInputController({
         dispatchUi({
           type: "hydrate",
           payload: {
-            activeTool: stored && isValidToolId(stored) ? (stored as ToolId) : null,
+            activeTool: stored,
             memoryEnabled: getStoredMemoryEnabled(),
             deepResearchEnabled: getStoredDeepResearchEnabled(),
             searchDepth: getStoredSearchDepth(),

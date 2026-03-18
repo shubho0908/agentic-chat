@@ -178,14 +178,14 @@ export async function handleSendMessage(
       throw new Error("Conversation ID is required for existing conversations");
     }
 
-    const savedMsgId = await saveUserMessage(currentConversationId, messageContent, attachments, abortSignal);
-    if (savedMsgId) {
-      onMessagesUpdate((prev) =>
-        prev.map((msg) => (msg.id === userMessage.id ? { ...msg, id: savedMsgId } : msg))
-      );
-    }
+    const saveUserMessagePromise = saveUserMessage(
+      currentConversationId,
+      messageContent,
+      attachments,
+      abortSignal
+    );
 
-    const result = await handleStreamingResponse(
+    const streamingResponsePromise = handleStreamingResponse(
       {
         messages,
         conversationId: currentConversationId,
@@ -208,6 +208,17 @@ export async function handleSendMessage(
         onMemoryStatusUpdate,
       }
     );
+
+    const [savedMsgId, result] = await Promise.all([
+      saveUserMessagePromise,
+      streamingResponsePromise,
+    ]);
+
+    if (savedMsgId) {
+      onMessagesUpdate((prev) =>
+        prev.map((msg) => (msg.id === userMessage.id ? { ...msg, id: savedMsgId } : msg))
+      );
+    }
 
     if (!result.success && result.error && result.error !== "aborted") {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {

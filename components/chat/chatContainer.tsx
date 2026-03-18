@@ -91,7 +91,12 @@ export function ChatContainer({
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
-      <div className={cn("flex flex-col md:pt-0", !isSharePage && "pt-20")}>
+      <div
+        className={cn(
+          "flex flex-col md:pr-20 xl:pr-0",
+          !isSharePage && "pt-20 md:pt-24 xl:pt-0"
+        )}
+      >
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
@@ -147,4 +152,3 @@ export function ChatContainer({
     </ScrollArea>
   );
 }
-

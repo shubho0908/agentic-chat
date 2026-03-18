@@ -499,7 +499,6 @@ function DeviceShell({
     return (
       <div className="mx-auto w-full max-w-[470px]">
         <div className={`relative aspect-[4/5] overflow-hidden rounded-[28px] p-[8px] shadow-sm ${FRAME_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
-          <div className="pointer-events-none absolute inset-[1px] rounded-[27px] border border-black/[0.08] dark:border-white/[0.08]" />
           <div className="absolute left-1/2 top-[5px] z-20 h-[4px] w-[64px] -translate-x-1/2 rounded-full bg-black/12 dark:bg-white/18" />
           <div className={`relative flex h-full flex-col overflow-hidden rounded-[22px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
             <ContentChrome
@@ -521,7 +520,6 @@ function DeviceShell({
       <div
         className={`relative aspect-[39/32] overflow-hidden rounded-[22px] p-[6px] shadow-sm ${FRAME_SURFACE_CLASS} ${FRAME_RING_CLASS}`}
       >
-        <div className="pointer-events-none absolute inset-[1px] rounded-[21px] border border-black/[0.08] dark:border-white/[0.08]" />
         <div className={`relative flex h-full flex-col overflow-hidden rounded-[16px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
           <ContentChrome
             device={device}

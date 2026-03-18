@@ -17,6 +17,7 @@ import { createRequestId, logError, logWarn } from '@/lib/observability';
 import { validateRequestedModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
+import { parseToolId } from '@/lib/tools/config';
 import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,6 +43,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     
     const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = true, deepResearchEnabled = false, searchDepth = 'basic' } = body;
+    const sanitizedActiveTool =
+      typeof activeTool === 'string' ? parseToolId(activeTool) : null;
+
+    if (typeof activeTool === 'string' && !sanitizedActiveTool) {
+      logWarn({
+        event: 'chat_invalid_active_tool_ignored',
+        requestId,
+        conversationId,
+        requestedTool: activeTool,
+      });
+    }
     
     if (!model || typeof model !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -81,7 +93,7 @@ export async function POST(request: NextRequest) {
             authUser.id,
             messages.slice(0, -1) as Message[],
             conversationId,
-            activeTool,
+            sanitizedActiveTool,
             memoryEnabled,
             deepResearchEnabled,
             { apiKey }
@@ -90,7 +102,7 @@ export async function POST(request: NextRequest) {
         {
           userId: authUser.id,
           conversationId,
-          activeTool,
+          activeTool: sanitizedActiveTool,
           memoryEnabled,
           deepResearchEnabled,
           model: validatedModel,
@@ -153,7 +165,7 @@ export async function POST(request: NextRequest) {
       const streamHandler = createChatStreamHandler({
         memoryStatusInfo,
         messages,
-        activeTool,
+        activeTool: sanitizedActiveTool,
         enhancedMessages,
         model: validatedModel,
         openai,
@@ -183,7 +195,7 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      if (activeTool || deepResearchEnabled) {
+      if (sanitizedActiveTool || deepResearchEnabled) {
         return errorResponse(
           'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
           undefined,

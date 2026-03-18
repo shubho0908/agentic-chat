@@ -3,7 +3,7 @@ import type { ChatCompletionMessageParam, ChatCompletionContentPart } from 'open
 import type { Message } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
-import { TOOL_IDS } from '@/lib/tools/config';
+import { parseToolId, TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { extractTextFromMessage } from './messageContent';
 import { executeWebSearchTool, executeDeepResearchTool, executeGoogleSuiteTool } from './toolExecutors';
@@ -62,6 +62,7 @@ function logStreamWriteFailure(context: string, error: unknown): void {
 
 export function createChatStreamHandler(options: StreamHandlerOptions) {
   const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId, searchDepth = 'basic', requestId } = options;
+  const sanitizedActiveTool = parseToolId(activeTool);
   let { enhancedMessages } = options;
 
   return {
@@ -148,21 +149,21 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         }
 
         if (shouldSendMemoryStatus(memoryStatusInfo)) {
-          controller.enqueue(encodeMemoryStatus(memoryStatusInfo, activeTool));
+          controller.enqueue(encodeMemoryStatus(memoryStatusInfo, sanitizedActiveTool));
           await new Promise(resolve => setImmediate(resolve));
         }
         
         const lastUserMessage = messages[messages.length - 1]?.content || '';
         const textQuery = extractTextFromMessage(lastUserMessage);
         
-        if (activeTool === TOOL_IDS.WEB_SEARCH) {
+        if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
           enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal, searchDepth);
           if (!(await ensurePromptBudget())) {
             return;
           }
         }
 
-        if (activeTool === TOOL_IDS.GOOGLE_SUITE) {
+        if (sanitizedActiveTool === TOOL_IDS.GOOGLE_SUITE) {
           if (!userId) {
             try {
               controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REQUIRED));
