@@ -3,10 +3,12 @@ import type { MemoryStatus } from "@/types/chat";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import { storeConversationMemory } from "@/lib/memory";
 import {
+
   shouldPersistConversationMemory,
   type MemoryPersistenceFlow,
 } from "@/lib/chat/memoryPolicy";
 
+import { logger } from "@/lib/logger";
 interface PersistConversationMemoryArgs {
   userMessageContent: string | Message["content"];
   assistantContent: string;
@@ -50,6 +52,6 @@ export function persistConversationMemoryIfEligible({
   }
 
   storeConversationMemory(userMessage, assistantContent, userId).catch((error) => {
-    console.error("[Memory] Failed to store conversation memory:", error);
+    logger.error("[Memory] Failed to store conversation memory:", error);
   });
 }

@@ -1,3 +1,5 @@
+
+import { logger } from "@/lib/logger";
 /* eslint-disable @next/next/no-img-element */
 
 import { ImageResponse } from 'next/og';
@@ -220,7 +222,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (e: unknown) {
-    console.error('Error generating homepage OG image:', e);
+    logger.error('Error generating homepage OG image:', e);
     return new Response(API_ERROR_MESSAGES.OG_IMAGE_GENERATION_FAILED, {
       status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
     });

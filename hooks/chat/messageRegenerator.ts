@@ -13,6 +13,8 @@ import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
 
+
+import { logger } from "@/lib/logger";
 function toJsonValue(value: unknown): JsonValue | undefined {
   if (value === undefined) {
     return undefined;
@@ -235,7 +237,7 @@ export async function handleRegenerateResponse(
         try {
           versions = await fetchMessageVersions(conversationId, parentId);
         } catch (versionError) {
-          console.warn('Failed to fetch message versions after regeneration:', versionError);
+          logger.warn('Failed to fetch message versions after regeneration:', versionError);
         }
 
         onMessagesUpdate((prev) =>

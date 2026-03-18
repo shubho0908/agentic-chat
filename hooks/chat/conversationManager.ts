@@ -7,6 +7,8 @@ import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
 import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referentialQuery";
 
+
+import { logger } from "@/lib/logger";
 function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
 }
@@ -164,7 +166,7 @@ async function createNewConversation(
     if ((err as Error).name === 'AbortError') {
       throw err;
     }
-    console.error("Failed to create conversation:", err);
+    logger.error("Failed to create conversation:", err);
     return null;
   }
 }

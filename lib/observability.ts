@@ -1,5 +1,7 @@
 type LogLevel = "info" | "warn" | "error";
 
+type LogSink = (level: LogLevel, serialized: string) => void;
+
 interface LogPayload {
   event: string;
   requestId?: string;
@@ -15,6 +17,17 @@ export function isObservabilityLoggingEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean {
   return nodeEnv === "development";
+}
+
+const defaultLogSink: LogSink = (level, serialized) => {
+  const stream = level === "error" || level === "warn" ? process.stderr : process.stdout;
+  stream.write(`${serialized}\n`);
+};
+
+let logSink: LogSink = defaultLogSink;
+
+export function setObservabilityLogSinkForTests(nextSink: LogSink | null): void {
+  logSink = nextSink ?? defaultLogSink;
 }
 
 function write(
@@ -33,18 +46,7 @@ function write(
   };
 
   const serialized = JSON.stringify(record);
-
-  if (level === "error") {
-    console.error(serialized);
-    return;
-  }
-
-  if (level === "warn") {
-    console.warn(serialized);
-    return;
-  }
-
-  console.info(serialized);
+  logSink(level, serialized);
 }
 
 export function logInfo(payload: LogPayload, nodeEnv?: string): void {

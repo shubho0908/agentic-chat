@@ -4,6 +4,7 @@ import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 
+
 interface CacheCheckContext {
   messages: Message[];
   content: string | MessageContentPart[];
@@ -97,19 +98,19 @@ async function checkCache(
     const result = await Promise.race([cachePromise, timeoutPromise, abortPromise]);
     const duration = Date.now() - startTime;
     if (result.cached) {
-      console.log(`[Cache] ✅ HIT in ${duration}ms - using cached response`);
+      logger.log(`[Cache] ✅ HIT in ${duration}ms - using cached response`);
     } else if (duration < CACHE_TIMEOUT_MS) {
-      console.log(`[Cache] ❌ MISS in ${duration}ms - generating new response`);
+      logger.log(`[Cache] ❌ MISS in ${duration}ms - generating new response`);
     }
 
     return result;
 
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      console.log('[Cache] Aborted by user');
+      logger.log('[Cache] Aborted by user');
       return { cached: false };
     }
-    console.error('[Cache] Error:', err);
+    logger.error('[Cache] Error:', err);
     return { cached: false };
   }
 }
@@ -130,3 +131,5 @@ export async function performCacheCheck(
 
   return { cacheQuery, cacheData };
 }
+
+import { logger } from "@/lib/logger";

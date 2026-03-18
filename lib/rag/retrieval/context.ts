@@ -4,6 +4,7 @@ import { searchDocumentChunks } from './search';
 import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';
 import {
+
   waitForDocumentProcessing,
   getCompletedAttachmentIds,
   getAttachmentStatuses,
@@ -18,6 +19,7 @@ import { withTrace } from '@/lib/langsmithConfig';
 import { getPgPool } from '../storage/pgvectorClient';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
+import { logger } from "@/lib/logger";
 interface ResolvedAttachmentScope {
   attachmentIds: string[];
   attachmentCount: number;
@@ -107,7 +109,7 @@ async function resolveCompletedAttachmentScope(
     if (processingIds.length > 0 && waitForProcessing) {
       for (const attachmentId of extractIds(partitioned.pending)) {
         void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-          console.warn('[RAG] Failed to kick off pending document processing:', {
+          logger.warn('[RAG] Failed to kick off pending document processing:', {
             attachmentId,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -137,7 +139,7 @@ async function resolveCompletedAttachmentScope(
     if (needProcessing.length > 0) {
       for (const attachmentId of extractIds(partitioned.pending)) {
         void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-          console.warn('[RAG] Failed to kick off provided document processing:', {
+          logger.warn('[RAG] Failed to kick off provided document processing:', {
             attachmentId,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -235,7 +237,7 @@ export async function getDocumentOverviewContext(
           documentCount: scope.attachmentCount,
         };
       } catch (error) {
-        console.error('[RAG] Document overview context retrieval failed:', error);
+        logger.error('[RAG] Document overview context retrieval failed:', error);
         return null;
       }
     },
@@ -282,7 +284,7 @@ export async function getRAGContext(
 
         return formatRetrievedContext(results);
       } catch (error) {
-        console.error('[RAG] Context retrieval failed:', error);
+        logger.error('[RAG] Context retrieval failed:', error);
         return null;
       }
     },

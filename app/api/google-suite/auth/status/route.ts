@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { prisma } from '@/lib/prisma';
 import type { GoogleAuthorizationStatus } from '@/types/googleSuite';
 import {
+
   GOOGLE_PROVIDER_ID,
   getGrantedGoogleScopes,
   getMissingGoogleWorkspaceScopes,
@@ -12,6 +13,7 @@ import {
 import { getGoogleWorkspaceOAuthReadiness } from '@/lib/tools/google-suite/oauthReadiness';
 import { isAuthRevokedError, synchronizeGoogleAccount } from '@/lib/tools/google-suite/client';
 
+import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -143,7 +145,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       configuredScopes,
     });
   } catch (error) {
-    console.error('[Google Suite Auth Status] Error:', error);
+    logger.error('[Google Suite Auth Status] Error:', error);
     return NextResponse.json(
       { error: 'Failed to check authorization status' },
       { status: 500 }

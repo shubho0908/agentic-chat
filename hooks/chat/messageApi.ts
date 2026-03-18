@@ -3,6 +3,8 @@ import { extractTextFromContent } from "@/lib/contentUtils";
 import type { FinalizeEditedMessageResponse, UpdateMessageResponse } from "@/types/chat";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 
+
+import { logger } from "@/lib/logger";
 interface SavedMessageWithAttachments {
   id: string;
   attachments?: Array<{
@@ -12,7 +14,7 @@ interface SavedMessageWithAttachments {
 }
 
 function logDocumentProcessingDispatchError(context: string, error: unknown): void {
-  console.warn(`[Message API] Failed to ${context}:`, error);
+  logger.warn(`[Message API] Failed to ${context}:`, error);
 }
 
 async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
@@ -84,7 +86,7 @@ export async function saveUserMessage(
     if ((err as Error).name === 'AbortError') {
       throw err;
     }
-    console.error("Failed to save user message:", err);
+    logger.error("Failed to save user message:", err);
     return null;
   }
 }
@@ -114,7 +116,7 @@ export async function saveAssistantMessage(
     const savedMessage = await response.json();
     return savedMessage.id;
   } catch (err) {
-    console.error("Failed to save assistant message:", err);
+    logger.error("Failed to save assistant message:", err);
     return null;
   }
 }

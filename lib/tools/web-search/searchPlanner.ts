@@ -1,5 +1,6 @@
 import type { SearchResultWithSources, MultiSearchImage } from '@/types/tools';
 
+
 interface SearchPlan {
   originalQuery: string;
   queryType: 'factual' | 'comparative' | 'analytical' | 'exploratory' | 'how-to' | 'current-events';
@@ -32,6 +33,7 @@ interface MultiSearchResult {
 }
 
 const MAX_PARALLEL_SEARCHES = 3;
+import { logger } from "@/lib/logger";
 const MIN_RESULTS_PER_SEARCH = 1;
 const MAX_RESULTS_PER_SEARCH = 10;
 
@@ -106,7 +108,7 @@ export async function executeMultiSearch(
       } else {
         const errorType =
           result.reason instanceof Error ? result.reason.name : typeof result.reason;
-        console.error(`[Multi-Search] Error in search ${searchIndex + 1}`, { errorType });
+        logger.error(`[Multi-Search] Error in search ${searchIndex + 1}`, { errorType });
         results[searchIndex] =
           `\n## Search ${searchIndex + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Error:** Search failed due to an upstream error.`;
       }

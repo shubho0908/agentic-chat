@@ -15,10 +15,12 @@ import { executeMultiSearch } from '../tools/web-search/searchPlanner';
 import { createUnifiedPlan, type WebSearchPlan } from '../tools/unifiedPlanner';
 import { truncateTextToTokenLimit } from '@/lib/utils/tokenCounter';
 
+
+import { logger } from "@/lib/logger";
 const MAX_TOOL_CONTEXT_TOKENS = 1600;
 
 function logToolWriteFailure(toolLabel: string, context: string, error: unknown): void {
-  console.warn(`[${toolLabel}] Failed to ${context}:`, error);
+  logger.warn(`[${toolLabel}] Failed to ${context}:`, error);
 }
 
 function truncateContext(text: string, model: string, maxTokens: number = MAX_TOOL_CONTEXT_TOKENS): string {
@@ -269,7 +271,7 @@ export async function executeWebSearchTool(
           }
           setImmediate(() => {});
         } catch {
-          console.error('[Web Search Tool] Failed to enqueue progress (controller closed)');
+          logger.error('[Web Search Tool] Failed to enqueue progress (controller closed)');
           streamClosed = true;
         }
       },
@@ -306,7 +308,7 @@ export async function executeWebSearchTool(
     
     return injectContextToMessages(messages, searchContext, model);
   } catch (error) {
-    console.error('[Chat API] Web search error:', error);
+    logger.error('[Chat API] Web search error:', error);
     
     if (error instanceof Error && error.message.includes('aborted')) {
       try {
@@ -384,7 +386,7 @@ export async function executeDeepResearchTool(
         
         setImmediate(() => {});
       } catch (error) {
-        console.error('[Tool Executor] Failed to enqueue progress (controller closed):', error);
+        logger.error('[Tool Executor] Failed to enqueue progress (controller closed):', error);
         streamClosed = true;
       }
     };
@@ -428,7 +430,7 @@ export async function executeDeepResearchTool(
         }
       ));
     } catch {
-      console.error('[Tool Executor] Failed to send final progress (controller closed)');
+      logger.error('[Tool Executor] Failed to send final progress (controller closed)');
       streamClosed = true;
     }
     
@@ -445,7 +447,7 @@ export async function executeDeepResearchTool(
       try {
         controller.enqueue(encodeToolResult(TOOL_IDS.DEEP_RESEARCH, toolCallId, formattedResult));
       } catch {
-        console.error('[Tool Executor] Failed to send tool result (controller closed)');
+        logger.error('[Tool Executor] Failed to send tool result (controller closed)');
         streamClosed = true;
       }
     }
@@ -461,7 +463,7 @@ export async function executeDeepResearchTool(
       followUpQuestions: result.followUpQuestions || [],
     };
   } catch (error) {
-    console.error('[Chat API] Deep research error:', error);
+    logger.error('[Chat API] Deep research error:', error);
     streamClosed = true;
     
     if (error instanceof Error && error.message.includes('aborted')) {
@@ -486,7 +488,7 @@ export async function executeDeepResearchTool(
         TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_DETAILED
       ));
     } catch {
-      console.error('[Tool Executor] Failed to send error to UI (controller closed)');
+      logger.error('[Tool Executor] Failed to send error to UI (controller closed)');
     }
     return { messages, failed: true, skipped: false };
   }
@@ -542,7 +544,7 @@ export async function executeGoogleSuiteTool(
           ));
           setImmediate(() => {});
         } catch {
-          console.error('[Google Workspace] Failed to enqueue progress (controller closed)');
+          logger.error('[Google Workspace] Failed to enqueue progress (controller closed)');
           streamClosed = true;
         }
       },
@@ -561,7 +563,7 @@ export async function executeGoogleSuiteTool(
 
     return injectContextToMessages(messages, workspaceContext, model);
   } catch (error) {
-    console.error('[Chat API] Google Workspace error:', error);
+    logger.error('[Chat API] Google Workspace error:', error);
 
     if (error instanceof Error && error.message.includes('aborted')) {
       try {

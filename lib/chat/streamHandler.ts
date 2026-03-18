@@ -8,6 +8,7 @@ import { parseOpenAIError } from '@/lib/openaiErrors';
 import { extractTextFromMessage } from './messageContent';
 import { executeWebSearchTool, executeDeepResearchTool, executeGoogleSuiteTool } from './toolExecutors';
 import {
+
   encodeMemoryStatus,
   encodeChatChunk,
   encodeError,
@@ -34,6 +35,7 @@ import {
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 import { logWarn } from '@/lib/observability';
 
+import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
   messages: Message[];
@@ -55,7 +57,7 @@ function toOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
 }
 
 function logStreamWriteFailure(context: string, error: unknown): void {
-  console.warn(`[Stream Handler] Failed to ${context}:`, error);
+  logger.warn(`[Stream Handler] Failed to ${context}:`, error);
 }
 
 export function createChatStreamHandler(options: StreamHandlerOptions) {
@@ -88,7 +90,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         try {
           await releaseDeepResearchUsageReservation(userId);
         } catch (error) {
-          console.error('[Stream Handler] Failed to release deep research reservation:', error);
+          logger.error('[Stream Handler] Failed to release deep research reservation:', error);
         } finally {
           deepResearchReservationActive = false;
         }
@@ -105,7 +107,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         try {
           await finishOrchestrationJob(deepResearchJobId, status, payload);
         } catch (error) {
-          console.error('[Stream Handler] Failed to finish deep research job:', error);
+          logger.error('[Stream Handler] Failed to finish deep research job:', error);
         } finally {
           deepResearchJobId = null;
         }
@@ -178,11 +180,11 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         let researchFailed = false;
         if (deepResearchEnabled) {
           if (!userId) {
-            console.error('[Stream Handler] ❌ SECURITY: No userId provided, rejecting deep research request');
+            logger.error('[Stream Handler] ❌ SECURITY: No userId provided, rejecting deep research request');
             try {
               controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.AUTH_REQUIRED));
             } catch {
-              console.error('[Stream Handler] Could not send auth error message (controller closed)');
+              logger.error('[Stream Handler] Could not send auth error message (controller closed)');
             }
           } else {
             try {
@@ -227,12 +229,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 try {
                   controller.enqueue(encodeChatChunk(message));
                 } catch {
-                  console.error('[Stream Handler] Could not send limit error message (controller closed)');
+                  logger.error('[Stream Handler] Could not send limit error message (controller closed)');
                 }
                 try {
                   controller.enqueue(encodeDone());
                 } catch {
-                  console.error('[Stream Handler] Could not enqueue done (controller closed)');
+                  logger.error('[Stream Handler] Could not enqueue done (controller closed)');
                 }
                 await finishDeepResearchJob('failed', { error: message });
                 safeClose();
@@ -305,7 +307,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     }
                   }
                 } catch (docError) {
-                  console.error('[Stream Handler] Document pre-processing error:', docError);
+                  logger.error('[Stream Handler] Document pre-processing error:', docError);
                   // Continue with research even if document prep fails
                 }
               }
@@ -345,7 +347,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     });
                   }
                 } catch (docContextError) {
-                  console.error('[Stream Handler] Document context retrieval for planning error:', docContextError);
+                  logger.error('[Stream Handler] Document context retrieval for planning error:', docContextError);
                   // Continue without document context for planning
                 }
               }
@@ -361,7 +363,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                       : urlContext;
                   }
                 } catch (urlError) {
-                  console.error('[Stream Handler] URL context retrieval for deep research failed:', urlError);
+                  logger.error('[Stream Handler] URL context retrieval for deep research failed:', urlError);
                 }
               }
               
@@ -417,7 +419,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     imageContext = visionResponse.choices[0]?.message?.content || '';
                   }
                 } catch (visionError) {
-                  console.error('[Stream Handler] Image analysis error:', visionError);
+                  logger.error('[Stream Handler] Image analysis error:', visionError);
                   imageContext = 'Note: Images were attached but could not be analyzed.';
                 }
               }
@@ -455,7 +457,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                           limit: reservedUsageInfo.limit,
                         })}\n\n`));
                       } catch {
-                        console.error('[Stream Handler] Could not send usage update event (controller closed)');
+                        logger.error('[Stream Handler] Could not send usage update event (controller closed)');
                       }
                     }
                   }
@@ -465,7 +467,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                       controller.enqueue(encodeChatChunk(result.finalResponse));
                       controller.enqueue(encodeDone());
                     } catch {
-                      console.error('[Stream Handler] Could not enqueue direct research response (controller closed)');
+                      logger.error('[Stream Handler] Could not enqueue direct research response (controller closed)');
                     }
                     safeClose();
                     await finishDeepResearchJob('completed', {
@@ -478,7 +480,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   }
                 }
               } catch (researchError) {
-                console.error('[Stream Handler] ❌ Deep research execution error:', researchError);
+                logger.error('[Stream Handler] ❌ Deep research execution error:', researchError);
                 await releaseDeepResearchReservation();
                 await finishDeepResearchJob('failed', {
                   error: researchError instanceof Error ? researchError.message : String(researchError),
@@ -486,12 +488,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 try {
                   controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.EXECUTION_ERROR));
                 } catch {
-                  console.error('[Stream Handler] Could not send error message (controller closed)');
+                  logger.error('[Stream Handler] Could not send error message (controller closed)');
                 }
                 researchFailed = true;
               }
             } catch (error) {
-              console.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
+              logger.error('[Stream Handler] ❌ Unexpected error during deep research flow:', error);
               await releaseDeepResearchReservation();
               await finishDeepResearchJob('failed', {
                 error: error instanceof Error ? error.message : String(error),
@@ -499,7 +501,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               try {
                 controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.TECHNICAL_ERROR));
               } catch {
-                console.error('[Stream Handler] Could not send error message (controller closed)');
+                logger.error('[Stream Handler] Could not send error message (controller closed)');
               }
             }
           }
@@ -522,7 +524,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.DEEP_RESEARCH.FAILED_FALLBACK));
           } catch {
-            console.error('[Stream Handler] Could not send error message (controller closed)');
+            logger.error('[Stream Handler] Could not send error message (controller closed)');
             safeClose();
             return;
           }
@@ -551,7 +553,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             try {
               controller.enqueue(encodeChatChunk(text));
             } catch {
-              console.error('[Stream Handler] Could not enqueue chunk (controller closed)');
+              logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
               break;
             }
           }
@@ -560,7 +562,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         try {
           controller.enqueue(encodeDone());
         } catch {
-          console.error('[Stream Handler] Could not enqueue done (controller closed)');
+          logger.error('[Stream Handler] Could not enqueue done (controller closed)');
         }
         await finishDeepResearchJob('completed', {
           result: { continuedWithStandardCompletion: true },
@@ -568,7 +570,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         safeClose();
       } catch (error) {
         if (error instanceof Error && (error.message.includes('aborted by user') || abortSignal?.aborted)) {
-          console.error('🛑 [Stream Handler] Request aborted, closing stream cleanly');
+          logger.error('🛑 [Stream Handler] Request aborted, closing stream cleanly');
           await releaseDeepResearchReservation();
           await finishDeepResearchJob('failed', { error: 'aborted' });
           try {

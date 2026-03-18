@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/apiUtils";
 import { revokeGoogleWorkspaceAccess } from "@/lib/tools/google-suite/client";
 
+
+import { logger } from "@/lib/logger";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,7 @@ export async function POST() {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[Google Suite Auth Reset] Error:", error);
+    logger.error("[Google Suite Auth Reset] Error:", error);
 
     return NextResponse.json(
       { error: "Failed to reset Google Workspace access" },

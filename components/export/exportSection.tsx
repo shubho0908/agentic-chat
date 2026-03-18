@@ -9,8 +9,8 @@ import type { ExportFormat, ExportConversation } from "@/types/export";
 import { downloadJSON } from "@/lib/export/jsonExporter";
 import { downloadMarkdown } from "@/lib/export/markdownExporter";
 import { downloadPDF } from "@/lib/export/pdfExporter";
-import { ConversationPDF } from "./conversationPdf";
 import { cn } from "@/lib/utils";
+
 
 interface ExportSectionProps {
   conversationId: string;
@@ -37,6 +37,7 @@ const exportFormats = [
   },
 ];
 
+import { logger } from "@/lib/logger";
 export function ExportSection({ conversationId }: ExportSectionProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('markdown');
   const [isExporting, setIsExporting] = useState(false);
@@ -77,15 +78,18 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
           toast.success('Markdown file downloaded successfully');
           break;
         case 'pdf':
-          await downloadPDF(
-            conversationData,
-            <ConversationPDF conversation={conversationData} includeAttachments={true} />
-          );
+          {
+            const { createConversationPDFDocument } = await import("./conversationPdf");
+            await downloadPDF(
+              conversationData,
+              await createConversationPDFDocument(conversationData, true)
+            );
+          }
           toast.success('PDF file downloaded successfully');
           break;
       }
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to export conversation');
     } finally {
       setIsExporting(false);

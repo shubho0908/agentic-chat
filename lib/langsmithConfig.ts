@@ -3,6 +3,8 @@ import { wrapOpenAI } from 'langsmith/wrappers';
 import { traceable } from 'langsmith/traceable';
 import type OpenAI from 'openai';
 
+
+import { logger } from "@/lib/logger";
 const LANGSMITH_CONFIG = {
   tracing: process.env.LANGSMITH_TRACING !== 'false',
   endpoint: process.env.LANGSMITH_ENDPOINT,
@@ -21,7 +23,7 @@ function initializeLangSmith(): void {
       apiKey: LANGSMITH_CONFIG.apiKey,
     });
   } catch (error) {
-    console.error('[LangSmith] Failed to initialize:', error);
+    logger.error('[LangSmith] Failed to initialize:', error);
   }
 }
 
@@ -37,7 +39,7 @@ export function wrapOpenAIWithLangSmith<T extends OpenAI>(client: T): T {
   try {
     return wrapOpenAI(client) as T;
   } catch (error) {
-    console.error('[LangSmith] Failed to wrap OpenAI client:', error);
+    logger.error('[LangSmith] Failed to wrap OpenAI client:', error);
     return client;
   }
 }

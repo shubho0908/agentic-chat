@@ -4,8 +4,10 @@ import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, Gma
 import { parseEmailContent } from '@/utils/google/email';
 import { formatEmailDate } from '@/utils/dateFormatter';
 
+
 const MAX_GMAIL_SEARCH_FETCHES = 10;
 
+import { logger } from "@/lib/logger";
 function getHeaderValue(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
   return headers?.find((header) => header.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
@@ -212,7 +214,7 @@ export async function handleGmailModify(
     });
     
     if (notFound.length > 0) {
-      console.warn(`[Gmail] Labels not found and will be skipped: ${notFound.join(', ')}`);
+      logger.warn(`[Gmail] Labels not found and will be skipped: ${notFound.join(', ')}`);
     }
     
     return translatedIds;

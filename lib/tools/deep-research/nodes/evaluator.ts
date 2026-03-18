@@ -6,6 +6,8 @@ import type { EvaluationResult, StrictnessLevel } from '@/types/deepResearch';
 import { getStageModel } from '@/lib/modelPolicy';
 import { invokeStructuredOutput } from '../structuredOutput';
 import { DEEP_RESEARCH_MAX_ATTEMPTS } from '../constants';
+
+import { logger } from "@/lib/logger";
 const evaluationResultSchema = z.object({
   meetsStandards: z.boolean(),
   isRelevant: z.boolean(),
@@ -89,7 +91,7 @@ export async function evaluatorNode(
     };
 
   } catch (error) {
-    console.error('[Evaluator Node] ❌ Error:', error);
+    logger.error('[Evaluator Node] ❌ Error:', error);
     return {
       evaluationResult: {
         meetsStandards: false,

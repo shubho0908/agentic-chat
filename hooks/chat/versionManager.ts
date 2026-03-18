@@ -1,6 +1,8 @@
 import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
 import type { VersionData } from "@/types/chat";
 
+
+import { logger } from "@/lib/logger";
 export function createNewVersion(
   existingVersions: Message[],
   role: "user" | "assistant",
@@ -96,7 +98,7 @@ export async function fetchMessageVersions(
 
     return [];
   } catch (err) {
-    console.error("Failed to fetch message versions:", err);
+    logger.error("Failed to fetch message versions:", err);
     return [];
   }
 }

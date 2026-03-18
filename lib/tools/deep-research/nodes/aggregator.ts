@@ -3,6 +3,8 @@ import type { ResearchState } from '../state';
 import { AGGREGATOR_SYSTEM_PROMPT } from '../prompts';
 import { getStageModel } from '@/lib/modelPolicy';
 
+
+import { logger } from "@/lib/logger";
 export async function aggregatorNode(
   state: ResearchState,
   config: { openaiApiKey: string; model: string; abortSignal?: AbortSignal }
@@ -59,7 +61,7 @@ export async function aggregatorNode(
     };
 
   } catch (error) {
-    console.error('[Aggregator Node] ❌ Error:', error);
+    logger.error('[Aggregator Node] ❌ Error:', error);
     const fallbackResults = completedTasks
       .map((task) => `**${task.question}**\n${task.result || task.error || 'No result'}`)
       .join('\n\n');

@@ -2,8 +2,10 @@ import { Pool } from 'pg';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getCacheTtlSeconds, getEmbeddingDimensions } from '@/lib/env';
 
+
 let pool: Pool | null = null;
 
+import { logger } from "@/lib/logger";
 function getPgPoolMax(): number {
   const rawValue = Number(process.env.PGVECTOR_POOL_MAX ?? 10);
   if (!Number.isInteger(rawValue) || rawValue <= 0) {
@@ -32,7 +34,7 @@ export function getPgPool(): Pool {
     
     pool.on('error', (err) => {
       // Critical: Pool errors indicate DB connectivity issues
-      console.error('[PgVector Pool Error]', {
+      logger.error('[PgVector Pool Error]', {
         message: err.message,
         code: (err as { code?: string }).code,
         timestamp: new Date().toISOString(),

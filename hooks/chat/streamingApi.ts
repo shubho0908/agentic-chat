@@ -1,5 +1,6 @@
 import type { StreamConfig } from "@/types/chat";
 
+
 function isAbortError(error: unknown): boolean {
   return (
     error instanceof DOMException && error.name === "AbortError"
@@ -146,7 +147,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
           if (err instanceof Error && err.message !== 'Unexpected token') {
             throw err;
           }
-          console.warn('Failed to parse SSE data:', data, err);
+          logger.warn('Failed to parse SSE data:', data, err);
         }
       }
 
@@ -171,7 +172,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
                 if (err instanceof Error && err.message !== 'Unexpected token') {
                   throw err;
                 }
-                console.warn('Failed to parse final SSE data:', data, err);
+                logger.warn('Failed to parse final SSE data:', data, err);
               }
             }
           }
@@ -182,7 +183,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   } catch (error) {
     void reader.cancel().catch((cancelError) => {
       if (!isAbortError(cancelError)) {
-        console.warn("Failed to cancel chat stream reader:", cancelError);
+        logger.warn("Failed to cancel chat stream reader:", cancelError);
       }
     });
     throw error;
@@ -190,3 +191,5 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 
   return fullContent;
 }
+
+import { logger } from "@/lib/logger";

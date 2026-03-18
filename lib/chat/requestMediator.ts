@@ -2,7 +2,9 @@ import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from "@/lib/langsmithConfig";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
 
+
 const MEDIATOR_MODEL = "gpt-5-nano";
+import { logger } from "@/lib/logger";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_SIZE = 500;
 
@@ -252,7 +254,7 @@ async function runAIMediator({
       shouldQuery: Boolean(parsed.memory?.should_query),
     };
   } catch (error) {
-    console.error("[Request Mediator] AI classification failed:", error);
+    logger.error("[Request Mediator] AI classification failed:", error);
     return null;
   }
 }

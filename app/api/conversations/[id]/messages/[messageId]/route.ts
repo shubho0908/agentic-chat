@@ -9,6 +9,8 @@ import { messageMetadataSchema } from '@/lib/schemas/chat';
 import { isSupportedForRAG } from '@/lib/rag/utils';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
+
+import { logger } from "@/lib/logger";
 function getRagAttachmentIds(
   attachments?: Array<{ id: string; fileType: string }>
 ): string[] {
@@ -35,7 +37,7 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
 
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        console.warn('[Message Version Route] Failed to schedule document processing:', {
+        logger.warn('[Message Version Route] Failed to schedule document processing:', {
           attachmentId: attachmentIds[index],
           error: result.reason instanceof Error ? result.reason.message : String(result.reason),
         });

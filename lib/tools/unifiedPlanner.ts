@@ -7,6 +7,8 @@ import { PLANNER_SYSTEM_PROMPT as DEEP_RESEARCH_PLANNING_PROMPT } from '@/lib/to
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { getStageModel } from '@/lib/modelPolicy';
 
+
+import { logger } from "@/lib/logger";
 type ToolType = 'web_search' | 'deep_research' | 'google_suite';
 
 interface UnifiedPlannerConfig {
@@ -326,7 +328,7 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
 
     return createFallbackPlan();
   } catch (error) {
-    console.error('[Unified Planner] Error:', error);
+    logger.error('[Unified Planner] Error:', error);
     return createFallbackPlan();
   }
 }

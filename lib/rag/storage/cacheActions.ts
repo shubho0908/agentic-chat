@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
 
+
 interface CacheCheckResult {
   cached: boolean;
   response?: string;
@@ -18,6 +19,7 @@ interface CacheSaveResult {
 
 const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
+import { logger } from "@/lib/logger";
 function shouldUseSemanticCache(query: string): boolean {
   return query.trim().length >= MIN_CACHEABLE_QUERY_LENGTH;
 }
@@ -56,7 +58,7 @@ export async function checkSemanticCacheAction(query: string): Promise<CacheChec
     const latency = Date.now() - startTime;
 
     if (cachedResponse) {
-      console.log(`[Cache] HIT in ${latency}ms`);
+      logger.log(`[Cache] HIT in ${latency}ms`);
       return {
         cached: true,
         response: cachedResponse,
@@ -64,12 +66,12 @@ export async function checkSemanticCacheAction(query: string): Promise<CacheChec
       };
     }
 
-    console.log(`[Cache] MISS in ${latency}ms`);
+    logger.log(`[Cache] MISS in ${latency}ms`);
     return { cached: false, latency };
 
   } catch (error) {
     const latency = Date.now() - startTime;
-    console.error('[Cache] Check failed:', error);
+    logger.error('[Cache] Check failed:', error);
     return {
       cached: false,
       error: error instanceof Error ? error.message : 'Cache check failed',
@@ -101,11 +103,11 @@ export async function saveToSemanticCacheAction(
     const queryEmbedding = await generateEmbedding(query, user.id);
     await addToSemanticCache(query, response, queryEmbedding, user.id);
 
-    console.log('[Cache] Saved successfully');
+    logger.log('[Cache] Saved successfully');
     return { success: true };
 
   } catch (error) {
-    console.error('[Cache] Save failed:', error);
+    logger.error('[Cache] Save failed:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Cache save failed'

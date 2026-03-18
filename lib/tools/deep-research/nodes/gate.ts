@@ -6,12 +6,14 @@ import type { GateDecision, DirectLLMResponse } from '@/types/deepResearch';
 import { getStageModel } from '@/lib/modelPolicy';
 import { invokeStructuredOutput } from '../structuredOutput';
 
+
 const gateDecisionSchema = z.object({
   shouldResearch: z.boolean(),
   reason: z.string(),
   confidence: z.enum(['low', 'medium', 'high']),
 });
 
+import { logger } from "@/lib/logger";
 const directResponseSchema = z.object({
   answer: z.string(),
   confidence: z.enum(['low', 'medium', 'high']),
@@ -106,7 +108,7 @@ export async function gateNode(
     };
 
   } catch (error) {
-    console.error('[Gate Node] ❌ Error:', error);
+    logger.error('[Gate Node] ❌ Error:', error);
     return {
       gateDecision: {
         shouldResearch: true,

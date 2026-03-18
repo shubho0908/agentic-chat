@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { prepareCiEnv } from "./prepare-ci-env.mjs";
+import logger from "./logger.mjs";
 
 const steps = [
   {
@@ -84,13 +85,13 @@ try {
   restoreEnv = prepared.restore;
 
   for (const step of steps) {
-    console.log(`\n==> ${step.name}`);
+    logger.log(`\n==> ${step.name}`);
     await runStep(step);
   }
 
-  console.log("\nLocal CI passed.");
+  logger.log("\nLocal CI passed.");
 } catch (error) {
-  console.error(
+  logger.error(
     `\nLocal CI failed: ${(error instanceof Error && error.message) || String(error)}`,
   );
   process.exitCode = 1;

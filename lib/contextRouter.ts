@@ -15,6 +15,8 @@ import { estimateMemoryEntryCount } from './chat/memoryPolicy';
 import { extractTextQuery, isReferentialQuery } from './chat/referentialQuery';
 import { logWarn } from './observability';
 
+
+import { logger } from "@/lib/logger";
 interface ContextRoutingMetadata {
   hasMemories: boolean;
   attemptedMemory: boolean;
@@ -205,7 +207,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
       documentCount: documentAttachments.length,
     };
   } catch (error) {
-    console.warn('[Context Router] Failed to get attachment info:', error);
+    logger.warn('[Context Router] Failed to get attachment info:', error);
     return { hasDocuments: false, hasAny: false, documentCount: 0 };
   }
 }
@@ -276,7 +278,7 @@ export async function routeContext(
           };
         }
       } catch (error) {
-        console.error('[Context Router] Deep research URL scraping failed:', error);
+        logger.error('[Context Router] Deep research URL scraping failed:', error);
         addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
       }
     }
@@ -311,10 +313,10 @@ export async function routeContext(
         
         return { context: urlContext, metadata };
       } else {
-        console.log('[Context Router] All URL scraping attempts failed, continuing with normal flow');
+        logger.log('[Context Router] All URL scraping attempts failed, continuing with normal flow');
       }
     } catch (error) {
-      console.error('[Context Router] URL scraping failed:', error);
+      logger.error('[Context Router] URL scraping failed:', error);
       addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
       // Continue with normal flow if URL scraping fails
     }

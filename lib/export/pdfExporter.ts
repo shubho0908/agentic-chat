@@ -1,17 +1,21 @@
-import React from 'react';
-import { pdf } from '@react-pdf/renderer';
-import { saveAs } from 'file-saver';
 import { API_ERROR_MESSAGES } from '@/constants/errors';
+import { logger } from "@/lib/logger";
 import type { ExportConversation } from '@/types/export';
+import type { ReactElement } from "react";
 
 export async function downloadPDF(
   conversation: ExportConversation,
-  pdfElement: React.ReactElement
+  pdfElement: ReactElement
 ): Promise<void> {
   const fileName = `${sanitizeFileName(conversation.title || 'conversation')}_${new Date().toISOString().split('T')[0]}.pdf`;
 
   try {
-    const blob = await pdf(pdfElement as React.ReactElement<Record<string, unknown>>).toBlob();
+    const [{ pdf }, { saveAs }] = await Promise.all([
+      import("@react-pdf/renderer"),
+      import("file-saver"),
+    ]);
+
+    const blob = await pdf(pdfElement as ReactElement<Record<string, unknown>>).toBlob();
     
     if (!blob || blob.size === 0) {
       throw new Error('Failed to generate PDF: Empty or invalid blob');
@@ -19,7 +23,7 @@ export async function downloadPDF(
     
     saveAs(blob, fileName);
   } catch (error) {
-    console.error('PDF generation failed:', error);
+    logger.error('PDF generation failed:', error);
     throw new Error(
       error instanceof Error 
         ? `${API_ERROR_MESSAGES.PDF_GENERATION_FAILED}: ${error.message}` 

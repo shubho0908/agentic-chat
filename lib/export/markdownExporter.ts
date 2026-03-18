@@ -1,5 +1,6 @@
 import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
 
+
 function exportToMarkdown(
   conversation: ExportConversation,
   options: ExportOptions = {}
@@ -84,7 +85,7 @@ function formatDate(dateString: string | undefined | null): string {
   const date = new Date(dateString);
   
   if (isNaN(date.getTime())) {
-    console.warn('Invalid date string:', dateString);
+    logger.warn('Invalid date string:', dateString);
     return 'Invalid date';
   }
   
@@ -127,3 +128,5 @@ function sanitizeFileName(name: string): string {
   
   return sanitized || 'conversation';
 }
+
+import { logger } from "@/lib/logger";

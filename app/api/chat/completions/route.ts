@@ -17,7 +17,7 @@ import { createRequestId, logError, logWarn } from '@/lib/observability';
 import { validateRequestedModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
-
+import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for deep research & google suite tools
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
       }
     } catch (error) {
-      console.error('[Context Routing Error]', error);
+      logger.error('[Context Routing Error]', error);
       memoryStatusInfo.degradedContexts = [
         ...(memoryStatusInfo.degradedContexts || []),
         {

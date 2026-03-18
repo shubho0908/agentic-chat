@@ -6,6 +6,7 @@ import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { GOOGLE_PROVIDER_ID, GOOGLE_SIGN_IN_SCOPES } from './scopes';
 import { appBaseUrl } from '@/lib/appUrl';
 
+
 interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
   userId: string;
@@ -23,6 +24,7 @@ interface SynchronizedGoogleAccount {
 }
 
 export const GOOGLE_ACCOUNT_MISMATCH_ERROR = 'GOOGLE_ACCOUNT_MISMATCH';
+import { logger } from "@/lib/logger";
 export const GOOGLE_ACCOUNT_LINKED_ERROR = 'GOOGLE_ACCOUNT_LINKED';
 
 interface CodedGoogleWorkspaceError extends Error {
@@ -102,7 +104,7 @@ async function resolveGoogleGrantedScopes(
       throw error;
     }
 
-    console.warn('[Google Suite] Failed to resolve token info, falling back to stored scopes:', error);
+    logger.warn('[Google Suite] Failed to resolve token info, falling back to stored scopes:', error);
     return normalizeGrantedScopes(parseScopeValue(fallbackScope));
   }
 }
@@ -405,7 +407,7 @@ export async function revokeGoogleWorkspaceAccess(userId: string): Promise<void>
     try {
       await oauth2Client.revokeToken(token);
     } catch (error) {
-      console.warn('[Google Suite] Failed to revoke token:', error);
+      logger.warn('[Google Suite] Failed to revoke token:', error);
     }
   }
 
