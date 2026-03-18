@@ -187,7 +187,7 @@ export function AppSidebar() {
               {isLoading ? (
                 <SidebarMenu className="gap-2">
                   {Array.from({ length: 5 }).map((_, index) => (
-                    <SidebarMenuItem key={index}>
+                    <SidebarMenuItem key={`skeleton-${index}`}>
                       <SidebarMenuSkeleton />
                     </SidebarMenuItem>
                   ))}

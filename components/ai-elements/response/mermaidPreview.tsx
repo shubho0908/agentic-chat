@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { AlertCircle, Code2, Eye } from "lucide-react";
 import { useTheme } from "next-themes";
+import DOMPurify from "dompurify";
 import { CodeCopyButton } from "./codeCopyButton";
 import {
   CODE_BLOCK_SHELL_CLASS,
@@ -16,7 +17,44 @@ type MermaidViewMode = "preview" | "code";
 
 let mermaidModulePromise: Promise<typeof import("mermaid")> | null = null;
 let mermaidInitializedTheme: MermaidTheme | null = null;
-const mermaidSvgCache = new Map<string, string>();
+
+// LRU Cache for Mermaid SVGs to prevent memory leaks
+const MAX_CACHE_SIZE = 50;
+
+function createLRUCache<K, V>() {
+  const cache = new Map<K, V>();
+
+  function get(key: K): V | undefined {
+    const value = cache.get(key);
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      cache.delete(key);
+      cache.set(key, value);
+    }
+    return value;
+  }
+
+  function set(key: K, value: V): void {
+    if (cache.has(key)) {
+      cache.delete(key);
+    } else if (cache.size >= MAX_CACHE_SIZE) {
+      // Remove least recently used item (first item)
+      const firstKey = cache.keys().next().value;
+      if (firstKey !== undefined) {
+        cache.delete(firstKey);
+      }
+    }
+    cache.set(key, value);
+  }
+
+  function clear(): void {
+    cache.clear();
+  }
+
+  return { get, set, clear };
+}
+
+const mermaidSvgCache = createLRUCache<string, string>();
 const mermaidRenderPromiseCache = new Map<string, Promise<string>>();
 
 function cleanupLeakedMermaidArtifacts() {
@@ -184,11 +222,17 @@ function MermaidPreviewContent({
   }, [source, theme]);
 
   useEffect(() => {
-    if (viewMode !== "preview" || !previewRef.current) {
+    if (viewMode !== "preview" || !previewRef.current || !state.svg) {
       return;
     }
 
-    previewRef.current.innerHTML = state.svg ?? "";
+    // Sanitize SVG before rendering to prevent XSS attacks
+    const cleanSvg = DOMPurify.sanitize(state.svg, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ["#text"],
+      ADD_ATTR: ["class", "style", "transform", "fill", "stroke", "stroke-width"],
+    });
+    previewRef.current.innerHTML = cleanSvg;
   }, [state.svg, viewMode]);
 
   const previewPanelId = `${idBase}-preview`;

@@ -7,6 +7,12 @@ interface FollowUpQuestionsProps {
   disabled?: boolean;
 }
 
+function getOccurrenceKey(value: string, counts: Map<string, number>): string {
+  const nextCount = counts.get(value) ?? 0;
+  counts.set(value, nextCount + 1);
+  return nextCount === 0 ? value || "empty" : `${value || "empty"}-${nextCount}`;
+}
+
 function FollowUpQuestionsComponent({
   questions,
   onQuestionClick,
@@ -27,35 +33,43 @@ function FollowUpQuestionsComponent({
       </div>
       
       <div className="flex flex-col gap-2">
-        {questions.map((question, index) => (
-          <button
-            key={index}
-            onClick={() => onQuestionClick?.(question)}
-            disabled={disabled || !onQuestionClick}
-            type="button"
-            className="group relative w-full rounded-lg border border-border/50 bg-background/50 hover:bg-muted/50 hover:border-border p-3 text-left transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background/50 disabled:hover:border-border/50 cursor-pointer"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                <div className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary group-hover:bg-primary/20 group-disabled:bg-muted group-disabled:text-muted-foreground transition-colors">
-                  {index + 1}
+        {(() => {
+          const questionKeys = new Map<string, number>();
+
+          return questions.map((question, index) => {
+            const key = getOccurrenceKey(question, questionKeys);
+
+            return (
+              <button
+                key={key}
+                onClick={() => onQuestionClick?.(question)}
+                disabled={disabled || !onQuestionClick}
+                type="button"
+                className="group relative w-full rounded-lg border border-border/50 bg-background/50 hover:bg-muted/50 hover:border-border p-3 text-left transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background/50 disabled:hover:border-border/50 cursor-pointer"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary group-hover:bg-primary/20 group-disabled:bg-muted group-disabled:text-muted-foreground transition-colors">
+                      {index + 1}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="text-sm leading-relaxed text-foreground/80 group-hover:text-foreground transition-colors break-words">
+                      {question}
+                    </p>
+                  </div>
+
+                  {onQuestionClick && !disabled && (
+                    <div className="flex-shrink-0 mt-0.5">
+                      <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-primary transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                    </div>
+                  )}
                 </div>
-              </div>
-              
-              <div className="flex-1 min-w-0 pr-2">
-                <p className="text-sm leading-relaxed text-foreground/80 group-hover:text-foreground transition-colors break-words">
-                  {question}
-                </p>
-              </div>
-              
-              {onQuestionClick && !disabled && (
-                <div className="flex-shrink-0 mt-0.5">
-                  <ArrowUpRight className="size-4 text-muted-foreground/50 group-hover:text-primary transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                </div>
-              )}
-            </div>
-          </button>
-        ))}
+              </button>
+            );
+          });
+        })()}
       </div>
     </div>
   );

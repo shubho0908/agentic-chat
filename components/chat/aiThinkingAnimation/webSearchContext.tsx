@@ -107,9 +107,9 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
                 <div className="flex flex-wrap gap-1 items-center">
                   {memoryStatus.toolProgress.details.sources
                     .slice(0, 6)
-                    .map((source, idx) => (
+                    .map((source) => (
                       <span
-                        key={idx}
+                        key={source.url}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono"
                       >
                         {source.domain}
@@ -162,15 +162,15 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
             <span className="text-foreground/40 font-mono text-[10px] select-none">
               └─
             </span>
-            <div className="flex flex-wrap gap-1 items-center">
-              {memoryStatus.toolProgress.details.sources
-                .slice(0, 5)
-                .map((source, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono"
-                  >
-                    {source.domain}
+              <div className="flex flex-wrap gap-1 items-center">
+                {memoryStatus.toolProgress.details.sources
+                  .slice(0, 5)
+                  .map((source) => (
+                    <span
+                    key={source.url}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono"
+                    >
+                      {source.domain}
                   </span>
                 ))}
               {memoryStatus.toolProgress.details.sources.length > 5 && (

@@ -23,14 +23,17 @@ interface DeepResearchTimelineProps {
 }
 
 export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearchTimelineProps) {
+  const stepKeys = new Map<string, number>();
   return (
     <div className="flex flex-col gap-0.5">
       {steps.map((step, index) => {
         const isLast = index === steps.length - 1;
         const showTaskProgress = step.status === 'current' && step.label.startsWith('Research');
-        
+        const stepKeyCount = stepKeys.get(step.label) ?? 0;
+        stepKeys.set(step.label, stepKeyCount + 1);
+
         return (
-          <div key={index} className="flex flex-col">
+          <div key={stepKeyCount === 0 ? step.label : `${step.label}-${stepKeyCount}`} className="flex flex-col">
             <div className="flex items-start gap-2">
               {/* Timeline connector */}
               <div className="flex flex-col items-center">
@@ -87,12 +90,25 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
                 {/* Show completed tasks for research step */}
                 {step.status === 'completed' && step.data?.completedTasks && step.data.completedTasks.length > 0 && (
                   <div className="mt-1 space-y-0.5">
-                    {step.data.completedTasks.slice(0, 3).map((task, idx: number) => (
-                      <div key={idx} className="text-[10px] text-muted-foreground flex items-start gap-1">
-                        <CheckCircle2 className="w-2.5 h-2.5 mt-0.5 text-green-500 flex-shrink-0" />
-                        <span className="line-clamp-1">{task.question}</span>
-                      </div>
-                    ))}
+                    {(() => {
+                      const taskKeys = new Map<string, number>();
+
+                      return step.data.completedTasks.slice(0, 3).map((task) => {
+                        const taskKeyBase = `${task.question}::${task.tools?.join("|") ?? ""}`;
+                        const taskKeyCount = taskKeys.get(taskKeyBase) ?? 0;
+                        taskKeys.set(taskKeyBase, taskKeyCount + 1);
+
+                        return (
+                          <div
+                            key={taskKeyCount === 0 ? taskKeyBase : `${taskKeyBase}-${taskKeyCount}`}
+                            className="text-[10px] text-muted-foreground flex items-start gap-1"
+                          >
+                            <CheckCircle2 className="w-2.5 h-2.5 mt-0.5 text-green-500 flex-shrink-0" />
+                            <span className="line-clamp-1">{task.question}</span>
+                          </div>
+                        );
+                      });
+                    })()}
                     {step.data.completedTasks.length > 3 && (
                       <div className="text-[10px] text-muted-foreground/60">
                         +{step.data.completedTasks.length - 3} more completed
