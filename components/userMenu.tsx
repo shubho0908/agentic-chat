@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { signOut, useSession } from "@/lib/auth-client";
+import { signOut, useSession } from "@/lib/authClient";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";

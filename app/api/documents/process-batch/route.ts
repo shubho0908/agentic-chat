@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { z } from 'zod';
-import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/api-utils';
+import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
-import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
 const ProcessBatchSchema = z.object({
   attachmentIds: z.array(z.string().min(1)).min(1).max(5),

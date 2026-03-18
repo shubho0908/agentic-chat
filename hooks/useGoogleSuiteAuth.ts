@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { GoogleAuthorizationStatus } from '@/types/google-suite';
+import type { GoogleAuthorizationStatus } from '@/types/googleSuite';
 
 interface UseGoogleSuiteAuthOptions {
   enabled?: boolean;

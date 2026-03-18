@@ -1,7 +1,7 @@
 import { Telescope, Globe } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
-import { GoogleIcon } from "@/components/icons/google-icon";
+import { GoogleIcon } from "@/components/icons/googleIcon";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',

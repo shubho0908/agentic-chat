@@ -12,11 +12,11 @@ import {
   partitionByStatus,
   extractIds,
   filterDocumentAttachments,
-} from './status-helpers';
+} from './statusHelpers';
 import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
-import { withTrace } from '@/lib/langsmith-config';
-import { getPgPool } from '../storage/pgvector-client';
-import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/document-jobs';
+import { withTrace } from '@/lib/langsmithConfig';
+import { getPgPool } from '../storage/pgvectorClient';
+import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
 interface ResolvedAttachmentScope {
   attachmentIds: string[];

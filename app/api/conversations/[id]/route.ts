@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/api-utils';
+import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
-import { calculateTokenUsage } from '@/lib/utils/token-counter';
+import { calculateTokenUsage } from '@/lib/utils/tokenCounter';
 import type { TokenUsage } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';

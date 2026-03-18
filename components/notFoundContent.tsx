@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Plus, ArrowLeft, LogIn, AlertCircle } from "lucide-react";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 import { useLayoutEffect, useState, useMemo } from "react";
 import { AuthModal } from "@/components/authModal";
 import { useLayout } from "@/components/providers/layoutProvider";
@@ -92,7 +92,7 @@ function NotFoundContent() {
         Oops! Lost in Space
       </CardTitle>
       <CardDescription className="text-base sm:text-lg leading-relaxed max-w-md mx-auto">
-        Looks like this page decided to take a vacation. The page you&apos;re looking for doesn&apos;t exist or has been moved to another dimension.
+        {"Looks like this page decided to take a vacation. The page you're looking for doesn't exist or has been moved to another dimension."}
       </CardDescription>
     </CardContent>
   );
@@ -146,7 +146,7 @@ function NotFoundActions() {
         <Separator className="my-2" />
 
         <CardDescription className="text-xs text-muted-foreground/60">
-          Lost in the digital void? Let&apos;s get you back on track.
+          {"Lost in the digital void? Let's get you back on track."}
         </CardDescription>
       </CardFooter>
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />

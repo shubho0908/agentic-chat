@@ -12,19 +12,19 @@ import {
 import {
   getAvailableGoogleWorkspaceTools,
   isGoogleWorkspaceToolAllowed,
-} from "@/lib/tools/google-suite/tool-access";
-import { validateGoogleToolArgs } from "@/lib/tools/google-suite/tool-schemas";
+} from "@/lib/tools/google-suite/toolAccess";
+import { validateGoogleToolArgs } from "@/lib/tools/google-suite/toolSchemas";
 import {
   validateRequestedModel,
   getStageModel,
   getSupportedTemperature,
-} from "@/lib/model-policy";
-import { injectContextToMessages } from "@/lib/chat/message-helpers";
-import { shouldPersistConversationMemory } from "@/lib/chat/memory-policy";
+} from "@/lib/modelPolicy";
+import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { shouldPersistConversationMemory } from "@/lib/chat/memoryPolicy";
 import {
   buildMemoryLookupQueries,
   mediateMemoryIntent,
-} from "@/lib/chat/request-mediator";
+} from "@/lib/chat/requestMediator";
 import {
   GOOGLE_SCOPES,
   GOOGLE_SIGN_IN_SCOPES,
@@ -37,7 +37,7 @@ import {
   uploadResponsesToAttachments,
   filterDocumentAttachments,
   filterImageAttachments,
-} from "@/lib/attachment-utils";
+} from "@/lib/attachmentUtils";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 import {
   createRequestId,
@@ -49,14 +49,14 @@ import {
   calculateTokenUsage,
   countTextTokens,
   truncateTextToTokenLimit,
-} from "@/lib/utils/token-counter";
+} from "@/lib/utils/tokenCounter";
 import {
   computeNextRetryAt,
   computeRetryBackoffMs,
   isLeaseExpired,
   isRetryableDocumentError,
   shouldRetryJob,
-} from "@/lib/orchestration/retry-policy";
+} from "@/lib/orchestration/retryPolicy";
 import {
   computeAdaptiveSimilarityThreshold,
   diversifyCandidates,

@@ -9,7 +9,7 @@ import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
 import { ShareDialog } from "@/components/shareDialog";
 import { ThemeToggle } from "@/components/themeToggle";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatHeaderProps {

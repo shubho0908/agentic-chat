@@ -9,8 +9,8 @@ import {
 } from "@/constants/upload";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { filterFiles, getFileNames } from "@/lib/file-validation";
-import { uploadResponsesToAttachments, type UploadAttachment } from "@/lib/attachment-utils";
+import { filterFiles, getFileNames } from "@/lib/fileValidation";
+import { uploadResponsesToAttachments, type UploadAttachment } from "@/lib/attachmentUtils";
 
 function getUploadErrorDescription(error: unknown): string {
   if (!(error instanceof Error)) {

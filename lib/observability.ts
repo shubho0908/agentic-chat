@@ -1,6 +1,6 @@
 type LogLevel = "info" | "warn" | "error";
 
-export interface LogPayload {
+interface LogPayload {
   event: string;
   requestId?: string;
   userId?: string;

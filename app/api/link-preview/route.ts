@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from 'next/headers';
 import * as cheerio from "cheerio";
-import { getAuthenticatedUser } from '@/lib/api-utils';
+import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { validateUrl } from '@/lib/url-scraper/scraper';
-import { safeFetch } from '@/lib/network/safe-fetch';
+import { safeFetch } from '@/lib/network/safeFetch';
 import { logWarn } from '@/lib/observability';
 
 export const runtime = 'nodejs';

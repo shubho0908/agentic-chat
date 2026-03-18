@@ -1,7 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import * as cheerio from "cheerio";
-import { safeFetch } from '@/lib/network/safe-fetch';
+import { safeFetch } from '@/lib/network/safeFetch';
 import { logError, logInfo } from '@/lib/observability';
 
 interface ScrapedContent {

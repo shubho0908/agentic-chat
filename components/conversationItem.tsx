@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdownMenu";
 import { RenameDialog } from "@/components/renameDialog";
 import { ShareDialog } from "@/components/shareDialog";
 import { DeleteConversationDialog } from "@/components/deleteConversationDialog";

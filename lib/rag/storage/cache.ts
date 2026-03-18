@@ -1,11 +1,11 @@
 'use server';
 
-import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS, EMBEDDING_DIMENSIONS } from "./pgvector-client";
-import { ensurePgVectorTables } from './pgvector-init';
+import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS, EMBEDDING_DIMENSIONS } from "./pgvectorClient";
+import { ensurePgVectorTables } from './pgvectorInit';
 import { RAGError, RAGErrorCode } from '../common/errors';
-import { getUserApiKey } from '@/lib/api-utils';
+import { getUserApiKey } from '@/lib/apiUtils';
 import OpenAI from "openai";
-import { wrapOpenAIWithLangSmith } from '@/lib/langsmith-config';
+import { wrapOpenAIWithLangSmith } from '@/lib/langsmithConfig';
 import { getEmbeddingModel } from '@/lib/env';
 import { withRetry } from '@/lib/retry';
 

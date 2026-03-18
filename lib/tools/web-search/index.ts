@@ -1,6 +1,6 @@
 import { TavilyClient } from 'tavily';
 import { z } from 'zod';
-import { webSearchParamsSchema } from '@/lib/schemas/web-search.tools';
+import { webSearchParamsSchema } from '@/lib/schemas/webSearchTools';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource, WebSearchProgress, WebSearchImage } from '@/types/tools';
 import { withRetry } from '@/lib/retry';

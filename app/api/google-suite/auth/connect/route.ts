@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { getAuthenticatedUser } from "@/lib/api-utils";
+import { getAuthenticatedUser } from "@/lib/apiUtils";
 import { createGoogleOAuth2Client } from "@/lib/tools/google-suite/client";
 import { ALL_GOOGLE_SUITE_SCOPES, GOOGLE_CONNECTOR_SCOPES } from "@/lib/tools/google-suite/scopes";
-import { createGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauth-state";
+import { createGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

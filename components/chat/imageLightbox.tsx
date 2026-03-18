@@ -6,7 +6,7 @@ import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { getImageModalTheme, type ImageModalTheme } from "./imageModalTheme";
 
 interface ImageLightboxProps {

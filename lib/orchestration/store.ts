@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { getPgPool } from '@/lib/rag/storage/pgvector-client';
+import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import {
   createRequestId,
   logError,
@@ -14,7 +14,7 @@ import {
   DEFAULT_JOB_MAX_ATTEMPTS,
   isLeaseExpired,
   shouldRetryJob,
-} from './retry-policy';
+} from './retryPolicy';
 
 type OrchestrationJobType = 'deep_research' | 'document_process';
 type OrchestrationJobStatus = 'queued' | 'running' | 'completed' | 'failed';

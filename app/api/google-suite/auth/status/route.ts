@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser } from '@/lib/api-utils';
+import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { prisma } from '@/lib/prisma';
-import type { GoogleAuthorizationStatus } from '@/types/google-suite';
+import type { GoogleAuthorizationStatus } from '@/types/googleSuite';
 import {
   GOOGLE_PROVIDER_ID,
   getGrantedGoogleScopes,
   getMissingGoogleWorkspaceScopes,
   hasAnyGoogleWorkspaceScopes,
 } from '@/lib/tools/google-suite/scopes';
-import { getGoogleWorkspaceOAuthReadiness } from '@/lib/tools/google-suite/oauth-readiness';
+import { getGoogleWorkspaceOAuthReadiness } from '@/lib/tools/google-suite/oauthReadiness';
 import { isAuthRevokedError, synchronizeGoogleAccount } from '@/lib/tools/google-suite/client';
 
 export const runtime = 'nodejs';

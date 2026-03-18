@@ -7,7 +7,7 @@ import { Zap, Check, ChevronDown, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/web-search.tools";
+import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { Button } from "../ui/button";
 import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
 

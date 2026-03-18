@@ -1,7 +1,7 @@
 import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt, Lightbulb, CheckCheck, ListChecks, ListTodo } from "lucide-react";
 import { GoogleSuiteStatus, type GoogleSuiteTask } from "@/types/tools";
-import { GoogleIcon } from "@/components/icons/google-icon";
-import { getToolDisplayName } from "@/utils/google/tool-names";
+import { GoogleIcon } from "@/components/icons/googleIcon";
+import { getToolDisplayName } from "@/utils/google/toolNames";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";

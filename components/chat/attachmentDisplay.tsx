@@ -5,7 +5,7 @@ import { Maximize2, FileText, FileSpreadsheet, File as FileIcon } from "lucide-r
 import type { Attachment } from "@/lib/schemas/chat";
 import { ImageLightbox } from "./imageLightbox";
 import { DocumentPreview } from "./documentPreview";
-import { filterImageAttachments, filterDocumentAttachments } from "@/lib/attachment-utils";
+import { filterImageAttachments, filterDocumentAttachments } from "@/lib/attachmentUtils";
 
 interface AttachmentDisplayProps {
   attachments?: Attachment[];

@@ -2,9 +2,9 @@ import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
-import type { GateDecision, DirectLLMResponse } from '@/types/deep-research';
-import { getStageModel } from '@/lib/model-policy';
-import { invokeStructuredOutput } from '../structured-output';
+import type { GateDecision, DirectLLMResponse } from '@/types/deepResearch';
+import { getStageModel } from '@/lib/modelPolicy';
+import { invokeStructuredOutput } from '../structuredOutput';
 
 const gateDecisionSchema = z.object({
   shouldResearch: z.boolean(),

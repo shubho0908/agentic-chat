@@ -16,7 +16,7 @@ import {
   getGoogleWorkspaceLevel,
   GOOGLE_WORKSPACE_SERVICE_CONFIGS,
   type GoogleWorkspaceServiceId,
-} from "@/lib/tools/google-suite/access-levels";
+} from "@/lib/tools/google-suite/accessLevels";
 import {
   CalendarIcon,
   DocsIcon,
@@ -24,7 +24,7 @@ import {
   GmailIcon,
   SheetsIcon,
   SlidesIcon,
-} from "@/components/icons/google-suite-icons";
+} from "@/components/icons/googleSuiteIcons";
 import { ChatHeader } from "@/components/chatHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

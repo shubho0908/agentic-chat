@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '../types';
-import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handler-types';
+import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handlerTypes';
 
 export async function handleCalendarListEvents(
   context: ToolHandlerContext,

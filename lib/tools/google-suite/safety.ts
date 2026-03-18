@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
-import { getPgPool } from '@/lib/rag/storage/pgvector-client';
+import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import { logError } from '@/lib/observability';
-import { getToolDisplayName } from '@/utils/google/tool-names';
+import { getToolDisplayName } from '@/utils/google/toolNames';
 
 export interface GoogleWorkspacePlannedAction {
   toolName: string;

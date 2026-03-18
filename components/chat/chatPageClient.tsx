@@ -11,11 +11,11 @@ import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
 import { AuthModal } from "@/components/authModal";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/authClient";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/message-utils";
+import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
 import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
 
 interface ChatPageClientProps {

@@ -1,7 +1,7 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
 import type { WebSearchSource, ResearchTask } from './tools';
-import type { GateDecision, EvaluationResult, Citation } from './deep-research';
-import type { SearchDepth } from '@/lib/schemas/web-search.tools';
+import type { GateDecision, EvaluationResult, Citation } from './deepResearch';
+import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',

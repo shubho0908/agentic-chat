@@ -1,9 +1,9 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import type { ResearchState } from '../state';
-import type { Citation } from '@/types/deep-research';
-import { getStageModel } from '@/lib/model-policy';
-import { invokeStructuredOutput } from '../structured-output';
+import type { Citation } from '@/types/deepResearch';
+import { getStageModel } from '@/lib/modelPolicy';
+import { invokeStructuredOutput } from '../structuredOutput';
 
 const formatterSchema = z.object({
   response: z.string(),

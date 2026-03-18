@@ -8,7 +8,7 @@ import { ImageLightbox } from "./imageLightbox";
 import { getImageModalTheme } from "./imageModalTheme";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 
 interface SearchImage {
   url: string;

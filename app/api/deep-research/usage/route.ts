@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, errorResponse } from '@/lib/api-utils';
-import { checkDeepResearchUsage } from '@/lib/deep-research-usage';
+import { getAuthenticatedUser, errorResponse } from '@/lib/apiUtils';
+import { checkDeepResearchUsage } from '@/lib/deepResearchUsage';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export const runtime = 'nodejs';

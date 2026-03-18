@@ -1,6 +1,6 @@
 import { google, type gmail_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
-import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handler-types';
+import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, GmailDeleteArgs, GmailModifyArgs, GmailGetAttachmentsArgs } from '../types/handlerTypes';
 import { parseEmailContent } from '@/utils/google/email';
 import { formatEmailDate } from '@/utils/dateFormatter';
 

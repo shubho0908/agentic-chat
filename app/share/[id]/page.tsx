@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import SharedConversationClient from "./shared-conversation-client";
+import SharedConversationClient from "./sharedConversationClient";
 
 export const metadata: Metadata = {
   title: "Shared Conversation",

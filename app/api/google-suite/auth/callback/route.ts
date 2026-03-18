@@ -5,7 +5,7 @@ import {
   GOOGLE_ACCOUNT_MISMATCH_ERROR,
   persistGoogleWorkspaceGrant,
 } from "@/lib/tools/google-suite/client";
-import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauth-state";
+import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

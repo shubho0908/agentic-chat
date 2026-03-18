@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from 'next/headers';
-import { getAuthenticatedUser } from '@/lib/api-utils';
+import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { scrapeUrl, validateUrl } from '@/lib/url-scraper/scraper';
 
 export const runtime = 'nodejs';

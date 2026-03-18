@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import { AGGREGATOR_SYSTEM_PROMPT } from '../prompts';
-import { getStageModel } from '@/lib/model-policy';
+import { getStageModel } from '@/lib/modelPolicy';
 
 export async function aggregatorNode(
   state: ResearchState,

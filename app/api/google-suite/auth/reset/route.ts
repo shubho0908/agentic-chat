@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/api-utils";
+import { getAuthenticatedUser } from "@/lib/apiUtils";
 import { revokeGoogleWorkspaceAccess } from "@/lib/tools/google-suite/client";
 
 export const runtime = "nodejs";

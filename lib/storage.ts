@@ -1,4 +1,4 @@
-import type { SearchDepth } from './schemas/web-search.tools';
+import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 
 const STORAGE_KEYS = {

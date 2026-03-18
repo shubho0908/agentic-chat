@@ -6,7 +6,7 @@ import {
   searchMemories,
   type Mem0ConfigSettings,
 } from '@mem0/vercel-ai-provider';
-import { buildMemoryLookupQueries } from '@/lib/chat/request-mediator';
+import { buildMemoryLookupQueries } from '@/lib/chat/requestMediator';
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 

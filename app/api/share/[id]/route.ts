@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
-import { errorResponse, jsonResponse } from '@/lib/api-utils';
+import { errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { redactSharedConversation } from '@/lib/share/redaction';
 
 export async function GET(

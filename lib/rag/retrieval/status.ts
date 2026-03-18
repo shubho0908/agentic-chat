@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';
 import type { AttachmentStatus } from '@/types/rag';
-import { partitionByStatus, extractIds } from './status-helpers';
+import { partitionByStatus, extractIds } from './statusHelpers';
 import { logWarn } from '@/lib/observability';
 
 export async function getAttachmentStatuses(

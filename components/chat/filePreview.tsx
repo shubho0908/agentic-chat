@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/file-validation";
+import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
 
 interface FilePreviewProps {
   files: File[];

@@ -1,7 +1,7 @@
 import { createResearchGraph } from './graph';
 import type { ResearchState } from './state';
 import type { DeepResearchProgress, WebSearchSource } from '@/types/tools';
-import type { Citation, GateDecision } from '@/types/deep-research';
+import type { Citation, GateDecision } from '@/types/deepResearch';
 import { DEEP_RESEARCH_MAX_ATTEMPTS } from './constants';
 import {
   createDeepResearchRun,

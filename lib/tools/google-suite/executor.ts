@@ -1,13 +1,13 @@
 import OpenAI from 'openai';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient, isAuthRevokedError } from '@/lib/tools/google-suite/client';
-import { getToolDisplayName } from '@/utils/google/tool-names';
+import { getToolDisplayName } from '@/utils/google/toolNames';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
-import type { GoogleWorkspaceProgressCallback } from '@/types/google-suite';
+import type { GoogleWorkspaceProgressCallback } from '@/types/googleSuite';
 import type { GoogleSuiteTask } from '@/types/tools';
-import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmith-config';
-import { getStageModel } from '@/lib/model-policy';
+import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
+import { getStageModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import {
   DESTRUCTIVE_GOOGLE_WORKSPACE_TOOLS,
@@ -15,9 +15,9 @@ import {
   buildGoogleWorkspaceApprovalBarrierMessage,
   type GoogleWorkspacePlannedAction,
 } from '@/lib/tools/google-suite/safety';
-import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '@/lib/tools/google-suite/tool-access';
-import { validateGoogleToolArgs } from '@/lib/tools/google-suite/tool-schemas';
-import { countTextTokens } from '@/lib/utils/token-counter';
+import { getAvailableGoogleWorkspaceTools, isGoogleWorkspaceToolAllowed } from '@/lib/tools/google-suite/toolAccess';
+import { validateGoogleToolArgs } from '@/lib/tools/google-suite/toolSchemas';
+import { countTextTokens } from '@/lib/utils/tokenCounter';
 import { OPENAI_MODELS } from '@/constants/openai-models';
 import { resolveGoogleWorkspaceScopesForRequest } from '@/lib/tools/google-suite/scopes';
 import type {
@@ -54,7 +54,7 @@ import type {
   SlidesCreateArgs,
   SlidesReadArgs,
   SlidesAddSlideArgs,
-} from '@/lib/tools/google-suite/types/handler-types';
+} from '@/lib/tools/google-suite/types/handlerTypes';
 import {
   handleGmailSearch,
   handleGmailRead,

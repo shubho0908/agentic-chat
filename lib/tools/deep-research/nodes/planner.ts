@@ -1,6 +1,6 @@
 import type { ResearchState } from '../state';
 import type { ResearchTask, ResearchQuestion } from '@/types/tools';
-import { createUnifiedPlan, type DeepResearchPlan } from '@/lib/tools/unified-planner';
+import { createUnifiedPlan, type DeepResearchPlan } from '@/lib/tools/unifiedPlanner';
 
 export async function plannerNode(
   state: ResearchState,

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { authorizeGoogleWorkspace, useSession } from "@/lib/auth-client";
+import { authorizeGoogleWorkspace, useSession } from "@/lib/authClient";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import {
   compareGoogleWorkspaceSelections,
@@ -13,7 +13,7 @@ import {
   resolveGoogleWorkspaceSelections,
   type GoogleWorkspaceServiceId,
   type GoogleWorkspaceServiceSelections,
-} from "@/lib/tools/google-suite/access-levels";
+} from "@/lib/tools/google-suite/accessLevels";
 
 function getConnectionTone(status: {
   connected?: boolean;
