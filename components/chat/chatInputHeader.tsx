@@ -1,13 +1,10 @@
 export function ChatInputHeader() {
   return (
-    <div className="text-center space-y-2 md:space-y-4 cursor-default">
-      <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tighter text-foreground">
-        Agentic chat
+    <div className="text-left space-y-4 cursor-default mb-8">
+      <h1 className="text-4xl sm:text-5xl md:text-6xl font-[family-name:var(--font-newsreader)] font-normal tracking-tight text-foreground leading-[1.1]">
+        Intelligence, <br />
+        <span className="italic text-muted-foreground">ready when you are.</span>
       </h1>
-
-      <p className="text-base md:text-lg text-muted-foreground">
-        Your intelligent assistant powered by advanced AI
-      </p>
     </div>
   );
 }

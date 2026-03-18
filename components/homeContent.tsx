@@ -8,6 +8,8 @@ import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
 import { EmptyState } from "@/components/emptyState";
 import { AuthModal } from "@/components/authModal";
+import { LandingPage } from "@/components/landingPage";
+import { Loader } from "lucide-react";
 import { useSession } from "@/lib/authClient";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
@@ -23,6 +25,17 @@ export function HomeContent() {
   const { data: session, isPending } = useSession();
 
   const hasMessages = messages.length > 0;
+
+  if (isPending) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader className="size-5 animate-spin" />
+          <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
     const activeTool = getActiveTool();
@@ -81,6 +94,15 @@ export function HomeContent() {
   };
 
   if (!hasMessages) {
+    if (!isPending && !session) {
+      return (
+        <>
+          <LandingPage onAuthRequired={() => setShowAuthModal(true)} />
+          <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
+        </>
+      );
+    }
+
     return (
       <>
         <ChatHeader
