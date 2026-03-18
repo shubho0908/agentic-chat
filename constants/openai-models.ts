@@ -10,17 +10,39 @@ interface OpenAIModel {
 }
 
 export const OPENAI_MODELS: OpenAIModel[] = [
-  // GPT-5 Series
+  // ─── GPT-5.4 Series (Frontier Reasoning) ──────────────────────────────────
   {
     id: "gpt-5.4",
     name: "GPT-5.4",
-    description: "Best intelligence at scale for agentic, coding, and professional workflows",
+    description:
+      "Best intelligence at scale for agentic, coding, and professional workflows",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
     recommended: true,
   },
+  {
+    id: "gpt-5.4-mini",
+    name: "GPT-5.4 Mini",
+    description:
+      "Strongest mini model for coding, computer use, and subagents at lower cost",
+    contextWindow: 400000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+  },
+  {
+    id: "gpt-5.4-nano",
+    name: "GPT-5.4 Nano",
+    description: "Fastest, cheapest GPT-5.4 model for simple high-volume tasks",
+    contextWindow: 400000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+  },
+
+  // ─── GPT-5.2 Series (Previous Frontier) ───────────────────────────────────
   {
     id: "gpt-5.2",
     name: "GPT-5.2",
@@ -33,18 +55,21 @@ export const OPENAI_MODELS: OpenAIModel[] = [
   {
     id: "gpt-5.2-codex",
     name: "GPT-5.2 Codex",
-    description: "Specialized GPT-5 model for long-horizon, agentic coding tasks",
+    description:
+      "Specialized GPT-5 model for long-horizon, agentic coding tasks",
     contextWindow: 400000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
   },
+
+  // ─── GPT-5 Series (Legacy Reasoning) ──────────────────────────────────────
   {
     id: "gpt-5",
     name: "GPT-5",
     description: "Previous GPT-5 reasoning model for coding and agentic tasks",
     contextWindow: 400000,
-    category: "reasoning",
+    category: "legacy",
     capabilities: ["text", "vision"],
     hasReasoning: true,
   },
@@ -53,16 +78,17 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     name: "GPT-5 Mini",
     description: "Near-frontier GPT-5 model for lower latency and cost",
     contextWindow: 400000,
-    category: "reasoning",
+    category: "legacy",
     capabilities: ["text", "vision"],
     hasReasoning: true,
   },
   {
     id: "gpt-5-nano",
     name: "GPT-5 Nano",
-    description: "Fastest, cheapest GPT-5 model for classification and summarization",
+    description:
+      "Fastest, cheapest GPT-5 model for classification and summarization",
     contextWindow: 400000,
-    category: "reasoning",
+    category: "legacy",
     capabilities: ["text", "vision"],
     hasReasoning: true,
   },

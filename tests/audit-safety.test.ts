@@ -434,8 +434,8 @@ test("document error retryability keeps permanent failures out of retry loop", (
 test("server model policy rejects unknown models and downshifts orchestration stages", () => {
   assert.equal(validateRequestedModel("gpt-5.4"), "gpt-5.4");
   assert.equal(validateRequestedModel("not-a-real-model"), null);
-  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5-nano");
-  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5-mini");
+  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5.4-nano");
+  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5.4-mini");
   assert.equal(getSupportedTemperature("gpt-5.4", 0.1), undefined);
   assert.equal(getSupportedTemperature("gpt-5-mini", 0), undefined);
   assert.equal(getSupportedTemperature("gpt-4.1", 0.1), 0.1);

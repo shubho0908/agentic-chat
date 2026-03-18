@@ -2,8 +2,7 @@ import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from "@/lib/langsmithConfig";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
 
-
-const MEDIATOR_MODEL = "gpt-5-nano";
+const MEDIATOR_MODEL = "gpt-5.4-nano";
 import { logger } from "@/lib/logger";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_SIZE = 500;
@@ -64,9 +63,12 @@ const MEMORY_ACTION_PATTERNS = [
 ] as const;
 
 function trimAndNormalize(text: string): string {
-  const replaced = NORMALIZATION_REPLACEMENTS.reduce((value, { pattern, replacement }) => {
-    return value.replace(pattern, replacement);
-  }, text);
+  const replaced = NORMALIZATION_REPLACEMENTS.reduce(
+    (value, { pattern, replacement }) => {
+      return value.replace(pattern, replacement);
+    },
+    text,
+  );
 
   return replaced.trim().replace(/\s+/g, " ");
 }
@@ -74,7 +76,9 @@ function trimAndNormalize(text: string): string {
 function cacheKey(messageText: string, recentConversation?: string): string {
   return JSON.stringify({
     messageText: trimAndNormalize(messageText).toLowerCase(),
-    recentConversation: trimAndNormalize(recentConversation || "").toLowerCase().slice(-600),
+    recentConversation: trimAndNormalize(recentConversation || "")
+      .toLowerCase()
+      .slice(-600),
   });
 }
 
@@ -101,10 +105,13 @@ function writeCache(key: string, value: MemoryIntentDecision) {
   }
 
   const entries = Array.from(decisionCache.entries()).sort(
-    (left, right) => left[1].timestamp - right[1].timestamp
+    (left, right) => left[1].timestamp - right[1].timestamp,
   );
 
-  for (const [entryKey] of entries.slice(0, decisionCache.size - CACHE_MAX_SIZE)) {
+  for (const [entryKey] of entries.slice(
+    0,
+    decisionCache.size - CACHE_MAX_SIZE,
+  )) {
     decisionCache.delete(entryKey);
   }
 }
@@ -142,28 +149,43 @@ function shouldRunMediator(text: string): boolean {
 
 export function buildMemoryLookupQueries(
   messageText: string,
-  recentConversation?: string
+  recentConversation?: string,
 ): string[] {
   const normalized = trimAndNormalize(messageText).toLowerCase();
   const queries = new Set<string>([trimAndNormalize(messageText)]);
 
   const recentConversationSummary = trimAndNormalize(recentConversation || "");
-  const isNameQuery = /\b(name|call me|nickname|what should you call me)\b/i.test(normalized);
-  const isProjectQuery = /\b(project|building|working on|latest project|current project)\b/i.test(normalized);
-  const isPreferenceQuery = /\b(prefer|preference|like|favorite|favourite)\b/i.test(normalized);
-  const isGoalQuery = /\b(goal|goals|aim|objective|trying to)\b/i.test(normalized);
-  const isBackgroundQuery = /\b(background|bio|biography|role|job|work|who am i|where am i from)\b/i.test(normalized);
-  const isConversationRecallQuery = /\b(what did i ask|what did i tell you|did i mention|have we talked before|did we talk before|today|earlier|last time)\b/i.test(normalized);
+  const isNameQuery =
+    /\b(name|call me|nickname|what should you call me)\b/i.test(normalized);
+  const isProjectQuery =
+    /\b(project|building|working on|latest project|current project)\b/i.test(
+      normalized,
+    );
+  const isPreferenceQuery =
+    /\b(prefer|preference|like|favorite|favourite)\b/i.test(normalized);
+  const isGoalQuery = /\b(goal|goals|aim|objective|trying to)\b/i.test(
+    normalized,
+  );
+  const isBackgroundQuery =
+    /\b(background|bio|biography|role|job|work|who am i|where am i from)\b/i.test(
+      normalized,
+    );
+  const isConversationRecallQuery =
+    /\b(what did i ask|what did i tell you|did i mention|have we talked before|did we talk before|today|earlier|last time)\b/i.test(
+      normalized,
+    );
   const isGeneralRecall = matchesAny(normalized, MEMORY_INTENT_PATTERNS);
 
   if (recentConversationSummary) {
     queries.add(
-      `Recent conversation recap for user memory lookup:\n${recentConversationSummary}\n\nCurrent question: ${trimAndNormalize(messageText)}`
+      `Recent conversation recap for user memory lookup:\n${recentConversationSummary}\n\nCurrent question: ${trimAndNormalize(messageText)}`,
     );
   }
 
   if (isNameQuery) {
-    queries.add("user name preferred name nickname what assistant should call user");
+    queries.add(
+      "user name preferred name nickname what assistant should call user",
+    );
   }
 
   if (isProjectQuery) {
@@ -183,7 +205,9 @@ export function buildMemoryLookupQueries(
   }
 
   if (isConversationRecallQuery) {
-    queries.add("user prior questions requests and facts from recent conversations");
+    queries.add(
+      "user prior questions requests and facts from recent conversations",
+    );
     queries.add("what the user asked or said in previous chats");
   }
 
