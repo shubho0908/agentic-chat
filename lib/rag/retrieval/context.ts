@@ -116,7 +116,9 @@ async function resolveCompletedAttachmentScope(
         });
       }
 
-      const newlyCompleted = await waitForDocumentProcessing(processingIds);
+      const newlyCompleted = await waitForDocumentProcessing(processingIds, {
+        timeoutMs: options.processingTimeoutMs,
+      });
       attachmentIds = [...completedIds, ...newlyCompleted];
     } else {
       attachmentIds = completedIds;
@@ -146,7 +148,9 @@ async function resolveCompletedAttachmentScope(
         });
       }
 
-      const newlyCompleted = await waitForDocumentProcessing(needProcessing);
+      const newlyCompleted = await waitForDocumentProcessing(needProcessing, {
+        timeoutMs: options.processingTimeoutMs,
+      });
       completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
     } else {
       completedAttachmentIds = alreadyCompleted;

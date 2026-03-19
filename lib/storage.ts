@@ -1,5 +1,6 @@
 import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
+import { parseToolId, type ToolId } from '@/lib/tools/config';
 
 
 import { logger } from "@/lib/logger";
@@ -92,19 +93,34 @@ export function setMemoryEnabled(enabled: boolean): boolean {
   }
 }
 
-export function getActiveTool(): string | null {
+export function getActiveTool(): ToolId | null {
   if (!isLocalStorageAvailable()) return null;
   try {
-    return localStorage.getItem(STORAGE_KEYS.ACTIVE_TOOL);
+    const storedTool = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOOL);
+    const parsedTool = parseToolId(storedTool);
+
+    if (storedTool && parsedTool) {
+      return parsedTool;
+    }
+
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
+    return null;
   } catch {
     return null;
   }
 }
 
-export function setActiveTool(toolId: string): boolean {
+export function setActiveTool(toolId: ToolId): boolean {
   if (!isLocalStorageAvailable()) return false;
   try {
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_TOOL, toolId);
+    const parsedTool = parseToolId(toolId);
+
+    if (!parsedTool) {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
+      return false;
+    }
+
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TOOL, parsedTool);
     return true;
   } catch {
     return false;

@@ -7,7 +7,7 @@ import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
 import { isSupportedDocumentExtension } from './fileValidation';
-import { TOOL_IDS } from './tools/config';
+import { parseToolId, TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { extractTextFromMessage } from './chat/messageContent';
 import { mediateMemoryIntent } from './chat/requestMediator';
@@ -39,6 +39,40 @@ interface ContextRoutingMetadata {
 interface ContextRoutingResult {
   context: string;
   metadata: ContextRoutingMetadata;
+}
+
+const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
+const CHAT_URL_CONTEXT_RETRIES = 0;
+const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 5_000;
+
+async function resolveExplicitUrlContext(
+  query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+  metadata: ContextRoutingMetadata,
+  addDegradedContext: (source: string, reason: string) => void
+): Promise<string> {
+  const detectedUrls = extractUrlsFromMessage(query);
+  if (detectedUrls.length === 0) {
+    return '';
+  }
+
+  try {
+    const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
+      timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
+      retries: CHAT_URL_CONTEXT_RETRIES,
+    });
+
+    if (scrapedContent.length === 0) {
+      return '';
+    }
+
+    metadata.hasUrls = true;
+    metadata.urlCount = scrapedContent.length;
+    return formatScrapedContentForContext(scrapedContent);
+  } catch (error) {
+    logger.error('[Context Router] URL scraping failed:', error);
+    addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
+    return '';
+  }
 }
 
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
@@ -110,7 +144,9 @@ async function resolveDocumentContext(
   userId: string,
   options: {
     conversationId?: string;
+    attachmentIds?: string[];
     waitForProcessing?: boolean;
+    processingTimeoutMs?: number;
   }
 ) {
   const attempts = queries.map((query, index) => ({
@@ -123,9 +159,11 @@ async function resolveDocumentContext(
   for (const attempt of attempts) {
     const result = await getRAGContext(attempt.query, userId, {
       conversationId: options.conversationId,
+      attachmentIds: options.attachmentIds,
       limit: attempt.limit,
       scoreThreshold: attempt.scoreThreshold,
       waitForProcessing: attempt.waitForProcessing,
+      processingTimeoutMs: options.processingTimeoutMs,
     });
 
     if (result) {
@@ -173,6 +211,7 @@ async function getAttachmentInfo(conversationId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
   documentCount: number;
+  documentAttachmentIds: string[];
 }> {
   try {
     const messages = await prisma.message.findMany({
@@ -194,21 +233,23 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     const allAttachments = messages.flatMap(m => m.attachments);
 
     if (allAttachments.length === 0) {
-      return { hasDocuments: false, hasAny: false, documentCount: 0 };
+      return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
     }
 
-    const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
+    const retrievableDocumentAttachments = filterDocumentAttachments(allAttachments);
+    const uiDocumentAttachments = retrievableDocumentAttachments.filter((att) =>
       att.fileName && isSupportedDocumentExtension(att.fileName)
     );
 
     return {
-      hasDocuments: documentAttachments.length > 0,
+      hasDocuments: retrievableDocumentAttachments.length > 0,
       hasAny: true,
-      documentCount: documentAttachments.length,
+      documentCount: uiDocumentAttachments.length,
+      documentAttachmentIds: retrievableDocumentAttachments.map((attachment) => attachment.id),
     };
   } catch (error) {
     logger.warn('[Context Router] Failed to get attachment info:', error);
-    return { hasDocuments: false, hasAny: false, documentCount: 0 };
+    return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
   }
 }
 
@@ -229,6 +270,7 @@ export async function routeContext(
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(textQuery);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
+  const sanitizedActiveTool = parseToolId(activeTool);
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
@@ -251,6 +293,16 @@ export async function routeContext(
     ];
   };
 
+  if (activeTool && !sanitizedActiveTool) {
+    addDegradedContext('tool_validation', `Ignored invalid active tool: ${activeTool}`);
+    logWarn({
+      event: 'context_router_invalid_active_tool_ignored',
+      conversationId,
+      userId,
+      requestedTool: activeTool,
+    });
+  }
+
 
   if (deepResearchEnabled) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
@@ -265,71 +317,49 @@ export async function routeContext(
       }
     }
 
-    const detectedUrls = extractUrlsFromMessage(query);
-    if (detectedUrls.length > 0) {
-      try {
-        const scrapedContent = await scrapeMultipleUrls(detectedUrls);
-        if (scrapedContent.length > 0) {
-          metadata.hasUrls = true;
-          metadata.urlCount = scrapedContent.length;
-          return {
-            context: formatScrapedContentForContext(scrapedContent),
-            metadata,
-          };
-        }
-      } catch (error) {
-        logger.error('[Context Router] Deep research URL scraping failed:', error);
-        addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
-      }
+    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+    if (urlContext) {
+      return {
+        context: urlContext,
+        metadata,
+      };
     }
 
     return { context: '', metadata };
   }
 
-  if (activeTool) {
+  if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
-    metadata.activeToolName = activeTool;
+    metadata.activeToolName = sanitizedActiveTool;
+
+    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+
+    return {
+      context: urlContext,
+      metadata,
+    };
+  }
+
+  if (sanitizedActiveTool) {
+    metadata.routingDecision = RoutingDecision.ToolOnly;
+    metadata.skippedMemory = true;
+    metadata.activeToolName = sanitizedActiveTool;
     return { context: '', metadata };
   }
 
-  const detectedUrls = extractUrlsFromMessage(query);
-  
-  if (detectedUrls.length > 0) {
-    try {
-      const scrapedContent = await scrapeMultipleUrls(detectedUrls);
-      
-      if (scrapedContent.length > 0) {
-        metadata.hasUrls = true;
-        metadata.urlCount = scrapedContent.length;
-        metadata.routingDecision = RoutingDecision.UrlContent;
-        metadata.skippedMemory = true;
-        
-        const urlContext = formatScrapedContentForContext(scrapedContent);
-        
-        if (hasImages) {
-          metadata.routingDecision = RoutingDecision.Hybrid;
-        }
-        
-        return { context: urlContext, metadata };
-      } else {
-        logger.log('[Context Router] All URL scraping attempts failed, continuing with normal flow');
-      }
-    } catch (error) {
-      logger.error('[Context Router] URL scraping failed:', error);
-      addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
-      // Continue with normal flow if URL scraping fails
+  const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+
+  if (urlContext) {
+    metadata.routingDecision = RoutingDecision.UrlContent;
+    metadata.skippedMemory = true;
+
+    if (hasImages) {
+      metadata.routingDecision = RoutingDecision.Hybrid;
     }
+
+    return { context: urlContext, metadata };
   }
-
-  const attachmentInfoPromise = conversationId
-    ? getAttachmentInfo(conversationId)
-    : Promise.resolve({ hasDocuments: false, hasAny: false, documentCount: 0 });
-
-  const ragPromise = resolveDocumentContext(retrievalQueries, userId, {
-    conversationId,
-    waitForProcessing: true,
-  });
 
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
@@ -337,33 +367,38 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
+  const attachmentInfo = conversationId
+    ? await getAttachmentInfo(conversationId)
+    : { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
+
   if (isReferential) {
     metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
-    const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
-    if (ragResult) {
-      metadata.hasDocuments = true;
-      metadata.documentCount = ragResult.documentCount;
-      
-      if (hasImages) {
-        metadata.routingDecision = RoutingDecision.Hybrid;
+    if (attachmentInfo.hasDocuments) {
+      const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
+        conversationId,
+        attachmentIds: attachmentInfo.documentAttachmentIds,
+        waitForProcessing: true,
+        processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+      });
+
+      if (ragResult) {
+        metadata.hasDocuments = true;
+        metadata.documentCount = ragResult.documentCount;
+        
+        if (hasImages) {
+          metadata.routingDecision = RoutingDecision.Hybrid;
+          return { context: ragResult.context, metadata };
+        }
+        
         return { context: ragResult.context, metadata };
       }
-      
-      return { context: ragResult.context, metadata };
-    }
 
-    // If no RAG results but has images, treat as VisionOnly
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.VisionOnly;
-      return { context: '', metadata };
-    }
-
-    if (attachmentInfo.hasDocuments) {
       metadata.documentCount = attachmentInfo.documentCount;
       const overviewContext = await getDocumentOverviewContext(userId, {
         conversationId,
+        attachmentIds: attachmentInfo.documentAttachmentIds,
         waitForProcessing: false,
       });
 
@@ -385,33 +420,44 @@ export async function routeContext(
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
+    // If no document context but has images, treat as VisionOnly
+    if (hasImages) {
+      metadata.routingDecision = RoutingDecision.VisionOnly;
+      return { context: '', metadata };
+    }
+
     return { context: '', metadata };
   }
 
-  const [ragResult, attachmentInfo] = await Promise.all([ragPromise, attachmentInfoPromise]);
+  if (attachmentInfo.hasDocuments) {
+    const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
+      conversationId,
+      attachmentIds: attachmentInfo.documentAttachmentIds,
+      waitForProcessing: true,
+      processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+    });
 
-  if (ragResult) {
-    metadata.hasDocuments = true;
-    metadata.documentCount = ragResult.documentCount;
-    metadata.skippedMemory = true;
-
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.Hybrid;
+    if (ragResult) {
+      metadata.hasDocuments = true;
+      metadata.documentCount = ragResult.documentCount;
+      
+      if (hasImages) {
+        metadata.routingDecision = RoutingDecision.Hybrid;
+        return { context: ragResult.context, metadata };
+      }
+      
+      metadata.routingDecision = RoutingDecision.DocumentsOnly;
       return { context: ragResult.context, metadata };
     }
 
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
-    return { context: ragResult.context, metadata };
-  }
-
-  if (attachmentInfo.hasDocuments) {
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
+    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.hasDocuments = true;
     metadata.documentCount = attachmentInfo.documentCount;
 
     const overviewContext = await getDocumentOverviewContext(userId, {
       conversationId,
+      attachmentIds: attachmentInfo.documentAttachmentIds,
       waitForProcessing: false,
     });
 

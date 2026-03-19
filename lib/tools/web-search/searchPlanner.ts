@@ -32,6 +32,16 @@ interface MultiSearchResult {
   allImages: MultiSearchImage[];
 }
 
+export interface MultiSearchProgressEvent {
+  phase: 'start' | 'complete';
+  searchIndex: number;
+  total: number;
+  query: string;
+  completedSearches: number;
+  accumulatedSources: MultiSearchSource[];
+  accumulatedImages: MultiSearchImage[];
+}
+
 const MAX_PARALLEL_SEARCHES = 3;
 import { logger } from "@/lib/logger";
 const MIN_RESULTS_PER_SEARCH = 1;
@@ -40,7 +50,7 @@ const MAX_RESULTS_PER_SEARCH = 10;
 export async function executeMultiSearch(
   searchPlan: SearchPlan,
   executeSearch: (query: string, maxResults: number) => Promise<SearchResultWithSources>,
-  onProgress?: (searchIndex: number, total: number, query: string) => void
+  onProgress?: (event: MultiSearchProgressEvent) => void
 ): Promise<MultiSearchResult> {
   const results: string[] = new Array(searchPlan.recommendedSearches.length).fill('');
   const allSources: MultiSearchSource[] = [];
@@ -54,7 +64,15 @@ export async function executeMultiSearch(
     const settledBatch = await Promise.allSettled(
       batch.map(async (plannedSearch, batchIndex) => {
         const searchIndex = start + batchIndex;
-        onProgress?.(searchIndex + 1, searchPlan.recommendedSearches.length, plannedSearch.query);
+        onProgress?.({
+          phase: 'start',
+          searchIndex: searchIndex + 1,
+          total: searchPlan.recommendedSearches.length,
+          query: plannedSearch.query,
+          completedSearches: start,
+          accumulatedSources: [...allSources],
+          accumulatedImages: [...allImages],
+        });
         const expectedResultCount = Number.isFinite(plannedSearch.expectedResultCount)
           ? Math.floor(plannedSearch.expectedResultCount)
           : MIN_RESULTS_PER_SEARCH;
@@ -102,6 +120,16 @@ export async function executeMultiSearch(
             }
           });
         }
+
+        onProgress?.({
+          phase: 'complete',
+          searchIndex: searchIndex + 1,
+          total: searchPlan.recommendedSearches.length,
+          query: plannedSearch.query,
+          completedSearches: start + batchIndex + 1,
+          accumulatedSources: [...allSources],
+          accumulatedImages: [...allImages],
+        });
 
         results[searchIndex] =
           `\n## Search ${searchIndex + 1}/${searchPlan.recommendedSearches.length}: "${plannedSearch.query}"\n**Purpose:** ${plannedSearch.rationale}\n\n${result.value.searchResult.output}`;

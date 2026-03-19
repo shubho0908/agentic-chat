@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader } from "lucide-react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
@@ -23,6 +23,22 @@ interface ChatContainerProps {
   onNewChat?: () => void;
 }
 
+function serializeAnchorValue(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export function ChatContainer({
   messages,
   isLoading,
@@ -36,18 +52,11 @@ export function ChatContainer({
   isFetchingNextPage,
   onNewChat
 }: ChatContainerProps) {
-  const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
   const isSharePage = pathname?.startsWith("/share/") ?? false;
-
-  useEffect(() => {
-    if (shouldScrollToBottom) {
-      scrollToBottom();
-    }
-  }, [messages, isLoading, shouldScrollToBottom]);
 
   useEffect(() => {
     if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {
@@ -61,9 +70,18 @@ export function ChatContainer({
     }
   }, [isFetchingNextPage]);
 
-  function scrollToBottom() {
-    lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }
+  const bottomAnchorRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && shouldScrollToBottom) {
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      node.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "end",
+      });
+    }
+  }, [shouldScrollToBottom]);
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -82,6 +100,15 @@ export function ChatContainer({
   };
 
   const lastMessage = messages[messages.length - 1];
+  const lastMessageFingerprint = lastMessage
+    ? serializeAnchorValue({
+        content: lastMessage.content,
+        metadata: lastMessage.metadata,
+        toolActivities: lastMessage.toolActivities,
+      })
+    : "empty";
+  const memoryStatusFingerprint = serializeAnchorValue(memoryStatus);
+  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessageFingerprint}-${memoryStatusFingerprint}`;
   const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
   const shouldShowBanner =
     isContextBlocked &&
@@ -91,7 +118,12 @@ export function ChatContainer({
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
-      <div className={cn("flex flex-col md:pt-0", !isSharePage && "pt-20")}>
+      <div
+        className={cn(
+          "flex flex-col md:pr-20 xl:pr-0",
+          !isSharePage && "pt-20 md:pt-24 xl:pt-0"
+        )}
+      >
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
@@ -120,7 +152,6 @@ export function ChatContainer({
         {messages.map((message, index) => (
             <div
               key={message.id || `${message.role}-${index}`}
-              ref={index === messages.length - 1 ? lastMessageRef : undefined}
             >
               <ChatMessage
                 message={message}
@@ -136,15 +167,15 @@ export function ChatContainer({
           ))}
 
         {shouldShowBanner && onNewChat && memoryStatus?.tokenUsage && (
-          <div ref={lastMessageRef}>
+          <div>
             <ContextLimitBanner
               tokenUsage={memoryStatus.tokenUsage}
               onNewChat={onNewChat}
             />
           </div>
         )}
+        <div key={bottomAnchorKey} ref={bottomAnchorRef} aria-hidden="true" />
       </div>
     </ScrollArea>
   );
 }
-

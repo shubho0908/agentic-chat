@@ -47,7 +47,9 @@ import { isSupportedForRAG } from "@/lib/rag/utils";
 import {
   createRequestId,
   isObservabilityLoggingEnabled,
+  logError,
   logInfo,
+  logWarn,
   measureLatencyMs,
 } from "@/lib/observability";
 import {
@@ -434,8 +436,8 @@ test("document error retryability keeps permanent failures out of retry loop", (
 test("server model policy rejects unknown models and downshifts orchestration stages", () => {
   assert.equal(validateRequestedModel("gpt-5.4"), "gpt-5.4");
   assert.equal(validateRequestedModel("not-a-real-model"), null);
-  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5-nano");
-  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5-mini");
+  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5.4-nano");
+  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5.4-mini");
   assert.equal(getSupportedTemperature("gpt-5.4", 0.1), undefined);
   assert.equal(getSupportedTemperature("gpt-5-mini", 0), undefined);
   assert.equal(getSupportedTemperature("gpt-4.1", 0.1), 0.1);
@@ -624,6 +626,63 @@ test("observability logger is enabled only in development", () => {
   } finally {
     setObservabilityLogSinkForTests(null);
   }
+});
+
+test("observability falls back to console when process streams are unavailable", () => {
+  const originalStdout = Object.getOwnPropertyDescriptor(process, "stdout");
+  const originalStderr = Object.getOwnPropertyDescriptor(process, "stderr");
+  const originalConsoleInfo = console.info;
+  const originalConsoleWarn = console.warn;
+  const originalConsoleError = console.error;
+  const calls: string[] = [];
+
+  Object.defineProperty(process, "stdout", {
+    configurable: true,
+    get: () => undefined,
+  });
+  Object.defineProperty(process, "stderr", {
+    configurable: true,
+    get: () => undefined,
+  });
+  console.info = ((message?: unknown) => {
+    calls.push(`info:${String(message)}`);
+  }) as typeof console.info;
+  console.warn = ((message?: unknown) => {
+    calls.push(`warn:${String(message)}`);
+  }) as typeof console.warn;
+  console.error = ((message?: unknown) => {
+    calls.push(`error:${String(message)}`);
+  }) as typeof console.error;
+
+  try {
+    setObservabilityLogSinkForTests(null);
+
+    assert.doesNotThrow(() => {
+      logInfo({ event: "console_fallback_info" }, "development");
+    });
+    assert.doesNotThrow(() => {
+      logWarn({ event: "console_fallback_warn" }, "development");
+    });
+    assert.doesNotThrow(() => {
+      logError({ event: "console_fallback_error" }, "development");
+    });
+  } finally {
+    if (originalStdout) {
+      Object.defineProperty(process, "stdout", originalStdout);
+    }
+    if (originalStderr) {
+      Object.defineProperty(process, "stderr", originalStderr);
+    }
+    console.info = originalConsoleInfo;
+    console.warn = originalConsoleWarn;
+    console.error = originalConsoleError;
+    setObservabilityLogSinkForTests(null);
+  }
+
+  assert.equal(calls.length >= 2, true);
+  assert.ok(calls.some((entry) => entry.includes("console_fallback_info")));
+  assert.ok(calls.some((entry) => entry.includes("console_fallback_warn")));
+  assert.ok(calls.some((entry) => entry.includes("console_fallback_error")));
 });
 
 test("environment warnings stay silent outside development", () => {

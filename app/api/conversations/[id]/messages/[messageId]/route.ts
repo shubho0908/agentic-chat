@@ -115,6 +115,13 @@ async function softDeleteDownstreamBranch(
   });
 }
 
+class MessageVersionRouteError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'MessageVersionRouteError';
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; messageId: string }> }
@@ -139,7 +146,8 @@ export async function PATCH(
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const { content, attachments, metadata, assistantContent, assistantMetadata } = body;
+    const { content, attachments, metadata, assistantContent, assistantMessageId, assistantMetadata } = body;
+    const hasAssistantMessageId = assistantMessageId !== undefined && assistantMessageId !== null;
     let validatedAttachments: AttachmentInput[] | undefined;
 
     if (!content || typeof content !== 'string') {
@@ -173,6 +181,14 @@ export async function PATCH(
       return errorResponse('Invalid assistantContent', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
+    if (
+      assistantMessageId !== undefined &&
+      assistantMessageId !== null &&
+      typeof assistantMessageId !== 'string'
+    ) {
+      return errorResponse('Invalid assistantMessageId', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
@@ -201,6 +217,15 @@ export async function PATCH(
       const result = await prisma.$transaction(async (tx) => {
         const siblingIndex = await getNextSiblingIndex(tx, parentId);
 
+        await softDeleteDownstreamBranch(
+          tx,
+          conversationId,
+          messageId,
+          existingMessage.parentMessageId,
+          existingMessage.siblingIndex,
+          now
+        );
+
         const updatedMessage = await tx.message.create({
           data: {
             conversationId,
@@ -216,26 +241,78 @@ export async function PATCH(
           },
         });
 
-        const assistantMessage = await tx.message.create({
-          data: {
-            conversationId,
-            role: 'ASSISTANT',
-            content: assistantContent,
-            ...(assistantMetadata && { metadata: assistantMetadata }),
-          },
-          include: {
-            attachments: true,
-          },
-        });
+        let assistantMessage;
 
-        await softDeleteDownstreamBranch(
-          tx,
-          conversationId,
-          messageId,
-          existingMessage.parentMessageId,
-          existingMessage.siblingIndex,
-          now
-        );
+        if (hasAssistantMessageId) {
+          try {
+            const existingAssistantMessage = await tx.message.findFirst({
+              where: {
+                id: assistantMessageId,
+                conversationId,
+                role: 'ASSISTANT',
+                isDeleted: false,
+              },
+              select: {
+                id: true,
+                parentMessageId: true,
+                siblingIndex: true,
+              },
+            });
+
+            if (!existingAssistantMessage) {
+              throw new MessageVersionRouteError(
+                'Assistant message not found or already deleted',
+                HTTP_STATUS.NOT_FOUND
+              );
+            }
+
+            const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
+            const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
+
+            await softDeleteDownstreamBranch(
+              tx,
+              conversationId,
+              existingAssistantMessage.id,
+              existingAssistantMessage.parentMessageId,
+              existingAssistantMessage.siblingIndex,
+              now
+            );
+
+            assistantMessage = await tx.message.create({
+              data: {
+                conversationId,
+                role: 'ASSISTANT',
+                content: assistantContent,
+                parentMessageId: assistantParentId,
+                siblingIndex: assistantSiblingIndex,
+                ...(assistantMetadata && { metadata: assistantMetadata }),
+              },
+              include: {
+                attachments: true,
+              },
+            });
+          } catch (assistantVersionError) {
+            logger.warn('[Message Version Route] Assistant version-link failed:', {
+              assistantMessageId,
+              error: assistantVersionError instanceof Error ? assistantVersionError.message : String(assistantVersionError),
+            });
+            throw assistantVersionError;
+          }
+        }
+
+        if (!hasAssistantMessageId && !assistantMessage) {
+          assistantMessage = await tx.message.create({
+            data: {
+              conversationId,
+              role: 'ASSISTANT',
+              content: assistantContent,
+              ...(assistantMetadata && { metadata: assistantMetadata }),
+            },
+            include: {
+              attachments: true,
+            },
+          });
+        }
 
         await tx.conversation.update({
           where: { id: conversationId },
@@ -292,10 +369,15 @@ export async function PATCH(
 
     return jsonResponse(newVersion, HTTP_STATUS.OK);
   } catch (error) {
+    logger.error('[Message Version Route] Failed to update message:', error);
     return errorResponse(
-      'Failed to update message',
-      error instanceof Error ? error.message : undefined,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+      error instanceof MessageVersionRouteError ? error.message : 'Failed to update message',
+      error instanceof MessageVersionRouteError
+        ? undefined
+        : error instanceof Error
+          ? error.message
+          : undefined,
+      error instanceof MessageVersionRouteError ? error.status : HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

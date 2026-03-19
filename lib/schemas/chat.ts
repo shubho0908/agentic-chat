@@ -90,10 +90,14 @@ const messageMetadataBaseSchema = z.object({
     domain: z.string(),
     snippet: z.string().optional(),
     score: z.number().optional(),
+    searchIndex: z.number().optional(),
+    searchQuery: z.string().optional(),
   })).optional(),
   images: z.array(z.object({
     url: z.string(),
     description: z.string().optional(),
+    searchIndex: z.number().optional(),
+    searchQuery: z.string().optional(),
   })).optional(),
   researchTask: z.object({
     gateDecision: z.object({

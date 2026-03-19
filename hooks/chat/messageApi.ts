@@ -126,6 +126,7 @@ export async function finalizeEditedMessage(
   messageId: string,
   content: string | MessageContentPart[],
   assistantContent: string,
+  assistantMessageId?: string,
   attachments?: Attachment[],
   assistantMetadata?: MessageMetadata,
   signal?: AbortSignal
@@ -139,13 +140,25 @@ export async function finalizeEditedMessage(
       content: contentToSave,
       attachments: attachments || [],
       assistantContent,
+      assistantMessageId,
       assistantMetadata,
     }),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to finalize edited message: ${response.statusText}`);
+    let errorMessage = `Failed to finalize edited message: ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      if (errorData?.error && typeof errorData.error === "string") {
+        errorMessage = errorData.error;
+      } else if (errorData?.message && typeof errorData.message === "string") {
+        errorMessage = errorData.message;
+      }
+    } catch {
+      // Keep the default response status text when no JSON body is available.
+    }
+    throw new Error(errorMessage);
   }
 
   const finalized: FinalizeEditedMessageResponse = await response.json();

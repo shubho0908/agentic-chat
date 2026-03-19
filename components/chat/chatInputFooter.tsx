@@ -26,17 +26,6 @@ export function ChatInputFooter({ centered = false }: ChatInputFooterProps) {
           Shubhojeet
         </Link>
       </span>
-      <span className="flex items-center gap-2 tracking-wide">
-        <Link href="/terms" className="font-medium text-foreground/65 transition-colors hover:text-foreground">
-          Terms
-        </Link>
-        <span aria-hidden="true" className="text-muted-foreground/30">
-          •
-        </span>
-        <Link href="/privacy" className="font-medium text-foreground/65 transition-colors hover:text-foreground">
-          Privacy
-        </Link>
-      </span>
     </div>
   );
 }

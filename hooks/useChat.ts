@@ -58,11 +58,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       const isNewConversation = !conversationId;
       abortControllerRef.current = new AbortController();
-      if (!isNewConversation) {
-        setIsLoading(true);
-        setMemoryStatus(undefined);
-        startStreaming(conversationId, abortControllerRef.current);
-      }
+      setIsLoading(true);
+      setMemoryStatus(undefined);
+      startStreaming(conversationId, abortControllerRef.current);
 
       try {
         await handleSendMessage(
@@ -97,10 +95,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw error;
         }
       } finally {
-        if (!isNewConversation) {
-          setIsLoading(false);
-          stopStreamingContext(false);
-        }
+        setIsLoading(false);
+        stopStreamingContext(false);
         abortControllerRef.current = null;
       }
     },

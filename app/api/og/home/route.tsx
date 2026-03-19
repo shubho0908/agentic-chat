@@ -149,7 +149,7 @@ export async function GET(request: Request) {
                   gap: '12px',
                 }}
               >
-                Intelligent Conversations
+                Search, memory, and tools
               </div>
             </div>
 
@@ -172,7 +172,7 @@ export async function GET(request: Request) {
                   fontWeight: '600',
                 }}
               >
-                AI-Powered
+                Web search
               </div>
               <div
                 style={{
@@ -185,7 +185,7 @@ export async function GET(request: Request) {
                   fontWeight: '600',
                 }}
               >
-                Agentic Workflow
+                Memory
               </div>
               <div
                 style={{
@@ -198,7 +198,7 @@ export async function GET(request: Request) {
                   fontWeight: '600',
                 }}
               >
-                Memory Enhanced
+                Workspace
               </div>
             </div>
           </div>

@@ -1,9 +1,9 @@
 import { Metadata } from "next";
-import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
 
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 import { logger } from "@/lib/logger";
 async function getSharedConversation(id: string) {
@@ -76,32 +76,33 @@ export async function generateMetadata({
 
   if (!conversation) {
     return {
-      title: "Shared Conversation Not Found - Agentic Chat",
+      title: "Shared Conversation Not Found",
       description: "The requested shared conversation could not be found or is no longer public.",
+      robots: noIndexRobots,
     };
   }
 
   const title = conversation.conversation.title || "Shared Conversation";
   const userName = conversation.conversation.user.name || conversation.conversation.user.email.split('@')[0];
   const firstUserMessage = conversation.messages.items.find(m => m.role === 'user');
-  const description = firstUserMessage 
-    ? firstUserMessage.content.substring(0, 155) + (firstUserMessage.content.length > 155 ? '...' : '')
-    : `A conversation shared by ${userName} on Agentic Chat`;
-
-  const headersList = await headers();
-  const protocol = headersList.get('x-forwarded-proto') || 'https';
-  const host = headersList.get('host') || process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '');
-  const baseUrl = host ? `${protocol}://${host}` : process.env.NEXT_PUBLIC_APP_URL || 'https://localhost:3000';
-  const ogImageUrl = `${baseUrl}/api/og?title=${encodeURIComponent(title)}`;
+  const normalizedSnippet = firstUserMessage?.content.replace(/\s+/g, " ").trim();
+  const description = normalizedSnippet
+    ? normalizedSnippet.slice(0, 155) + (normalizedSnippet.length > 155 ? "..." : "")
+    : `A conversation shared by ${userName} on ${siteConfig.name}`;
+  const fullTitle = `${title} | Shared on ${siteConfig.name}`;
+  const ogImageUrl = absoluteUrl(`/api/og?title=${encodeURIComponent(title)}`);
 
   return {
-    title: `${title} - Shared on Agentic Chat`,
+    title: `${title} | Shared Conversation`,
     description,
+    alternates: {
+      canonical: `/share/${id}`,
+    },
     openGraph: {
-      title: `${title} - Shared on Agentic Chat`,
+      title: fullTitle,
       description,
-      url: `${baseUrl}/share/${id}`,
-      siteName: "Agentic Chat",
+      url: `/share/${id}`,
+      siteName: siteConfig.name,
       images: [
         {
           url: ogImageUrl,
@@ -110,15 +111,16 @@ export async function generateMetadata({
           alt: title,
         },
       ],
-      locale: "en_US",
+      locale: siteConfig.locale,
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} - Shared on Agentic Chat`,
+      title: fullTitle,
       description,
       images: [ogImageUrl],
     },
+    robots: noIndexRobots,
   };
 }
 

@@ -54,7 +54,7 @@ export function FileUploadButton({ onFilesSelected, disabled, fileCount = 0 }: F
                 variant="ghost"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                className="size-10 rounded-lg transition-colors"
+                className="size-8 rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/5"
               >
                 <Paperclip className="size-4" />
                 <span className="sr-only">Attach files</span>
@@ -62,7 +62,7 @@ export function FileUploadButton({ onFilesSelected, disabled, fileCount = 0 }: F
               {fileCount > 0 && (
                 <Badge 
                   variant="default"
-                  className="absolute -top-0.5 -right-0.5 size-4 flex items-center justify-center p-0 text-[9px] rounded-full"
+                  className="pointer-events-none absolute -top-0.5 -right-0.5 size-4 rounded-full p-0 text-[9px] flex items-center justify-center"
                 >
                   {fileCount}
                 </Badge>

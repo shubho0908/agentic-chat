@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/themeProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,7 +9,7 @@ import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
-import { appBaseUrl } from "@/lib/appUrl";
+import { absoluteUrl, indexRobots, siteConfig } from "@/lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,32 +21,64 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+});
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
+};
+
 export const metadata: Metadata = {
-  title: "Agentic Chat - Intelligent Conversations",
-  description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
-  metadataBase: new URL(appBaseUrl),
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.defaultTitle,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.fullDescription,
+  keywords: Array.from(siteConfig.defaultKeywords),
+  category: "technology",
+  creator: siteConfig.name,
+  publisher: siteConfig.name,
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: [{ url: "/favicon.ico", rel: "icon" }],
+    shortcut: [{ url: "/favicon.ico", rel: "shortcut icon" }],
+    apple: [{ url: "/favicon.ico", rel: "apple-touch-icon" }],
+  },
   openGraph: {
-    title: "Agentic Chat - Intelligent Conversations",
-    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
-    url: '/',
-    siteName: "Agentic Chat",
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    url: "/",
+    siteName: siteConfig.name,
     images: [
       {
-        url: '/api/og/home',
+        url: absoluteUrl(siteConfig.defaultOgImagePath),
         width: 1200,
         height: 630,
-        alt: "Agentic Chat - Intelligent Conversations",
+        alt: siteConfig.defaultTitle,
       },
     ],
-    locale: "en_US",
+    locale: siteConfig.locale,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agentic Chat - Intelligent Conversations",
-    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
-    images: ['/api/og/home'],
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    images: [absoluteUrl(siteConfig.defaultOgImagePath)],
   },
+  robots: indexRobots,
 };
 
 export default function RootLayout({
@@ -57,7 +89,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased selection:bg-primary/20 bg-background`}
+        className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} antialiased selection:bg-primary/20 bg-background`}
       >
         <div className="fixed inset-0 z-[-1] opacity-[0.03] dark:opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('/noise.svg')]" />
         <QueryProvider>
@@ -73,9 +105,9 @@ export default function RootLayout({
                   <Suspense fallback={null}>
                     <ConditionalSidebar />
                   </Suspense>
-                  <main className="w-full">
+                  <div className="w-full">
                     {children}
-                  </main>
+                  </div>
                 </SidebarProvider>
               </LayoutProvider>
             </StreamingProvider>

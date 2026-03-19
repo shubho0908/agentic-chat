@@ -2,25 +2,38 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/legal/legalDocument";
 import { LegalRouteShell } from "@/components/legal/legalRouteShell";
+import { JsonLd } from "@/components/seo/jsonLd";
+import { createPageMetadata, createWebPageSchema, siteConfig } from "@/lib/seo";
 
-const CONTACT_EMAIL = "dev@shubhojeet.com";
 const LAST_UPDATED = "March 18, 2026";
+const PAGE_TITLE = "Terms and Conditions";
+const PAGE_DESCRIPTION = "Terms and Conditions for using Agentic Chat.";
 
-export const metadata: Metadata = {
-  title: "Terms and Conditions | Agentic Chat",
-  description: "Terms and Conditions for using Agentic Chat.",
-};
+export const metadata: Metadata = createPageMetadata({
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  path: "/terms",
+  keywords: ["terms and conditions", "service terms", "AI app terms"],
+});
 
 export default function TermsPage() {
   return (
-    <LegalRouteShell>
-      <LegalDocument
-        eyebrow="Legal"
-        title="Terms and Conditions"
-        subtitle="These terms explain how Agentic Chat works, what you can expect from the service, and the responsibilities that come with using it."
-        lastUpdated={LAST_UPDATED}
-        contactEmail={CONTACT_EMAIL}
-        sections={[
+    <>
+      <JsonLd
+        data={createWebPageSchema({
+          title: `${PAGE_TITLE} | ${siteConfig.name}`,
+          description: PAGE_DESCRIPTION,
+          path: "/terms",
+        })}
+      />
+      <LegalRouteShell>
+        <LegalDocument
+          eyebrow="Legal"
+          title={PAGE_TITLE}
+          subtitle="These terms explain how Agentic Chat works, what you can expect from the service, and the responsibilities that come with using it."
+          lastUpdated={LAST_UPDATED}
+          contactEmail={siteConfig.contactEmail}
+          sections={[
           {
             id: "acceptance",
             title: "1. Acceptance of Terms",
@@ -62,10 +75,10 @@ export default function TermsPage() {
                 <p>
                   If you believe your account has been compromised, contact us immediately at{" "}
                   <Link
-                    href={`mailto:${CONTACT_EMAIL}`}
+                    href={`mailto:${siteConfig.contactEmail}`}
                     className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
                   >
-                    {CONTACT_EMAIL}
+                    {siteConfig.contactEmail}
                   </Link>
                   .
                 </p>
@@ -201,18 +214,19 @@ export default function TermsPage() {
                 <p>
                   If you have questions about these Terms, contact{" "}
                   <Link
-                    href={`mailto:${CONTACT_EMAIL}`}
+                    href={`mailto:${siteConfig.contactEmail}`}
                     className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
                   >
-                    {CONTACT_EMAIL}
+                    {siteConfig.contactEmail}
                   </Link>
                   .
                 </p>
               </>
             ),
           },
-        ]}
-      />
-    </LegalRouteShell>
+          ]}
+        />
+      </LegalRouteShell>
+    </>
   );
 }

@@ -12,6 +12,7 @@ import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/webSea
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
 import { executeMultiSearch } from '../tools/web-search/searchPlanner';
+import { prepareWebSearchQuery, resolveWebSearchQuery } from '../tools/web-search/queryContext';
 import { createUnifiedPlan, type WebSearchPlan } from '../tools/unifiedPlanner';
 import { truncateTextToTokenLimit } from '@/lib/utils/tokenCounter';
 
@@ -32,6 +33,18 @@ function truncateContext(text: string, model: string, maxTokens: number = MAX_TO
   );
 }
 
+function buildSearchPlanSummary(searchPlan: WebSearchPlan) {
+  return {
+    originalQuery: searchPlan.originalQuery,
+    queryType: searchPlan.queryType,
+    complexity: searchPlan.complexity,
+    reasoning: searchPlan.reasoning,
+    totalResultsNeeded: searchPlan.totalResultsNeeded,
+    searches: searchPlan.recommendedSearches.length,
+    recommendedSearches: searchPlan.recommendedSearches,
+  };
+}
+
 export async function executeWebSearchTool(
   textQuery: string,
   controller: ReadableStreamDefaultController,
@@ -39,7 +52,8 @@ export async function executeWebSearchTool(
   apiKey?: string,
   model?: string,
   abortSignal?: AbortSignal,
-  searchDepth: SearchDepth = 'basic'
+  searchDepth: SearchDepth = 'basic',
+  conversationMessages: Message[] = messages
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
@@ -55,7 +69,39 @@ export async function executeWebSearchTool(
       }
       return messages;
     }
+    const preparedQuery = prepareWebSearchQuery(textQuery);
+    const queryInput = preparedQuery.searchQuery || preparedQuery.originalQuery;
     const useIntelligentPlanning = searchDepth === 'advanced' && apiKey && model;
+    const queryResolution = await resolveWebSearchQuery({
+      query: queryInput,
+      messages: conversationMessages,
+      apiKey,
+      model,
+      abortSignal,
+    });
+    const effectiveQuery = queryResolution.resolvedQuery;
+
+    if (queryResolution.usedConversationContext) {
+      try {
+        controller.enqueue(encodeToolProgress(
+          TOOL_IDS.WEB_SEARCH,
+          'contextualizing_query',
+          `Resolved follow-up from chat context: "${effectiveQuery}"`,
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: true,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+            searchDepth,
+            ...(searchDepth === 'advanced' ? { phase: 1, totalPhases } : {}),
+          }
+        ));
+        setImmediate(() => {});
+      } catch {
+        streamClosed = true;
+      }
+    }
     
     let searchResults: string;
     
@@ -66,7 +112,15 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'phase_1_analysis',
           'Analyzing query complexity and planning optimal search strategy...',
-          { searchDepth, phase: currentPhase, totalPhases, intelligent: true }
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: queryResolution.usedConversationContext,
+            searchDepth,
+            phase: currentPhase,
+            totalPhases,
+            intelligent: true,
+          }
         ));
         setImmediate(() => {});
       } catch {
@@ -74,16 +128,21 @@ export async function executeWebSearchTool(
       }
 
       const searchPlan = await createUnifiedPlan({
-        query: textQuery,
+        query: effectiveQuery,
         toolType: 'web_search',
         apiKey: apiKey!,
         model: model!,
         searchDepth,
         abortSignal,
+        conversationHistory: extractConversationHistory(conversationMessages, {
+          excludeLastMessage: true,
+          maxExchanges: 4,
+          includeAllForShortConversations: true,
+        }),
       }) as WebSearchPlan;
       
       const toolArgs = {
-        query: textQuery,
+        query: effectiveQuery,
         maxResults: searchPlan.totalResultsNeeded,
         searchDepth: searchDepth,
         includeAnswer: false,
@@ -102,7 +161,18 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'phase_2_planning',
           `Query analyzed: ${searchPlan.queryType} (${searchPlan.complexity}). Executing ${searchPlan.recommendedSearches.length} targeted searches with ${searchPlan.totalResultsNeeded} total results.`,
-          { searchDepth, phase: currentPhase, totalPhases, searchPlan, intelligent: true }
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+            searchDepth,
+            phase: currentPhase,
+            totalPhases,
+            searchPlan: buildSearchPlanSummary(searchPlan),
+            intelligent: true,
+          }
         ));
         setImmediate(() => {});
       } catch {
@@ -130,15 +200,39 @@ export async function executeWebSearchTool(
           
           return { output, sources: capturedSources, images: capturedImages };
         },
-        (searchIndex, total, query) => {
+        ({ phase, searchIndex, total, query, completedSearches, accumulatedSources, accumulatedImages }) => {
           if (streamClosed || abortSignal?.aborted) return;
-          currentPhase = 3;
+
+          if (phase === 'start') {
+            currentPhase = 3;
+          }
+
           try {
             controller.enqueue(encodeToolProgress(
               TOOL_IDS.WEB_SEARCH,
               'phase_3_execution',
-              `Executing search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`,
-              { searchDepth, phase: currentPhase, totalPhases, searchIndex, total, intelligent: true }
+              phase === 'complete'
+                ? `Completed search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`
+                : `Executing search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`,
+              {
+                query,
+                originalQuery: queryResolution.originalQuery,
+                usedConversationContext: queryResolution.usedConversationContext,
+                explicitUrls: preparedQuery.explicitUrls,
+                usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                searchDepth,
+                phase: currentPhase,
+                totalPhases,
+                searchIndex,
+                total,
+                completedSearches,
+                intelligent: true,
+                searchPlan: buildSearchPlanSummary(searchPlan),
+                sources: accumulatedSources,
+                images: accumulatedImages,
+                imageCount: accumulatedImages.length,
+                resultsCount: accumulatedSources.length,
+              }
             ));
             setImmediate(() => {});
           } catch {
@@ -155,7 +249,23 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'phase_4_synthesis',
           'Synthesizing results from multiple targeted searches...',
-          { searchDepth, phase: currentPhase, totalPhases, intelligent: true, sources: multiSearchResult.allSources }
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+            searchDepth,
+            phase: currentPhase,
+            totalPhases,
+            intelligent: true,
+            completedSearches: searchPlan.recommendedSearches.length,
+            searchPlan: buildSearchPlanSummary(searchPlan),
+            sources: multiSearchResult.allSources,
+            images: multiSearchResult.allImages,
+            imageCount: multiSearchResult.allImages.length,
+            resultsCount: multiSearchResult.allSources.length,
+          }
         ));
         setImmediate(() => {});
       } catch {
@@ -167,18 +277,22 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'completed',
           `Intelligent search complete: ${multiSearchResult.allSources.length} sources${multiSearchResult.allImages.length > 0 ? ` and ${multiSearchResult.allImages.length} images` : ''} from ${searchPlan.recommendedSearches.length} targeted searches`,
-          { 
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth, 
+            phase: currentPhase,
+            totalPhases,
             intelligent: true,
+            completedSearches: searchPlan.recommendedSearches.length,
             sources: multiSearchResult.allSources,
             images: multiSearchResult.allImages,
             resultsCount: multiSearchResult.allSources.length,
             imageCount: multiSearchResult.allImages.length,
-            searchPlan: {
-              type: searchPlan.queryType,
-              complexity: searchPlan.complexity,
-              searches: searchPlan.recommendedSearches.length,
-            }
+            searchPlan: buildSearchPlanSummary(searchPlan),
           }
         ));
         setImmediate(() => {});
@@ -187,7 +301,7 @@ export async function executeWebSearchTool(
       }
     } else {
       const toolArgs = {
-        query: textQuery,
+        query: effectiveQuery,
         maxResults: getRecommendedMaxResults(searchDepth),
         searchDepth: searchDepth,
         includeAnswer: false,
@@ -203,7 +317,16 @@ export async function executeWebSearchTool(
             TOOL_IDS.WEB_SEARCH,
             'phase_1_analysis',
             'Analyzing query and gathering comprehensive sources...',
-            { searchDepth, phase: currentPhase, totalPhases }
+            {
+              originalQuery: queryResolution.originalQuery,
+              query: effectiveQuery,
+              usedConversationContext: queryResolution.usedConversationContext,
+              explicitUrls: preparedQuery.explicitUrls,
+              usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+              searchDepth,
+              phase: currentPhase,
+              totalPhases,
+            }
           ));
           setImmediate(() => {});
         } catch {
@@ -226,7 +349,17 @@ export async function executeWebSearchTool(
                   TOOL_IDS.WEB_SEARCH,
                   'phase_2_gathering',
                   'Gathering evidence from 10-15 comprehensive sources',
-                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                  {
+                    ...progress.details,
+                    originalQuery: queryResolution.originalQuery,
+                    query: progress.details?.query || effectiveQuery,
+                    usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                    searchDepth,
+                    phase: currentPhase,
+                    totalPhases,
+                  }
                 ));
               }
             } else if (progress.status === 'found') {
@@ -236,7 +369,17 @@ export async function executeWebSearchTool(
                   TOOL_IDS.WEB_SEARCH,
                   'phase_3_verification',
                   'Cross-verifying information across multiple sources',
-                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                  {
+                    ...progress.details,
+                    originalQuery: queryResolution.originalQuery,
+                    query: progress.details?.query || effectiveQuery,
+                    usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                    searchDepth,
+                    phase: currentPhase,
+                    totalPhases,
+                  }
                 ));
               }
             } else if (progress.status === 'processing_sources') {
@@ -247,7 +390,17 @@ export async function executeWebSearchTool(
                 TOOL_IDS.WEB_SEARCH,
                 'phase_3_verification',
                 `Verifying source ${progress.details?.processedCount || 0}/${progress.details?.resultsCount || 0}`,
-                { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                {
+                  ...progress.details,
+                  originalQuery: queryResolution.originalQuery,
+                  query: progress.details?.query || effectiveQuery,
+                  usedConversationContext: queryResolution.usedConversationContext,
+                  explicitUrls: preparedQuery.explicitUrls,
+                  usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                  searchDepth,
+                  phase: currentPhase,
+                  totalPhases,
+                }
               ));
             } else if (progress.status === 'completed') {
               if (currentPhase < 4) {
@@ -256,7 +409,17 @@ export async function executeWebSearchTool(
                   TOOL_IDS.WEB_SEARCH,
                   'phase_4_synthesis',
                   'Synthesizing comprehensive analysis',
-                  { ...progress.details, searchDepth, phase: currentPhase, totalPhases }
+                  {
+                    ...progress.details,
+                    originalQuery: queryResolution.originalQuery,
+                    query: progress.details?.query || effectiveQuery,
+                    usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                    searchDepth,
+                    phase: currentPhase,
+                    totalPhases,
+                  }
                 ));
               }
             }
@@ -266,7 +429,15 @@ export async function executeWebSearchTool(
               TOOL_IDS.WEB_SEARCH,
               progress.status,
               progress.message,
-              { ...progress.details, searchDepth }
+              {
+                ...progress.details,
+                originalQuery: queryResolution.originalQuery,
+                query: progress.details?.query || effectiveQuery,
+                usedConversationContext: queryResolution.usedConversationContext,
+                explicitUrls: preparedQuery.explicitUrls,
+                usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+                searchDepth,
+              }
             ));
           }
           setImmediate(() => {});
@@ -295,7 +466,16 @@ export async function executeWebSearchTool(
           TOOL_IDS.WEB_SEARCH,
           'phase_5_validation',
           'Final validation and quality check complete',
-          { searchDepth, phase: currentPhase, totalPhases }
+          {
+            originalQuery: queryResolution.originalQuery,
+            query: effectiveQuery,
+            usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
+            searchDepth,
+            phase: currentPhase,
+            totalPhases,
+          }
         ));
         setImmediate(() => {});
       } catch {

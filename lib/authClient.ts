@@ -10,6 +10,14 @@ const clientBaseUrl =
 
 const authClient = createAuthClient({
   baseURL: clientBaseUrl,
+  fetchOptions: {
+    timeout: 10_000,
+    retry: {
+      type: "linear",
+      attempts: 2,
+      delay: 500,
+    },
+  },
 });
 
 export const { signIn, signOut, useSession } = authClient;

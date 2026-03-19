@@ -5,14 +5,15 @@ import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Loader } from "lucide-react";
 import { useTheme } from "next-themes";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { logger } from "@/lib/logger";
 import { signInWithGoogle } from "@/lib/authClient";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
@@ -136,9 +137,8 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                   )}
                 </AnimatePresence>
               </Button>
-
-              <p className="text-xs text-muted-foreground/70 pt-2">
-                By continuing, you agree to our Terms and Privacy Policy
+              <p className="pt-2 text-xs leading-5 text-muted-foreground/70">
+                By continuing, you agree to our <Link href="/terms" className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80">Terms</Link> and <Link href="/privacy" className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-foreground/80">Privacy Policy</Link>.
               </p>
             </div>
             </div>
@@ -148,5 +148,3 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
     </Dialog>
   );
 }
-
-import { logger } from "@/lib/logger";

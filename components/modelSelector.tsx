@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -18,85 +19,126 @@ interface ModelSelectorProps {
   onModelSelect: (modelId: string) => void;
 }
 
-function formatTokenCount(tokens: number): string {
-  if (tokens >= 1000000) {
-    const millions = tokens / 1000000;
-    return `${millions % 1 === 0 ? millions : millions.toFixed(1)}M`;
-  } else if (tokens >= 1000) {
-    const thousands = tokens / 1000;
-    return `${thousands % 1 === 0 ? thousands : thousands.toFixed(1)}K`;
-  }
-  return tokens.toString();
+function formatContext(tokens: number): string {
+  const formatCompactValue = (value: number) => {
+    const rounded = Number(value.toFixed(1));
+    return rounded.toString();
+  };
+
+  if (tokens >= 1000000) return `${formatCompactValue(tokens / 1000000)}M`;
+  if (tokens >= 1000) return `${formatCompactValue(tokens / 1000)}K`;
+  return String(tokens);
 }
 
 export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
-  const selectedModelData = OPENAI_MODELS.find(
-    (model) => model.id === selectedModel
+  const selectedModelData = useMemo(
+    () => OPENAI_MODELS.find((model) => model.id === selectedModel),
+    [selectedModel]
   );
 
   return (
     <div className="grid gap-2">
-      <Label>Model</Label>
+      <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+        Model Selection
+      </Label>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="outline"
-            className="w-full justify-between h-auto min-h-[52px] px-3 sm:px-4 py-2.5 hover:bg-accent transition-all duration-200 ease-out active:scale-[0.98]"
+            variant="ghost"
+            className={cn(
+              "w-full h-auto min-h-[52px] px-3 py-2.5 justify-between group",
+              "bg-muted/30 hover:bg-muted/60 transition-colors duration-200",
+              "border border-border/40 rounded-xl"
+            )}
           >
             {selectedModelData ? (
-              <div className="flex flex-col items-start gap-1 flex-1 min-w-0 overflow-hidden">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                <div className="flex items-center justify-center size-8 rounded-[8px] bg-background border border-border/40 text-foreground shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                   <ModelIcon />
-                  <span className="font-semibold text-xs sm:text-sm truncate">{selectedModelData.name}</span>
-                  {selectedModelData.recommended && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0">
-                      RECOMMENDED
-                    </span>
-                  )}
                 </div>
-                <span className="text-xs text-muted-foreground line-clamp-1 text-left">
-                  {selectedModelData.description}
-                </span>
+                <div className="flex flex-col items-start min-w-0 gap-0.5">
+                  <div className="flex items-center gap-1.5 focus:outline-none">
+                    <span className="font-medium text-[13px] text-foreground tracking-tight truncate">{selectedModelData.name}</span>
+                    {selectedModelData.recommended && (
+                      <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" title="Recommended" />
+                    )}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground/80 line-clamp-1 text-left font-medium">
+                    {selectedModelData.description}
+                  </span>
+                </div>
               </div>
             ) : (
-              <span className="text-muted-foreground text-xs sm:text-sm">Select model...</span>
+              <span className="text-muted-foreground text-[13px]">Select a model...</span>
             )}
-            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            <div className="flex items-center justify-center size-6 text-muted-foreground/50 group-hover:text-foreground shrink-0 transition-colors">
+              <ChevronDown className="size-[14px]" />
+            </div>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] max-h-[400px] overflow-y-auto" align="start">
-          {OPENAI_MODELS.map((model) => (
-            <DropdownMenuItem
-              key={model.id}
-              onClick={() => onModelSelect(model.id)}
-              className={cn(
-                "flex items-start gap-3 px-3 py-3 cursor-pointer relative overflow-hidden",
-                selectedModel === model.id && "bg-accent",
-                model.recommended && "bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-pink-500/10 border border-purple-500/20"
-              )}
-            >
-              <Check
-                className={cn(
-                  "h-4 w-4 shrink-0 mt-0.5",
-                  selectedModel === model.id ? "opacity-100" : "opacity-0"
-                )}
-              />
-              <div className="flex flex-col gap-1 flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <ModelIcon />
-                  <span className="font-semibold text-sm">{model.name}</span>
-                  {model.recommended && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shrink-0">
-                      RECOMMENDED
-                    </span>
+        
+        <DropdownMenuContent
+          className="w-[var(--radix-dropdown-menu-trigger-width)] p-1.5 rounded-2xl bg-background/95 backdrop-blur-xl border border-border/40 shadow-xl"
+          align="start"
+          sideOffset={8}
+        >
+          <div className="max-h-[320px] overflow-y-auto px-0.5">
+            {OPENAI_MODELS.map((model) => {
+              const isSelected = selectedModel === model.id;
+              
+              return (
+                <DropdownMenuItem
+                  key={model.id}
+                  onSelect={() => onModelSelect(model.id)}
+                  className={cn(
+                    "flex items-start gap-3 p-2 rounded-xl cursor-pointer mb-0.5 last:mb-0",
+                    "transition-colors outline-none",
+                    isSelected 
+                      ? "bg-muted/80 text-foreground shadow-sm" 
+                      : "hover:bg-muted/40 focus:bg-muted/40"
                   )}
-                </div>
-                <span className="text-xs text-muted-foreground leading-relaxed">
-                  {model.description} • {formatTokenCount(model.contextWindow)} tokens
-                </span>
-              </div>
-            </DropdownMenuItem>
-          ))}
+                >
+                  <div className={cn(
+                    "flex items-center justify-center size-8 rounded-[8px] shrink-0 border transition-colors",
+                    isSelected 
+                      ? "bg-background border-border/60 text-foreground shadow-sm" 
+                      : "bg-background/50 border-border/20 text-muted-foreground"
+                  )}>
+                    <ModelIcon />
+                  </div>
+                  
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={cn(
+                          "font-medium text-[13px] tracking-tight truncate",
+                          isSelected ? "text-foreground" : "text-foreground/80"
+                        )}>
+                          {model.name}
+                        </span>
+                        {model.recommended && (
+                          <div className="size-1.5 rounded-full bg-blue-500 opacity-90" title="Recommended" />
+                        )}
+                      </div>
+                      {isSelected && (
+                        <div className="flex items-center justify-center size-5 rounded-md bg-background shadow-sm border border-border/40">
+                          <Check className="size-3 text-foreground" strokeWidth={2.5} />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <span className="block max-w-full truncate text-[11px] font-medium text-muted-foreground/70 leading-relaxed">
+                      {model.description}
+                    </span>
+                    
+                    <span className="text-[9px] uppercase font-bold text-muted-foreground/50 tracking-wider mt-1">
+                      {formatContext(model.contextWindow)} context
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

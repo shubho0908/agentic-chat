@@ -107,11 +107,25 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground tracking-tight selection:bg-primary/20 selection:text-foreground;
+    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
   }
 
   .prose a {
@@ -296,6 +310,36 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+
+    .animate-spin {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
+
+    .animate-pulse {
+      animation-duration: 2s !important;
+      animation-iteration-count: infinite !important;
+    }
+
+    .animate-ping {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
   }
 
   /* Custom Premium Scrollbar */

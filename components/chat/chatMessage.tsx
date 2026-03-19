@@ -327,8 +327,8 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                   />
                 )}
 
-                {isUser && totalVersions > 0 && (
-                  <div className="mr-2">
+                {totalVersions > 1 && (
+                  <div className={cn(isUser ? "mr-2" : "ml-1")}>
                     <VersionNavigator
                       currentVersion={currentVersion}
                       totalVersions={totalVersions}
