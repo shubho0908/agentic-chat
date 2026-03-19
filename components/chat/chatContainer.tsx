@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader } from "lucide-react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
@@ -36,18 +36,11 @@ export function ChatContainer({
   isFetchingNextPage,
   onNewChat
 }: ChatContainerProps) {
-  const lastMessageRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
   const isSharePage = pathname?.startsWith("/share/") ?? false;
-
-  useEffect(() => {
-    if (shouldScrollToBottom) {
-      scrollToBottom();
-    }
-  }, [messages, isLoading, shouldScrollToBottom]);
 
   useEffect(() => {
     if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {
@@ -61,9 +54,11 @@ export function ChatContainer({
     }
   }, [isFetchingNextPage]);
 
-  function scrollToBottom() {
-    lastMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }
+  const bottomAnchorRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && shouldScrollToBottom) {
+      node.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [shouldScrollToBottom]);
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -82,6 +77,7 @@ export function ChatContainer({
   };
 
   const lastMessage = messages[messages.length - 1];
+  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessage?.content ?? ""}`;
   const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
   const shouldShowBanner =
     isContextBlocked &&
@@ -125,7 +121,6 @@ export function ChatContainer({
         {messages.map((message, index) => (
             <div
               key={message.id || `${message.role}-${index}`}
-              ref={index === messages.length - 1 ? lastMessageRef : undefined}
             >
               <ChatMessage
                 message={message}
@@ -141,13 +136,14 @@ export function ChatContainer({
           ))}
 
         {shouldShowBanner && onNewChat && memoryStatus?.tokenUsage && (
-          <div ref={lastMessageRef}>
+          <div>
             <ContextLimitBanner
               tokenUsage={memoryStatus.tokenUsage}
               onNewChat={onNewChat}
             />
           </div>
         )}
+        <div key={bottomAnchorKey} ref={bottomAnchorRef} aria-hidden="true" />
       </div>
     </ScrollArea>
   );
