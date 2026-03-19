@@ -1,5 +1,6 @@
 "use client";
 
+import { useId, useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,8 @@ function formatContext(tokens: number): string {
 }
 
 export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const listboxId = useId();
   const selectedModelData = OPENAI_MODELS.find(
     (model) => model.id === selectedModel
   );
@@ -34,11 +37,14 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
       <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
         Model Selection
       </Label>
-      <DropdownMenu>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             role="combobox"
+            aria-controls={listboxId}
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
             className={cn(
               "w-full h-auto min-h-[52px] px-3 py-2.5 justify-between group",
               "bg-muted/30 hover:bg-muted/60 transition-colors duration-200",
@@ -72,6 +78,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
         </DropdownMenuTrigger>
         
         <DropdownMenuContent 
+          id={listboxId}
           className="w-[var(--radix-dropdown-menu-trigger-width)] p-1.5 rounded-2xl bg-background/95 backdrop-blur-xl border border-border/40 shadow-xl"
           align="start"
           sideOffset={8}
@@ -101,11 +108,11 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                     <ModelIcon />
                   </div>
                   
-                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                    <div className="flex items-center justify-between mt-0.5">
-                      <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <span className={cn(
-                          "font-medium text-[13px] tracking-tight",
+                          "font-medium text-[13px] tracking-tight truncate",
                           isSelected ? "text-foreground" : "text-foreground/80"
                         )}>
                           {model.name}
@@ -121,7 +128,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                       )}
                     </div>
                     
-                    <span className="text-[11px] font-medium text-muted-foreground/70 pr-4 leading-relaxed line-clamp-2">
+                    <span className="block max-w-full truncate text-[11px] font-medium text-muted-foreground/70 leading-relaxed">
                       {model.description}
                     </span>
                     
@@ -138,4 +145,3 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
     </div>
   );
 }
-

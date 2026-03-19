@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LegalLinks } from "@/components/legalLinks";
 
 interface ChatInputFooterProps {
   centered?: boolean;
@@ -27,7 +26,6 @@ export function ChatInputFooter({ centered = false }: ChatInputFooterProps) {
           Shubhojeet
         </Link>
       </span>
-      <LegalLinks className="tracking-wide" />
     </div>
   );
 }

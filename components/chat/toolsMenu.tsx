@@ -3,9 +3,8 @@
 import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -131,10 +130,8 @@ export function ToolsMenu({
               onClick={handleButtonClick}
               disabled={disabled}
               variant="ghost"
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon" }),
-                "size-10 rounded-lg animate-in fade-in-0 zoom-in-95 duration-200"
-              )}
+              size="icon"
+              className="size-8 rounded-full animate-in fade-in-0 zoom-in-95 duration-200 hover:opacity-80 transition-opacity"
               style={{
                 background: `linear-gradient(135deg, ${toolConfig.gradientColors.from}33, ${toolConfig.gradientColors.via}53, ${toolConfig.gradientColors.to}33)`,
               }}
@@ -203,18 +200,12 @@ export function ToolsMenu({
                       type="button"
                       disabled={disabled}
                       variant="ghost"
-                      className={cn(
-                        buttonVariants({ variant: "ghost", size: "icon" }),
-                        "size-10 rounded-lg active:scale-95 transition-transform",
-                        hasActiveTool
-                          ? 'bg-primary/10 hover:bg-primary/15'
-                          : 'hover:bg-accent'
-                      )}
+                      size="icon"
+                      className="size-8 rounded-full active:scale-95 transition-transform hover:bg-black/5 dark:hover:bg-white/5"
                       aria-label="Tools"
                     >
                       <Settings2
-                        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''
-                          }`}
+                        className="size-4 transition-transform duration-200"
                         style={{
                           transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
                         }}

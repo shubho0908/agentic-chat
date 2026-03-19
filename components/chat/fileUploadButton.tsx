@@ -54,7 +54,7 @@ export function FileUploadButton({ onFilesSelected, disabled, fileCount = 0 }: F
                 variant="ghost"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
-                className="size-10 rounded-lg transition-colors"
+                className="size-8 rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/5"
               >
                 <Paperclip className="size-4" />
                 <span className="sr-only">Attach files</span>
