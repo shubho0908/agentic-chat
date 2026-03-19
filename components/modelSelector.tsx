@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useMemo } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -20,16 +20,20 @@ interface ModelSelectorProps {
 }
 
 function formatContext(tokens: number): string {
-  if (tokens >= 1000000) return `${tokens / 1000000}M`;
-  if (tokens >= 1000) return `${tokens / 1000}K`;
+  const formatCompactValue = (value: number) => {
+    const rounded = Number(value.toFixed(1));
+    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  };
+
+  if (tokens >= 1000000) return `${formatCompactValue(tokens / 1000000)}M`;
+  if (tokens >= 1000) return `${formatCompactValue(tokens / 1000)}K`;
   return String(tokens);
 }
 
 export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const listboxId = useId();
-  const selectedModelData = OPENAI_MODELS.find(
-    (model) => model.id === selectedModel
+  const selectedModelData = useMemo(
+    () => OPENAI_MODELS.find((model) => model.id === selectedModel),
+    [selectedModel]
   );
 
   return (
@@ -37,14 +41,10 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
       <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
         Model Selection
       </Label>
-      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            role="combobox"
-            aria-controls={listboxId}
-            aria-expanded={isOpen}
-            aria-haspopup="listbox"
             className={cn(
               "w-full h-auto min-h-[52px] px-3 py-2.5 justify-between group",
               "bg-muted/30 hover:bg-muted/60 transition-colors duration-200",
@@ -77,8 +77,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
           </Button>
         </DropdownMenuTrigger>
         
-        <DropdownMenuContent 
-          id={listboxId}
+        <DropdownMenuContent
           className="w-[var(--radix-dropdown-menu-trigger-width)] p-1.5 rounded-2xl bg-background/95 backdrop-blur-xl border border-border/40 shadow-xl"
           align="start"
           sideOffset={8}

@@ -1,5 +1,6 @@
 import {
   LOOP_DURATION,
+  RESEARCH_STEPS,
   SCENE_DURATIONS,
   SCENE_ORDER,
   SCENE_TOTALS,
@@ -186,7 +187,7 @@ export function getResearchStepState(step: number, index: number): ProcessState 
     return "pending";
   }
 
-  if (stagePointer === index && step < 7) {
+  if (stagePointer === index && step < RESEARCH_STEPS.length + 1) {
     return "current";
   }
 

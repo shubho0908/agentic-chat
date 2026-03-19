@@ -325,6 +325,21 @@
       scroll-behavior: auto !important;
       transition-duration: 0.01ms !important;
     }
+
+    .animate-spin {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
+
+    .animate-pulse {
+      animation-duration: 2s !important;
+      animation-iteration-count: infinite !important;
+    }
+
+    .animate-ping {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
   }
 
   /* Custom Premium Scrollbar */

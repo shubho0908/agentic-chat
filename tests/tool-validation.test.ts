@@ -72,6 +72,13 @@ test("getActiveTool purges legacy invalid stored tool ids", () => {
   assert.equal(localStorage.getItem("agentic-chat-active-tool"), null);
 });
 
+test("getActiveTool removes empty-string values from storage", () => {
+  localStorage.setItem("agentic-chat-active-tool", "");
+
+  assert.equal(getActiveTool(), null);
+  assert.equal(localStorage.getItem("agentic-chat-active-tool"), null);
+});
+
 test("setActiveTool persists valid ids and rejects invalid ids at runtime", () => {
   assert.equal(setActiveTool(TOOL_IDS.WEB_SEARCH), true);
   assert.equal(getActiveTool(), TOOL_IDS.WEB_SEARCH);

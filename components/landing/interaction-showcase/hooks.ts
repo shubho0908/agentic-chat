@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SCENE_ORDER } from "@/components/landing/interaction-showcase/constants";
 import {
   getCompletedScenePosition,
@@ -101,7 +101,7 @@ export function useInteractionTimeline(prefersReducedMotion: boolean) {
     ? getCompletedScenePosition(SCENE_ORDER[staticSceneIndex])
     : getTimelinePosition(effectiveElapsed);
 
-  const navigateScene = (direction: -1 | 1) => {
+  const navigateScene = useCallback((direction: -1 | 1) => {
     const nextSceneIndex =
       (timeline.sceneIndex + direction + SCENE_ORDER.length) % SCENE_ORDER.length;
 
@@ -114,7 +114,7 @@ export function useInteractionTimeline(prefersReducedMotion: boolean) {
       elapsedAtAnchor: elapsed,
       timelineElapsed: getSceneLoopOffset(SCENE_ORDER[nextSceneIndex]),
     });
-  };
+  }, [elapsed, prefersReducedMotion, timeline.sceneIndex]);
 
   return {
     timeline,

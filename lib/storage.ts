@@ -99,7 +99,7 @@ export function getActiveTool(): ToolId | null {
     const storedTool = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOOL);
     const parsedTool = parseToolId(storedTool);
 
-    if (!storedTool || parsedTool) {
+    if (storedTool && parsedTool) {
       return parsedTool;
     }
 

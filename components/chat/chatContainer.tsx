@@ -23,6 +23,22 @@ interface ChatContainerProps {
   onNewChat?: () => void;
 }
 
+function serializeAnchorValue(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export function ChatContainer({
   messages,
   isLoading,
@@ -77,7 +93,14 @@ export function ChatContainer({
   };
 
   const lastMessage = messages[messages.length - 1];
-  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessage?.content ?? ""}`;
+  const lastMessageFingerprint = lastMessage
+    ? serializeAnchorValue({
+        content: lastMessage.content,
+        metadata: lastMessage.metadata,
+        toolActivities: lastMessage.toolActivities,
+      })
+    : "empty";
+  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessageFingerprint}`;
   const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
   const shouldShowBanner =
     isContextBlocked &&

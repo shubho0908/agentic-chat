@@ -62,7 +62,7 @@ export function FileUploadButton({ onFilesSelected, disabled, fileCount = 0 }: F
               {fileCount > 0 && (
                 <Badge 
                   variant="default"
-                  className="absolute -top-0.5 -right-0.5 size-4 flex items-center justify-center p-0 text-[9px] rounded-full"
+                  className="pointer-events-none absolute -top-0.5 -right-0.5 size-4 rounded-full p-0 text-[9px] flex items-center justify-center"
                 >
                   {fileCount}
                 </Badge>

@@ -200,15 +200,16 @@ async function getAttachmentInfo(conversationId: string): Promise<{
       return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
     }
 
-    const documentAttachments = filterDocumentAttachments(allAttachments).filter(att =>
+    const retrievableDocumentAttachments = filterDocumentAttachments(allAttachments);
+    const uiDocumentAttachments = retrievableDocumentAttachments.filter((att) =>
       att.fileName && isSupportedDocumentExtension(att.fileName)
     );
 
     return {
-      hasDocuments: documentAttachments.length > 0,
+      hasDocuments: retrievableDocumentAttachments.length > 0,
       hasAny: true,
-      documentCount: documentAttachments.length,
-      documentAttachmentIds: documentAttachments.map((attachment) => attachment.id),
+      documentCount: uiDocumentAttachments.length,
+      documentAttachmentIds: retrievableDocumentAttachments.map((attachment) => attachment.id),
     };
   } catch (error) {
     logger.warn('[Context Router] Failed to get attachment info:', error);

@@ -18,10 +18,27 @@ import { validateRequestedModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { parseToolId } from '@/lib/tools/config';
+import { searchDepthEnum, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { logger } from "@/lib/logger";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for deep research & google suite tools
+
+function parseOptionalBoolean(
+  value: unknown,
+  fieldName: string,
+  defaultValue: boolean,
+): { success: true; value: boolean } | { success: false; error: string } {
+  if (value === undefined) {
+    return { success: true, value: defaultValue };
+  }
+
+  if (typeof value !== 'boolean') {
+    return { success: false, error: `${fieldName} must be a boolean` };
+  }
+
+  return { success: true, value };
+}
 
 export async function POST(request: NextRequest) {
   const requestId = createRequestId('chat');
@@ -40,13 +57,72 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = decryptApiKey(user.encryptedApiKey);
-    const body = await request.json();
-    
-    const { model, messages, stream = true, conversationId, activeTool, memoryEnabled = true, deepResearchEnabled = false, searchDepth = 'basic' } = body;
-    const sanitizedActiveTool =
-      typeof activeTool === 'string' ? parseToolId(activeTool) : null;
+    let rawBody: unknown;
 
-    if (typeof activeTool === 'string' && !sanitizedActiveTool) {
+    try {
+      rawBody = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return errorResponse('Request body must be a JSON object.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const body = rawBody as Record<string, unknown>;
+    const { model, messages } = body;
+    const conversationId =
+      body.conversationId === undefined || body.conversationId === null
+        ? undefined
+        : typeof body.conversationId === 'string'
+          ? body.conversationId
+          : null;
+    const activeTool =
+      body.activeTool === undefined || body.activeTool === null
+        ? null
+        : typeof body.activeTool === 'string'
+          ? body.activeTool
+          : null;
+
+    if (conversationId === null) {
+      return errorResponse('conversationId must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (
+      body.activeTool !== undefined &&
+      body.activeTool !== null &&
+      typeof body.activeTool !== 'string'
+    ) {
+      return errorResponse('activeTool must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const streamResult = parseOptionalBoolean(body.stream, 'stream', true);
+    if (!streamResult.success) {
+      return errorResponse(streamResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const memoryEnabledResult = parseOptionalBoolean(body.memoryEnabled, 'memoryEnabled', true);
+    if (!memoryEnabledResult.success) {
+      return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const deepResearchEnabledResult = parseOptionalBoolean(body.deepResearchEnabled, 'deepResearchEnabled', false);
+    if (!deepResearchEnabledResult.success) {
+      return errorResponse(deepResearchEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const parsedSearchDepth = searchDepthEnum.safeParse(body.searchDepth ?? 'basic');
+    if (!parsedSearchDepth.success) {
+      return errorResponse('searchDepth must be either "basic" or "advanced".', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const stream = streamResult.value;
+    const memoryEnabled = memoryEnabledResult.value;
+    const deepResearchEnabled = deepResearchEnabledResult.value;
+    const searchDepth: SearchDepth = parsedSearchDepth.data;
+    const sanitizedActiveTool = activeTool ? parseToolId(activeTool) : null;
+
+    if (activeTool && !sanitizedActiveTool) {
       logWarn({
         event: 'chat_invalid_active_tool_ignored',
         requestId,
@@ -55,20 +131,21 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    if (!model || typeof model !== 'string') {
+    if (typeof model !== 'string' || !model.trim()) {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    const validatedModel = validateRequestedModel(model);
+    const validatedModel = validateRequestedModel(model.trim());
     if (!validatedModel) {
       return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const validation = validateChatMessages(messages);
+    const validation = validateChatMessages(messages as Array<Record<string, unknown>>);
     if (!validation.valid) {
       return errorResponse(validation.error || 'Invalid messages', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    let enhancedMessages = messages;
+    const validatedMessages = messages as Message[];
+    let enhancedMessages = validatedMessages;
     let memoryStatusInfo: MemoryStatus = { 
       hasMemories: false, 
       attemptedMemory: false,
@@ -83,7 +160,7 @@ export async function POST(request: NextRequest) {
     };
     
     try {
-      const lastUserMessage = messages[messages.length - 1]?.content || '';
+      const lastUserMessage = validatedMessages[validatedMessages.length - 1]?.content || '';
 
       const contextResult = await withTrace(
         'context-routing',
@@ -91,7 +168,7 @@ export async function POST(request: NextRequest) {
           return await routeContext(
             lastUserMessage,
             authUser.id,
-            messages.slice(0, -1) as Message[],
+            validatedMessages.slice(0, -1),
             conversationId,
             sanitizedActiveTool,
             memoryEnabled,
@@ -164,7 +241,7 @@ export async function POST(request: NextRequest) {
       
       const streamHandler = createChatStreamHandler({
         memoryStatusInfo,
-        messages,
+        messages: validatedMessages,
         activeTool: sanitizedActiveTool,
         enhancedMessages,
         model: validatedModel,
@@ -208,7 +285,7 @@ export async function POST(request: NextRequest) {
           openai.chat.completions.create(
             {
               model: validatedModel,
-              messages: enhancedMessages,
+              messages: enhancedMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
               stream: false,
             },
             { signal: request.signal }

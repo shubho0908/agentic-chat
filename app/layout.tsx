@@ -27,21 +27,29 @@ const newsreader = Newsreader({
   style: ["normal", "italic"],
 });
 
+const SITE_TITLE = "Agentic Chat - Search, memory, and tools";
+const SITE_DESCRIPTION =
+  "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.";
+const SITE_FULL_DESCRIPTION =
+  "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace with your own key if you want it.";
+const SITE_NAME = "Agentic Chat";
+const SITE_OG_IMAGE_URL = "/api/og/home";
+
 export const metadata: Metadata = {
-  title: "Agentic Chat - Search, memory, and tools",
-  description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace with your own key if you want it.",
+  title: SITE_TITLE,
+  description: SITE_FULL_DESCRIPTION,
   metadataBase: new URL(appBaseUrl),
   openGraph: {
-    title: "Agentic Chat - Search, memory, and tools",
-    description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     url: '/',
-    siteName: "Agentic Chat",
+    siteName: SITE_NAME,
     images: [
       {
-        url: '/api/og/home',
+        url: SITE_OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: "Agentic Chat - Search, memory, and tools",
+        alt: SITE_TITLE,
       },
     ],
     locale: "en_US",
@@ -49,9 +57,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agentic Chat - Search, memory, and tools",
-    description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.",
-    images: ['/api/og/home'],
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [SITE_OG_IMAGE_URL],
   },
 };
 
