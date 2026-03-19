@@ -35,29 +35,6 @@ export const homepageKeywords = [
   "context-aware AI",
 ];
 
-export const homepageFaqs = [
-  {
-    question: "What is Agentic Chat?",
-    answer:
-      "Agentic Chat is a web-based AI chat app that combines conversation memory, web search, document understanding, and optional Google Workspace access in one workflow.",
-  },
-  {
-    question: "Can Agentic Chat search the web and analyze files?",
-    answer:
-      "Yes. You can search the web, upload documents, and keep both sources in the same conversation so follow-up prompts stay grounded in the material you already gathered.",
-  },
-  {
-    question: "Does Agentic Chat support Google Workspace?",
-    answer:
-      "Yes. The product includes optional Google Workspace connections for tools like Gmail, Drive, Calendar, Docs, Sheets, and Slides when those integrations help with the task.",
-  },
-  {
-    question: "Can I use my own API key?",
-    answer:
-      "Yes. Agentic Chat supports bring-your-own-key workflows so access and billing can remain under your control when you prefer that setup.",
-  },
-] as const;
-
 export const indexRobots: NonNullable<Metadata["robots"]> = {
   index: true,
   follow: true,

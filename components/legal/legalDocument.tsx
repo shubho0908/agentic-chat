@@ -34,7 +34,7 @@ export function LegalDocument({
             className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Back to chat
+            Back
           </Link>
 
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground/55">

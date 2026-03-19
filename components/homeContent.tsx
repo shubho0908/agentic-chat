@@ -41,7 +41,11 @@ function sessionLoadReducer(
   }
 }
 
-export function HomeContent() {
+interface HomeContentProps {
+  currentYear: number;
+}
+
+export function HomeContent({ currentYear }: HomeContentProps) {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
   const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({ memoryStatus });
   const [isConfigured, setIsConfigured] = useState(false);
@@ -158,7 +162,10 @@ export function HomeContent() {
     if (!isPending && !session) {
       return (
         <>
-          <LandingPage onAuthRequired={() => setShowAuthModal(true)} />
+          <LandingPage
+            currentYear={currentYear}
+            onAuthRequired={() => setShowAuthModal(true)}
+          />
           <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
         </>
       );
