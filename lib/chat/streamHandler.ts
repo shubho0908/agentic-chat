@@ -3,17 +3,17 @@ import type { ChatCompletionMessageParam, ChatCompletionContentPart } from 'open
 import type { Message } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
+import { routeContext } from '@/lib/contextRouter';
 import { parseToolId, TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openaiErrors';
+import { injectContextToMessages } from '@/lib/chat/messageHelpers';
 import { extractTextFromMessage } from './messageContent';
 import { executeWebSearchTool, executeDeepResearchTool, executeGoogleSuiteTool } from './toolExecutors';
 import {
-
   encodeMemoryStatus,
   encodeChatChunk,
   encodeError,
   encodeDone,
-  shouldSendMemoryStatus,
 } from './streamingHelpers';
 import {
   reserveDeepResearchUsage,
@@ -40,10 +40,10 @@ interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
   messages: Message[];
   activeTool?: string | null;
-  enhancedMessages: Message[];
   model: string;
   openai: OpenAI;
   apiKey: string;
+  memoryEnabled?: boolean;
   deepResearchEnabled?: boolean;
   abortSignal?: AbortSignal;
   userId?: string;
@@ -61,9 +61,23 @@ function logStreamWriteFailure(context: string, error: unknown): void {
 }
 
 export function createChatStreamHandler(options: StreamHandlerOptions) {
-  const { memoryStatusInfo, messages, activeTool, model, openai, apiKey, deepResearchEnabled, abortSignal, userId, conversationId, searchDepth = 'basic', requestId } = options;
+  const {
+    activeTool,
+    apiKey,
+    abortSignal,
+    conversationId,
+    deepResearchEnabled,
+    memoryEnabled = true,
+    messages,
+    model,
+    openai,
+    requestId,
+    searchDepth = 'basic',
+    userId,
+  } = options;
   const sanitizedActiveTool = parseToolId(activeTool);
-  let { enhancedMessages } = options;
+  let memoryStatusInfo: MemoryStatus = { ...options.memoryStatusInfo };
+  let enhancedMessages = messages;
 
   return {
     async start(controller: ReadableStreamDefaultController) {
@@ -114,9 +128,19 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         }
       };
 
+      const emitMemoryStatus = async () => {
+        try {
+          controller.enqueue(encodeMemoryStatus(memoryStatusInfo, sanitizedActiveTool));
+          await new Promise((resolve) => setImmediate(resolve));
+        } catch (error) {
+          logStreamWriteFailure('send memory status', error);
+        }
+      };
+
       const ensurePromptBudget = async () => {
         const budgetCheck = checkTokenBudget(enhancedMessages, model);
         memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
+        await emitMemoryStatus();
 
         if (budgetCheck.ok) {
           return true;
@@ -148,12 +172,46 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           return;
         }
 
-        if (shouldSendMemoryStatus(memoryStatusInfo)) {
-          controller.enqueue(encodeMemoryStatus(memoryStatusInfo, sanitizedActiveTool));
-          await new Promise(resolve => setImmediate(resolve));
-        }
-        
         const lastUserMessage = messages[messages.length - 1]?.content || '';
+        await emitMemoryStatus();
+
+        try {
+          if (userId) {
+            const contextResult = await routeContext(
+              lastUserMessage,
+              userId,
+              messages.slice(0, -1),
+              conversationId,
+              sanitizedActiveTool,
+              memoryEnabled,
+              deepResearchEnabled,
+              { apiKey }
+            );
+
+            memoryStatusInfo = {
+              ...memoryStatusInfo,
+              ...contextResult.metadata,
+            };
+
+            if (contextResult.context) {
+              enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
+            }
+          }
+        } catch (error) {
+          logger.error('[Stream Handler] Context routing failed:', error);
+          memoryStatusInfo.degradedContexts = [
+            ...(memoryStatusInfo.degradedContexts || []),
+            {
+              source: 'context_router',
+              reason: error instanceof Error ? error.message : String(error),
+            },
+          ];
+        }
+
+        if (!(await ensurePromptBudget())) {
+          return;
+        }
+
         const textQuery = extractTextFromMessage(lastUserMessage);
         
         if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {

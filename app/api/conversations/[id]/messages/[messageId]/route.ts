@@ -139,7 +139,7 @@ export async function PATCH(
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const { content, attachments, metadata, assistantContent, assistantMetadata } = body;
+    const { content, attachments, metadata, assistantContent, assistantMessageId, assistantMetadata } = body;
     let validatedAttachments: AttachmentInput[] | undefined;
 
     if (!content || typeof content !== 'string') {
@@ -173,6 +173,14 @@ export async function PATCH(
       return errorResponse('Invalid assistantContent', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
+    if (
+      assistantMessageId !== undefined &&
+      assistantMessageId !== null &&
+      typeof assistantMessageId !== 'string'
+    ) {
+      return errorResponse('Invalid assistantMessageId', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
@@ -201,6 +209,15 @@ export async function PATCH(
       const result = await prisma.$transaction(async (tx) => {
         const siblingIndex = await getNextSiblingIndex(tx, parentId);
 
+        await softDeleteDownstreamBranch(
+          tx,
+          conversationId,
+          messageId,
+          existingMessage.parentMessageId,
+          existingMessage.siblingIndex,
+          now
+        );
+
         const updatedMessage = await tx.message.create({
           data: {
             conversationId,
@@ -216,26 +233,72 @@ export async function PATCH(
           },
         });
 
-        const assistantMessage = await tx.message.create({
-          data: {
-            conversationId,
-            role: 'ASSISTANT',
-            content: assistantContent,
-            ...(assistantMetadata && { metadata: assistantMetadata }),
-          },
-          include: {
-            attachments: true,
-          },
-        });
+        let assistantMessage;
 
-        await softDeleteDownstreamBranch(
-          tx,
-          conversationId,
-          messageId,
-          existingMessage.parentMessageId,
-          existingMessage.siblingIndex,
-          now
-        );
+        if (assistantMessageId) {
+          try {
+            const existingAssistantMessage = await tx.message.findFirst({
+              where: {
+                id: assistantMessageId,
+                conversationId,
+                role: 'ASSISTANT',
+                isDeleted: false,
+              },
+              select: {
+                id: true,
+                parentMessageId: true,
+                siblingIndex: true,
+              },
+            });
+
+            if (existingAssistantMessage) {
+              const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
+              const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
+
+              await softDeleteDownstreamBranch(
+                tx,
+                conversationId,
+                existingAssistantMessage.id,
+                existingAssistantMessage.parentMessageId,
+                existingAssistantMessage.siblingIndex,
+                now
+              );
+
+              assistantMessage = await tx.message.create({
+                data: {
+                  conversationId,
+                  role: 'ASSISTANT',
+                  content: assistantContent,
+                  parentMessageId: assistantParentId,
+                  siblingIndex: assistantSiblingIndex,
+                  ...(assistantMetadata && { metadata: assistantMetadata }),
+                },
+                include: {
+                  attachments: true,
+                },
+              });
+            }
+          } catch (assistantVersionError) {
+            logger.warn('[Message Version Route] Falling back to standalone assistant message after version-link failure:', {
+              assistantMessageId,
+              error: assistantVersionError instanceof Error ? assistantVersionError.message : String(assistantVersionError),
+            });
+          }
+        }
+
+        if (!assistantMessage) {
+          assistantMessage = await tx.message.create({
+            data: {
+              conversationId,
+              role: 'ASSISTANT',
+              content: assistantContent,
+              ...(assistantMetadata && { metadata: assistantMetadata }),
+            },
+            include: {
+              attachments: true,
+            },
+          });
+        }
 
         await tx.conversation.update({
           where: { id: conversationId },
@@ -292,6 +355,7 @@ export async function PATCH(
 
     return jsonResponse(newVersion, HTTP_STATUS.OK);
   } catch (error) {
+    logger.error('[Message Version Route] Failed to update message:', error);
     return errorResponse(
       'Failed to update message',
       error instanceof Error ? error.message : undefined,

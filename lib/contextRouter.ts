@@ -41,6 +41,10 @@ interface ContextRoutingResult {
   metadata: ContextRoutingMetadata;
 }
 
+const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
+const CHAT_URL_CONTEXT_RETRIES = 0;
+const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 5_000;
+
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
   if (!Array.isArray(content)) return 0;
   return content.filter(part => 
@@ -112,6 +116,7 @@ async function resolveDocumentContext(
     conversationId?: string;
     attachmentIds?: string[];
     waitForProcessing?: boolean;
+    processingTimeoutMs?: number;
   }
 ) {
   const attempts = queries.map((query, index) => ({
@@ -128,6 +133,7 @@ async function resolveDocumentContext(
       limit: attempt.limit,
       scoreThreshold: attempt.scoreThreshold,
       waitForProcessing: attempt.waitForProcessing,
+      processingTimeoutMs: options.processingTimeoutMs,
     });
 
     if (result) {
@@ -284,7 +290,10 @@ export async function routeContext(
     const detectedUrls = extractUrlsFromMessage(query);
     if (detectedUrls.length > 0) {
       try {
-        const scrapedContent = await scrapeMultipleUrls(detectedUrls);
+        const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
+          timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
+          retries: CHAT_URL_CONTEXT_RETRIES,
+        });
         if (scrapedContent.length > 0) {
           metadata.hasUrls = true;
           metadata.urlCount = scrapedContent.length;
@@ -313,7 +322,10 @@ export async function routeContext(
   
   if (detectedUrls.length > 0) {
     try {
-      const scrapedContent = await scrapeMultipleUrls(detectedUrls);
+      const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
+        timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
+        retries: CHAT_URL_CONTEXT_RETRIES,
+      });
       
       if (scrapedContent.length > 0) {
         metadata.hasUrls = true;
@@ -357,6 +369,7 @@ export async function routeContext(
         conversationId,
         attachmentIds: attachmentInfo.documentAttachmentIds,
         waitForProcessing: true,
+        processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
       });
 
       if (ragResult) {
@@ -410,6 +423,7 @@ export async function routeContext(
       conversationId,
       attachmentIds: attachmentInfo.documentAttachmentIds,
       waitForProcessing: true,
+      processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
     });
 
     if (ragResult) {

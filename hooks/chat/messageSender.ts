@@ -127,22 +127,22 @@ export async function handleSendMessage(
   };
 
   const isNewConversation = !conversationId;
-  const placeholderAssistantId = conversationId ? `assistant-pending-${conversationId}` : undefined;
+  const placeholderAssistantId = conversationId
+    ? `assistant-pending-${conversationId}`
+    : `assistant-pending-${userMessage.id}`;
 
-  if (!isNewConversation && placeholderAssistantId) {
-    onMessagesUpdate((prev) => [
-      ...prev,
-      userMessage,
-      {
-        role: "assistant",
-        content: "",
-        id: placeholderAssistantId,
-        timestamp: Date.now(),
-        model,
-        toolActivities: [],
-      },
-    ]);
-  }
+  onMessagesUpdate((prev) => [
+    ...prev,
+    userMessage,
+    {
+      role: "assistant",
+      content: "",
+      id: placeholderAssistantId,
+      timestamp: Date.now(),
+      model,
+      toolActivities: [],
+    },
+  ]);
 
   let savedMsgId: string | null = null;
 

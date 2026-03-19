@@ -2,6 +2,7 @@ import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/sc
 import { ToolStatus } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "@/types/chat";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import type { WebSearchProgressDetails } from "@/types/tools";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
@@ -48,7 +49,7 @@ function toJsonValue(value: unknown): JsonValue | undefined {
 }
 
 function extractMetadataFromProgress(
-  progress: { details?: Record<string, unknown> },
+  progress: { details?: WebSearchProgressDetails | Record<string, unknown> },
   currentMetadata?: MessageMetadata
 ): MessageMetadata | undefined {
   if (!progress.details) return currentMetadata;

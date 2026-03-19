@@ -19,6 +19,7 @@ export interface RAGContextOptions {
   limit?: number;
   scoreThreshold?: number;
   waitForProcessing?: boolean;
+  processingTimeoutMs?: number;
 }
 
 export interface RAGContextResult {

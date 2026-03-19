@@ -163,7 +163,11 @@ async function executeSingleTask(
 
         return { output, sources: capturedSources, images: capturedImages };
       },
-      (searchIndex, total, query) => {
+      ({ phase, searchIndex, total, query }) => {
+        if (phase !== 'start') {
+          return;
+        }
+
         config.onProgress?.(taskIndex, {
           toolName: 'web_search',
           status: 'searching',

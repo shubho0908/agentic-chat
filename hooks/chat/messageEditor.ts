@@ -63,6 +63,7 @@ export async function handleEditMessage(
   let messageMetadata: MessageMetadata = {};
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
+  const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
   
   const newEditedVersion = createNewVersion(
@@ -251,6 +252,7 @@ export async function handleEditMessage(
           messageToEdit.id,
           messageContent,
           responseContent,
+          nextAssistantMessage?.id,
           attachments,
           messageMetadata,
           abortSignal
@@ -258,6 +260,9 @@ export async function handleEditMessage(
         const updatedMessageId = finalizedEdit.updatedMessage.id;
         const parentId = finalizedEdit.updatedMessage.parentMessageId || updatedMessageId;
         const versions = await fetchMessageVersions(conversationIdStr, parentId);
+        const assistantParentId =
+          finalizedEdit.assistantMessage.parentMessageId || finalizedEdit.assistantMessage.id;
+        const assistantVersions = await fetchMessageVersions(conversationIdStr, assistantParentId);
 
         onMessagesUpdate((prev) =>
           prev.map((msg) => {
@@ -265,11 +270,14 @@ export async function handleEditMessage(
               return updateMessageWithVersions(msg, updatedMessageId, versions);
             }
             if (msg.id === placeholderAssistantId) {
-              return {
-                ...msg,
-                id: finalizedEdit.assistantMessage.id,
-                metadata: messageMetadata,
-              };
+              return updateMessageWithVersions(
+                {
+                  ...msg,
+                  metadata: messageMetadata,
+                },
+                finalizedEdit.assistantMessage.id,
+                assistantVersions
+              );
             }
             return msg;
           })

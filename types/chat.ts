@@ -1,5 +1,10 @@
 import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
-import type { WebSearchSource, ResearchTask } from './tools';
+import type {
+  WebSearchImage,
+  WebSearchProgressDetails,
+  WebSearchSource,
+  ResearchTask,
+} from './tools';
 import type { GateDecision, EvaluationResult, Citation } from './deepResearch';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
@@ -54,15 +59,24 @@ export interface MemoryStatus {
     message: string;
     details?: {
       // Web search fields
+      originalQuery?: string;
       query?: string;
       resultsCount?: number;
       responseTime?: number;
       sources?: WebSearchSource[];
+      images?: WebSearchImage[];
+      imageCount?: number;
       currentSource?: WebSearchSource;
       processedCount?: number;
       searchDepth?: SearchDepth;
       phase?: number;
       totalPhases?: number;
+      intelligent?: boolean;
+      searchIndex?: number;
+      total?: number;
+      completedSearches?: number;
+      searchPlan?: WebSearchProgressDetails['searchPlan'];
+      usedConversationContext?: boolean;
 
       // Google Suite fields
       operation?: string;
@@ -209,16 +223,9 @@ export interface ToolResultEvent {
 
 export interface ToolProgressEvent {
   toolName: string;
-  status: ToolProgressStatus;
+  status: ToolProgressStatus | string;
   message: string;
-  details?: {
-    query?: string;
-    resultsCount?: number;
-    responseTime?: number;
-    sources?: WebSearchSource[];
-    currentSource?: WebSearchSource;
-    processedCount?: number;
-  };
+  details?: WebSearchProgressDetails;
 }
 
 export interface StreamConfig {

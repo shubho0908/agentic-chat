@@ -7,10 +7,8 @@ import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
-import { routeContext } from '@/lib/contextRouter';
 import type { MemoryStatus } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
-import { injectContextToMessages } from '@/lib/chat/messageHelpers';
 import { createChatStreamHandler } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
@@ -145,8 +143,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validatedMessages = messages as Message[];
-    let enhancedMessages = validatedMessages;
-    let memoryStatusInfo: MemoryStatus = { 
+    const baseMemoryStatusInfo: MemoryStatus = {
       hasMemories: false, 
       attemptedMemory: false,
       hasDocuments: false, 
@@ -158,81 +155,6 @@ export async function POST(request: NextRequest) {
       urlCount: 0,
       skippedMemory: false,
     };
-    
-    try {
-      const lastUserMessage = validatedMessages[validatedMessages.length - 1]?.content || '';
-
-      const contextResult = await withTrace(
-        'context-routing',
-        async () => {
-          return await routeContext(
-            lastUserMessage,
-            authUser.id,
-            validatedMessages.slice(0, -1),
-            conversationId,
-            sanitizedActiveTool,
-            memoryEnabled,
-            deepResearchEnabled,
-            { apiKey }
-          );
-        },
-        {
-          userId: authUser.id,
-          conversationId,
-          activeTool: sanitizedActiveTool,
-          memoryEnabled,
-          deepResearchEnabled,
-          model: validatedModel,
-        }
-      );
-
-      memoryStatusInfo = contextResult.metadata;
-
-      if (contextResult.context) {
-        enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
-      }
-    } catch (error) {
-      logger.error('[Context Routing Error]', error);
-      memoryStatusInfo.degradedContexts = [
-        ...(memoryStatusInfo.degradedContexts || []),
-        {
-          source: 'context_router',
-          reason: error instanceof Error ? error.message : String(error),
-        },
-      ];
-    }
-
-    try {
-      const budgetCheck = checkTokenBudget(enhancedMessages, validatedModel);
-      memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
-      if (!budgetCheck.ok) {
-        logWarn({
-          event: 'chat_request_rejected_budget',
-          requestId,
-          model: validatedModel,
-          usedTokens: budgetCheck.tokenUsage.used,
-          limit: budgetCheck.tokenUsage.limit,
-          reserve: budgetCheck.tokenUsage.responseReserve,
-        });
-        return errorResponse(
-          budgetCheck.errorMessage ?? 'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
-          undefined,
-          HTTP_STATUS.BAD_REQUEST
-        );
-      }
-    } catch (error) {
-      logError({
-        event: 'token_count_failed',
-        requestId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      memoryStatusInfo.tokenUsage = undefined;
-      return errorResponse(
-        'Unable to validate request size. Please try again.',
-        undefined,
-        HTTP_STATUS.BAD_REQUEST
-      );
-    }
 
     const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 
@@ -240,13 +162,13 @@ export async function POST(request: NextRequest) {
       const abortController = new AbortController();
       
       const streamHandler = createChatStreamHandler({
-        memoryStatusInfo,
         messages: validatedMessages,
         activeTool: sanitizedActiveTool,
-        enhancedMessages,
+        memoryStatusInfo: baseMemoryStatusInfo,
         model: validatedModel,
         openai,
         apiKey,
+        memoryEnabled,
         deepResearchEnabled,
         abortSignal: abortController.signal,
         userId: authUser.id,
@@ -275,6 +197,86 @@ export async function POST(request: NextRequest) {
       if (sanitizedActiveTool || deepResearchEnabled) {
         return errorResponse(
           'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+      let enhancedMessages = validatedMessages;
+      let memoryStatusInfo: MemoryStatus = { ...baseMemoryStatusInfo };
+
+      try {
+        const { routeContext } = await import('@/lib/contextRouter');
+        const { injectContextToMessages } = await import('@/lib/chat/messageHelpers');
+        const lastUserMessage = validatedMessages[validatedMessages.length - 1]?.content || '';
+
+        const contextResult = await withTrace(
+          'context-routing',
+          async () => {
+            return await routeContext(
+              lastUserMessage,
+              authUser.id,
+              validatedMessages.slice(0, -1),
+              conversationId,
+              sanitizedActiveTool,
+              memoryEnabled,
+              deepResearchEnabled,
+              { apiKey }
+            );
+          },
+          {
+            userId: authUser.id,
+            conversationId,
+            activeTool: sanitizedActiveTool,
+            memoryEnabled,
+            deepResearchEnabled,
+            model: validatedModel,
+          }
+        );
+
+        memoryStatusInfo = contextResult.metadata;
+
+        if (contextResult.context) {
+          enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
+        }
+      } catch (error) {
+        logger.error('[Context Routing Error]', error);
+        memoryStatusInfo.degradedContexts = [
+          ...(memoryStatusInfo.degradedContexts || []),
+          {
+            source: 'context_router',
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        ];
+      }
+
+      try {
+        const budgetCheck = checkTokenBudget(enhancedMessages, validatedModel);
+        memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
+        if (!budgetCheck.ok) {
+          logWarn({
+            event: 'chat_request_rejected_budget',
+            requestId,
+            model: validatedModel,
+            usedTokens: budgetCheck.tokenUsage.used,
+            limit: budgetCheck.tokenUsage.limit,
+            reserve: budgetCheck.tokenUsage.responseReserve,
+          });
+          return errorResponse(
+            budgetCheck.errorMessage ?? 'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
+            undefined,
+            HTTP_STATUS.BAD_REQUEST
+          );
+        }
+      } catch (error) {
+        logError({
+          event: 'token_count_failed',
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        memoryStatusInfo.tokenUsage = undefined;
+        return errorResponse(
+          'Unable to validate request size. Please try again.',
           undefined,
           HTTP_STATUS.BAD_REQUEST
         );
