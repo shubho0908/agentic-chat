@@ -72,7 +72,14 @@ export function ChatContainer({
 
   const bottomAnchorRef = useCallback((node: HTMLDivElement | null) => {
     if (node && shouldScrollToBottom) {
-      node.scrollIntoView({ behavior: "smooth", block: "end" });
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      node.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "end",
+      });
     }
   }, [shouldScrollToBottom]);
 

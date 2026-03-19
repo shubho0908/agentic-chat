@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       body.conversationId === undefined || body.conversationId === null
         ? undefined
         : typeof body.conversationId === 'string'
-          ? body.conversationId
+          ? body.conversationId.trim() || undefined
           : null;
     const activeTool =
       body.activeTool === undefined || body.activeTool === null
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     if (!streamResult.success) {
       return errorResponse(streamResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
     }
+    const stream = streamResult.value;
 
     const memoryEnabledResult = parseOptionalBoolean(body.memoryEnabled, 'memoryEnabled', true);
     if (!memoryEnabledResult.success) {
@@ -108,15 +109,22 @@ export async function POST(request: NextRequest) {
     if (!deepResearchEnabledResult.success) {
       return errorResponse(deepResearchEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
     }
+    const deepResearchEnabled = deepResearchEnabledResult.value;
+
+    if (!stream && (deepResearchEnabled || activeTool)) {
+      return errorResponse(
+        'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
+        undefined,
+        HTTP_STATUS.BAD_REQUEST
+      );
+    }
 
     const parsedSearchDepth = searchDepthEnum.safeParse(body.searchDepth ?? 'basic');
     if (!parsedSearchDepth.success) {
       return errorResponse('searchDepth must be either "basic" or "advanced".', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const stream = streamResult.value;
     const memoryEnabled = memoryEnabledResult.value;
-    const deepResearchEnabled = deepResearchEnabledResult.value;
     const searchDepth: SearchDepth = parsedSearchDepth.data;
     const sanitizedActiveTool = activeTool ? parseToolId(activeTool) : null;
 
@@ -194,14 +202,6 @@ export async function POST(request: NextRequest) {
         },
       });
     } else {
-      if (sanitizedActiveTool || deepResearchEnabled) {
-        return errorResponse(
-          'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
-          undefined,
-          HTTP_STATUS.BAD_REQUEST
-        );
-      }
-
       let enhancedMessages = validatedMessages;
       let memoryStatusInfo: MemoryStatus = { ...baseMemoryStatusInfo };
 

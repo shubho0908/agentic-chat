@@ -22,7 +22,7 @@ interface ModelSelectorProps {
 function formatContext(tokens: number): string {
   const formatCompactValue = (value: number) => {
     const rounded = Number(value.toFixed(1));
-    return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+    return rounded.toString();
   };
 
   if (tokens >= 1000000) return `${formatCompactValue(tokens / 1000000)}M`;
@@ -89,7 +89,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
               return (
                 <DropdownMenuItem
                   key={model.id}
-                  onClick={() => onModelSelect(model.id)}
+                  onSelect={() => onModelSelect(model.id)}
                   className={cn(
                     "flex items-start gap-3 p-2 rounded-xl cursor-pointer mb-0.5 last:mb-0",
                     "transition-colors outline-none",

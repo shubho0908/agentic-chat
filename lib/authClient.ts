@@ -14,7 +14,7 @@ const authClient = createAuthClient({
     timeout: 10_000,
     retry: {
       type: "linear",
-      attempts: 1,
+      attempts: 2,
       delay: 500,
     },
   },
