@@ -275,7 +275,7 @@ export function AutoScrollStage({ children }: { children: ReactNode }) {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [children]);
+  }, []);
 
   return (
     <div

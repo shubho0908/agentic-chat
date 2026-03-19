@@ -144,6 +144,8 @@ export async function handleSendMessage(
     ]);
   }
 
+  let savedMsgId: string | null = null;
+
   try {
     let currentConversationId = conversationId;
 
@@ -178,14 +180,26 @@ export async function handleSendMessage(
       throw new Error("Conversation ID is required for existing conversations");
     }
 
-    const saveUserMessagePromise = saveUserMessage(
+    savedMsgId = await saveUserMessage(
       currentConversationId,
       messageContent,
       attachments,
       abortSignal
     );
 
-    const streamingResponsePromise = handleStreamingResponse(
+    if (!savedMsgId) {
+      throw new Error("Failed to save user message");
+    }
+
+    const persistedUserMessageId = savedMsgId;
+
+    onMessagesUpdate((prev) =>
+      prev.map((msg) =>
+        msg.id === userMessage.id ? { ...msg, id: persistedUserMessageId } : msg
+      )
+    );
+
+    const result = await handleStreamingResponse(
       {
         messages,
         conversationId: currentConversationId,
@@ -209,17 +223,6 @@ export async function handleSendMessage(
       }
     );
 
-    const [savedMsgId, result] = await Promise.all([
-      saveUserMessagePromise,
-      streamingResponsePromise,
-    ]);
-
-    if (savedMsgId) {
-      onMessagesUpdate((prev) =>
-        prev.map((msg) => (msg.id === userMessage.id ? { ...msg, id: savedMsgId } : msg))
-      );
-    }
-
     if (!result.success && result.error && result.error !== "aborted") {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
         description: result.error,
@@ -228,6 +231,18 @@ export async function handleSendMessage(
 
     return result;
   } catch (err) {
+    if (!isNewConversation) {
+      const userMessageWasPersisted = typeof savedMsgId === "string" && savedMsgId.length > 0;
+
+      if (!userMessageWasPersisted) {
+        onMessagesUpdate((prev) =>
+          prev.filter(
+            (msg) => msg.id !== userMessage.id && msg.id !== placeholderAssistantId
+          )
+        );
+      }
+    }
+
     if ((err as Error).name === "AbortError") {
       return { success: false, error: "aborted" };
     }
