@@ -9,7 +9,6 @@ import { auth } from "@/lib/auth";
 import {
   absoluteUrl,
   createPageMetadata,
-  homepageFaqs,
   homepageKeywords,
   siteConfig,
 } from "@/lib/seo";
@@ -56,22 +55,11 @@ const homeStructuredData = [
       "Bring your own API key",
     ],
   },
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: homepageFaqs.map((faq) => ({
-      "@type": "Question",
-      name: faq.question,
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: faq.answer,
-      },
-    })),
-  },
 ];
 
 export default async function Home() {
   let session = null;
+  const currentYear = new Date().getFullYear();
 
   try {
     session = await auth.api.getSession({ headers: await headers() });
@@ -93,10 +81,10 @@ export default async function Home() {
             </div>
           }
         >
-          <HomeContent />
+          <HomeContent currentYear={currentYear} />
         </Suspense>
       ) : (
-        <LandingEntry />
+        <LandingEntry currentYear={currentYear} />
       )}
     </>
   );
