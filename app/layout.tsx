@@ -52,9 +52,9 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    icon: [{ url: "/favicon.ico" }],
-    shortcut: ["/favicon.ico"],
-    apple: [{ url: "/favicon.ico" }],
+    icon: [{ url: "/favicon.ico", rel: "icon" }],
+    shortcut: [{ url: "/favicon.ico", rel: "shortcut icon" }],
+    apple: [{ url: "/favicon.ico", rel: "apple-touch-icon" }],
   },
   openGraph: {
     title: siteConfig.defaultTitle,

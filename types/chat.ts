@@ -225,7 +225,7 @@ export interface ToolProgressEvent {
   toolName: string;
   status: ToolProgressStatus | string;
   message: string;
-  details?: WebSearchProgressDetails;
+  details?: Record<string, unknown>;
 }
 
 export interface StreamConfig {

@@ -11,7 +11,7 @@ import { DEEP_RESEARCH_MAX_ATTEMPTS } from './constants';
 interface GraphConfig {
   openaiApiKey: string;
   model: string;
-  onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string }) => void;
+  onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string; details?: Record<string, unknown> }) => void;
   forceDeepResearch?: boolean;
   abortSignal?: AbortSignal;
   userId?: string;

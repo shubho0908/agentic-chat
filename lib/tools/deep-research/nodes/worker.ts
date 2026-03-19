@@ -26,7 +26,7 @@ import { logger } from "@/lib/logger";
 interface WorkerConfig {
   openaiApiKey: string;
   model: string;
-  onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string }) => void;
+  onProgress?: (taskIndex: number, toolProgress: { toolName: string; status: string; message: string; details?: Record<string, unknown> }) => void;
   abortSignal?: AbortSignal;
   userId?: string;
   conversationId?: string;
@@ -163,15 +163,17 @@ async function executeSingleTask(
 
         return { output, sources: capturedSources, images: capturedImages };
       },
-      ({ phase, searchIndex, total, query }) => {
-        if (phase !== 'start') {
-          return;
-        }
-
+      ({ phase, searchIndex, total, query, accumulatedSources, accumulatedImages }) => {
         config.onProgress?.(taskIndex, {
           toolName: 'web_search',
-          status: 'searching',
-          message: `Search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`,
+          status: phase === 'complete' ? 'completed' : 'searching',
+          message: phase === 'complete'
+            ? `Completed search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
+            : `Search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`,
+          details: {
+            sources: accumulatedSources,
+            images: accumulatedImages,
+          },
         });
       }
     );

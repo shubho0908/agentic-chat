@@ -72,7 +72,8 @@ export function buildUpdatedVersionsList(
 
 export async function fetchMessageVersions(
   conversationId: string,
-  parentMessageId: string
+  parentMessageId: string,
+  options: { throwOnError?: boolean } = {}
 ): Promise<Message[]> {
   try {
     const versionsResponse = await fetch(
@@ -80,6 +81,12 @@ export async function fetchMessageVersions(
     );
     
     if (!versionsResponse.ok) {
+      const error = new Error(
+        `Failed to fetch message versions: ${versionsResponse.status} ${versionsResponse.statusText}`
+      );
+      if (options.throwOnError) {
+        throw error;
+      }
       return [];
     }
 
@@ -99,6 +106,9 @@ export async function fetchMessageVersions(
     return [];
   } catch (err) {
     logger.error("Failed to fetch message versions:", err);
+    if (options.throwOnError) {
+      throw err;
+    }
     return [];
   }
 }

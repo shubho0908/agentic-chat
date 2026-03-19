@@ -1,4 +1,4 @@
-import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { buildMultimodalContent } from "@/lib/contentUtils";
@@ -13,6 +13,7 @@ import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updat
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
+import { logger } from "@/lib/logger";
 
 function toJsonValue(value: unknown): JsonValue | undefined {
   if (value === undefined) {
@@ -262,7 +263,37 @@ export async function handleEditMessage(
         const versions = await fetchMessageVersions(conversationIdStr, parentId);
         const assistantParentId =
           finalizedEdit.assistantMessage.parentMessageId || finalizedEdit.assistantMessage.id;
-        const assistantVersions = await fetchMessageVersions(conversationIdStr, assistantParentId);
+        let assistantVersions: Message[] = [];
+        let shouldUseAssistantFallback = false;
+
+        try {
+          assistantVersions = await fetchMessageVersions(
+            conversationIdStr,
+            assistantParentId,
+            { throwOnError: true }
+          );
+
+          if (assistantVersions.length === 0) {
+            shouldUseAssistantFallback = true;
+            logger.warn("Falling back to finalized assistant edit data after empty versions response", {
+              conversationId: conversationIdStr,
+              assistantParentId,
+              assistantMessageId: finalizedEdit.assistantMessage.id,
+            });
+            queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+          }
+        } catch (assistantVersionsError) {
+          shouldUseAssistantFallback = true;
+          logger.warn("Failed to fetch assistant message versions after edit; using finalized response fallback", {
+            conversationId: conversationIdStr,
+            assistantParentId,
+            assistantMessageId: finalizedEdit.assistantMessage.id,
+            error: assistantVersionsError instanceof Error
+              ? assistantVersionsError.message
+              : String(assistantVersionsError),
+          });
+          queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+        }
 
         onMessagesUpdate((prev) =>
           prev.map((msg) => {
@@ -270,6 +301,19 @@ export async function handleEditMessage(
               return updateMessageWithVersions(msg, updatedMessageId, versions);
             }
             if (msg.id === placeholderAssistantId) {
+              if (shouldUseAssistantFallback) {
+                return {
+                  ...msg,
+                  id: finalizedEdit.assistantMessage.id,
+                  content: finalizedEdit.assistantMessage.content,
+                  timestamp: new Date(finalizedEdit.assistantMessage.createdAt).getTime(),
+                  parentMessageId: finalizedEdit.assistantMessage.parentMessageId,
+                  siblingIndex: finalizedEdit.assistantMessage.siblingIndex,
+                  attachments: finalizedEdit.assistantMessage.attachments,
+                  metadata: messageMetadata,
+                };
+              }
+
               return updateMessageWithVersions(
                 {
                   ...msg,

@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       
       const streamHandler = createChatStreamHandler({
         messages: validatedMessages,
-        activeTool: sanitizedActiveTool,
+        sanitizedActiveTool,
         memoryStatusInfo: baseMemoryStatusInfo,
         model: validatedModel,
         openai,

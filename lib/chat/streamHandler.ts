@@ -3,8 +3,9 @@ import type { ChatCompletionMessageParam, ChatCompletionContentPart } from 'open
 import type { Message } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
+import type { ToolId } from '@/lib/tools/config';
 import { routeContext } from '@/lib/contextRouter';
-import { parseToolId, TOOL_IDS } from '@/lib/tools/config';
+import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { injectContextToMessages } from '@/lib/chat/messageHelpers';
 import { extractTextFromMessage } from './messageContent';
@@ -39,7 +40,7 @@ import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
   messages: Message[];
-  activeTool?: string | null;
+  sanitizedActiveTool?: ToolId | null;
   model: string;
   openai: OpenAI;
   apiKey: string;
@@ -62,7 +63,6 @@ function logStreamWriteFailure(context: string, error: unknown): void {
 
 export function createChatStreamHandler(options: StreamHandlerOptions) {
   const {
-    activeTool,
     apiKey,
     abortSignal,
     conversationId,
@@ -72,10 +72,10 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     model,
     openai,
     requestId,
+    sanitizedActiveTool,
     searchDepth = 'basic',
     userId,
   } = options;
-  const sanitizedActiveTool = parseToolId(activeTool);
   let memoryStatusInfo: MemoryStatus = { ...options.memoryStatusInfo };
   let enhancedMessages = messages;
 
@@ -215,7 +215,16 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         const textQuery = extractTextFromMessage(lastUserMessage);
         
         if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
-          enhancedMessages = await executeWebSearchTool(textQuery, controller, enhancedMessages, apiKey, model, abortSignal, searchDepth);
+          enhancedMessages = await executeWebSearchTool(
+            textQuery,
+            controller,
+            enhancedMessages,
+            apiKey,
+            model,
+            abortSignal,
+            searchDepth,
+            messages
+          );
           if (!(await ensurePromptBudget())) {
             return;
           }

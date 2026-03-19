@@ -12,7 +12,7 @@ import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/webSea
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
 import { executeMultiSearch } from '../tools/web-search/searchPlanner';
-import { resolveWebSearchQuery } from '../tools/web-search/queryContext';
+import { prepareWebSearchQuery, resolveWebSearchQuery } from '../tools/web-search/queryContext';
 import { createUnifiedPlan, type WebSearchPlan } from '../tools/unifiedPlanner';
 import { truncateTextToTokenLimit } from '@/lib/utils/tokenCounter';
 
@@ -52,7 +52,8 @@ export async function executeWebSearchTool(
   apiKey?: string,
   model?: string,
   abortSignal?: AbortSignal,
-  searchDepth: SearchDepth = 'basic'
+  searchDepth: SearchDepth = 'basic',
+  conversationMessages: Message[] = messages
 ): Promise<Message[]> {
   const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   let streamClosed = false;
@@ -68,10 +69,12 @@ export async function executeWebSearchTool(
       }
       return messages;
     }
+    const preparedQuery = prepareWebSearchQuery(textQuery);
+    const queryInput = preparedQuery.searchQuery || preparedQuery.originalQuery;
     const useIntelligentPlanning = searchDepth === 'advanced' && apiKey && model;
     const queryResolution = await resolveWebSearchQuery({
-      query: textQuery,
-      messages,
+      query: queryInput,
+      messages: conversationMessages,
       apiKey,
       model,
       abortSignal,
@@ -88,6 +91,8 @@ export async function executeWebSearchTool(
             originalQuery: queryResolution.originalQuery,
             query: effectiveQuery,
             usedConversationContext: true,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth,
             ...(searchDepth === 'advanced' ? { phase: 1, totalPhases } : {}),
           }
@@ -129,7 +134,7 @@ export async function executeWebSearchTool(
         model: model!,
         searchDepth,
         abortSignal,
-        conversationHistory: extractConversationHistory(messages, {
+        conversationHistory: extractConversationHistory(conversationMessages, {
           excludeLastMessage: true,
           maxExchanges: 4,
           includeAllForShortConversations: true,
@@ -160,6 +165,8 @@ export async function executeWebSearchTool(
             originalQuery: queryResolution.originalQuery,
             query: effectiveQuery,
             usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth,
             phase: currentPhase,
             totalPhases,
@@ -211,6 +218,8 @@ export async function executeWebSearchTool(
                 query,
                 originalQuery: queryResolution.originalQuery,
                 usedConversationContext: queryResolution.usedConversationContext,
+                explicitUrls: preparedQuery.explicitUrls,
+                usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                 searchDepth,
                 phase: currentPhase,
                 totalPhases,
@@ -244,6 +253,8 @@ export async function executeWebSearchTool(
             originalQuery: queryResolution.originalQuery,
             query: effectiveQuery,
             usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth,
             phase: currentPhase,
             totalPhases,
@@ -270,6 +281,8 @@ export async function executeWebSearchTool(
             originalQuery: queryResolution.originalQuery,
             query: effectiveQuery,
             usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth, 
             phase: currentPhase,
             totalPhases,
@@ -308,6 +321,8 @@ export async function executeWebSearchTool(
               originalQuery: queryResolution.originalQuery,
               query: effectiveQuery,
               usedConversationContext: queryResolution.usedConversationContext,
+              explicitUrls: preparedQuery.explicitUrls,
+              usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
               searchDepth,
               phase: currentPhase,
               totalPhases,
@@ -339,6 +354,8 @@ export async function executeWebSearchTool(
                     originalQuery: queryResolution.originalQuery,
                     query: progress.details?.query || effectiveQuery,
                     usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                     searchDepth,
                     phase: currentPhase,
                     totalPhases,
@@ -357,6 +374,8 @@ export async function executeWebSearchTool(
                     originalQuery: queryResolution.originalQuery,
                     query: progress.details?.query || effectiveQuery,
                     usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                     searchDepth,
                     phase: currentPhase,
                     totalPhases,
@@ -376,6 +395,8 @@ export async function executeWebSearchTool(
                   originalQuery: queryResolution.originalQuery,
                   query: progress.details?.query || effectiveQuery,
                   usedConversationContext: queryResolution.usedConversationContext,
+                  explicitUrls: preparedQuery.explicitUrls,
+                  usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                   searchDepth,
                   phase: currentPhase,
                   totalPhases,
@@ -393,6 +414,8 @@ export async function executeWebSearchTool(
                     originalQuery: queryResolution.originalQuery,
                     query: progress.details?.query || effectiveQuery,
                     usedConversationContext: queryResolution.usedConversationContext,
+                    explicitUrls: preparedQuery.explicitUrls,
+                    usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                     searchDepth,
                     phase: currentPhase,
                     totalPhases,
@@ -411,6 +434,8 @@ export async function executeWebSearchTool(
                 originalQuery: queryResolution.originalQuery,
                 query: progress.details?.query || effectiveQuery,
                 usedConversationContext: queryResolution.usedConversationContext,
+                explicitUrls: preparedQuery.explicitUrls,
+                usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
                 searchDepth,
               }
             ));
@@ -445,6 +470,8 @@ export async function executeWebSearchTool(
             originalQuery: queryResolution.originalQuery,
             query: effectiveQuery,
             usedConversationContext: queryResolution.usedConversationContext,
+            explicitUrls: preparedQuery.explicitUrls,
+            usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth,
             phase: currentPhase,
             totalPhases,

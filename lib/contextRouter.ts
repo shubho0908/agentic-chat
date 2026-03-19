@@ -45,6 +45,36 @@ const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
 const CHAT_URL_CONTEXT_RETRIES = 0;
 const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 5_000;
 
+async function resolveExplicitUrlContext(
+  query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+  metadata: ContextRoutingMetadata,
+  addDegradedContext: (source: string, reason: string) => void
+): Promise<string> {
+  const detectedUrls = extractUrlsFromMessage(query);
+  if (detectedUrls.length === 0) {
+    return '';
+  }
+
+  try {
+    const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
+      timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
+      retries: CHAT_URL_CONTEXT_RETRIES,
+    });
+
+    if (scrapedContent.length === 0) {
+      return '';
+    }
+
+    metadata.hasUrls = true;
+    metadata.urlCount = scrapedContent.length;
+    return formatScrapedContentForContext(scrapedContent);
+  } catch (error) {
+    logger.error('[Context Router] URL scraping failed:', error);
+    addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
+    return '';
+  }
+}
+
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
   if (!Array.isArray(content)) return 0;
   return content.filter(part => 
@@ -287,28 +317,28 @@ export async function routeContext(
       }
     }
 
-    const detectedUrls = extractUrlsFromMessage(query);
-    if (detectedUrls.length > 0) {
-      try {
-        const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
-          timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
-          retries: CHAT_URL_CONTEXT_RETRIES,
-        });
-        if (scrapedContent.length > 0) {
-          metadata.hasUrls = true;
-          metadata.urlCount = scrapedContent.length;
-          return {
-            context: formatScrapedContentForContext(scrapedContent),
-            metadata,
-          };
-        }
-      } catch (error) {
-        logger.error('[Context Router] Deep research URL scraping failed:', error);
-        addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
-      }
+    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+    if (urlContext) {
+      return {
+        context: urlContext,
+        metadata,
+      };
     }
 
     return { context: '', metadata };
+  }
+
+  if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
+    metadata.routingDecision = RoutingDecision.ToolOnly;
+    metadata.skippedMemory = true;
+    metadata.activeToolName = sanitizedActiveTool;
+
+    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+
+    return {
+      context: urlContext,
+      metadata,
+    };
   }
 
   if (sanitizedActiveTool) {
@@ -318,36 +348,17 @@ export async function routeContext(
     return { context: '', metadata };
   }
 
-  const detectedUrls = extractUrlsFromMessage(query);
-  
-  if (detectedUrls.length > 0) {
-    try {
-      const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
-        timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
-        retries: CHAT_URL_CONTEXT_RETRIES,
-      });
-      
-      if (scrapedContent.length > 0) {
-        metadata.hasUrls = true;
-        metadata.urlCount = scrapedContent.length;
-        metadata.routingDecision = RoutingDecision.UrlContent;
-        metadata.skippedMemory = true;
-        
-        const urlContext = formatScrapedContentForContext(scrapedContent);
-        
-        if (hasImages) {
-          metadata.routingDecision = RoutingDecision.Hybrid;
-        }
-        
-        return { context: urlContext, metadata };
-      } else {
-        logger.log('[Context Router] All URL scraping attempts failed, continuing with normal flow');
-      }
-    } catch (error) {
-      logger.error('[Context Router] URL scraping failed:', error);
-      addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
-      // Continue with normal flow if URL scraping fails
+  const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
+
+  if (urlContext) {
+    metadata.routingDecision = RoutingDecision.UrlContent;
+    metadata.skippedMemory = true;
+
+    if (hasImages) {
+      metadata.routingDecision = RoutingDecision.Hybrid;
     }
+
+    return { context: urlContext, metadata };
   }
 
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {

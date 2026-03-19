@@ -107,7 +107,8 @@ export function ChatContainer({
         toolActivities: lastMessage.toolActivities,
       })
     : "empty";
-  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessageFingerprint}`;
+  const memoryStatusFingerprint = serializeAnchorValue(memoryStatus);
+  const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessageFingerprint}-${memoryStatusFingerprint}`;
   const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
   const shouldShowBanner =
     isContextBlocked &&

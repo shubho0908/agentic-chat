@@ -145,6 +145,7 @@ export async function handleSendMessage(
   ]);
 
   let savedMsgId: string | null = null;
+  let userMessageWasPersisted = false;
 
   try {
     let currentConversationId = conversationId;
@@ -159,6 +160,12 @@ export async function handleSendMessage(
         queryClient,
         (data: ConversationResult) => {
           currentConversationId = data.conversationId;
+          onMessagesUpdate((prev) =>
+            prev.map((msg) =>
+              msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
+            )
+          );
+          userMessageWasPersisted = true;
           onConversationIdUpdate(data.conversationId);
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
           onNavigate(`/c/${data.conversationId}`);
@@ -172,32 +179,35 @@ export async function handleSendMessage(
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
+    } else {
+      if (!currentConversationId) {
+        throw new Error("Conversation ID is required for existing conversations");
+      }
 
-      return { success: true };
+      savedMsgId = await saveUserMessage(
+        currentConversationId,
+        messageContent,
+        attachments,
+        abortSignal
+      );
+
+      if (!savedMsgId) {
+        throw new Error("Failed to save user message");
+      }
+
+      const persistedUserMessageId = savedMsgId;
+      userMessageWasPersisted = true;
+
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === userMessage.id ? { ...msg, id: persistedUserMessageId } : msg
+        )
+      );
     }
 
     if (!currentConversationId) {
-      throw new Error("Conversation ID is required for existing conversations");
+      throw new Error("Conversation ID is required before streaming the response");
     }
-
-    savedMsgId = await saveUserMessage(
-      currentConversationId,
-      messageContent,
-      attachments,
-      abortSignal
-    );
-
-    if (!savedMsgId) {
-      throw new Error("Failed to save user message");
-    }
-
-    const persistedUserMessageId = savedMsgId;
-
-    onMessagesUpdate((prev) =>
-      prev.map((msg) =>
-        msg.id === userMessage.id ? { ...msg, id: persistedUserMessageId } : msg
-      )
-    );
 
     const result = await handleStreamingResponse(
       {
@@ -231,16 +241,12 @@ export async function handleSendMessage(
 
     return result;
   } catch (err) {
-    if (!isNewConversation) {
-      const userMessageWasPersisted = typeof savedMsgId === "string" && savedMsgId.length > 0;
-
-      if (!userMessageWasPersisted) {
-        onMessagesUpdate((prev) =>
-          prev.filter(
-            (msg) => msg.id !== userMessage.id && msg.id !== placeholderAssistantId
-          )
-        );
-      }
+    if (!userMessageWasPersisted) {
+      onMessagesUpdate((prev) =>
+        prev.filter(
+          (msg) => msg.id !== userMessage.id && msg.id !== placeholderAssistantId
+        )
+      );
     }
 
     if ((err as Error).name === "AbortError") {

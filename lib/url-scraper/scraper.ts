@@ -127,11 +127,17 @@ function extractWithCheerio(html: string, url: string): ScrapedContent {
 
 async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): Promise<ScrapedContent> {
   logInfo({ event: 'url_scrape_start', url });
+  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs as number) > 0
+    ? Number(options.timeoutMs)
+    : REQUEST_TIMEOUT;
+  const retries = Number.isInteger(options.retries) && (options.retries as number) >= 0
+    ? Number(options.retries)
+    : 2;
 
   try {
     const response = await safeFetch(url, {
-      timeoutMs: options.timeoutMs ?? REQUEST_TIMEOUT,
-      retries: options.retries ?? 2,
+      timeoutMs,
+      retries,
       maxResponseBytes: MAX_SCRAPE_RESPONSE_BYTES,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -198,6 +204,10 @@ const EXCLUDED_PATTERNS = [
   /\.imgur\./i,
 ];
 
+export function stripUrlsFromText(text: string): string {
+  return text.replace(URL_REGEX, ' ');
+}
+
 export function extractUrlsFromMessage(message: string | Array<{ type: string; text?: string }>): string[] {
   const textContent = typeof message === 'string' 
     ? message 
@@ -240,7 +250,7 @@ export async function scrapeMultipleUrls(
   const failed = results.filter(result => result.status === 'rejected');
   
   if (failed.length > 0) {
-    failed.forEach((result, index) => {
+    results.forEach((result, index) => {
       if (result.status === 'rejected') {
         logError({
           event: 'url_scrape_batch_failed',
