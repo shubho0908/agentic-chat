@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
                 gap: '8px',
               }}
             >
-              Intelligent Conversations
+              Search, memory, and tools
             </div>
           </div>
         </div>

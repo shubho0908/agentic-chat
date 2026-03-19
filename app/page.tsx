@@ -5,12 +5,12 @@ import { HomeContent } from "@/components/homeContent";
 import { appBaseUrl } from "@/lib/appUrl";
 
 export const metadata: Metadata = {
-  title: "Agentic Chat - Intelligent Conversations",
-  description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement. Experience intelligent conversations with advanced AI capabilities.",
+  title: "Agentic Chat - Search, memory, and tools",
+  description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace with your own key if you want it.",
   metadataBase: new URL(appBaseUrl),
   openGraph: {
-    title: "Agentic Chat - Intelligent Conversations",
-    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
+    title: "Agentic Chat - Search, memory, and tools",
+    description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.",
     url: '/',
     siteName: "Agentic Chat",
     images: [
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
         url: '/api/og/home',
         width: 1200,
         height: 630,
-        alt: "Agentic Chat - Intelligent Conversations",
+        alt: "Agentic Chat - Search, memory, and tools",
       },
     ],
     locale: "en_US",
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agentic Chat - Intelligent Conversations",
-    description: "Chat with AI assistant powered by OpenAI with semantic caching and memory enhancement.",
+    title: "Agentic Chat - Search, memory, and tools",
+    description: "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.",
     images: ['/api/og/home'],
   },
 };
