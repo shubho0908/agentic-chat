@@ -1,8 +1,7 @@
 import { Metadata } from "next";
-import { headers } from "next/headers";
-import { appBaseUrl } from "@/lib/appUrl";
+import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -12,21 +11,20 @@ export async function generateMetadata({
   const { id } = await params;
   const title = "Private Conversation";
   const description = "Sign in to view your conversation in Agentic Chat.";
-
-  const headersList = await headers();
-  const protocol = headersList.get('x-forwarded-proto') || 'https';
-  const host = headersList.get('host') || appBaseUrl.replace(/^https?:\/\//, '');
-  const baseUrl = host ? `${protocol}://${host}` : appBaseUrl;
-  const ogImageUrl = `${baseUrl}/api/og?title=${encodeURIComponent(title)}`;
+  const fullTitle = `${title} | ${siteConfig.name}`;
+  const ogImageUrl = absoluteUrl(`/api/og?title=${encodeURIComponent(title)}`);
 
   return {
-    title: `${title} - Agentic Chat`,
+    title,
     description,
+    alternates: {
+      canonical: `/c/${id}`,
+    },
     openGraph: {
-      title: `${title} - Agentic Chat`,
+      title: fullTitle,
       description,
-      url: `${baseUrl}/c/${id}`,
-      siteName: "Agentic Chat",
+      url: `/c/${id}`,
+      siteName: siteConfig.name,
       images: [
         {
           url: ogImageUrl,
@@ -35,15 +33,16 @@ export async function generateMetadata({
           alt: title,
         },
       ],
-      locale: "en_US",
+      locale: siteConfig.locale,
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} - Agentic Chat`,
+      title: fullTitle,
       description,
       images: [ogImageUrl],
     },
+    robots: noIndexRobots,
   };
 }
 

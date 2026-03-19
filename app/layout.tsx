@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
@@ -9,7 +9,7 @@ import { LayoutProvider } from "@/components/providers/layoutProvider";
 import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
-import { appBaseUrl } from "@/lib/appUrl";
+import { absoluteUrl, indexRobots, siteConfig } from "@/lib/seo";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,40 +27,58 @@ const newsreader = Newsreader({
   style: ["normal", "italic"],
 });
 
-const SITE_TITLE = "Agentic Chat - Search, memory, and tools";
-const SITE_DESCRIPTION =
-  "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace.";
-const SITE_FULL_DESCRIPTION =
-  "A chat surface that keeps context, searches the web, works with documents, and connects to Google Workspace with your own key if you want it.";
-const SITE_NAME = "Agentic Chat";
-const SITE_OG_IMAGE_URL = "/api/og/home";
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
+};
 
 export const metadata: Metadata = {
-  title: SITE_TITLE,
-  description: SITE_FULL_DESCRIPTION,
-  metadataBase: new URL(appBaseUrl),
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.defaultTitle,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.fullDescription,
+  keywords: Array.from(siteConfig.defaultKeywords),
+  category: "technology",
+  creator: siteConfig.name,
+  publisher: siteConfig.name,
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: [{ url: "/favicon.ico" }],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/favicon.ico" }],
+  },
   openGraph: {
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-    url: '/',
-    siteName: SITE_NAME,
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    url: "/",
+    siteName: siteConfig.name,
     images: [
       {
-        url: SITE_OG_IMAGE_URL,
+        url: absoluteUrl(siteConfig.defaultOgImagePath),
         width: 1200,
         height: 630,
-        alt: SITE_TITLE,
+        alt: siteConfig.defaultTitle,
       },
     ],
-    locale: "en_US",
+    locale: siteConfig.locale,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: SITE_TITLE,
-    description: SITE_DESCRIPTION,
-    images: [SITE_OG_IMAGE_URL],
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    images: [absoluteUrl(siteConfig.defaultOgImagePath)],
   },
+  robots: indexRobots,
 };
 
 export default function RootLayout({
@@ -87,9 +105,9 @@ export default function RootLayout({
                   <Suspense fallback={null}>
                     <ConditionalSidebar />
                   </Suspense>
-                  <main className="w-full">
+                  <div className="w-full">
                     {children}
-                  </main>
+                  </div>
                 </SidebarProvider>
               </LayoutProvider>
             </StreamingProvider>

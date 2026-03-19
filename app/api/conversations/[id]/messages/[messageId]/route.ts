@@ -115,6 +115,13 @@ async function softDeleteDownstreamBranch(
   });
 }
 
+class MessageVersionRouteError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'MessageVersionRouteError';
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; messageId: string }> }
@@ -140,6 +147,7 @@ export async function PATCH(
     }
 
     const { content, attachments, metadata, assistantContent, assistantMessageId, assistantMetadata } = body;
+    const hasAssistantMessageId = assistantMessageId !== undefined && assistantMessageId !== null;
     let validatedAttachments: AttachmentInput[] | undefined;
 
     if (!content || typeof content !== 'string') {
@@ -235,7 +243,7 @@ export async function PATCH(
 
         let assistantMessage;
 
-        if (assistantMessageId) {
+        if (hasAssistantMessageId) {
           try {
             const existingAssistantMessage = await tx.message.findFirst({
               where: {
@@ -251,42 +259,48 @@ export async function PATCH(
               },
             });
 
-            if (existingAssistantMessage) {
-              const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
-              const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
-
-              await softDeleteDownstreamBranch(
-                tx,
-                conversationId,
-                existingAssistantMessage.id,
-                existingAssistantMessage.parentMessageId,
-                existingAssistantMessage.siblingIndex,
-                now
+            if (!existingAssistantMessage) {
+              throw new MessageVersionRouteError(
+                'Assistant message not found or already deleted',
+                HTTP_STATUS.NOT_FOUND
               );
-
-              assistantMessage = await tx.message.create({
-                data: {
-                  conversationId,
-                  role: 'ASSISTANT',
-                  content: assistantContent,
-                  parentMessageId: assistantParentId,
-                  siblingIndex: assistantSiblingIndex,
-                  ...(assistantMetadata && { metadata: assistantMetadata }),
-                },
-                include: {
-                  attachments: true,
-                },
-              });
             }
+
+            const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
+            const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
+
+            await softDeleteDownstreamBranch(
+              tx,
+              conversationId,
+              existingAssistantMessage.id,
+              existingAssistantMessage.parentMessageId,
+              existingAssistantMessage.siblingIndex,
+              now
+            );
+
+            assistantMessage = await tx.message.create({
+              data: {
+                conversationId,
+                role: 'ASSISTANT',
+                content: assistantContent,
+                parentMessageId: assistantParentId,
+                siblingIndex: assistantSiblingIndex,
+                ...(assistantMetadata && { metadata: assistantMetadata }),
+              },
+              include: {
+                attachments: true,
+              },
+            });
           } catch (assistantVersionError) {
-            logger.warn('[Message Version Route] Falling back to standalone assistant message after version-link failure:', {
+            logger.warn('[Message Version Route] Assistant version-link failed:', {
               assistantMessageId,
               error: assistantVersionError instanceof Error ? assistantVersionError.message : String(assistantVersionError),
             });
+            throw assistantVersionError;
           }
         }
 
-        if (!assistantMessage) {
+        if (!hasAssistantMessageId && !assistantMessage) {
           assistantMessage = await tx.message.create({
             data: {
               conversationId,
@@ -357,9 +371,13 @@ export async function PATCH(
   } catch (error) {
     logger.error('[Message Version Route] Failed to update message:', error);
     return errorResponse(
-      'Failed to update message',
-      error instanceof Error ? error.message : undefined,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+      error instanceof MessageVersionRouteError ? error.message : 'Failed to update message',
+      error instanceof MessageVersionRouteError
+        ? undefined
+        : error instanceof Error
+          ? error.message
+          : undefined,
+      error instanceof MessageVersionRouteError ? error.status : HTTP_STATUS.INTERNAL_SERVER_ERROR
     );
   }
 }

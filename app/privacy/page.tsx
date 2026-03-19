@@ -2,25 +2,39 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalDocument } from "@/components/legal/legalDocument";
 import { LegalRouteShell } from "@/components/legal/legalRouteShell";
+import { JsonLd } from "@/components/seo/jsonLd";
+import { createPageMetadata, createWebPageSchema, siteConfig } from "@/lib/seo";
 
-const CONTACT_EMAIL = "dev@shubhojeet.com";
 const LAST_UPDATED = "March 18, 2026";
+const PAGE_TITLE = "Privacy Policy";
+const PAGE_DESCRIPTION =
+  "How Agentic Chat collects, uses, stores, and protects information.";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy | Agentic Chat",
-  description: "How Agentic Chat collects, uses, stores, and protects information.",
-};
+export const metadata: Metadata = createPageMetadata({
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  path: "/privacy",
+  keywords: ["privacy policy", "data handling", "AI app privacy"],
+});
 
 export default function PrivacyPage() {
   return (
-    <LegalRouteShell>
-      <LegalDocument
-        eyebrow="Legal"
-        title="Privacy Policy"
-        subtitle="This policy explains what data Agentic Chat collects, how it is used, and the choices you have around your information."
-        lastUpdated={LAST_UPDATED}
-        contactEmail={CONTACT_EMAIL}
-        sections={[
+    <>
+      <JsonLd
+        data={createWebPageSchema({
+          title: `${PAGE_TITLE} | ${siteConfig.name}`,
+          description: PAGE_DESCRIPTION,
+          path: "/privacy",
+        })}
+      />
+      <LegalRouteShell>
+        <LegalDocument
+          eyebrow="Legal"
+          title={PAGE_TITLE}
+          subtitle="This policy explains what data Agentic Chat collects, how it is used, and the choices you have around your information."
+          lastUpdated={LAST_UPDATED}
+          contactEmail={siteConfig.contactEmail}
+          sections={[
           {
             id: "info-we-collect",
             title: "1. Information We Collect",
@@ -174,18 +188,19 @@ export default function PrivacyPage() {
                 <p>
                   If you have questions about this Privacy Policy or your data, email{" "}
                   <Link
-                    href={`mailto:${CONTACT_EMAIL}`}
+                    href={`mailto:${siteConfig.contactEmail}`}
                     className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"
                   >
-                    {CONTACT_EMAIL}
+                    {siteConfig.contactEmail}
                   </Link>
                   .
                 </p>
               </>
             ),
           },
-        ]}
-      />
-    </LegalRouteShell>
+          ]}
+        />
+      </LegalRouteShell>
+    </>
   );
 }

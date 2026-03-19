@@ -1,10 +1,12 @@
-import type { Metadata } from "next";
+import type { ResolvingMetadata } from "next";
 import SharedConversationClient from "./sharedConversationClient";
 
-export const metadata: Metadata = {
-  title: "Shared Conversation",
-  description: "View a shared conversation on Agentic Chat.",
-};
+export async function generateMetadata(
+  _props: { params: Promise<{ id: string }> },
+  parent: ResolvingMetadata
+) {
+  return await parent;
+}
 
 export default function SharedConversationPage({
   params,
