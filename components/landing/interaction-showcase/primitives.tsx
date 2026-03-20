@@ -363,7 +363,7 @@ export function ServiceAction({
       >
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex min-w-0 items-center gap-2">
-            <div className={`flex size-6 shrink-0 items-center justify-center rounded-lg text-foreground ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}>
+            <div className={`flex size-6 min-h-6 min-w-6 shrink-0 items-center justify-center rounded-lg text-foreground ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}>
               {icon}
             </div>
             <div className="min-w-0">
@@ -373,12 +373,12 @@ export function ServiceAction({
           </div>
           {status === "completed" ? (
             <div className="flex shrink-0 items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-300">
-              <CheckCircle2 className="size-3" />
+              <CheckCircle2 className="size-3 shrink-0" />
               {statusLabel}
             </div>
           ) : (
             <div className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground dark:text-white/[0.5]">
-              <Clock3 className="size-3" />
+              <Clock3 className="size-3 shrink-0" />
               {statusLabel}
             </div>
           )}
@@ -397,7 +397,7 @@ export function ProcessMarker({
 }) {
   if (state === "completed") {
     return (
-      <div className="mt-0.5 flex size-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
+      <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
         <CheckCircle2 className="size-3.5" />
       </div>
     );
@@ -405,7 +405,7 @@ export function ProcessMarker({
 
   if (state === "current") {
     return (
-      <div className="mt-0.5 flex size-5 items-center justify-center rounded-full bg-sky-500/10 text-sky-400">
+      <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-400">
         {prefersReducedMotion ? (
           <div className="size-2 rounded-full bg-current" />
         ) : (
@@ -420,7 +420,7 @@ export function ProcessMarker({
   }
 
   return (
-    <div className={`mt-0.5 flex size-5 items-center justify-center rounded-full bg-background dark:bg-[#121418] ${SOFT_BORDER_CLASS}`}>
+    <div className={`mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-background dark:bg-[#121418] ${SOFT_BORDER_CLASS}`}>
       <div className="size-1.5 rounded-full bg-muted-foreground/40" />
     </div>
   );
