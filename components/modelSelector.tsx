@@ -38,7 +38,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
 
   return (
     <div className="grid gap-2">
-      <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+      <Label className="px-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         Model Selection
       </Label>
       <DropdownMenu>
@@ -46,7 +46,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
           <Button
             variant="ghost"
             className={cn(
-              "w-full h-auto min-h-[52px] px-3 py-2.5 justify-between group",
+              "group h-auto min-h-14 w-full items-start justify-between px-3.5 py-3 whitespace-normal sm:min-h-[52px] sm:px-3 sm:py-2.5",
               "bg-muted/30 hover:bg-muted/60 transition-colors duration-200",
               "border border-border/40 rounded-xl"
             )}
@@ -58,18 +58,18 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                 </div>
                 <div className="flex flex-col items-start min-w-0 gap-0.5">
                   <div className="flex items-center gap-1.5 focus:outline-none">
-                    <span className="font-medium text-[13px] text-foreground tracking-tight truncate">{selectedModelData.name}</span>
+                    <span className="truncate text-[15px] font-medium tracking-tight text-foreground sm:text-[13px]">{selectedModelData.name}</span>
                     {selectedModelData.recommended && (
                       <div className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" title="Recommended" />
                     )}
                   </div>
-                  <span className="text-[11px] text-muted-foreground/80 line-clamp-1 text-left font-medium">
+                  <span className="line-clamp-2 text-left text-[12px] font-medium leading-4 text-muted-foreground/80 sm:line-clamp-1 sm:text-[11px]">
                     {selectedModelData.description}
                   </span>
                 </div>
               </div>
             ) : (
-              <span className="text-muted-foreground text-[13px]">Select a model...</span>
+              <span className="text-[15px] text-muted-foreground sm:text-[13px]">Select a model...</span>
             )}
             <div className="flex items-center justify-center size-6 text-muted-foreground/50 group-hover:text-foreground shrink-0 transition-colors">
               <ChevronDown className="size-[14px]" />
@@ -78,8 +78,9 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
         </DropdownMenuTrigger>
         
         <DropdownMenuContent
-          className="w-[var(--radix-dropdown-menu-trigger-width)] p-1.5 rounded-2xl bg-background/95 backdrop-blur-xl border border-border/40 shadow-xl"
+          className="w-[min(var(--radix-dropdown-menu-trigger-width),calc(100vw-2rem))] max-w-[calc(100vw-2rem)] p-1.5 rounded-2xl bg-background/95 backdrop-blur-xl border border-border/40 shadow-xl"
           align="start"
+          collisionPadding={12}
           sideOffset={8}
         >
           <div className="max-h-[320px] overflow-y-auto px-0.5">
@@ -91,7 +92,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                   key={model.id}
                   onSelect={() => onModelSelect(model.id)}
                   className={cn(
-                    "flex items-start gap-3 p-2 rounded-xl cursor-pointer mb-0.5 last:mb-0",
+                    "mb-0.5 flex items-start gap-3 rounded-xl p-2.5 last:mb-0 sm:p-2",
                     "transition-colors outline-none",
                     isSelected 
                       ? "bg-muted/80 text-foreground shadow-sm" 
@@ -111,7 +112,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className={cn(
-                          "font-medium text-[13px] tracking-tight truncate",
+                          "truncate text-[14px] font-medium tracking-tight sm:text-[13px]",
                           isSelected ? "text-foreground" : "text-foreground/80"
                         )}>
                           {model.name}
@@ -127,11 +128,11 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                       )}
                     </div>
                     
-                    <span className="block max-w-full truncate text-[11px] font-medium text-muted-foreground/70 leading-relaxed">
+                    <span className="block max-w-full truncate text-[12px] font-medium leading-relaxed text-muted-foreground/70 sm:text-[11px]">
                       {model.description}
                     </span>
                     
-                    <span className="text-[9px] uppercase font-bold text-muted-foreground/50 tracking-wider mt-1">
+                    <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50 sm:text-[9px]">
                       {formatContext(model.contextWindow)} context
                     </span>
                   </div>
