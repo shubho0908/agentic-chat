@@ -7,9 +7,10 @@ import { deleteMessagesAfter } from '@/lib/messageVersioning';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteContext<"/api/conversations/[id]/messages/delete-after">
 ) {
   try {
+    const { params } = context;
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 

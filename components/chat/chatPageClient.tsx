@@ -33,13 +33,14 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     isFetchingNextPage
   } = useConversation(conversationId);
   const { toggleSharing, isToggling } = useConversations({ enabled: !!session });
+  const conversationItems = conversationData?.messages.items;
 
   const initialMessages = useMemo(() => {
-    if (!conversationData?.messages.items) return [];
+    if (!conversationItems) return [];
 
-    const dbMessages = convertDbMessagesToFrontend(conversationData.messages.items);
+    const dbMessages = convertDbMessagesToFrontend(conversationItems);
     return flattenMessageTree(dbMessages);
-  }, [conversationData?.messages.items]);
+  }, [conversationItems]);
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
@@ -117,14 +118,14 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
 
   const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {
     if (isPending) {
-      return;
+      return { success: false, error: "Session is loading" };
     }
 
     if (!session) {
       toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
         description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
       });
-      return;
+      return { success: false, error: "Authentication required" };
     }
 
     if (!isConfigured) {
@@ -132,10 +133,10 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         description: TOAST_ERROR_MESSAGES.API_KEY.REQUIRED_DESCRIPTION,
       });
       byokTriggerRef.current?.click();
-      return;
+      return { success: false, error: "API key required" };
     }
     const searchDepth = getSearchDepth();
-    await sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
   };
 
   const handleFollowUpQuestion = async (question: string) => {

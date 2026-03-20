@@ -63,12 +63,13 @@ export default function SharedConversationClient({
     queryFn: () => fetchSharedConversation(id),
     retry: false,
   });
+  const sharedMessages = data?.messages;
 
   const messages: Message[] = useMemo(() => {
-    if (!data?.messages) return [];
-    const dbMessages = convertDbMessagesToFrontend(data.messages);
+    if (!sharedMessages) return [];
+    const dbMessages = convertDbMessagesToFrontend(sharedMessages);
     return flattenMessageTree(dbMessages);
-  }, [data?.messages]);
+  }, [sharedMessages]);
 
   if (isLoading) {
     return (

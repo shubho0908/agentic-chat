@@ -8,7 +8,6 @@ import {
 } from "@/lib/tools/google-suite/client";
 import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
-export const runtime = "nodejs";
 import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 

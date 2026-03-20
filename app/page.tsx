@@ -41,12 +41,15 @@ const homeStructuredData = [
   },
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
+    "@type": "WebApplication",
     name: siteConfig.name,
     applicationCategory: "ProductivityApplication",
     operatingSystem: "Web",
     url: siteConfig.url,
     description: siteConfig.fullDescription,
+    image: absoluteUrl(siteConfig.defaultOgImagePath),
+    browserRequirements: "Requires JavaScript and a modern web browser.",
+    keywords: [...siteConfig.defaultKeywords, ...homepageKeywords].join(", "),
     featureList: [
       "Web search in chat",
       "Document analysis",

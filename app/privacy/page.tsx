@@ -3,9 +3,15 @@ import Link from "next/link";
 import { LegalDocument } from "@/components/legal/legalDocument";
 import { LegalRouteShell } from "@/components/legal/legalRouteShell";
 import { JsonLd } from "@/components/seo/jsonLd";
-import { createPageMetadata, createWebPageSchema, siteConfig } from "@/lib/seo";
+import {
+  createBreadcrumbSchema,
+  createPageMetadata,
+  createWebPageSchema,
+  siteConfig,
+} from "@/lib/seo";
 
 const LAST_UPDATED = "March 18, 2026";
+const LAST_UPDATED_ISO = "2026-03-18T00:00:00.000Z";
 const PAGE_TITLE = "Privacy Policy";
 const PAGE_DESCRIPTION =
   "How Agentic Chat collects, uses, stores, and protects information.";
@@ -15,17 +21,27 @@ export const metadata: Metadata = createPageMetadata({
   description: PAGE_DESCRIPTION,
   path: "/privacy",
   keywords: ["privacy policy", "data handling", "AI app privacy"],
+  type: "article",
+  modifiedTime: LAST_UPDATED_ISO,
+  publishedTime: LAST_UPDATED_ISO,
+  section: "Legal",
 });
 
 export default function PrivacyPage() {
   return (
     <>
       <JsonLd
-        data={createWebPageSchema({
-          title: `${PAGE_TITLE} | ${siteConfig.name}`,
-          description: PAGE_DESCRIPTION,
-          path: "/privacy",
-        })}
+        data={[
+          createWebPageSchema({
+            title: `${PAGE_TITLE} | ${siteConfig.name}`,
+            description: PAGE_DESCRIPTION,
+            path: "/privacy",
+          }),
+          createBreadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: PAGE_TITLE, path: "/privacy" },
+          ]),
+        ]}
       />
       <LegalRouteShell>
         <LegalDocument

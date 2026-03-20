@@ -82,18 +82,3 @@ export function encodeError(message: string): Uint8Array {
 export function encodeDone(): Uint8Array {
   return encoder.encode('data: [DONE]\n\n');
 }
-
-export function shouldSendMemoryStatus(memoryStatusInfo: MemoryStatus): boolean {
-  return memoryStatusInfo.hasMemories ||
-    memoryStatusInfo.attemptedMemory === true ||
-    memoryStatusInfo.hasDocuments ||
-    memoryStatusInfo.hasImages ||
-    memoryStatusInfo.hasUrls ||
-    memoryStatusInfo.tokenUsage !== undefined ||
-    memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly ||
-    memoryStatusInfo.routingDecision === RoutingDecision.MemoryOnly ||
-    memoryStatusInfo.routingDecision === RoutingDecision.VisionOnly ||
-    memoryStatusInfo.routingDecision === RoutingDecision.DocumentsOnly ||
-    memoryStatusInfo.routingDecision === RoutingDecision.Hybrid ||
-    memoryStatusInfo.routingDecision === RoutingDecision.UrlContent;
-}

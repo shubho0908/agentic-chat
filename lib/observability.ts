@@ -2,10 +2,6 @@ type LogLevel = "info" | "warn" | "error";
 
 type LogSink = (level: LogLevel, serialized: string) => void;
 
-interface WritableLike {
-  write: (chunk: string) => unknown;
-}
-
 interface LogPayload {
   event: string;
   requestId?: string;
@@ -21,27 +17,6 @@ export function isObservabilityLoggingEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean {
   return nodeEnv === "development";
-}
-
-function isWritableLike(value: unknown): value is WritableLike {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "write" in value &&
-    typeof (value as WritableLike).write === "function"
-  );
-}
-
-function getProcessStream(level: LogLevel): WritableLike | null {
-  if (typeof process === "undefined") {
-    return null;
-  }
-
-  const candidate = level === "error" || level === "warn"
-    ? process.stderr
-    : process.stdout;
-
-  return isWritableLike(candidate) ? candidate : null;
 }
 
 function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
@@ -67,17 +42,6 @@ function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
 }
 
 const defaultLogSink: LogSink = (level, serialized) => {
-  const stream = getProcessStream(level);
-
-  if (stream) {
-    try {
-      stream.write(`${serialized}\n`);
-      return;
-    } catch {
-      // Fall back to console below when a runtime exposes a broken stream.
-    }
-  }
-
   writeWithConsoleFallback(level, serialized);
 };
 

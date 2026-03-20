@@ -8,9 +8,10 @@ import type { ExportConversation } from '@/types/export';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteContext<"/api/conversations/[id]/export">
 ) {
   try {
+    const { params } = context;
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 

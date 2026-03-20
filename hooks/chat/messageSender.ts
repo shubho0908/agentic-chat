@@ -9,6 +9,7 @@ import { saveUserMessage } from "./messageApi";
 import { handleConversationSaving } from "./conversationManager";
 import type { SendMessageContext, BaseChatContext } from "@/types/chatHooks";
 import { handleStreamingResponse } from "./streamingHandler";
+import { getResumeConversationState } from "./resumeState";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -39,14 +40,10 @@ export async function continueIncompleteConversation(
     return { success: false, error: "No model selected" };
   }
 
-  const lastMessage = messages[messages.length - 1];
-  const existingEmptyAssistantId =
-    lastMessage?.role === "assistant" &&
-    !lastMessage.content &&
-    lastMessage.id &&
-    lastMessage.id.startsWith("assistant-")
-      ? lastMessage.id
-      : undefined;
+  const { contextMessages, existingAssistantMessageId } = getResumeConversationState(
+    messages,
+    userMessage.id
+  );
 
   const userTextContent = typeof userMessage.content === 'string'
     ? userMessage.content
@@ -57,7 +54,7 @@ export async function continueIncompleteConversation(
 
   const result = await handleStreamingResponse(
     {
-      messages: existingEmptyAssistantId ? messages.slice(0, -1) : messages,
+      messages: contextMessages,
       conversationId,
       userMessageContent: reconstructedContent,
       userTimestamp: userMessage.timestamp ?? Date.now(),
@@ -70,7 +67,7 @@ export async function continueIncompleteConversation(
       memoryEnabled,
       deepResearchEnabled,
       searchDepth,
-      existingAssistantMessageId: existingEmptyAssistantId,
+      existingAssistantMessageId,
     },
     {
       onMessagesUpdate,
@@ -149,6 +146,7 @@ export async function handleSendMessage(
 
   try {
     let currentConversationId = conversationId;
+    let shouldResumeOnConversationPage = false;
 
     if (isNewConversation) {
       await handleConversationSaving(
@@ -179,6 +177,11 @@ export async function handleSendMessage(
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
+
+      // New chats navigate to /c/:id immediately after the user message is saved.
+      // Let the destination page resume generation once, instead of starting a
+      // stream here that will be aborted during route teardown and retried there.
+      shouldResumeOnConversationPage = true;
     } else {
       if (!currentConversationId) {
         throw new Error("Conversation ID is required for existing conversations");
@@ -207,6 +210,10 @@ export async function handleSendMessage(
 
     if (!currentConversationId) {
       throw new Error("Conversation ID is required before streaming the response");
+    }
+
+    if (shouldResumeOnConversationPage) {
+      return { success: true };
     }
 
     const result = await handleStreamingResponse(

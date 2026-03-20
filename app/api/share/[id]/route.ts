@@ -7,9 +7,10 @@ import { redactSharedConversation } from '@/lib/share/redaction';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteContext<"/api/share/[id]">
 ) {
   try {
+    const { params } = context;
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {

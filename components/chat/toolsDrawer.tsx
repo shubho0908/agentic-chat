@@ -70,7 +70,7 @@ export function ToolsDrawer({
       variant="ghost"
       className={cn(
         buttonVariants({ variant: "ghost", size: "icon" }),
-        "size-10 rounded-lg active:scale-95 transition-transform",
+        "size-10 rounded-lg active:scale-95 transition-transform p-1",
         hasActiveTool
           ? 'bg-primary/10 hover:bg-primary/15'
           : 'hover:bg-accent'

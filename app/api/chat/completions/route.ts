@@ -18,7 +18,6 @@ import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { parseToolId } from '@/lib/tools/config';
 import { searchDepthEnum, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { logger } from "@/lib/logger";
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for deep research & google suite tools
 

@@ -195,18 +195,18 @@ function updateQueryCacheWithUserMessage(
       messages: {
         items: [
           {
-            id: placeholderAssistantId,
-            role: "assistant" as const,
-            content: "",
-            createdAt: new Date().toISOString(),
-            attachments: [],
-          },
-          {
             id: userMessageId,
             role: "user" as const,
             content: textContent,
             createdAt: new Date(userTimestamp).toISOString(),
             attachments: attachments || [],
+          },
+          {
+            id: placeholderAssistantId,
+            role: "assistant" as const,
+            content: "",
+            createdAt: new Date().toISOString(),
+            attachments: [],
           },
         ],
         nextCursor: undefined,

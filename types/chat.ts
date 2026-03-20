@@ -132,6 +132,11 @@ export interface SendMessageOptions {
   searchDepth?: SearchDepth;
 }
 
+export interface MessageSendResult {
+  success: boolean;
+  error?: string;
+}
+
 export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
@@ -139,7 +144,7 @@ export type MessageSendHandler = (
   memoryEnabled?: boolean,
   deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
-) => Promise<void> | void;
+) => Promise<MessageSendResult> | MessageSendResult;
 
 export interface EditMessageOptions {
   messageId: string;
@@ -173,7 +178,7 @@ export interface ContinueConversationOptions {
 export interface UseChatReturn {
   messages: Message[];
   isLoading: boolean;
-  sendMessage: (options: SendMessageOptions) => Promise<void>;
+  sendMessage: (options: SendMessageOptions) => Promise<MessageSendResult>;
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
   continueConversation: (options: ContinueConversationOptions) => Promise<void>;

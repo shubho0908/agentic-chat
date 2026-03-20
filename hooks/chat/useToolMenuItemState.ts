@@ -46,7 +46,7 @@ export function useToolMenuItemState({
     isGoogleSuite &&
     isAuthenticated &&
     !googleSuiteStatus?.loading &&
-    !hasWorkspaceAccess;
+    !googleSuiteStatus?.workspaceConnected;
   const isDisabled =
     !isAuthenticated ||
     (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
@@ -55,6 +55,7 @@ export function useToolMenuItemState({
     isGoogleSuite &&
     isAuthenticated &&
     !googleSuiteStatus?.loading &&
+    !!googleSuiteStatus?.workspaceConnected &&
     !hasWorkspaceAccess;
   const googleWorkspaceSelections = resolveGoogleWorkspaceSelections(
     googleSuiteStatus?.grantedScopes ?? []

@@ -111,5 +111,3 @@ export const logger = {
   log: ((...args: unknown[]) => emit("info", args)) as LoggerMethod,
   debug: ((...args: unknown[]) => emit("info", args)) as LoggerMethod,
 };
-
-export default logger;

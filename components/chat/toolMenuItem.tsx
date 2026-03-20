@@ -43,7 +43,6 @@ export function ToolMenuItem({
     ToolIcon,
     googleWorkspaceSelections,
     handleOpenGoogleSettings,
-    hasWorkspaceAccess,
     isDeepResearch,
     isDisabled,
     isGoogleSuite,
@@ -205,7 +204,7 @@ export function ToolMenuItem({
           <span className="font-medium truncate">{tool.name}</span>
           {(needsPermissions || googleSuiteNeedsSetup) && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
+              {googleSuiteNeedsSetup ? "Enable first" : needsPermissions ? "Limited" : "Setup"}
             </Badge>
           )}
           {isDeepResearch && (
