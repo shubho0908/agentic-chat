@@ -54,16 +54,17 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
   const sendMessage = useCallback(
     async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: SendMessageOptions) => {
-      if (!content.trim() || isLoading) return;
+      if (!content.trim() || isLoading) {
+        return { success: false, error: "Unable to send message" };
+      }
 
-      const isNewConversation = !conversationId;
       abortControllerRef.current = new AbortController();
       setIsLoading(true);
       setMemoryStatus(undefined);
       startStreaming(conversationId, abortControllerRef.current);
 
       try {
-        await handleSendMessage(
+        const result = await handleSendMessage(
           content,
           attachments,
           {
@@ -87,13 +88,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           deepResearchEnabled,
           searchDepth
         );
-        if (isNewConversation) {
-          return;
-        }
+        return result;
       } catch (error) {
         if (!isAbortError(error)) {
           throw error;
         }
+
+        return { success: false, error: "aborted" };
       } finally {
         setIsLoading(false);
         stopStreamingContext(false);

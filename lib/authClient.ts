@@ -20,7 +20,8 @@ const authClient = createAuthClient({
   },
 });
 
-export const { signIn, signOut, useSession } = authClient;
+const { signIn, signOut, useSession } = authClient;
+export { signOut, useSession };
 
 export async function signInWithGoogle(callbackURL: string) {
   return signIn.social({

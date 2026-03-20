@@ -371,10 +371,7 @@ export function useChatInputController({
       }
 
       const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);
-      clearInput();
-      clearAttachments();
-
-      await onSend(
+      const result = await onSend(
         messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         activeTool,
@@ -382,6 +379,11 @@ export function useChatInputController({
         finalDeepResearchEnabled,
         searchDepth
       );
+
+      if (result.success) {
+        clearInput();
+        clearAttachments();
+      }
     } catch (error) {
       logger.error("Error sending message:", error);
     } finally {

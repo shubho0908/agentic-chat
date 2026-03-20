@@ -176,7 +176,6 @@ function GoogleSuiteDrawerItem({
   isAuthenticated,
   isDisabled,
   googleSuiteNeedsSetup,
-  hasWorkspaceAccess,
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
@@ -229,7 +228,7 @@ function GoogleSuiteDrawerItem({
             <span className="font-medium truncate">{tool.name}</span>
             {(needsPermissions || googleSuiteNeedsSetup) && (
               <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-                {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
+                {googleSuiteNeedsSetup ? "Enable first" : needsPermissions ? "Limited" : "Setup"}
               </Badge>
             )}
           </div>
@@ -272,7 +271,6 @@ function StandardDrawerItem({
   isAuthenticated,
   isDisabled,
   googleSuiteNeedsSetup,
-  hasWorkspaceAccess,
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
@@ -318,7 +316,7 @@ function StandardDrawerItem({
           <span className="font-medium truncate">{tool.name}</span>
           {(needsPermissions || googleSuiteNeedsSetup) && (
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-              {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
+              {googleSuiteNeedsSetup ? "Enable first" : needsPermissions ? "Limited" : "Setup"}
             </Badge>
           )}
         </div>
@@ -365,7 +363,7 @@ export function ToolMenuItemDrawer({
     isGoogleSuite &&
     isAuthenticated &&
     !googleSuiteStatus?.loading &&
-    !hasWorkspaceAccess;
+    !googleSuiteStatus?.workspaceConnected;
   const isDisabled =
     !isAuthenticated ||
     (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
@@ -374,6 +372,7 @@ export function ToolMenuItemDrawer({
     isGoogleSuite &&
     isAuthenticated &&
     !googleSuiteStatus?.loading &&
+    !!googleSuiteStatus?.workspaceConnected &&
     !hasWorkspaceAccess;
   const commonProps = {
     tool,

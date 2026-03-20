@@ -16,7 +16,7 @@ const optionalTimeZone = z.string().trim().refine((value) => {
   }
 }, 'Invalid IANA time zone').optional();
 
-export const GOOGLE_TOOL_SCHEMAS = {
+const GOOGLE_TOOL_SCHEMAS = {
   gmail_search: z.object({
     query: nonEmptyString,
     maxResults: z.number().int().min(1).max(50).optional(),

@@ -9,6 +9,7 @@ import { saveUserMessage } from "./messageApi";
 import { handleConversationSaving } from "./conversationManager";
 import type { SendMessageContext, BaseChatContext } from "@/types/chatHooks";
 import { handleStreamingResponse } from "./streamingHandler";
+import { getResumeConversationState } from "./resumeState";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -39,14 +40,10 @@ export async function continueIncompleteConversation(
     return { success: false, error: "No model selected" };
   }
 
-  const lastMessage = messages[messages.length - 1];
-  const existingEmptyAssistantId =
-    lastMessage?.role === "assistant" &&
-    !lastMessage.content &&
-    lastMessage.id &&
-    lastMessage.id.startsWith("assistant-")
-      ? lastMessage.id
-      : undefined;
+  const { contextMessages, existingAssistantMessageId } = getResumeConversationState(
+    messages,
+    userMessage.id
+  );
 
   const userTextContent = typeof userMessage.content === 'string'
     ? userMessage.content
@@ -57,7 +54,7 @@ export async function continueIncompleteConversation(
 
   const result = await handleStreamingResponse(
     {
-      messages: existingEmptyAssistantId ? messages.slice(0, -1) : messages,
+      messages: contextMessages,
       conversationId,
       userMessageContent: reconstructedContent,
       userTimestamp: userMessage.timestamp ?? Date.now(),
@@ -70,7 +67,7 @@ export async function continueIncompleteConversation(
       memoryEnabled,
       deepResearchEnabled,
       searchDepth,
-      existingAssistantMessageId: existingEmptyAssistantId,
+      existingAssistantMessageId,
     },
     {
       onMessagesUpdate,
