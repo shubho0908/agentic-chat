@@ -3,7 +3,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 
 export const siteConfig = {
   name: "Agentic Chat",
-  defaultTitle: "Agentic Chat AI Chat App with Web Search, Memory, and Tools",
+  defaultTitle: "Agentic Chat | AI Chat App with Web Search, Memory, and Tools",
   description:
     "Agentic Chat is an AI chat app for web search, document analysis, memory, and Google Workspace workflows.",
   fullDescription:
@@ -13,6 +13,8 @@ export const siteConfig = {
   locale: "en_US",
   contactEmail: "dev@shubhojeet.com",
   githubUrl: "https://github.com/shubho0908/agentic-chat",
+  category: "technology",
+  classification: "AI productivity software",
   defaultKeywords: [
     "AI chat app",
     "AI assistant",
@@ -78,6 +80,9 @@ type CreatePageMetadataOptions = {
   noIndex?: boolean;
   absoluteTitle?: boolean;
   type?: "website" | "article";
+  publishedTime?: string;
+  modifiedTime?: string;
+  section?: string;
 };
 
 export function createPageMetadata({
@@ -89,14 +94,29 @@ export function createPageMetadata({
   noIndex = false,
   absoluteTitle = false,
   type = "website",
+  publishedTime,
+  modifiedTime,
+  section,
 }: CreatePageMetadataOptions): Metadata {
   const fullTitle = getFullTitle(title);
   const imageUrl = imagePath.startsWith("http") ? imagePath : absoluteUrl(imagePath);
+  const uniqueKeywords = Array.from(new Set([...siteConfig.defaultKeywords, ...keywords]));
+  const articleMetadata =
+    type === "article"
+      ? {
+          publishedTime,
+          modifiedTime,
+          section,
+          tags: uniqueKeywords,
+        }
+      : undefined;
 
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description,
-    keywords: Array.from(new Set([...siteConfig.defaultKeywords, ...keywords])),
+    keywords: uniqueKeywords,
+    category: siteConfig.category,
+    classification: siteConfig.classification,
     alternates: {
       canonical: path,
     },
@@ -115,6 +135,7 @@ export function createPageMetadata({
       ],
       locale: siteConfig.locale,
       type,
+      ...articleMetadata,
     },
     twitter: {
       card: "summary_large_image",
@@ -146,5 +167,20 @@ export function createWebPageSchema({
       name: siteConfig.name,
       url: siteConfig.url,
     },
+  };
+}
+
+export function createBreadcrumbSchema(
+  items: Array<{ name: string; path: string }>,
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: absoluteUrl(item.path),
+    })),
   };
 }

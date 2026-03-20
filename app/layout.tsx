@@ -39,15 +39,29 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
+  applicationName: siteConfig.name,
   title: {
     default: siteConfig.defaultTitle,
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.fullDescription,
   keywords: Array.from(siteConfig.defaultKeywords),
-  category: "technology",
+  authors: [
+    {
+      name: siteConfig.name,
+      url: siteConfig.githubUrl,
+    },
+  ],
+  category: siteConfig.category,
+  classification: siteConfig.classification,
   creator: siteConfig.name,
   publisher: siteConfig.name,
+  referrer: "origin-when-cross-origin",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
   alternates: {
     canonical: "/",
   },
