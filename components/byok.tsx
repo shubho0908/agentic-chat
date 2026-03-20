@@ -32,6 +32,10 @@ interface BYOKProps {
   hiddenTrigger?: boolean;
 }
 
+function getInitialModelSelection() {
+  return getModel() ?? DEFAULT_MODEL;
+}
+
 export function BYOK({
   autoOpen = false,
   onConfigured,
@@ -40,8 +44,8 @@ export function BYOK({
 }: BYOKProps = {}) {
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
-  const [initialModel, setInitialModel] = useState(DEFAULT_MODEL);
+  const [selectedModel, setSelectedModel] = useState(getInitialModelSelection);
+  const [initialModel, setInitialModel] = useState(getInitialModelSelection);
 
   const { data: apiKeyData, isLoading } = useApiKey();
   const { saveApiKey: saveApiKeyMutation, deleteApiKey: deleteApiKeyMutation } = useApiKeyMutations();
@@ -63,14 +67,6 @@ export function BYOK({
       }
     }
   }, [isConfigured, isLoading, autoOpen, onConfigured]);
-
-  useEffect(() => {
-    const storedModel = getModel();
-    if (storedModel) {
-      setSelectedModel(storedModel);
-      setInitialModel(storedModel);
-    }
-  }, []);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -127,6 +123,7 @@ export function BYOK({
       removeModel();
       setApiKey("");
       setSelectedModel(DEFAULT_MODEL);
+      setInitialModel(DEFAULT_MODEL);
       toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_CLEARED);
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_CLEAR, {
@@ -135,7 +132,7 @@ export function BYOK({
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !hiddenTrigger) {
     return <Skeleton className="h-9 w-10 md:w-24 rounded-xl" />;
   }
 

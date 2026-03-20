@@ -12,7 +12,6 @@ function useAnimationClock(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) {
-      setElapsed(0);
       return;
     }
 
@@ -35,7 +34,7 @@ function useAnimationClock(enabled: boolean) {
     };
   }, [enabled]);
 
-  return elapsed;
+  return enabled ? elapsed : 0;
 }
 
 export function useShowcaseWidth(targetRef: RefObject<HTMLDivElement | null>) {

@@ -172,7 +172,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     });
 
     return uniqueCitations;
-  }, [isUser, isLastMessage, displayedMessage.metadata?.citations, displayedMessage.metadata?.sources, memoryStatus?.toolProgress?.details?.citations]);
+  }, [displayedMessage.metadata, isLastMessage, isUser, memoryStatus]);
 
   const images = useMemo(() => {
     if (isUser) return [];
@@ -191,7 +191,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     });
 
     return uniqueImages;
-  }, [isUser, displayedMessage.metadata?.images]);
+  }, [displayedMessage.metadata, isUser]);
 
   const followUpQuestions = useMemo(() => {
     if (isUser) return [];
@@ -203,7 +203,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     }
 
     return [];
-  }, [isUser, isLastMessage, isLoading, displayedMessage.metadata?.followUpQuestions]);
+  }, [displayedMessage.metadata, isLastMessage, isLoading, isUser]);
 
   const userUrls = useMemo(() => {
     if (!isUser || !textContent) return [];

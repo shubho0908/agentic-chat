@@ -5,7 +5,6 @@ import { createGoogleOAuth2Client } from "@/lib/tools/google-suite/client";
 import { ALL_GOOGLE_SUITE_SCOPES, GOOGLE_CONNECTOR_SCOPES } from "@/lib/tools/google-suite/scopes";
 import { createGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function normalizeReturnTo(value: string | null): string {

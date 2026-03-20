@@ -7,9 +7,10 @@ import { getMessageVersions, getVersionCount } from '@/lib/messageVersioning';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; messageId: string }> }
+  context: RouteContext<"/api/conversations/[id]/messages/[messageId]/versions">
 ) {
   try {
+    const { params } = context;
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 

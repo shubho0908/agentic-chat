@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -142,7 +142,6 @@ function ImageCard({
 export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
   const [selectedImage, setSelectedImage] = useState<{ url: string; alt: string } | null>(null);
   const [showAllImages, setShowAllImages] = useState(false);
-  const [pendingSelection, setPendingSelection] = useState<{ url: string; alt: string } | null>(null);
   const [imageStatuses, setImageStatuses] = useState<Record<string, ImageStatus>>({});
   const isMobile = useIsMobile();
   const { resolvedTheme } = useTheme();
@@ -166,7 +165,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
     const nextSelection = { url, alt: description || "Search result image" };
 
     if (showAllImages) {
-      setPendingSelection(nextSelection);
+      setSelectedImage(nextSelection);
       setShowAllImages(false);
       return;
     }
@@ -181,13 +180,6 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
   const handleCloseLightbox = useCallback(() => {
     setSelectedImage(null);
   }, []);
-
-  useEffect(() => {
-    if (!showAllImages && pendingSelection) {
-      setSelectedImage(pendingSelection);
-      setPendingSelection(null);
-    }
-  }, [showAllImages, pendingSelection]);
 
   if (!images?.length) {
     return null;

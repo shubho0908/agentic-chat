@@ -31,50 +31,26 @@ interface ToolMenuItemDrawerProps {
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
-export function ToolMenuItemDrawer({
+type ToolMenuItemCommonProps = ToolMenuItemDrawerProps & {
+  isDisabled: boolean;
+  googleSuiteNeedsSetup: boolean;
+  hasWorkspaceAccess: boolean;
+  needsPermissions: boolean;
+};
+
+function WebSearchDrawerItem({
   tool,
   isActive,
-  isAuthenticated,
-  searchDepth = 'basic',
-  deepResearchUsage,
-  googleSuiteStatus,
+  isDisabled,
+  searchDepth = "basic",
   onToolSelect,
-}: ToolMenuItemDrawerProps) {
-  const router = useRouter();
+}: ToolMenuItemCommonProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const ToolIcon = tool.icon;
-  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
-  const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
-  const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
-  const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
-  const hasWorkspaceAccess = googleSuiteStatus?.hasWorkspaceAccess ?? (googleSuiteStatus?.grantedScopes ?? []).some(
-    (scope) => !signInScopes.has(scope)
-  );
-  const googleSuiteNeedsSetup =
-    isGoogleSuite &&
-    isAuthenticated &&
-    !googleSuiteStatus?.loading &&
-    !hasWorkspaceAccess;
-  const isDisabled =
-    !isAuthenticated ||
-    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
-    (isGoogleSuite && !!googleSuiteStatus?.loading);
-  const needsPermissions =
-    isGoogleSuite &&
-    isAuthenticated &&
-    !googleSuiteStatus?.loading &&
-    !hasWorkspaceAccess;
 
-  const handleOpenGoogleSettings = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    router.push("/settings/google-workspace");
-  };
-
-  if (isWebSearch) {
-    return (
-      <LazyMotion features={domAnimation}>
-        <div className="space-y-1">
+  return (
+    <LazyMotion features={domAnimation}>
+      <div className="space-y-1">
         <Button
           variant="ghost"
           disabled={isDisabled}
@@ -95,7 +71,7 @@ export function ToolMenuItemDrawer({
             <ToolIcon
               className={cn(
                 "size-4 transition-colors",
-                isActive ? tool.iconColorClass : 'text-muted-foreground'
+                isActive ? tool.iconColorClass : "text-muted-foreground"
               )}
             />
           </div>
@@ -103,13 +79,13 @@ export function ToolMenuItemDrawer({
             <div className="flex items-center gap-1.5">
               <span className="font-medium truncate">{tool.name}</span>
               <Badge
-                variant={searchDepth === 'advanced' ? 'default' : 'outline'}
+                variant={searchDepth === "advanced" ? "default" : "outline"}
                 className={cn(
                   "text-[10px] py-0 px-1.5 h-4 shrink-0",
-                  searchDepth === 'advanced' && "bg-primary/20 text-primary border-primary/30"
+                  searchDepth === "advanced" && "bg-primary/20 text-primary border-primary/30"
                 )}
               >
-                {searchDepth === 'advanced' ? 'Advanced' : 'Basic'}
+                {searchDepth === "advanced" ? "Advanced" : "Basic"}
               </Badge>
             </div>
             <span className="text-xs text-muted-foreground truncate">
@@ -147,7 +123,7 @@ export function ToolMenuItemDrawer({
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
                     if (!isDisabled) {
-                      onToolSelect(tool.id, 'basic');
+                      onToolSelect(tool.id, "basic");
                       setIsExpanded(false);
                     }
                   }}
@@ -159,7 +135,7 @@ export function ToolMenuItemDrawer({
                     <span className="font-medium text-sm">Basic Search</span>
                     <span className="text-xs text-muted-foreground">Quick results, faster response</span>
                   </div>
-                  {isActive && searchDepth === 'basic' && (
+                  {isActive && searchDepth === "basic" && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
@@ -169,7 +145,7 @@ export function ToolMenuItemDrawer({
                   className="w-full flex items-center justify-start gap-3 py-2.5 px-3 h-auto rounded-md hover:bg-accent transition-colors"
                   onClick={() => {
                     if (!isDisabled) {
-                      onToolSelect(tool.id, 'advanced');
+                      onToolSelect(tool.id, "advanced");
                       setIsExpanded(false);
                     }
                   }}
@@ -181,7 +157,7 @@ export function ToolMenuItemDrawer({
                     <span className="font-medium text-sm">Advanced Search</span>
                     <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
                   </div>
-                  {isActive && searchDepth === 'advanced' && (
+                  {isActive && searchDepth === "advanced" && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
@@ -189,88 +165,119 @@ export function ToolMenuItemDrawer({
             </m.div>
           )}
         </AnimatePresence>
-        </div>
-      </LazyMotion>
-    );
-  }
+      </div>
+    </LazyMotion>
+  );
+}
 
-  if (isGoogleSuite) {
-    return (
-      <div className="flex items-start gap-2">
-        <Button
-          variant="ghost"
-          disabled={isDisabled}
-          className={cn(
-            "flex-1 flex items-center justify-start gap-3 py-3 px-3 h-auto rounded-lg transition-all",
-            (isDisabled || googleSuiteNeedsSetup) && "opacity-50 cursor-not-allowed",
-            isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
-            !isDisabled && !googleSuiteNeedsSetup && "hover:bg-accent"
-          )}
-          onClick={() => {
-            if (googleSuiteNeedsSetup) {
-              router.push("/settings/google-workspace");
-              return;
-            }
+function GoogleSuiteDrawerItem({
+  tool,
+  isActive,
+  isAuthenticated,
+  isDisabled,
+  googleSuiteNeedsSetup,
+  hasWorkspaceAccess,
+  needsPermissions,
+  onToolSelect,
+}: ToolMenuItemCommonProps) {
+  const router = useRouter();
+  const ToolIcon = tool.icon;
 
-            if (!isDisabled) {
-              onToolSelect(tool.id);
-            }
+  const handleOpenGoogleSettings = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    router.push("/settings/google-workspace");
+  };
+
+  return (
+    <div className="flex items-start gap-2">
+      <Button
+        variant="ghost"
+        disabled={isDisabled}
+        className={cn(
+          "flex-1 flex items-center justify-start gap-3 py-3 px-3 h-auto rounded-lg transition-all",
+          (isDisabled || googleSuiteNeedsSetup) && "opacity-50 cursor-not-allowed",
+          isActive && "bg-gradient-to-r from-primary/10 to-primary/5 border-l-2 border-primary",
+          !isDisabled && !googleSuiteNeedsSetup && "hover:bg-accent"
+        )}
+        onClick={() => {
+          if (googleSuiteNeedsSetup) {
+            router.push("/settings/google-workspace");
+            return;
+          }
+
+          if (!isDisabled) {
+            onToolSelect(tool.id);
+          }
+        }}
+      >
+        <div
+          className="relative flex items-center justify-center size-9 rounded-lg transition-all"
+          style={{
+            background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
           }}
         >
-          <div
-            className="relative flex items-center justify-center size-9 rounded-lg transition-all"
-            style={{
-              background: `linear-gradient(135deg, ${tool.gradientColors.from}20, ${tool.gradientColors.via}30, ${tool.gradientColors.to}20)`,
-            }}
-          >
-            <ToolIcon
-              className={cn(
-                "size-4 transition-colors",
-                isActive ? tool.iconColorClass : 'text-muted-foreground'
-              )}
-            />
+          <ToolIcon
+            className={cn(
+              "size-4 transition-colors",
+              isActive ? tool.iconColorClass : "text-muted-foreground"
+            )}
+          />
+        </div>
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium truncate">{tool.name}</span>
+            {(needsPermissions || googleSuiteNeedsSetup) && (
+              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
+                {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
+              </Badge>
+            )}
           </div>
-          <div className="flex flex-col gap-0.5 flex-1 min-w-0 text-left">
-            <div className="flex items-center gap-1.5">
-              <span className="font-medium truncate">{tool.name}</span>
-              {(needsPermissions || googleSuiteNeedsSetup) && (
-                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
-                  {googleSuiteNeedsSetup ? "Enable first" : hasWorkspaceAccess ? "Limited" : "Setup"}
-                </Badge>
-              )}
-            </div>
-            <span className="text-xs text-muted-foreground truncate">
-              {!isAuthenticated
-                ? 'Login required to access this tool'
-                : googleSuiteNeedsSetup
-                  ? 'Enable at least one Google app in Settings before using Google Suite.'
+          <span className="text-xs text-muted-foreground truncate">
+            {!isAuthenticated
+              ? "Login required to access this tool"
+              : googleSuiteNeedsSetup
+                ? "Enable at least one Google app in Settings before using Google Suite."
                 : needsPermissions
-                  ? 'Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides.'
+                  ? "Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides."
                   : tool.description}
-            </span>
-          </div>
-          {isActive && (
-            <LazyMotion features={domAnimation}>
-              <m.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="size-2 rounded-full bg-primary shadow-lg shadow-primary/50 shrink-0"
-              />
-            </LazyMotion>
-          )}
-        </Button>
+          </span>
+        </div>
+        {isActive && (
+          <LazyMotion features={domAnimation}>
+            <m.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="size-2 rounded-full bg-primary shadow-lg shadow-primary/50 shrink-0"
+            />
+          </LazyMotion>
+        )}
+      </Button>
 
-        <button
-          type="button"
-          onClick={handleOpenGoogleSettings}
-          className="inline-flex h-8 shrink-0 items-center rounded-md border border-border/70 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Settings2 className="mr-1 size-3" />
-          Settings
-        </button>
-      </div>
-    );
-  }
+      <button
+        type="button"
+        onClick={handleOpenGoogleSettings}
+        className="inline-flex h-8 shrink-0 items-center rounded-md border border-border/70 px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+      >
+        <Settings2 className="mr-1 size-3" />
+        Settings
+      </button>
+    </div>
+  );
+}
+
+function StandardDrawerItem({
+  tool,
+  isActive,
+  isAuthenticated,
+  isDisabled,
+  googleSuiteNeedsSetup,
+  hasWorkspaceAccess,
+  needsPermissions,
+  onToolSelect,
+}: ToolMenuItemCommonProps) {
+  const router = useRouter();
+  const ToolIcon = tool.icon;
 
   return (
     <Button
@@ -302,7 +309,7 @@ export function ToolMenuItemDrawer({
         <ToolIcon
           className={cn(
             "size-4 transition-colors",
-            isActive ? tool.iconColorClass : 'text-muted-foreground'
+            isActive ? tool.iconColorClass : "text-muted-foreground"
           )}
         />
       </div>
@@ -317,12 +324,12 @@ export function ToolMenuItemDrawer({
         </div>
         <span className="text-xs text-muted-foreground truncate">
           {!isAuthenticated
-            ? 'Login required to access this tool'
+            ? "Login required to access this tool"
             : googleSuiteNeedsSetup
-              ? 'Enable at least one Google app in Settings before using Google Suite.'
-            : needsPermissions
-              ? 'Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides.'
-              : tool.description}
+              ? "Enable at least one Google app in Settings before using Google Suite."
+              : needsPermissions
+                ? "Choose Google access in Settings before using Gmail, Drive, Calendar, Docs, Sheets, or Slides."
+                : tool.description}
         </span>
       </div>
       {isActive && (
@@ -336,4 +343,59 @@ export function ToolMenuItemDrawer({
       )}
     </Button>
   );
+}
+
+export function ToolMenuItemDrawer({
+  tool,
+  isActive,
+  isAuthenticated,
+  searchDepth = 'basic',
+  deepResearchUsage,
+  googleSuiteStatus,
+  onToolSelect,
+}: ToolMenuItemDrawerProps) {
+  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
+  const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
+  const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
+  const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
+  const hasWorkspaceAccess = googleSuiteStatus?.hasWorkspaceAccess ?? (googleSuiteStatus?.grantedScopes ?? []).some(
+    (scope) => !signInScopes.has(scope)
+  );
+  const googleSuiteNeedsSetup =
+    isGoogleSuite &&
+    isAuthenticated &&
+    !googleSuiteStatus?.loading &&
+    !hasWorkspaceAccess;
+  const isDisabled =
+    !isAuthenticated ||
+    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
+    (isGoogleSuite && !!googleSuiteStatus?.loading);
+  const needsPermissions =
+    isGoogleSuite &&
+    isAuthenticated &&
+    !googleSuiteStatus?.loading &&
+    !hasWorkspaceAccess;
+  const commonProps = {
+    tool,
+    isActive,
+    isAuthenticated,
+    searchDepth,
+    deepResearchUsage,
+    googleSuiteStatus,
+    onToolSelect,
+    isDisabled,
+    googleSuiteNeedsSetup,
+    hasWorkspaceAccess,
+    needsPermissions,
+  };
+
+  if (isWebSearch) {
+    return <WebSearchDrawerItem {...commonProps} />;
+  }
+
+  if (isGoogleSuite) {
+    return <GoogleSuiteDrawerItem {...commonProps} />;
+  }
+
+  return <StandardDrawerItem {...commonProps} />;
 }

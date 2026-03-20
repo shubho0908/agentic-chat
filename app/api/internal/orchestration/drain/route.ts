@@ -9,7 +9,6 @@ import { logWarn } from '@/lib/observability';
 const DEFAULT_DRAIN_BATCH_SIZE = 5;
 const MAX_DRAIN_BATCH_SIZE = 25;
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: NextRequest): boolean {

@@ -17,7 +17,6 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
 import {
-
   GOOGLE_SIGN_IN_SCOPES,
   getMissingGoogleScopes,
   resolveGoogleWorkspaceScopesForRequest,
@@ -133,7 +132,6 @@ export function useChatInputController({
   centered,
   onAuthRequired,
   tokenUsage,
-  conversationId,
   messages = [],
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
@@ -361,6 +359,7 @@ export function useChatInputController({
     dispatchUi({ type: "set-sending", isSending: true });
 
     try {
+      const messageText = input;
       const attachmentsToSend = uploadedAttachments;
 
       if (selectedFiles.length > 0 && attachmentsToSend.length !== selectedFiles.length) {
@@ -372,8 +371,11 @@ export function useChatInputController({
       }
 
       const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);
-      onSend(
-        input,
+      clearInput();
+      clearAttachments();
+
+      await onSend(
+        messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         activeTool,
         !!session && memoryEnabled,
@@ -382,13 +384,8 @@ export function useChatInputController({
       );
     } catch (error) {
       logger.error("Error sending message:", error);
-      dispatchUi({ type: "set-sending", isSending: false });
     } finally {
-      if (conversationId) {
-        clearInput();
-        clearAttachments();
-        dispatchUi({ type: "set-sending", isSending: false });
-      }
+      dispatchUi({ type: "set-sending", isSending: false });
     }
   }
 

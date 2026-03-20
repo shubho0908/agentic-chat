@@ -14,7 +14,6 @@ import { getGoogleWorkspaceOAuthReadiness } from '@/lib/tools/google-suite/oauth
 import { isAuthRevokedError, synchronizeGoogleAccount } from '@/lib/tools/google-suite/client';
 
 import { logger } from "@/lib/logger";
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { error: string }>> {

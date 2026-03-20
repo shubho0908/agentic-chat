@@ -6,7 +6,6 @@ import { validateUrl } from '@/lib/url-scraper/scraper';
 import { safeFetch } from '@/lib/network/safeFetch';
 import { logWarn } from '@/lib/observability';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const MAX_LINK_PREVIEW_BYTES = 5 * 1024 * 1024;
 

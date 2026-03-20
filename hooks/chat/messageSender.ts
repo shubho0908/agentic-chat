@@ -149,6 +149,7 @@ export async function handleSendMessage(
 
   try {
     let currentConversationId = conversationId;
+    let shouldResumeOnConversationPage = false;
 
     if (isNewConversation) {
       await handleConversationSaving(
@@ -179,6 +180,11 @@ export async function handleSendMessage(
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
+
+      // New chats navigate to /c/:id immediately after the user message is saved.
+      // Let the destination page resume generation once, instead of starting a
+      // stream here that will be aborted during route teardown and retried there.
+      shouldResumeOnConversationPage = true;
     } else {
       if (!currentConversationId) {
         throw new Error("Conversation ID is required for existing conversations");
@@ -207,6 +213,10 @@ export async function handleSendMessage(
 
     if (!currentConversationId) {
       throw new Error("Conversation ID is required before streaming the response");
+    }
+
+    if (shouldResumeOnConversationPage) {
+      return { success: true };
     }
 
     const result = await handleStreamingResponse(

@@ -33,13 +33,14 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     isFetchingNextPage
   } = useConversation(conversationId);
   const { toggleSharing, isToggling } = useConversations({ enabled: !!session });
+  const conversationItems = conversationData?.messages.items;
 
   const initialMessages = useMemo(() => {
-    if (!conversationData?.messages.items) return [];
+    if (!conversationItems) return [];
 
-    const dbMessages = convertDbMessagesToFrontend(conversationData.messages.items);
+    const dbMessages = convertDbMessagesToFrontend(conversationItems);
     return flattenMessageTree(dbMessages);
-  }, [conversationData?.messages.items]);
+  }, [conversationItems]);
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 

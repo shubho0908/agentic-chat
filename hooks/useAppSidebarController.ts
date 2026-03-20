@@ -99,6 +99,8 @@ export function useAppSidebarController() {
     bulkDeleteConversations,
   } = conversationsState;
 
+  // TanStack Virtual returns non-memoizable functions; this hook intentionally opts out.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: conversations.length,
     getScrollElement: () => parentRef.current,

@@ -4,8 +4,6 @@ import { getAuthenticatedUser, errorResponse } from '@/lib/apiUtils';
 import { checkDeepResearchUsage } from '@/lib/deepResearchUsage';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
-
-export const runtime = 'nodejs';
 import { logger } from "@/lib/logger";
 export const dynamic = 'force-dynamic';
 
