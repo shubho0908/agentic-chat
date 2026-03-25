@@ -117,7 +117,9 @@ async function loadMermaidModule() {
   return mermaidModulePromise;
 }
 
-function getMermaidAppearance(resolvedTheme: string | undefined): MermaidAppearance | null {
+function getMermaidAppearance(
+  resolvedTheme: MermaidResolvedTheme | null | undefined,
+): MermaidAppearance | null {
   if (resolvedTheme !== "light" && resolvedTheme !== "dark") {
     return null;
   }
