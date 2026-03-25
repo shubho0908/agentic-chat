@@ -1,16 +1,43 @@
 "use client";
 
-import { useTheme } from "next-themes";
+import { useSyncExternalStore } from "react";
 import { Toaster as Sonner } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+function useDomResolvedTheme(): "light" | "dark" | null {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof document === "undefined") {
+        return () => {};
+      }
+
+      const root = document.documentElement;
+      const observer = new MutationObserver(onStoreChange);
+      observer.observe(root, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+
+      return () => observer.disconnect();
+    },
+    () => {
+      if (typeof document === "undefined") {
+        return null;
+      }
+
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    },
+    () => null,
+  );
+}
+
 function Toaster({ ...props }: ToasterProps) {
-  const { theme = "system" } = useTheme();
+  const resolvedTheme = useDomResolvedTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={(resolvedTheme ?? "light") as ToasterProps["theme"]}
       className="toaster group"
       toastOptions={{
         classNames: {

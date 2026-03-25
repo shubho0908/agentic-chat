@@ -4,6 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ERROR_CODES } from "@/constants/errors";
 import { getModel } from "@/lib/storage";
+import { orderConversationMessagesAsc } from "@/lib/conversationMessageOrder";
 import type { Attachment } from "@/lib/schemas/chat";
 import type { TokenUsage } from "@/types/chat";
 
@@ -112,9 +113,9 @@ export function useConversation(conversationId: string | null) {
     if (!query.data) return undefined;
 
     const firstPage = query.data.pages[0];
-    const allMessages = query.data.pages
-      .flatMap((page) => page.messages.items)
-      .reverse();
+    const allMessages = orderConversationMessagesAsc(
+      query.data.pages.flatMap((page) => page.messages.items)
+    );
 
     return {
       conversation: firstPage.conversation,

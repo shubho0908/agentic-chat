@@ -146,14 +146,14 @@
     max-width: 100%;
   }
 
-  .prose-edward .mermaidPreview-svg svg {
+  .mermaidPreview-svg svg {
     display: block;
     max-width: none;
     height: auto;
     margin-inline: auto;
   }
 
-  .prose-edward .mermaidPreview-viewport {
+  .mermaidPreview-viewport {
     width: fit-content;
     max-width: 100%;
     max-height: min(70vh, 36rem);
@@ -161,7 +161,11 @@
     overscroll-behavior: contain;
   }
 
-  .prose-edward .mermaidPreview-svg {
+  .mermaidPreview-viewport-inline {
+    max-width: min(100%, 52rem);
+  }
+
+  .mermaidPreview-svg {
     display: flex;
     width: max-content;
     min-width: 100%;
@@ -169,8 +173,21 @@
     padding: 0.75rem;
   }
 
-  .prose-edward .mermaidPreview-svg svg[width] {
+  .mermaidPreview-svg svg[width] {
     min-width: min-content;
+  }
+
+  .mermaidPreview-viewport-expanded {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+  }
+
+  .mermaidPreview-svg-expanded {
+    min-width: max(100%, 56rem);
+    min-height: 100%;
+    align-items: center;
+    padding: 1.5rem;
   }
 
   .hljs-comment,

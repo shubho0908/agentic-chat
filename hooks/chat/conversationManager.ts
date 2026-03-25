@@ -2,6 +2,7 @@ import { type Attachment, type MessageContentPart, type Message, type MessageMet
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/contentUtils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
+import { orderConversationMessagesDesc } from "@/lib/conversationMessageOrder";
 import { saveUserMessage, saveAssistantMessage } from "./messageApi";
 import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
@@ -182,6 +183,22 @@ function updateQueryCacheWithUserMessage(
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
   const placeholderAssistantId = `assistant-pending-${conversationId}`;
+  const messages = orderConversationMessagesDesc([
+    {
+      id: userMessageId,
+      role: "user" as const,
+      content: textContent,
+      createdAt: new Date(userTimestamp).toISOString(),
+      attachments: attachments || [],
+    },
+    {
+      id: placeholderAssistantId,
+      role: "assistant" as const,
+      content: "",
+      createdAt: new Date().toISOString(),
+      attachments: [],
+    },
+  ]);
 
   queryClient.setQueryData(["conversation", conversationId], {
     pages: [{
@@ -193,22 +210,7 @@ function updateQueryCacheWithUserMessage(
         updatedAt: new Date().toISOString(),
       },
       messages: {
-        items: [
-          {
-            id: userMessageId,
-            role: "user" as const,
-            content: textContent,
-            createdAt: new Date(userTimestamp).toISOString(),
-            attachments: attachments || [],
-          },
-          {
-            id: placeholderAssistantId,
-            role: "assistant" as const,
-            content: "",
-            createdAt: new Date().toISOString(),
-            attachments: [],
-          },
-        ],
+        items: messages,
         nextCursor: undefined,
       },
       tokenUsage: undefined,
@@ -230,6 +232,22 @@ function updateQueryCache(
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
+  const messages = orderConversationMessagesDesc([
+    {
+      id: userMessageId,
+      role: "user" as const,
+      content: textContent,
+      createdAt: new Date(userTimestamp).toISOString(),
+      attachments: attachments || [],
+    },
+    {
+      id: assistantMessageId,
+      role: "assistant" as const,
+      content: assistantContent,
+      createdAt: new Date().toISOString(),
+      ...(metadata && { metadata }),
+    },
+  ]);
 
   queryClient.setQueryData(["conversation", conversationId], {
     pages: [{
@@ -241,22 +259,7 @@ function updateQueryCache(
         updatedAt: new Date().toISOString(),
       },
       messages: {
-        items: [
-          {
-            id: userMessageId,
-            role: "user" as const,
-            content: textContent,
-            createdAt: new Date(userTimestamp).toISOString(),
-            attachments: attachments || [],
-          },
-          {
-            id: assistantMessageId,
-            role: "assistant" as const,
-            content: assistantContent,
-            createdAt: new Date().toISOString(),
-            ...(metadata && { metadata }),
-          },
-        ],
+        items: messages,
         nextCursor: undefined,
       },
       tokenUsage: undefined,
