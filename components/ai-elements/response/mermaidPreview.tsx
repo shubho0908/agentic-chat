@@ -470,6 +470,7 @@ function MermaidFullscreenViewer({
       <div className={`min-h-0 flex-1 p-3 sm:p-4 ${isMobile ? "pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : ""}`}>
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <MermaidPanSurface
+            expanded={true}
             className="mermaidPreview-viewport mermaidPreview-viewport-expanded h-full rounded-2xl border border-zinc-200/80 bg-white/90 dark:border-zinc-800/80 dark:bg-zinc-950/80"
           >
             <MermaidSvgCanvas svg={svg} className="mermaidPreview-svg mermaidPreview-svg-expanded" />
