@@ -1,6 +1,8 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { AlertCircle, Code2, Eye } from "lucide-react";
-import { useTheme } from "next-themes";
+"use client";
+
+import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { AlertCircle, Code2, Expand, Eye, X } from "lucide-react";
 import DOMPurify from "dompurify";
 import { CodeCopyButton } from "./codeCopyButton";
 import {
@@ -8,18 +10,55 @@ import {
   MAX_MERMAID_ERROR_LENGTH,
   MERMAID_FALLBACK_ERROR,
   MERMAID_LOADING_TEXT,
-  MERMAID_THEME_DARK,
-  MERMAID_THEME_DEFAULT,
 } from "./constants";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/useMobile";
 
-type MermaidTheme = typeof MERMAID_THEME_DEFAULT | typeof MERMAID_THEME_DARK;
 type MermaidViewMode = "preview" | "code";
+type MermaidResolvedTheme = "light" | "dark";
+type MermaidThemeName = "base";
+type MermaidThemeVariables = Record<string, string>;
+type MermaidAppearance = {
+  cacheKey: `${MermaidResolvedTheme}-v2`;
+  mermaidTheme: MermaidThemeName;
+  darkMode: boolean;
+  themeVariables: MermaidThemeVariables;
+};
 
 let mermaidModulePromise: Promise<typeof import("mermaid")> | null = null;
-let mermaidInitializedTheme: MermaidTheme | null = null;
+let mermaidInitializedThemeKey: MermaidAppearance["cacheKey"] | null = null;
+let mermaidRenderQueue: Promise<void> = Promise.resolve();
 
 // LRU Cache for Mermaid SVGs to prevent memory leaks
 const MAX_CACHE_SIZE = 50;
+
+function useDomResolvedTheme(): MermaidResolvedTheme | null {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof document === "undefined") {
+        return () => {};
+      }
+
+      const root = document.documentElement;
+      const observer = new MutationObserver(onStoreChange);
+      observer.observe(root, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+
+      return () => observer.disconnect();
+    },
+    () => {
+      if (typeof document === "undefined") {
+        return null;
+      }
+
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    },
+    () => null,
+  );
+}
 
 function createLRUCache<K, V>() {
   const cache = new Map<K, V>();
@@ -78,8 +117,95 @@ async function loadMermaidModule() {
   return mermaidModulePromise;
 }
 
-function getMermaidTheme(resolvedTheme: string | undefined): MermaidTheme {
-  return resolvedTheme === "light" ? MERMAID_THEME_DEFAULT : MERMAID_THEME_DARK;
+function getMermaidAppearance(
+  resolvedTheme: MermaidResolvedTheme | null | undefined,
+): MermaidAppearance | null {
+  if (resolvedTheme !== "light" && resolvedTheme !== "dark") {
+    return null;
+  }
+
+  if (resolvedTheme === "light") {
+    return {
+      cacheKey: "light-v2",
+      mermaidTheme: "base",
+      darkMode: false,
+      themeVariables: {
+        background: "#ffffff",
+        primaryColor: "#fafafa",
+        primaryTextColor: "#18181b",
+        primaryBorderColor: "#d4d4d8",
+        lineColor: "#52525b",
+        textColor: "#18181b",
+        mainBkg: "#ffffff",
+        secondBkg: "#f4f4f5",
+        clusterBkg: "#f8fafc",
+        clusterBorder: "#d4d4d8",
+        nodeBorder: "#d4d4d8",
+        defaultLinkColor: "#52525b",
+        edgeLabelBackground: "#ffffff",
+        labelBackground: "#ffffff",
+        titleColor: "#09090b",
+        noteBkgColor: "#fef3c7",
+        noteTextColor: "#3f3f46",
+      },
+    };
+  }
+
+  return {
+    cacheKey: "dark-v2",
+    mermaidTheme: "base",
+    darkMode: true,
+    themeVariables: {
+      background: "#09090b",
+      primaryColor: "#18181b",
+      primaryTextColor: "#fafafa",
+      primaryBorderColor: "#71717a",
+      lineColor: "#d4d4d8",
+      textColor: "#fafafa",
+      mainBkg: "#18181b",
+      secondBkg: "#27272a",
+      clusterBkg: "#111827",
+      clusterBorder: "#52525b",
+      nodeBorder: "#71717a",
+      defaultLinkColor: "#d4d4d8",
+      edgeLabelBackground: "#18181b",
+      labelBackground: "#18181b",
+      titleColor: "#fafafa",
+      noteBkgColor: "#3f3f46",
+      noteTextColor: "#fafafa",
+    },
+  };
+}
+
+function injectMermaidThemeOverrides(svg: string, appearance: MermaidAppearance): string {
+  const nodeFill = appearance.themeVariables.mainBkg ?? appearance.themeVariables.primaryColor ?? "#ffffff";
+  const nodeBorder = appearance.themeVariables.nodeBorder ?? appearance.themeVariables.primaryBorderColor ?? "#d4d4d8";
+  const clusterFill = appearance.themeVariables.clusterBkg ?? appearance.themeVariables.secondBkg ?? nodeFill;
+  const clusterBorder = appearance.themeVariables.clusterBorder ?? nodeBorder;
+  const textColor =
+    appearance.themeVariables.textColor ?? appearance.themeVariables.primaryTextColor ?? "#18181b";
+  const lineColor = appearance.themeVariables.lineColor ?? "#52525b";
+  const edgeLabelBackground =
+    appearance.themeVariables.edgeLabelBackground ?? appearance.themeVariables.labelBackground ?? nodeFill;
+  const titleColor = appearance.themeVariables.titleColor ?? textColor;
+  const noteFill = appearance.themeVariables.noteBkgColor ?? clusterFill;
+  const noteText = appearance.themeVariables.noteTextColor ?? textColor;
+
+  const overrideStyle = `
+<style data-mermaid-theme-override="true">
+.node rect, .node circle, .node ellipse, .node polygon, .node path { fill: ${nodeFill} !important; stroke: ${nodeBorder} !important; }
+.cluster rect { fill: ${clusterFill} !important; stroke: ${clusterBorder} !important; }
+.label text, .nodeLabel, .edgeLabel, .cluster-label text, .cluster text, .label, text { fill: ${textColor} !important; color: ${textColor} !important; }
+.label span, .nodeLabel span, .edgeLabel span, foreignObject div { color: ${textColor} !important; }
+.edgeLabel .label rect, .labelBkg { fill: ${edgeLabelBackground} !important; background: ${edgeLabelBackground} !important; }
+.path, .flowchart-link, .relationshipLine, .messageLine0, .messageLine1, .loopLine { stroke: ${lineColor} !important; }
+marker path, .marker { fill: ${lineColor} !important; stroke: ${lineColor} !important; }
+.cluster-label text, .classTitleText { fill: ${titleColor} !important; }
+.note, .note rect { fill: ${noteFill} !important; stroke: ${clusterBorder} !important; }
+.note text { fill: ${noteText} !important; }
+</style>`;
+
+  return svg.includes("</svg>") ? svg.replace("</svg>", `${overrideStyle}</svg>`) : `${svg}${overrideStyle}`;
 }
 
 function normalizeMermaidError(error: unknown): string {
@@ -120,8 +246,8 @@ function createMermaidRenderHost(): HTMLDivElement {
   return host;
 }
 
-async function renderMermaidSvg(source: string, theme: MermaidTheme): Promise<string> {
-  const cacheKey = `${theme}\n${source}`;
+async function renderMermaidSvg(source: string, appearance: MermaidAppearance): Promise<string> {
+  const cacheKey = `${appearance.cacheKey}\n${source}`;
   const cachedSvg = mermaidSvgCache.get(cacheKey);
   if (cachedSvg) {
     return cachedSvg;
@@ -135,32 +261,43 @@ async function renderMermaidSvg(source: string, theme: MermaidTheme): Promise<st
   const renderPromise = (async () => {
     const mermaidModule = await loadMermaidModule();
     const mermaid = mermaidModule.default;
+    const mermaidApi = mermaid.mermaidAPI;
 
-    if (mermaidInitializedTheme !== theme) {
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        suppressErrorRendering: true,
-        theme,
-        darkMode: theme === MERMAID_THEME_DARK,
-      });
-      mermaid.setParseErrorHandler(() => undefined);
-      mermaidInitializedTheme = theme;
-    }
+    const runRender = async () => {
+      if (mermaidInitializedThemeKey !== appearance.cacheKey) {
+        mermaidApi.globalReset();
+        mermaidApi.reset();
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          suppressErrorRendering: true,
+          theme: appearance.mermaidTheme,
+          darkMode: appearance.darkMode,
+          themeVariables: appearance.themeVariables,
+        });
+        mermaid.setParseErrorHandler(() => undefined);
+        mermaidInitializedThemeKey = appearance.cacheKey;
+      }
 
-    const renderHost = createMermaidRenderHost();
+      const renderHost = createMermaidRenderHost();
+      const renderId = `mermaid-${appearance.cacheKey}-${Math.random().toString(36).slice(2)}`;
 
-    const renderId = `mermaid-${theme}-${Math.random().toString(36).slice(2)}`;
-    try {
-      cleanupLeakedMermaidArtifacts();
-      await mermaid.parse(source, { suppressErrors: false });
-      const { svg } = await mermaid.render(renderId, source, renderHost);
-      mermaidSvgCache.set(cacheKey, svg);
-      return svg;
-    } finally {
-      renderHost.remove();
-      cleanupLeakedMermaidArtifacts();
-    }
+      try {
+        cleanupLeakedMermaidArtifacts();
+        await mermaid.parse(source, { suppressErrors: false });
+        const { svg } = await mermaid.render(renderId, source, renderHost);
+        const themedSvg = injectMermaidThemeOverrides(svg, appearance);
+        mermaidSvgCache.set(cacheKey, themedSvg);
+        return themedSvg;
+      } finally {
+        renderHost.remove();
+        cleanupLeakedMermaidArtifacts();
+      }
+    };
+
+    const queuedRender = mermaidRenderQueue.then(runRender);
+    mermaidRenderQueue = queuedRender.then(() => undefined, () => undefined);
+    return queuedRender;
   })();
 
   mermaidRenderPromiseCache.set(cacheKey, renderPromise);
@@ -172,16 +309,216 @@ async function renderMermaidSvg(source: string, theme: MermaidTheme): Promise<st
   }
 }
 
+function MermaidSvgCanvas({
+  svg,
+  className,
+  onSvgRendered,
+}: {
+  svg: string;
+  className: string;
+  onSvgRendered?: (svgElement: SVGSVGElement | null) => void;
+}) {
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const onSvgRenderedRef = useRef(onSvgRendered);
+
+  useEffect(() => {
+    onSvgRenderedRef.current = onSvgRendered;
+  }, [onSvgRendered]);
+
+  useEffect(() => {
+    const previewElement = previewRef.current;
+    if (!previewElement) {
+      return;
+    }
+
+    const cleanSvg = DOMPurify.sanitize(svg, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ["#text"],
+      ADD_ATTR: ["class", "style", "transform", "fill", "stroke", "stroke-width"],
+    });
+
+    previewElement.innerHTML = cleanSvg;
+    const svgElement = previewElement.querySelector("svg");
+    if (svgElement) {
+      svgElement.style.display = "block";
+      svgElement.style.overflow = "visible";
+    }
+    onSvgRenderedRef.current?.(svgElement);
+
+    return () => {
+      onSvgRenderedRef.current?.(null);
+      previewElement.replaceChildren();
+    };
+  }, [svg]);
+
+  return <div ref={previewRef} className={className} aria-label="Mermaid diagram preview" />;
+}
+
+function MermaidPanSurface({
+  children,
+  className,
+  expanded = false,
+}: {
+  children: ReactNode;
+  className: string;
+  expanded?: boolean;
+}) {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef({
+    isDragging: false,
+    pointerId: -1,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
+  const [isDragging, setIsDragging] = useState(false);
+
+  return (
+    <div
+      ref={viewportRef}
+      className={`${className} ${expanded ? (isDragging ? "cursor-grabbing" : "cursor-grab") : ""}`}
+      onPointerDown={(event) => {
+        if (!expanded || event.pointerType !== "mouse" || event.button !== 0 || !viewportRef.current) {
+          return;
+        }
+
+        dragStateRef.current = {
+          isDragging: true,
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          scrollLeft: viewportRef.current.scrollLeft,
+          scrollTop: viewportRef.current.scrollTop,
+        };
+
+        setIsDragging(true);
+        viewportRef.current.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!dragStateRef.current.isDragging || dragStateRef.current.pointerId !== event.pointerId || !viewportRef.current) {
+          return;
+        }
+
+        event.preventDefault();
+        const deltaX = event.clientX - dragStateRef.current.startX;
+        const deltaY = event.clientY - dragStateRef.current.startY;
+        viewportRef.current.scrollLeft = dragStateRef.current.scrollLeft - deltaX;
+        viewportRef.current.scrollTop = dragStateRef.current.scrollTop - deltaY;
+      }}
+      onPointerUp={(event) => {
+        if (!dragStateRef.current.isDragging || dragStateRef.current.pointerId !== event.pointerId || !viewportRef.current) {
+          return;
+        }
+
+        dragStateRef.current.isDragging = false;
+        setIsDragging(false);
+        if (viewportRef.current.hasPointerCapture(event.pointerId)) {
+          viewportRef.current.releasePointerCapture(event.pointerId);
+        }
+      }}
+      onPointerCancel={(event) => {
+        if (!dragStateRef.current.isDragging || dragStateRef.current.pointerId !== event.pointerId || !viewportRef.current) {
+          return;
+        }
+
+        dragStateRef.current.isDragging = false;
+        setIsDragging(false);
+        if (viewportRef.current.hasPointerCapture(event.pointerId)) {
+          viewportRef.current.releasePointerCapture(event.pointerId);
+        }
+      }}
+      style={{ userSelect: isDragging ? "none" : undefined }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MermaidFullscreenViewer({
+  open,
+  onOpenChange,
+  svg,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  svg: string;
+}) {
+  const isMobile = useIsMobile();
+  const viewer = (
+    <div className={`flex min-h-0 flex-col overflow-hidden border border-zinc-200/80 bg-zinc-50/96 text-zinc-900 shadow-2xl shadow-black/15 backdrop-blur-xl dark:border-zinc-800/80 dark:bg-zinc-950/96 dark:text-zinc-50 ${isMobile ? "h-full rounded-t-[28px] border-b-0" : "h-[min(92vh,64rem)] w-[min(96vw,96rem)] rounded-[28px]"}`}>
+      <div className="relative px-4 py-3 sm:px-5">
+        <div className="pointer-events-none absolute inset-x-4 bottom-0 border-b border-zinc-200/80 sm:inset-x-5 dark:border-zinc-800/80" />
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Mermaid diagram</p>
+            <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+              Scroll or swipe to explore large diagrams.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-zinc-200/80 bg-white/80 text-zinc-600 transition hover:bg-white hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-700/80 dark:bg-zinc-900/80 dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+            aria-label="Close Mermaid fullscreen preview"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className={`min-h-0 flex-1 p-3 sm:p-4 ${isMobile ? "pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : ""}`}>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <MermaidPanSurface
+            expanded={true}
+            className="mermaidPreview-viewport mermaidPreview-viewport-expanded h-full rounded-2xl border border-zinc-200/80 bg-white/90 dark:border-zinc-800/80 dark:bg-zinc-950/80"
+          >
+            <MermaidSvgCanvas svg={svg} className="mermaidPreview-svg mermaidPreview-svg-expanded" />
+          </MermaidPanSurface>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
+        <DrawerContent
+          variant="bare"
+          showHandle={false}
+          className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+        >
+          <DrawerTitle className="sr-only">Mermaid diagram</DrawerTitle>
+          {viewer}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        variant="bare"
+        className="max-h-[96vh] max-w-none overflow-visible border-0 bg-transparent p-0 shadow-none"
+      >
+        <DialogTitle className="sr-only">Mermaid diagram</DialogTitle>
+        {viewer}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MermaidPreviewContent({
   source,
-  theme,
+  appearance,
 }: {
   source: string;
-  theme: MermaidTheme;
+  appearance: MermaidAppearance;
 }) {
   const idBase = useId();
-  const previewRef = useRef<HTMLDivElement | null>(null);
   const [viewMode, setViewMode] = useState<MermaidViewMode>("preview");
+  const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [state, setState] = useState<{
     svg: string | null;
     error: string | null;
@@ -194,10 +531,8 @@ function MermaidPreviewContent({
 
   useEffect(() => {
     let isActive = true;
-    const previewElement = previewRef.current;
-    previewElement?.replaceChildren();
 
-    void renderMermaidSvg(source, theme)
+    void renderMermaidSvg(source, appearance)
       .then((nextSvg) => {
         if (!isActive) return;
         setState({
@@ -217,23 +552,8 @@ function MermaidPreviewContent({
 
     return () => {
       isActive = false;
-      previewElement?.replaceChildren();
     };
-  }, [source, theme]);
-
-  useEffect(() => {
-    if (viewMode !== "preview" || !previewRef.current || !state.svg) {
-      return;
-    }
-
-    // Sanitize SVG before rendering to prevent XSS attacks
-    const cleanSvg = DOMPurify.sanitize(state.svg, {
-      USE_PROFILES: { svg: true, svgFilters: true },
-      ADD_TAGS: ["#text"],
-      ADD_ATTR: ["class", "style", "transform", "fill", "stroke", "stroke-width"],
-    });
-    previewRef.current.innerHTML = cleanSvg;
-  }, [state.svg, viewMode]);
+  }, [source, appearance]);
 
   const previewPanelId = `${idBase}-preview`;
   const codePanelId = `${idBase}-code`;
@@ -247,40 +567,51 @@ function MermaidPreviewContent({
           mermaid
         </span>
 
-        <div
-          role="tablist"
-          aria-label="Mermaid diagram views"
-          className="inline-flex items-center gap-1 rounded-lg border border-zinc-200/80 bg-white/90 p-0.5 shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_1px_2px_rgba(15,23,42,0.08)] dark:border-zinc-800/80 dark:bg-zinc-950/90 dark:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_1px_2px_rgba(0,0,0,0.3)]"
-        >
+        <div className="inline-flex items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Mermaid diagram views"
+            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200/80 bg-white/90 p-0.5 shadow-[0_1px_0_rgba(255,255,255,0.75)_inset,0_1px_2px_rgba(15,23,42,0.08)] dark:border-zinc-800/80 dark:bg-zinc-950/90 dark:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_1px_2px_rgba(0,0,0,0.3)]"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "preview"}
+              aria-controls={previewPanelId}
+              aria-label="Show Mermaid preview"
+              onClick={() => setViewMode("preview")}
+              className={`${tabButtonClass} ${
+                viewMode === "preview"
+                  ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
+                  : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+              }`}
+            >
+              <Eye className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "code"}
+              aria-controls={codePanelId}
+              aria-label="Show Mermaid code"
+              onClick={() => setViewMode("code")}
+              className={`${tabButtonClass} ${
+                viewMode === "code"
+                  ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
+                  : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+              }`}
+            >
+              <Code2 className="size-3.5" />
+            </button>
+          </div>
           <button
             type="button"
-            role="tab"
-            aria-selected={viewMode === "preview"}
-            aria-controls={previewPanelId}
-            aria-label="Show Mermaid preview"
-            onClick={() => setViewMode("preview")}
-            className={`${tabButtonClass} ${
-              viewMode === "preview"
-                ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
-                : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            }`}
+            onClick={() => setIsFullscreenOpen(true)}
+            disabled={!state.svg}
+            className="inline-flex size-8 items-center justify-center rounded-lg border border-zinc-200/80 bg-white/90 text-zinc-600 transition-all hover:border-zinc-300 hover:bg-white hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 disabled:pointer-events-none disabled:opacity-40 dark:border-zinc-800/80 dark:bg-zinc-950/90 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-950 dark:hover:text-zinc-100"
+            aria-label="Open Mermaid diagram fullscreen preview"
           >
-            <Eye className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={viewMode === "code"}
-            aria-controls={codePanelId}
-            aria-label="Show Mermaid code"
-            onClick={() => setViewMode("code")}
-            className={`${tabButtonClass} ${
-              viewMode === "code"
-                ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
-                : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
-            }`}
-          >
-            <Code2 className="size-3.5" />
+            <Expand className="size-3.5" />
           </button>
         </div>
       </div>
@@ -295,13 +626,9 @@ function MermaidPreviewContent({
             )}
 
             {!state.isLoading && state.svg && (
-              <div className="mermaidPreview-viewport inline-block rounded-lg border border-zinc-200/80 bg-white/85 dark:border-zinc-800/80 dark:bg-zinc-950/70">
-                <div
-                  ref={previewRef}
-                  className="mermaidPreview-svg"
-                  aria-label="Mermaid diagram preview"
-                />
-              </div>
+              <MermaidPanSurface className="mermaidPreview-viewport mermaidPreview-viewport-inline inline-block rounded-lg border border-zinc-200/80 bg-white/85 dark:border-zinc-800/80 dark:bg-zinc-950/70">
+                <MermaidSvgCanvas svg={state.svg} className="mermaidPreview-svg" />
+              </MermaidPanSurface>
             )}
 
             {!state.isLoading && state.error && (
@@ -344,14 +671,40 @@ function MermaidPreviewContent({
           </div>
         )}
       </div>
+
+      {state.svg && (
+        <MermaidFullscreenViewer
+          open={isFullscreenOpen && !!state.svg}
+          onOpenChange={setIsFullscreenOpen}
+          svg={state.svg}
+        />
+      )}
     </div>
   );
 }
 
 export function MermaidPreview({ source }: { source: string }) {
-  const { resolvedTheme } = useTheme();
-  const theme = getMermaidTheme(resolvedTheme);
-  const previewKey = `${theme}\n${source}`;
+  const resolvedTheme = useDomResolvedTheme();
+  const appearance = getMermaidAppearance(resolvedTheme);
 
-  return <MermaidPreviewContent key={previewKey} source={source} theme={theme} />;
+  if (!appearance) {
+    return (
+      <div className={CODE_BLOCK_SHELL_CLASS}>
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 bg-zinc-100/70 px-3 py-2 sm:px-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/70">
+          <span className="block truncate text-[11px] font-medium lowercase tracking-wide text-zinc-600 dark:text-zinc-400">
+            mermaid
+          </span>
+        </div>
+        <div className="mermaidPreview px-3 py-4 sm:px-4 sm:py-5">
+          <div className="mermaidPreview-viewport inline-flex min-h-[140px] min-w-[16rem] items-center justify-center rounded-lg border border-dashed border-zinc-300/70 bg-white/70 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-700/70 dark:bg-zinc-900/40 dark:text-zinc-400">
+            <span>{MERMAID_LOADING_TEXT}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const previewKey = `${appearance.cacheKey}\n${source}`;
+
+  return <MermaidPreviewContent key={previewKey} source={source} appearance={appearance} />;
 }
