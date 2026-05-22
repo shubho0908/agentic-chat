@@ -42,11 +42,15 @@ step "[2/4] Running TypeScript type-check..."
 pnpm run typecheck || error "TypeScript type-check failed"
 success "TypeScript type-check passed"
 
-step "[3/4] Running React Doctor (score must be > 98)..."
+step "[3/5] Running tests..."
+pnpm test || error "Tests failed"
+success "Tests passed"
+
+step "[4/5] Running React Doctor (score must be > 98)..."
 REACT_DOCTOR_MIN_SCORE=98 pnpm run react-doctor:score || error "React Doctor score must be > 98"
 success "React Doctor passed"
 
-step "[4/4] Validating Prisma schema..."
+step "[5/5] Validating Prisma schema..."
 pnpm run prisma:validate || error "Prisma schema validation failed"
 success "Prisma schema validation passed"
 

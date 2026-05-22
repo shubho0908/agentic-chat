@@ -15,7 +15,8 @@
     "react-doctor:score": "node scripts/check-react-doctor-score.mjs --staged",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "tsx --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@langchain/community": "^0.3.57",
