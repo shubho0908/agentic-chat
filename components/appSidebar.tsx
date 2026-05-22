@@ -232,9 +232,11 @@ export function AppSidebar() {
                             }}
                             conversation={conversation}
                             isActive={currentConversationId === conversation.id}
-                            isDeleting={deletingId === conversation.id}
-                            isRenaming={isRenaming}
-                            isToggling={isToggling}
+                            state={{
+                              isDeleting: deletingId === conversation.id,
+                              isRenaming: isRenaming,
+                              isToggling: isToggling,
+                            }}
                             onDelete={handleDeleteConversation}
                             onRename={renameConversation}
                             onToggleSharing={toggleSharing}
@@ -250,9 +252,11 @@ export function AppSidebar() {
                           key={conversation.id}
                           conversation={conversation}
                           isActive={currentConversationId === conversation.id}
-                          isDeleting={deletingId === conversation.id}
-                          isRenaming={isRenaming}
-                          isToggling={isToggling}
+                          state={{
+                            isDeleting: deletingId === conversation.id,
+                            isRenaming: isRenaming,
+                            isToggling: isToggling,
+                          }}
                           onDelete={handleDeleteConversation}
                           onRename={renameConversation}
                           onToggleSharing={toggleSharing}

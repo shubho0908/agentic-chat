@@ -25,7 +25,8 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
     const isPreparingDocs = status && docPrepStatuses.includes(status);
     const isProcessingImages = status === STRING_ENUM.PROCESSING_IMAGES;
     
-    const researchHasStarted = status && !['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'].includes(status);
+    const nonResearchStatuses = [...docPrepStatuses, STRING_ENUM.PROCESSING_IMAGES];
+    const researchHasStarted = status && !nonResearchStatuses.includes(status);
     
     if (researchHasStarted) {
       return <DeepResearchContext memoryStatus={memoryStatus} />;

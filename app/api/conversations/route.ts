@@ -18,9 +18,13 @@ function getRagAttachmentIds(
     return [];
   }
 
-  return attachments
-    .filter((attachment) => isSupportedForRAG(attachment.fileType))
-    .map((attachment) => attachment.id);
+  const ragAttachmentIds: string[] = [];
+  for (const attachment of attachments) {
+    if (isSupportedForRAG(attachment.fileType)) {
+      ragAttachmentIds.push(attachment.id);
+    }
+  }
+  return ragAttachmentIds;
 }
 
 function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {

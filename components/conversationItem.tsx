@@ -1,7 +1,6 @@
 "use client";
 
 import { STRING_ENUM } from "@/constants/stringEnums";
-import { useState, useEffect } from "react";
 import { Trash2, MoreHorizontal, Loader, Pencil, Share2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -32,9 +31,11 @@ interface Conversation {
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
-  isDeleting: boolean;
-  isRenaming: boolean;
-  isToggling: boolean;
+  state: {
+    isDeleting: boolean;
+    isRenaming: boolean;
+    isToggling: boolean;
+  };
   onDelete: (id: string) => void;
   onRename: (data: { id: string; title: string }) => void;
   onToggleSharing: (data: { id: string; isPublic: boolean }) => void;
@@ -44,23 +45,13 @@ interface ConversationItemProps {
 }
 
 function useRelativeTime(dateString: string): string {
-  const [relativeTime, setRelativeTime] = useState("");
-
-  useEffect(() => {
-    setRelativeTime(
-      formatDistanceToNow(new Date(dateString), { addSuffix: true })
-    );
-  }, [dateString]);
-
-  return relativeTime;
+  return formatDistanceToNow(new Date(dateString), { addSuffix: true });
 }
 
 export function ConversationItem({
   conversation,
   isActive,
-  isDeleting,
-  isRenaming,
-  isToggling,
+  state,
   onDelete,
   onRename,
   onToggleSharing,
@@ -71,7 +62,7 @@ export function ConversationItem({
 }: ConversationItemProps & { ref?: React.Ref<HTMLLIElement> }) {
   const relativeTime = useRelativeTime(conversation.updatedAt);
     const handleRowClick = () => {
-      if (selectionMode && onToggleSelect && !isDeleting) {
+      if (selectionMode && onToggleSelect && !state.isDeleting) {
         onToggleSelect(conversation.id);
       }
     };
@@ -79,7 +70,7 @@ export function ConversationItem({
     return (
       <SidebarMenuItem
         ref={ref}
-        className={isDeleting ? "opacity-50 pointer-events-none" : ""}
+        className={state.isDeleting ? "opacity-50 pointer-events-none" : ""}
       >
         {selectionMode ? (
           <div
@@ -97,7 +88,7 @@ export function ConversationItem({
           >
             <Checkbox
               checked={isSelected}
-              disabled={isDeleting}
+              disabled={state.isDeleting}
               className="shrink-0 pointer-events-none"
               tabIndex={-1}
             />
@@ -109,13 +100,13 @@ export function ConversationItem({
             </div>
           </div>
         ) : (
-          <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
+          <SidebarMenuButton asChild isActive={isActive} disabled={state.isDeleting}>
             <ProtectedConversationLink
               conversationId={conversation.id}
               conversationTitle={conversation.title}
               className="p-2"
             >
-              {isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
+              {state.isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
               <div className="flex flex-col gap-1 min-w-0 flex-1">
                 <span className="truncate font-medium text-sm leading-none">{conversation.title}</span>
                 <span className="text-xs text-muted-foreground leading-none">
@@ -127,9 +118,9 @@ export function ConversationItem({
         )}
         {!selectionMode && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild disabled={isDeleting}>
+            <DropdownMenuTrigger asChild disabled={state.isDeleting}>
               <SidebarMenuAction className="cursor-pointer" showOnHover>
-              {isDeleting ? (
+              {state.isDeleting ? (
                 <Loader className="size-4 animate-spin" />
               ) : (
                 <MoreHorizontal />
@@ -142,7 +133,7 @@ export function ConversationItem({
               conversationId={conversation.id}
               currentTitle={conversation.title}
               onRename={(id, title) => onRename({ id, title })}
-              isRenaming={isRenaming}
+              isRenaming={state.isRenaming}
               trigger={
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
@@ -157,7 +148,7 @@ export function ConversationItem({
               conversationId={conversation.id}
               isPublic={conversation.isPublic}
               onToggleSharing={(id, isPublic) => onToggleSharing({ id, isPublic })}
-              isToggling={isToggling}
+              isToggling={state.isToggling}
               trigger={
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
@@ -174,12 +165,12 @@ export function ConversationItem({
               conversationId={conversation.id}
               conversationTitle={conversation.title}
               onDelete={onDelete}
-              isDeleting={isDeleting}
+              isDeleting={state.isDeleting}
               trigger={
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
                   className="text-destructive cursor-pointer"
-                  disabled={isDeleting}
+                  disabled={state.isDeleting}
                 >
                   <Trash2 className="mr-2 size-4" />
                   Delete

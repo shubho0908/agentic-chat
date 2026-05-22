@@ -49,8 +49,7 @@ function useSidebar() {
 }
 
 function useDerivedOpen(defaultOpen: boolean | undefined) {
-  const initialRef = React.useRef(defaultOpen ?? true)
-  const [open, setOpen] = React.useState(initialRef.current)
+  const [open, setOpen] = React.useState(defaultOpen ?? true)
   return [open, setOpen] as const
 }
 
@@ -86,7 +85,7 @@ const SidebarProvider = (
 
         document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
-      [setOpenProp, open]
+      [setOpenProp, open, _setOpen]
     )
 
     const toggleSidebar = React.useCallback(() => {
@@ -467,7 +466,6 @@ const SidebarMenuButton = (
         />
       </Tooltip>
     )
-  }
 }
 
 const SidebarMenuAction = ({

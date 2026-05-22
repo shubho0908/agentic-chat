@@ -13,7 +13,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
 
   const timelineSteps = [];
   
-  const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'];
+  const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', STRING_ENUM.PROCESSING_IMAGES, 'analyzing_documents'];
   const isDocPrep = progressStatus && docPrepStatuses.includes(progressStatus);
   
   const isAfterGate = progressStatus && !['gate_check', 'gate_skip', ...docPrepStatuses].includes(progressStatus);

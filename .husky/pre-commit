@@ -26,6 +26,13 @@ warn() {
   echo "${YELLOW}⚠ $1${NC}"
 }
 
+# Load environment variables from .env.local if it exists
+if [ -f "$ROOT/.env.local" ]; then
+  set -a
+  . "$ROOT/.env.local"
+  set +a
+fi
+
 step "[1/4] Running linter..."
 cd "$ROOT"
 pnpm run lint || error "Lint failed"

@@ -447,7 +447,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
                     type: 'tool_progress',
                     toolId: TOOL_IDS.DEEP_RESEARCH,
-                    status: 'processing_images',
+                    status: STRING_ENUM.PROCESSING_IMAGES,
                     message: 'Analyzing attached images...',
                   })}\n\n`));
                   
