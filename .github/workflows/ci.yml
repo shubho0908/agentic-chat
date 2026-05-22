@@ -21,6 +21,11 @@ jobs:
     name: quality
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      EMBEDDING_MODEL: text-embedding-3-small
 
     steps:
       - name: Checkout repository
@@ -59,6 +64,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: quality
+    env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      EMBEDDING_MODEL: text-embedding-3-small
 
     steps:
       - name: Checkout repository
@@ -88,6 +98,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [quality, test]
+    env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      EMBEDDING_MODEL: text-embedding-3-small
 
     steps:
       - name: Checkout repository
