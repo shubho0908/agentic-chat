@@ -151,20 +151,22 @@ export function WebSearchScene({
               className={`relative aspect-[16/9] min-w-0 overflow-hidden rounded-xl ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}
             >
               <div className="absolute inset-0 overflow-hidden bg-muted/30">
-                <Image
-                  src={item.src}
-                  alt={item.alt}
-                  fill
-                  sizes={
-                    device === STRING_ENUM.DESKTOP
-                      ? "(max-width: 1023px) 33vw, 200px"
-                      : device === STRING_ENUM.TABLET
-                        ? "(max-width: 719px) 100vw, 220px"
-                        : "260px"
-                  }
-                  quality={68}
-                  className="object-cover"
-                />
+                <div className="relative size-full">
+                  <Image
+                    src={item.src}
+                    alt={item.alt}
+                    fill
+                    sizes={
+                      device === STRING_ENUM.DESKTOP
+                        ? "(max-width: 1023px) 33vw, 200px"
+                        : device === STRING_ENUM.TABLET
+                          ? "(max-width: 719px) 100vw, 220px"
+                          : "260px"
+                    }
+                    quality={68}
+                    className="object-cover"
+                  />
+                </div>
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 px-2.5 pb-2">
                   <div className="min-w-0">
