@@ -38,8 +38,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Prepare CI environment
-        run: node scripts/prepare-ci-env.mjs --write
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -75,8 +73,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Prepare CI environment
-        run: node scripts/prepare-ci-env.mjs --write
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -106,8 +102,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Prepare CI environment
-        run: node scripts/prepare-ci-env.mjs --write
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
