@@ -118,10 +118,15 @@ export function ChatInputForm({
               />
             </div>
             <ActionButtons
-              isLoading={isLoading}
-              isUploading={isUploading}
-              isSending={isSending}
-              disabled={disabled}
+              state={
+                isLoading
+                  ? "generating"
+                  : isUploading || isSending
+                    ? "processing"
+                    : disabled
+                      ? "disabled"
+                      : "idle"
+              }
               hasInput={!!input.trim()}
               onStop={onStop}
               size={buttonSize}

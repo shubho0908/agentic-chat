@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,9 +22,9 @@ import { useStreaming } from "@/contexts/streaming-context";
 
 function isAbortError(error: unknown): boolean {
   return (
-    error instanceof DOMException && error.name === "AbortError"
+    error instanceof DOMException && error.name === STRING_ENUM.ABORT_ERROR
   ) || (
-    error instanceof Error && error.name === "AbortError"
+    error instanceof Error && error.name === STRING_ENUM.ABORT_ERROR
   );
 }
 

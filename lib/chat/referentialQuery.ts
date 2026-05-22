@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { MessageContentPart } from '@/lib/schemas/chat';
 
 const REFERENTIAL_PATTERNS = [
@@ -13,7 +14,7 @@ export function extractTextQuery(
   return typeof query === 'string'
     ? query
     : query
-        .filter((part): part is { type: 'text'; text: string } => part.type === 'text' && typeof part.text === 'string')
+        .filter((part): part is { type: 'text'; text: string } => part.type === STRING_ENUM.TEXT && typeof part.text === 'string')
         .map((part) => part.text)
         .join(' ');
 }

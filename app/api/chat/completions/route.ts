@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, errorResponse } from '@/lib/apiUtils';
@@ -12,7 +13,7 @@ import type { Message } from '@/lib/schemas/chat';
 import { createChatStreamHandler } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel } from '@/lib/modelPolicy';
+import { getOpenAIChatCompletionOptions, validateRequestedModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { parseToolId } from '@/lib/tools/config';
@@ -40,27 +41,34 @@ function parseOptionalBoolean(
 export async function POST(request: NextRequest) {
   const requestId = createRequestId('chat');
   try {
+    const bodyPromise = request.json();
     const { user: authUser, error } = await getAuthenticatedUser(await headers());
     if (error) {
+      void bodyPromise.catch(() => undefined);
       return error;
     }
-    const user = await prisma.user.findUnique({
-      where: { id: authUser.id },
-      select: { encryptedApiKey: true },
-    });
+    const [userResult, bodyResult] = await Promise.allSettled([
+      prisma.user.findUnique({
+        where: { id: authUser.id },
+        select: { encryptedApiKey: true },
+      }),
+      bodyPromise,
+    ]);
 
-    if (!user?.encryptedApiKey) {
+    if (bodyResult.status === STRING_ENUM.REJECTED) {
+      return errorResponse('Request body must be valid JSON.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (userResult.status === STRING_ENUM.REJECTED) {
+      throw userResult.reason;
+    }
+
+    if (!userResult.value?.encryptedApiKey) {
       return errorResponse(API_ERROR_MESSAGES.API_KEY_NOT_CONFIGURED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const apiKey = decryptApiKey(user.encryptedApiKey);
-    let rawBody: unknown;
-
-    try {
-      rawBody = await request.json();
-    } catch {
-      return errorResponse('Request body must be valid JSON.', undefined, HTTP_STATUS.BAD_REQUEST);
-    }
+    const rawBody = bodyResult.value;
+    const apiKey = decryptApiKey(userResult.value.encryptedApiKey);
 
     if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
       return errorResponse('Request body must be a JSON object.', undefined, HTTP_STATUS.BAD_REQUEST);
@@ -286,6 +294,7 @@ export async function POST(request: NextRequest) {
           openai.chat.completions.create(
             {
               model: validatedModel,
+              ...getOpenAIChatCompletionOptions(validatedModel),
               messages: enhancedMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
               stream: false,
             },

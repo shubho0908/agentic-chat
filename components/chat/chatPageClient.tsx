@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
@@ -72,10 +73,10 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     }
 
     const lastMessage = messages[messages.length - 1];
-    const lastUserMessage = messages.findLast(msg => msg.role === "user");
+    const lastUserMessage = messages.findLast(msg => msg.role === STRING_ENUM.USER);
     const isIncomplete =
-      (lastMessage?.role === "user" && lastMessage.id) ||
-      (lastMessage?.role === "assistant" && !lastMessage.content && lastUserMessage?.id);
+      (lastMessage?.role === STRING_ENUM.USER && lastMessage.id) ||
+      (lastMessage?.role === STRING_ENUM.ASSISTANT && !lastMessage.content && lastUserMessage?.id);
 
     if (isIncomplete && lastUserMessage?.id) {
       autoTriggerStateRef.current.triggered = true;
@@ -177,7 +178,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         <div className="flex h-full items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader className="size-5 animate-spin" />
-            <span>Loading conversation...</span>
+            <span>Loading conversation…</span>
           </div>
         </div>
       </>

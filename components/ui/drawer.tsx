@@ -1,5 +1,6 @@
 "use client"
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import * as React from "react"
 import { Drawer as DrawerPrimitive } from "vaul"
 
@@ -20,34 +21,41 @@ const DrawerTrigger = DrawerPrimitive.Trigger
 
 const DrawerPortal = DrawerPrimitive.Portal
 
-const DrawerOverlay = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Overlay>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+const DrawerOverlay = ({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay> & {
+  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Overlay>>
+}) => (
   <DrawerPrimitive.Overlay
     ref={ref}
     className={cn("fixed inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-md", className)}
     {...props}
   />
-))
-DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
+)
 
-const DrawerContent = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & {
-    variant?: "default" | "bare"
-    showHandle?: boolean
-  }
->(({ className, children, variant = "default", showHandle = variant === "default", ...props }, ref) => (
+const DrawerContent = ({
+  className,
+  children,
+  variant = "default",
+  showHandle = variant === STRING_ENUM.DEFAULT,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & {
+  variant?: "default" | "bare"
+  showHandle?: boolean
+  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Content>>
+}) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 flex h-auto flex-col",
-        variant === "default" &&
+        variant === STRING_ENUM.DEFAULT &&
           "mt-24 rounded-t-3xl border border-black/5 bg-background/95 shadow-[var(--shadow-apple)] supports-[backdrop-filter]:bg-background/80 backdrop-blur-2xl dark:border-white/10",
-        variant === "bare" && "inset-y-0",
+        variant === STRING_ENUM.BARE && "inset-y-0",
         className
       )}
       {...props}
@@ -56,8 +64,7 @@ const DrawerContent = React.forwardRef<
       {children}
     </DrawerPrimitive.Content>
   </DrawerPortal>
-))
-DrawerContent.displayName = "DrawerContent"
+)
 
 const DrawerHeader = ({
   className,
@@ -70,10 +77,13 @@ const DrawerHeader = ({
 )
 DrawerHeader.displayName = "DrawerHeader"
 
-const DrawerTitle = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Title>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
->(({ className, ...props }, ref) => (
+const DrawerTitle = ({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title> & {
+  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Title>>
+}) => (
   <DrawerPrimitive.Title
     ref={ref}
     className={cn(
@@ -82,20 +92,21 @@ const DrawerTitle = React.forwardRef<
     )}
     {...props}
   />
-))
-DrawerTitle.displayName = DrawerPrimitive.Title.displayName
+)
 
-const DrawerDescription = React.forwardRef<
-  React.ElementRef<typeof DrawerPrimitive.Description>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
->(({ className, ...props }, ref) => (
+const DrawerDescription = ({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description> & {
+  ref?: React.Ref<React.ElementRef<typeof DrawerPrimitive.Description>>
+}) => (
   <DrawerPrimitive.Description
     ref={ref}
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
-))
-DrawerDescription.displayName = DrawerPrimitive.Description.displayName
+)
 
 export {
   Drawer,

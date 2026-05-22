@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import {
   LOOP_DURATION,
   RESEARCH_STEPS,
@@ -169,11 +170,11 @@ export function getDeviceKind(
 }
 
 export function getSceneTitle(scene: SceneKind) {
-  if (scene === "research") {
+  if (scene === STRING_ENUM.RESEARCH) {
     return "Deep research";
   }
 
-  if (scene === "workspace") {
+  if (scene === STRING_ENUM.WORKSPACE) {
     return "Google Workspace";
   }
 

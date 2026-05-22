@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
@@ -79,13 +80,13 @@ function WebSearchDrawerItem({
             <div className="flex items-center gap-1.5">
               <span className="font-medium truncate">{tool.name}</span>
               <Badge
-                variant={searchDepth === "advanced" ? "default" : "outline"}
+                variant={searchDepth === STRING_ENUM.ADVANCED ? "default" : "outline"}
                 className={cn(
                   "text-[10px] py-0 px-1.5 h-4 shrink-0",
-                  searchDepth === "advanced" && "bg-primary/20 text-primary border-primary/30"
+                  searchDepth === STRING_ENUM.ADVANCED && "bg-primary/20 text-primary border-primary/30"
                 )}
               >
-                {searchDepth === "advanced" ? "Advanced" : "Basic"}
+                {searchDepth === STRING_ENUM.ADVANCED ? "Advanced" : "Basic"}
               </Badge>
             </div>
             <span className="text-xs text-muted-foreground truncate">
@@ -135,7 +136,7 @@ function WebSearchDrawerItem({
                     <span className="font-medium text-sm">Basic Search</span>
                     <span className="text-xs text-muted-foreground">Quick results, faster response</span>
                   </div>
-                  {isActive && searchDepth === "basic" && (
+                  {isActive && searchDepth === STRING_ENUM.BASIC && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
@@ -157,7 +158,7 @@ function WebSearchDrawerItem({
                     <span className="font-medium text-sm">Advanced Search</span>
                     <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
                   </div>
-                  {isActive && searchDepth === "advanced" && (
+                  {isActive && searchDepth === STRING_ENUM.ADVANCED && (
                     <Check className="size-4 text-primary" />
                   )}
                 </Button>
@@ -179,13 +180,13 @@ function GoogleSuiteDrawerItem({
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
-  const router = useRouter();
+  const { push } = useRouter();
   const ToolIcon = tool.icon;
 
   const handleOpenGoogleSettings = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    router.push("/settings/google-workspace");
+    push("/settings/google-workspace");
   };
 
   return (
@@ -201,7 +202,7 @@ function GoogleSuiteDrawerItem({
         )}
         onClick={() => {
           if (googleSuiteNeedsSetup) {
-            router.push("/settings/google-workspace");
+            push("/settings/google-workspace");
             return;
           }
 
@@ -274,7 +275,7 @@ function StandardDrawerItem({
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
-  const router = useRouter();
+  const { push } = useRouter();
   const ToolIcon = tool.icon;
 
   return (
@@ -289,7 +290,7 @@ function StandardDrawerItem({
       )}
       onClick={() => {
         if (googleSuiteNeedsSetup) {
-          router.push("/settings/google-workspace");
+          push("/settings/google-workspace");
           return;
         }
 

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { isObservabilityLoggingEnabled, logError, logInfo, logWarn } from "@/lib/observability";
 
 type LoggerMethod = (...args: unknown[]) => void;
@@ -91,12 +92,12 @@ function emit(level: "info" | "warn" | "error", args: unknown[]): void {
   const { message, details } = formatArgs(args);
   const payload = details && details.length > 0 ? { event: `console_${level}`, message, details } : { event: `console_${level}`, message };
 
-  if (level === "error") {
+  if (level === STRING_ENUM.ERROR) {
     logError(payload);
     return;
   }
 
-  if (level === "warn") {
+  if (level === STRING_ENUM.WARN) {
     logWarn(payload);
     return;
   }

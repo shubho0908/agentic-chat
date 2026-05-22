@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
 
 
@@ -43,7 +44,7 @@ function formatMessage(
   includeVersions: boolean
 ): string {
   const lines: string[] = [];
-  const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
+  const role = message.role === STRING_ENUM.USER ? '👤 User' : '🤖 Assistant';
   
   lines.push(`### Message ${index}: ${role}`);
   lines.push(`*${formatDate(message.createdAt)}*\n`);

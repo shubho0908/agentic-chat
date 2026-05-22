@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 interface ConversationMessageLike {
   id: string;
   role?: string;
@@ -16,11 +17,11 @@ function compareRoleTieBreak(
     return 0;
   }
 
-  if (left.role === "assistant" && right.role === "user") {
+  if (left.role === STRING_ENUM.ASSISTANT && right.role === STRING_ENUM.USER) {
     return -1;
   }
 
-  if (left.role === "user" && right.role === "assistant") {
+  if (left.role === STRING_ENUM.USER && right.role === STRING_ENUM.ASSISTANT) {
     return 1;
   }
 

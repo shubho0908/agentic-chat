@@ -1,5 +1,6 @@
 'use server';
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import {
   addMemories,
   retrieveMemories,
@@ -146,7 +147,7 @@ export async function getMemoryContextResult(
       })
     );
     const searchResults = settledSearchResults.flatMap((result, index) => {
-      if (result.status === 'fulfilled') {
+      if (result.status === STRING_ENUM.FULFILLED) {
         return [result.value];
       }
 

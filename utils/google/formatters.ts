@@ -1,3 +1,5 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
+
 export function formatFileSize(bytes?: string | null): string {
   if (!bytes) return 'N/A';
   const size = parseInt(bytes);
@@ -9,11 +11,11 @@ export function formatFileSize(bytes?: string | null): string {
 
 export function formatMimeType(mimeType?: string | null): string {
   if (!mimeType) return 'Unknown';
-  if (mimeType === 'application/vnd.google-apps.folder') return '📁 Folder';
-  if (mimeType === 'application/vnd.google-apps.document') return '📄 Google Doc';
-  if (mimeType === 'application/vnd.google-apps.spreadsheet') return '📊 Google Sheet';
-  if (mimeType === 'application/vnd.google-apps.presentation') return '📽️ Google Slides';
-  if (mimeType === 'application/pdf') return '📕 PDF';
+  if (mimeType === STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_FOLDER) return '📁 Folder';
+  if (mimeType === STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_DOCUMENT) return '📄 Google Doc';
+  if (mimeType === STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_SPREADSHEET) return '📊 Google Sheet';
+  if (mimeType === STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_PRESENTATION) return '📽️ Google Slides';
+  if (mimeType === STRING_ENUM.APPLICATION_PDF) return '📕 PDF';
   if (mimeType.startsWith('image/')) return '🖼️ Image';
   if (mimeType.startsWith('video/')) return '🎥 Video';
   if (mimeType.startsWith('audio/')) return '🎵 Audio';

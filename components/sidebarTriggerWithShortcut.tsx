@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useEffect } from "react";
 import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import {
@@ -34,7 +35,7 @@ export function SidebarTriggerWithShortcut({ className, showTooltip = true }: Si
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
+      if ((event.metaKey || event.ctrlKey) && event.key === STRING_ENUM.B) {
         event.preventDefault();
         toggleSidebar();
       }
@@ -56,7 +57,7 @@ export function SidebarTriggerWithShortcut({ className, showTooltip = true }: Si
         </TooltipTrigger>
         <TooltipContent side="right" align="start" className="flex items-center gap-2">
           <span className="text-muted-foreground">
-            {state === "collapsed" ? "Open" : "Close"} sidebar
+            {state === STRING_ENUM.COLLAPSED ? "Open" : "Close"} sidebar
           </span>
           <div className="flex items-center gap-1">
             <KeyboardKey>

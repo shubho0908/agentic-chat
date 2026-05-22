@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt, Lightbulb, CheckCheck, ListChecks, ListTodo } from "lucide-react";
 import { GoogleSuiteStatus, type GoogleSuiteTask } from "@/types/tools";
 import { GoogleIcon } from "@/components/icons/googleIcon";
@@ -91,7 +92,7 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
         }
         return "Validating task completion";
       case GoogleSuiteStatus.COMPLETED:
-        const taskCount = completedTasks?.length || allTasks?.filter(t => t.status === 'completed').length || 0;
+        const taskCount = completedTasks?.length || allTasks?.filter(t => t.status === STRING_ENUM.COMPLETED).length || 0;
         return `Workspace task completed (${taskCount} action${taskCount !== 1 ? 's' : ''})`;
       case GoogleSuiteStatus.AUTH_REQUIRED:
         return "Google authorization required";
@@ -232,12 +233,12 @@ export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
           {allTasks.map((task, index) => {
             const isLast = index === allTasks.length - 1;
             const serviceColor = getServiceColorForTool(task.tool);
-            const taskStatusIcon = task.status === 'completed' ? '✓' :
-              task.status === 'failed' ? '✗' :
-                task.status === 'in_progress' ? '▸' : '○';
-            const taskStatusColor = task.status === 'completed' ? 'text-green-600 dark:text-green-400' :
-              task.status === 'failed' ? 'text-red-600 dark:text-red-400' :
-                task.status === 'in_progress' ? 'text-blue-600 dark:text-blue-400' :
+            const taskStatusIcon = task.status === STRING_ENUM.COMPLETED ? '✓' :
+              task.status === STRING_ENUM.FAILED ? '✗' :
+                task.status === STRING_ENUM.IN_PROGRESS ? '▸' : '○';
+            const taskStatusColor = task.status === STRING_ENUM.COMPLETED ? 'text-green-600 dark:text-green-400' :
+              task.status === STRING_ENUM.FAILED ? 'text-red-600 dark:text-red-400' :
+                task.status === STRING_ENUM.IN_PROGRESS ? 'text-blue-600 dark:text-blue-400' :
                   'text-foreground/40';
 
             return (

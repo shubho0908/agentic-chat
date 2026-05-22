@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useRef } from "react";
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion";
 import { useInteractionTimeline, useShowcaseWidth, useViewportBounds } from "@/components/landing/interaction-showcase/hooks";
@@ -41,7 +42,7 @@ export function InteractionShowcase() {
               transition={prefersReducedMotion ? { duration: 0 } : SCENE_TRANSITION}
               className="flex min-h-0 flex-1 flex-col"
             >
-              {scene === "web" && (
+              {scene === STRING_ENUM.WEB && (
                 <WebSearchScene
                   device={device}
                   step={step}
@@ -49,14 +50,14 @@ export function InteractionShowcase() {
                   prefersReducedMotion={prefersReducedMotion}
                 />
               )}
-              {scene === "research" && (
+              {scene === STRING_ENUM.RESEARCH && (
                 <DeepResearchScene
                   step={step}
                   sceneElapsed={sceneElapsed}
                   prefersReducedMotion={prefersReducedMotion}
                 />
               )}
-              {scene === "workspace" && (
+              {scene === STRING_ENUM.WORKSPACE && (
                 <GoogleWorkspaceScene
                   step={step}
                   sceneElapsed={sceneElapsed}

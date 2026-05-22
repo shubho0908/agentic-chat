@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,7 @@ function trimTrailingUrlPunctuation(rawUrl: string) {
       continue;
     }
 
-    if (lastChar === ")") {
+    if (lastChar === STRING_ENUM.RIGHT_PAREN) {
       const openParens = (url.match(/\(/g) || []).length;
       const closeParens = (url.match(/\)/g) || []).length;
 
@@ -77,7 +78,7 @@ interface ChatMessageProps {
 }
 
 function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
-  const isUser = message.role === "user";
+  const isUser = message.role === STRING_ENUM.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
@@ -254,7 +255,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     return nodes;
   }, []);
 
-  if (message.role === "system") return null;
+  if (message.role === STRING_ENUM.SYSTEM) return null;
 
   return (
     <div

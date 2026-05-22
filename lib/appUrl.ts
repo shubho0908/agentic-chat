@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 const LOCAL_APP_URL = "http://localhost:3000";
 
 function withScheme(value: string) {
@@ -19,7 +20,7 @@ export function normalizeOrigin(value?: string | null) {
 export function resolveAppBaseUrl(
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ) {
-  if (env.NODE_ENV !== "production") {
+  if (env.NODE_ENV !== STRING_ENUM.PRODUCTION) {
     return LOCAL_APP_URL;
   }
 

@@ -1,0 +1,48 @@
+#!/usr/bin/env sh
+set -euo pipefail
+
+BOLD='\033[1m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+ROOT="$(git rev-parse --show-toplevel)"
+
+step() {
+  echo ""
+  echo "${BOLD}$1${NC}"
+}
+
+error() {
+  echo "${RED}✖ $1${NC}"
+  exit 1
+}
+
+success() {
+  echo "${GREEN}✔ $1${NC}"
+}
+
+warn() {
+  echo "${YELLOW}⚠ $1${NC}"
+}
+
+step "[1/4] Running linter..."
+cd "$ROOT"
+pnpm run lint || error "Lint failed"
+success "Lint passed"
+
+step "[2/4] Running TypeScript type-check..."
+pnpm run typecheck || error "TypeScript type-check failed"
+success "TypeScript type-check passed"
+
+step "[3/4] Running React Doctor (score must be > 98)..."
+REACT_DOCTOR_MIN_SCORE=98 pnpm run react-doctor:score || error "React Doctor score must be > 98"
+success "React Doctor passed"
+
+step "[4/4] Validating Prisma schema..."
+pnpm run prisma:validate || error "Prisma schema validation failed"
+success "Prisma schema validation passed"
+
+echo ""
+echo "${GREEN}${BOLD}All checks passed. Commit allowed.${NC}"
+

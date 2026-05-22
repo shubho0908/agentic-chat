@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 
@@ -10,7 +11,7 @@ export function useThemeToggle() {
   );
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    setTheme(theme === STRING_ENUM.DARK ? "light" : "dark");
   };
 
   return {

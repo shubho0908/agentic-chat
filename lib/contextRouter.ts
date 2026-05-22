@@ -1,5 +1,6 @@
 'use server';
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { getMemoryContextResult } from './memory';
 import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
@@ -84,7 +85,7 @@ function detectImages(content: string | Array<{ type: string; text?: string; ima
 
 function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
   const relevantMessages = messages
-    .filter((message) => message.role !== 'system')
+    .filter((message) => message.role !== STRING_ENUM.SYSTEM)
     .slice(-maxMessages)
     .map((message) => {
       const text = extractTextFromMessage(message.content).trim();

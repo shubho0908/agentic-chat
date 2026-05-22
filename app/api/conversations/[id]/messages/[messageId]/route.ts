@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
@@ -36,7 +37,7 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
     );
 
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
+      if (result.status === STRING_ENUM.REJECTED) {
         logger.warn('[Message Version Route] Failed to schedule document processing:', {
           attachmentId: attachmentIds[index],
           error: result.reason instanceof Error ? result.reason.message : String(result.reason),
@@ -213,7 +214,7 @@ export async function PATCH(
     const parentId = existingMessage.parentMessageId || messageId;
     const now = new Date();
 
-    if (existingMessage.role === 'USER' && assistantContent) {
+    if (existingMessage.role === STRING_ENUM.USER_55534552 && assistantContent) {
       const result = await prisma.$transaction(async (tx) => {
         const siblingIndex = await getNextSiblingIndex(tx, parentId);
 

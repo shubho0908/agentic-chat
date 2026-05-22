@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ExternalLink, Globe, Link2, Loader } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -73,7 +74,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
   });
 
   if (isLoading) {
-    if (variant === "userMessage") {
+    if (variant === STRING_ENUM.USER_MESSAGE) {
       return (
         <div className={cn("inline-block w-full", className)}>
           <div className="relative flex items-center gap-3.5 p-3 pr-4 rounded-2xl bg-black/5 dark:bg-[#1E1E1E] border border-black/5 dark:border-white/5 shadow-sm">
@@ -127,7 +128,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
   const displayTitle = metadata.title || metadata.siteName || metadata.domain || "Link";
   const displaySite = metadata.siteName || metadata.domain;
 
-  if (variant === "minimal") {
+  if (variant === STRING_ENUM.MINIMAL) {
     return (
       <Link
         href={url}
@@ -150,7 +151,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
     );
   }
 
-  if (variant === "compact") {
+  if (variant === STRING_ENUM.COMPACT) {
     return (
       <div className={cn("inline-block w-full max-w-2xl", className)}>
         <Link href={url} target="_blank" rel="noopener noreferrer" className="group block no-underline">
@@ -180,7 +181,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
                   <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-50 transition-opacity duration-300 group-hover:opacity-100" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-foreground transition-colors duration-300 group-hover:text-primary line-clamp-1">
+                  <h4 className="text-sm font-semibold text-foreground transition-colors duration-300 group-hover:text-primary line-clamp-1">
                     {displayTitle}
                   </h4>
                   <div className="flex items-center gap-2 mt-1.5">
@@ -205,7 +206,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
     );
   }
 
-  if (variant === "userMessage") {
+  if (variant === STRING_ENUM.USER_MESSAGE) {
     return (
       <div className={cn("inline-block w-full", className)}>
         <Link
@@ -214,8 +215,8 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
           rel="noopener noreferrer"
           className="group block rounded-2xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
         >
-          <div className="relative flex items-center gap-3.5 p-3 pr-4 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl bg-black/5 dark:bg-[#1E1E1E] border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]">
-            <div className="relative size-[60px] flex-shrink-0 overflow-hidden rounded-[12px] bg-white dark:bg-black flex items-center justify-center shadow-sm dark:shadow-none border border-black/5 dark:border-white/10">
+          <div className="relative flex items-center gap-3.5 p-3 pr-4 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl bg-black/5 dark:bg-gray-950 border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]">
+            <div className="relative size-[60px] flex-shrink-0 overflow-hidden rounded-[12px] bg-white dark:bg-gray-950 flex items-center justify-center shadow-sm dark:shadow-none border border-black/5 dark:border-white/10">
               {metadata.image ? (
                 <SafeImage
                   src={metadata.image}
@@ -281,7 +282,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0 space-y-2">
-                  <h4 className="text-base font-bold leading-tight text-foreground transition-colors duration-300 group-hover:text-primary line-clamp-2">
+                  <h4 className="text-base font-semibold leading-tight text-foreground transition-colors duration-300 group-hover:text-primary line-clamp-2">
                     {displayTitle}
                   </h4>
                   {metadata.description && (

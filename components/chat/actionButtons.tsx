@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ArrowUp, StopCircle, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,28 +9,27 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+type ActionButtonState = "idle" | "generating" | "processing" | "disabled";
+
 interface ActionButtonsProps {
-  isLoading: boolean;
-  isUploading: boolean;
-  isSending: boolean;
-  disabled: boolean;
+  state: ActionButtonState;
   hasInput: boolean;
   onStop?: () => void;
   size?: "default" | "large";
 }
 
 export function ActionButtons({
-  isLoading,
-  isUploading,
-  isSending,
-  disabled,
+  state,
   hasInput,
   onStop,
   size = "default",
 }: ActionButtonsProps) {
-  const isLarge = size === "large";
+  const isLarge = size === STRING_ENUM.LARGE;
+  const isGenerating = state === "generating";
+  const isProcessing = state === "processing";
+  const isDisabled = state === "disabled" || !hasInput;
 
-  if (isLoading && onStop) {
+  if (isGenerating && onStop) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -59,7 +59,7 @@ export function ActionButtons({
   return (
     <Button
       type="submit"
-      disabled={!hasInput || isLoading || disabled || isUploading || isSending}
+      disabled={isDisabled || isGenerating || isProcessing}
       size="icon"
       className={cn(
         "size-8 rounded-full transition-all duration-300 ease-out",
@@ -69,7 +69,7 @@ export function ActionButtons({
           : "bg-black/5 dark:bg-white/5 text-muted-foreground shadow-none"
       )}
     >
-      {isUploading || isSending ? (
+      {isProcessing ? (
         <Loader className={cn("size-4 animate-spin", isLarge && "size-5")} />
       ) : (
         <ArrowUp className={cn("size-4", isLarge && "size-5")} />

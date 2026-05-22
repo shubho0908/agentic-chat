@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState } from "react";
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Loader } from "lucide-react";
@@ -26,12 +27,12 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const { resolvedTheme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
-      setIsLoading(true);
+      setIsSigningIn(true);
       const resolvedCallbackURL =
         callbackURL ||
         (typeof window !== "undefined"
@@ -44,7 +45,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
       toast.error(TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN, {
         description: TOAST_ERROR_MESSAGES.AUTH.FAILED_SIGN_IN_DESCRIPTION,
       });
-      setIsLoading(false);
+      setIsSigningIn(false);
     }
   };
 
@@ -68,9 +69,9 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
 
             <div className="p-8">
-              <div className="flex flex-col items-center text-center space-y-6">
+              <div className="flex flex-col items-center text-center gap-y-6">
                 <Image
-                  src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
+                  src={resolvedTheme === STRING_ENUM.LIGHT ? "/light.png" : "/dark.png"}
                   alt="Agentic Chat"
                   width={80}
                   height={80}
@@ -89,13 +90,13 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
 
               <Button
                 onClick={handleGoogleSignIn}
-                disabled={isLoading}
+                disabled={isSigningIn}
                 size="lg"
                 className="w-full h-11 rounded-xl text-[15px] font-medium bg-foreground hover:bg-foreground/90 text-background border-0 shadow-sm transition-all duration-200 ease-out hover:shadow-md active:scale-[0.98]"
                 variant="default"
               >
                 <AnimatePresence mode="wait">
-                  {isLoading ? (
+                  {isSigningIn ? (
                     <m.div
                       key="loading"
                       initial={{ opacity: 0 }}
@@ -103,8 +104,8 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                       exit={{ opacity: 0 }}
                       className="flex items-center gap-2"
                     >
-                      <Loader className="w-4 h-4 animate-spin" />
-                      <span>Signing in...</span>
+                      <Loader className="size-4 animate-spin" />
+                      <span>Signing in…</span>
                     </m.div>
                   ) : (
                     <m.div
@@ -114,7 +115,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                       exit={{ opacity: 0 }}
                       className="flex items-center gap-2.5"
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <svg className="size-4" viewBox="0 0 24 24">
                         <path
                           fill="#4285F4"
                           d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Agent, fetch as undiciFetch } from 'undici';
 import { assertSafePublicUrl, type SafeResolvedUrl } from './ssrf';
 import { withRetry } from '@/lib/retry';
@@ -27,7 +28,7 @@ function selectResolvedAddress(
   family?: number | string
 ): SafeResolvedUrl['resolvedAddresses'][number] {
   const normalizedFamily =
-    family === 'IPv4' ? 4 : family === 'IPv6' ? 6 : family;
+    family === STRING_ENUM.IPV4 ? 4 : family === STRING_ENUM.IPV6 ? 6 : family;
 
   return addresses.find((address) => normalizedFamily === undefined || address.family === normalizedFamily) ?? addresses[0];
 }

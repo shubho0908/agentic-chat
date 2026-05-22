@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { createHash, randomUUID } from 'crypto';
 import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import { logError, logWarn } from '@/lib/observability';
@@ -129,8 +130,8 @@ function createPlanHash(actions: GoogleWorkspacePlannedAction[]): string {
 
 async function ensureApprovalTable(): Promise<boolean> {
   const storeMode = await resolveApprovalStoreMode();
-  if (storeMode !== 'durable' || approvalTableInitialized) {
-    return storeMode === 'durable';
+  if (storeMode !== STRING_ENUM.DURABLE || approvalTableInitialized) {
+    return storeMode === STRING_ENUM.DURABLE;
   }
 
   if (approvalTablePromise) {

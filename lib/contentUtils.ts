@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { MessageContentPart, Attachment } from "@/lib/schemas/chat";
 import { filterImageAttachments } from "@/lib/attachmentUtils";
 
@@ -9,7 +10,7 @@ export function extractTextFromContent(content: string | MessageContentPart[]): 
   if (Array.isArray(content)) {
     return content
       .filter((part): part is { type: 'text'; text: string } => 
-        part.type === 'text' && 'text' in part
+        part.type === STRING_ENUM.TEXT && 'text' in part
       )
       .map(part => part.text)
       .join(' ');

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { GOOGLE_WORKSPACE_TOOLS } from '@/lib/tools/google-suite/definitions';
 import { GOOGLE_SCOPES, getMissingGoogleScopes } from '@/lib/tools/google-suite/scopes';
@@ -129,7 +130,7 @@ export function getAvailableGoogleWorkspaceTools(
     : null;
 
   return GOOGLE_WORKSPACE_TOOLS.filter((tool) =>
-    tool.type === 'function' &&
+    tool.type === STRING_ENUM.FUNCTION &&
     isGoogleWorkspaceToolAllowed(tool.function.name, grantedScopes) &&
     (
       !requestedServices ||

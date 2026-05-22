@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
@@ -346,7 +347,7 @@ export async function handleEditMessage(
 
     return { success: true };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }

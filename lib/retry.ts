@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 interface RetryOptions {
   retries?: number;
   initialDelayMs?: number;
@@ -39,10 +40,10 @@ function defaultShouldRetry(error: unknown): boolean {
     message.includes('socket hang up') ||
     message.includes('503') ||
     message.includes('502') ||
-    code === 'etimedout' ||
-    code === 'econnreset' ||
-    code === 'econrefused' ||
-    code === 'eai_again' ||
+    code === STRING_ENUM.ETIMEDOUT ||
+    code === STRING_ENUM.ECONNRESET ||
+    code === STRING_ENUM.ECONREFUSED ||
+    code === STRING_ENUM.EAI_AGAIN ||
     status === 408 ||
     status === 409 ||
     status === 425 ||

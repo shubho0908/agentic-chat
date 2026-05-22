@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionContentPart } from 'openai/resources/chat/completions';
 import type { Message } from '@/lib/schemas/chat';
@@ -26,7 +27,7 @@ import { filterDocumentAttachments, partitionByStatus, extractIds } from '@/lib/
 import { waitForDocumentProcessing } from '@/lib/rag/retrieval/status';
 import { getRAGContext } from '@/lib/rag/retrieval/context';
 import { withRetry } from '@/lib/retry';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getOpenAIChatCompletionOptions, getStageModel } from '@/lib/modelPolicy';
 import { extractUrlsFromMessage, formatScrapedContentForContext, scrapeMultipleUrls } from '@/lib/url-scraper/scraper';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import {
@@ -464,7 +465,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                     ];
                     
                     for (const msg of imageMessages) {
-                      if (msg.role === 'user' && Array.isArray(msg.content)) {
+                      if (msg.role === STRING_ENUM.USER && Array.isArray(msg.content)) {
                         visionMessages.push({
                           role: 'user',
                           content: msg.content as ChatCompletionContentPart[],
@@ -477,6 +478,9 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                         openai.chat.completions.create(
                           {
                             model: getStageModel(model, 'vision'),
+                            ...getOpenAIChatCompletionOptions(getStageModel(model, 'vision'), {
+                              promptCacheKey: 'agentic-chat-vision',
+                            }),
                             messages: visionMessages,
                           },
                           { signal: abortSignal }
@@ -607,6 +611,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             openai.chat.completions.create(
               {
                 model,
+                ...getOpenAIChatCompletionOptions(model),
                 messages: toOpenAIMessages(enhancedMessages),
                 stream: true,
               },

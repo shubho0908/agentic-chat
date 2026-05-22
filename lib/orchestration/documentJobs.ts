@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { processDocument } from "@/lib/rag/indexing/processor";
 import {
   claimNextQueuedJobWithinCapacity,
@@ -283,7 +284,7 @@ export async function runOrQueueDocumentProcessingJob(
   });
 
   if (!started) {
-    const queued = job.status === "queued" || job.status === "running";
+    const queued = job.status === STRING_ENUM.QUEUED || job.status === STRING_ENUM.RUNNING;
 
     await drainQueuedDocumentJobs({
       maxJobs: DEFAULT_DRAIN_BATCH_SIZE,
@@ -293,7 +294,7 @@ export async function runOrQueueDocumentProcessingJob(
     return {
       jobId: job.id,
       queued,
-      success: job.status === "completed",
+      success: job.status === STRING_ENUM.COMPLETED,
       error: job.error ?? undefined,
     };
   }

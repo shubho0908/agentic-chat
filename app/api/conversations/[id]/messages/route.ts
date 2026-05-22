@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
@@ -34,7 +35,7 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
     );
 
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
+      if (result.status === STRING_ENUM.REJECTED) {
         logger.warn('[Messages Route] Failed to schedule document processing:', {
           attachmentId: attachmentIds[index],
           error: result.reason instanceof Error ? result.reason.message : String(result.reason),

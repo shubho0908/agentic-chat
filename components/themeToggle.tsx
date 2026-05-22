@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useThemeToggle } from "@/hooks/useThemeToggle";
@@ -27,7 +28,7 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       className="size-9 rounded-full hover:bg-accent/50 transition-all duration-200 ease-out active:scale-[0.98]"
     >
-      {theme === "dark" ? (
+      {theme === STRING_ENUM.DARK ? (
         <Sun className="size-4" />
       ) : (
         <Moon className="size-4" />

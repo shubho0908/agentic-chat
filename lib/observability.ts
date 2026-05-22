@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 type LogLevel = "info" | "warn" | "error";
 
 type LogSink = (level: LogLevel, serialized: string) => void;
@@ -16,7 +17,7 @@ interface LogPayload {
 export function isObservabilityLoggingEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean {
-  return nodeEnv === "development";
+  return nodeEnv === STRING_ENUM.DEVELOPMENT;
 }
 
 function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
@@ -25,9 +26,9 @@ function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
   }
 
   const method =
-    level === "error"
+    level === STRING_ENUM.ERROR
       ? console.error
-      : level === "warn"
+      : level === STRING_ENUM.WARN
         ? console.warn
         : console.info;
 

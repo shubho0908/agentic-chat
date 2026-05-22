@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
@@ -49,8 +50,8 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
     if (!container) return;
 
     const scrollAmount = 200;
-    const newScrollLeft = direction === "left" 
-      ? container.scrollLeft - scrollAmount 
+    const newScrollLeft = direction === STRING_ENUM.LEFT
+      ? container.scrollLeft - scrollAmount
       : container.scrollLeft + scrollAmount;
 
     container.scrollTo({

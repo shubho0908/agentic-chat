@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest } from 'next/server';
 import { jsonResponse, errorResponse } from '@/lib/apiUtils';
 import { HTTP_STATUS } from '@/constants/errors';
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   let maxJobs = DEFAULT_DRAIN_BATCH_SIZE;
-  const hasBody = request.headers.get('content-length') !== '0';
+  const hasBody = request.headers.get('content-length') !== STRING_ENUM.ZERO;
   try {
     if (hasBody) {
       const body = await request.json() as { maxJobs?: unknown };

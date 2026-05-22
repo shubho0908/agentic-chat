@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import OpenAI from 'openai';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { createGoogleSuiteClient, isAuthRevokedError } from '@/lib/tools/google-suite/client';
@@ -7,7 +8,7 @@ import type { ToolHandlerContext } from '@/lib/tools/google-suite/types';
 import type { GoogleWorkspaceProgressCallback } from '@/types/googleSuite';
 import type { GoogleSuiteTask } from '@/types/tools';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getOpenAIChatCompletionOptions, getStageModel } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import {
 
@@ -128,7 +129,7 @@ function estimateWorkspaceMessageTokens(
   } else if (Array.isArray(message.content)) {
     textParts.push(
       message.content
-        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .filter((part): part is { type: 'text'; text: string } => part.type === STRING_ENUM.TEXT)
         .map((part) => part.text)
         .join('\n')
     );
@@ -155,7 +156,7 @@ function trimWorkspaceMessagesToBudget(
 
   const preservedIndexes = new Set<number>([0]);
   for (let index = messages.length - 1; index >= 1; index -= 1) {
-    if (messages[index]?.role === 'user') {
+    if (messages[index]?.role === STRING_ENUM.USER) {
       preservedIndexes.add(index);
       break;
     }
@@ -178,7 +179,7 @@ function trimWorkspaceMessagesToBudget(
   while (recentEntries.length > 1 && estimateTotal() > budget) {
     recentEntries.shift();
 
-    while (recentEntries[0]?.message.role === 'tool') {
+    while (recentEntries[0]?.message.role === STRING_ENUM.TOOL) {
       recentEntries.shift();
     }
   }
@@ -197,7 +198,7 @@ function extractTextContent(
 
   if (Array.isArray(message.content)) {
     return message.content
-      .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+      .filter((part): part is { type: 'text'; text: string } => part.type === STRING_ENUM.TEXT)
       .map((part) => part.text)
       .join('\n');
   }
@@ -289,7 +290,7 @@ function getSingleToolCallMessage(
 } {
   const functionToolCalls = (message.tool_calls ?? []).filter(
     (toolCall): toolCall is OpenAI.Chat.Completions.ChatCompletionMessageToolCall & { type: 'function' } =>
-      toolCall.type === 'function'
+      toolCall.type === STRING_ENUM.FUNCTION
   );
 
   if (functionToolCalls.length === 0) {
@@ -343,11 +344,11 @@ export async function executeGoogleWorkspace(
       const scopeResolution = resolveGoogleWorkspaceScopesForRequest(query, recentContext);
 	    const availableTools = getAvailableGoogleWorkspaceTools(
         grantedScopes,
-        scopeResolution.source === 'unknown' ? undefined : scopeResolution.requiredScopes
+        scopeResolution.source === STRING_ENUM.UNKNOWN ? undefined : scopeResolution.requiredScopes
       );
       const availableToolNames = new Set(
         availableTools
-          .filter((tool): tool is OpenAI.Chat.Completions.ChatCompletionTool & { type: 'function' } => tool.type === 'function')
+          .filter((tool): tool is OpenAI.Chat.Completions.ChatCompletionTool & { type: 'function' } => tool.type === STRING_ENUM.FUNCTION)
           .map((tool) => tool.function.name)
       );
 
@@ -381,22 +382,22 @@ export async function executeGoogleWorkspace(
       if (abortSignal?.aborted) throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.OPERATION_ABORTED_BY_USER);
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
-        if (msg?.role === 'tool') {
+        if (msg?.role === STRING_ENUM.TOOL) {
           let foundToolCalls = false;
           for (let j = i - 1; j >= 0; j--) {
             const prevMsg = messages[j];
-            if (prevMsg?.role === 'assistant' && 'tool_calls' in prevMsg && prevMsg.tool_calls) {
+            if (prevMsg?.role === STRING_ENUM.ASSISTANT && 'tool_calls' in prevMsg && prevMsg.tool_calls) {
               foundToolCalls = true;
               break;
             }
-            if (prevMsg?.role !== 'tool') {
+            if (prevMsg?.role !== STRING_ENUM.TOOL) {
               break;
             }
           }
           if (!foundToolCalls) {
             logger.error('[Google Workspace Executor] Invalid message structure at iteration', iteration, ':', {
               index: i,
-              messageRoles: messages.map((m, idx) => ({ idx, role: m?.role, hasToolCalls: m?.role === 'assistant' && 'tool_calls' in m })),
+              messageRoles: messages.map((m, idx) => ({ idx, role: m?.role, hasToolCalls: m?.role === STRING_ENUM.ASSISTANT && 'tool_calls' in m })),
             });
             throw new Error(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_MESSAGE_STRUCTURE(i));
           }
@@ -408,6 +409,9 @@ export async function executeGoogleWorkspace(
           openai.chat.completions.create(
             {
               model: workspaceModel,
+              ...getOpenAIChatCompletionOptions(workspaceModel, {
+                promptCacheKey: 'agentic-chat-google-workspace',
+              }),
               messages,
               tools: availableTools,
               tool_choice: 'auto',
@@ -423,7 +427,7 @@ export async function executeGoogleWorkspace(
       if (!message.tool_calls?.length) {
         finalResponse = message.content || 'Task completed successfully.';
         
-        const completedTasks = allTasks.filter(t => t.status === 'completed');
+        const completedTasks = allTasks.filter(t => t.status === STRING_ENUM.COMPLETED);
         onProgress?.({
           status: 'completed',
           message: `Task completed (${taskCount} actions executed)`,
@@ -439,7 +443,7 @@ export async function executeGoogleWorkspace(
 
       if (iteration === 1 && message.tool_calls?.length > 0) {
         const toolsToUse = message.tool_calls
-          .filter(tc => tc.type === 'function')
+          .filter(tc => tc.type === STRING_ENUM.FUNCTION)
           .map(tc => tc.function.name);
         onProgress?.({
           status: 'planning',
@@ -473,7 +477,7 @@ export async function executeGoogleWorkspace(
 	      const plannedActions = new Map<string, GoogleWorkspacePlannedAction>();
 
 	      for (const toolCall of singleToolCallMessage.message.tool_calls ?? []) {
-	        if (toolCall.type !== 'function') {
+	        if (toolCall.type !== STRING_ENUM.FUNCTION) {
 	          continue;
 	        }
 
@@ -516,7 +520,7 @@ export async function executeGoogleWorkspace(
         }
 
 	      for (const toolCall of singleToolCallMessage.message.tool_calls ?? []) {
-	          if (toolCall.type !== 'function') {
+	          if (toolCall.type !== STRING_ENUM.FUNCTION) {
 	            logger.error('[Google Workspace Executor] Invalid tool call type:', toolCall.type);
 	            toolResults.push({ tool_call_id: toolCall.id, content: 'Invalid tool call type' });
             continue;
@@ -540,7 +544,7 @@ export async function executeGoogleWorkspace(
             toolResults.push({
               tool_call_id: toolCall.id,
               content:
-                errorMessage === 'Tool arguments failed validation'
+                errorMessage === STRING_ENUM.TOOL_ARGUMENTS_FAILED_VALIDATION
                   ? 'Tool arguments failed validation'
                   : TOOL_ERROR_MESSAGES.GOOGLE_SUITE.INVALID_JSON_ARGS,
             });
@@ -614,7 +618,7 @@ export async function executeGoogleWorkspace(
                 step: taskCount,
                 currentTask,
                 allTasks: [...allTasks],
-                completedTasks: allTasks.filter(t => t.status === 'completed'),
+                completedTasks: allTasks.filter(t => t.status === STRING_ENUM.COMPLETED),
               },
             });
             
@@ -663,7 +667,7 @@ export async function executeGoogleWorkspace(
       });
 
 	      if (iteration >= 1) {
-	        const completedInIteration = allTasks.filter(t => t.iteration === iteration && t.status === 'completed').length;
+	        const completedInIteration = allTasks.filter(t => t.iteration === iteration && t.status === STRING_ENUM.COMPLETED).length;
 	        
 	        onProgress?.({
           status: 'validating',
@@ -671,7 +675,7 @@ export async function executeGoogleWorkspace(
           details: {
             iteration,
             completedInIteration,
-	            totalCompleted: allTasks.filter(t => t.status === 'completed').length,
+	            totalCompleted: allTasks.filter(t => t.status === STRING_ENUM.COMPLETED).length,
 	          },
 	        });
 	      }

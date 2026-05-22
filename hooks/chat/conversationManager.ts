@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { type Attachment, type MessageContentPart, type Message, type MessageMetadata } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/contentUtils";
@@ -42,10 +43,10 @@ function estimateMessageTokens(content: string | MessageContentPart[]): number {
   }
 
   return content.reduce((total, part) => {
-    if (part.type === 'text') {
+    if (part.type === STRING_ENUM.TEXT) {
       return total + Math.ceil(part.text.length / 4);
     }
-    if (part.type === 'image_url') {
+    if (part.type === STRING_ENUM.IMAGE_URL) {
       return total + APPROX_IMAGE_TOKENS;
     }
     return total;
@@ -58,8 +59,8 @@ function trimMessagesByApproximateTokenBudget(
 ): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
   const contextWindow = OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ?? 128000;
   const inputBudget = Math.max(4000, Math.floor(contextWindow * 0.8));
-  const systemMessages = messages.filter((message) => message.role === 'system');
-  const nonSystemMessages = messages.filter((message) => message.role !== 'system');
+  const systemMessages = messages.filter((message) => message.role === STRING_ENUM.SYSTEM);
+  const nonSystemMessages = messages.filter((message) => message.role !== STRING_ENUM.SYSTEM);
 
   const workingMessages = [...nonSystemMessages];
   let estimatedTokens =
@@ -135,10 +136,18 @@ async function createNewConversation(
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
+    const contentToSave = extractTextFromContent(userContent);
     const createResponse = await fetch("/api/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        firstMessage: {
+          role: "USER",
+          content: contentToSave,
+          attachments: attachments || [],
+        },
+      }),
       signal,
     });
 
@@ -147,7 +156,10 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    const userMessageId = await saveUserMessage(conversationId, userContent, attachments, signal);
+    const userMessageId =
+      typeof newConversation.firstMessageId === "string"
+        ? newConversation.firstMessageId
+        : await saveUserMessage(conversationId, userContent, attachments, signal);
     
     if (!userMessageId) {
       return null;
@@ -164,7 +176,7 @@ async function createNewConversation(
 
     return { conversationId, userMessageId, assistantMessageId };
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       throw err;
     }
     logger.error("Failed to create conversation:", err);

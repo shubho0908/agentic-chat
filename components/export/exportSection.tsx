@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState } from "react";
 import { Download, FileJson, FileText, File, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -162,7 +163,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
         {isExporting ? (
           <>
             <Loader className="size-4 animate-spin mr-2" />
-            Exporting...
+            Exporting…
           </>
         ) : (
           <>
@@ -173,10 +174,10 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
       </Button>
 
       <p className="text-[11px] text-center text-muted-foreground/70 leading-relaxed text-balance pt-1">
-        Export includes all messages{selectedFormat !== 'pdf' ? ', attachments,' : ''} and metadata.
-        {selectedFormat === 'json' && ' Perfect for backups and data portability.'}
-        {selectedFormat === 'markdown' && ' Easy to read and compatible with most text editors.'}
-        {selectedFormat === 'pdf' && ' Professional format suitable for printing and sharing.'}
+        Export includes all messages{selectedFormat !== STRING_ENUM.PDF ? ', attachments,' : ''} and metadata.
+        {selectedFormat === STRING_ENUM.JSON && ' Perfect for backups and data portability.'}
+        {selectedFormat === STRING_ENUM.MARKDOWN && ' Easy to read and compatible with most text editors.'}
+        {selectedFormat === STRING_ENUM.PDF && ' Professional format suitable for printing and sharing.'}
       </p>
     </div>
   );

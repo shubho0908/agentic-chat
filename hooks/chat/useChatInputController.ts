@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { type ClipboardEvent, useEffect, useReducer } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -252,7 +253,7 @@ export function useChatInputController({
     const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : toolId.replace("_", " ");
     const currentDepth = selectedDepth || searchDepth;
     const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
-      ? ` (${currentDepth === "advanced" ? "Advanced" : "Basic"})`
+      ? ` (${currentDepth === STRING_ENUM.ADVANCED ? "Advanced" : "Basic"})`
       : "";
 
     toast.success(TOAST_ERROR_MESSAGES.TOOLS.ACTIVATED, {
@@ -343,7 +344,7 @@ export function useChatInputController({
         setPendingGoogleWorkspaceQuery(input);
         toast.error("Google Workspace access needed", {
           description:
-            scopeResolution.source === "context"
+            scopeResolution.source === STRING_ENUM.CONTEXT
               ? "This follow-up needs broader Google Workspace access than your current selection. Open Settings > Google Workspace to add it."
               : "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
           action: {

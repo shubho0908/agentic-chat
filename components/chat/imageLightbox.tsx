@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState, useCallback } from "react";
 import Image from "next/image";
 import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
@@ -104,7 +105,7 @@ function LightboxStage({ imageUrl, alt, caption, isMobile, onClose, theme }: Lig
               <p className={`text-sm ${theme.errorMutedText}`}>
                 The image could not be loaded. It may have been removed or the link is broken.
               </p>
-              {alt && alt !== "Search result image" && (
+              {alt && alt !== STRING_ENUM.SEARCH_RESULT_IMAGE && (
                 <p className={`mt-4 text-xs italic ${theme.mutedText}`}>
                   {alt}
                 </p>
@@ -129,7 +130,7 @@ export function ImageLightbox({ imageUrl, alt, open, onClose }: ImageLightboxPro
     }
   }, [onClose]);
 
-  const caption = alt && alt !== "Search result image" ? alt : "Web search image";
+  const caption = alt && alt !== STRING_ENUM.SEARCH_RESULT_IMAGE ? alt : "Web search image";
   
   if (isMobile) {
     return (

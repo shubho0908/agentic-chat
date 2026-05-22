@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Download, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -34,8 +35,8 @@ function getOccurrenceKey(value: string, counts: Map<string, number>): string {
 export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: DocumentPreviewProps) {
   const isMobile = useIsMobile();
 
-  const isPDF = fileType === "application/pdf" || fileName.endsWith(".pdf");
-  const isCSV = fileType === "text/csv" || fileName.endsWith(".csv");
+  const isPDF = fileType === STRING_ENUM.APPLICATION_PDF || fileName.endsWith(".pdf");
+  const isCSV = fileType === STRING_ENUM.TEXT_CSV || fileName.endsWith(".csv");
   const isTextFile = (fileType.startsWith("text/") || fileName.endsWith(".txt")) && !isCSV;
   const isOfficeDoc =
     fileType.includes("wordprocessingml") ||
@@ -193,7 +194,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
     return (
       <Drawer open={open && !!fileUrl} onOpenChange={onClose}>
         <DrawerContent className="h-[80vh] p-0 flex flex-col">
-          <DrawerHeader className="px-4 py-4 border-b bg-muted/30">
+          <DrawerHeader className="p-4 border-b bg-muted/30">
             <DrawerTitle className="sr-only">{fileName}</DrawerTitle>
             <DrawerDescription className="sr-only">{fileType}</DrawerDescription>
             {headerContent}
@@ -207,7 +208,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   return (
     <Dialog open={open && !!fileUrl} onOpenChange={onClose}>
       <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl xl:max-w-5xl max-h-[90vh] h-[90vh] p-0 gap-0 flex flex-col">
-        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
+        <DialogHeader className="p-4 px-6 border-b bg-muted/30">
           <DialogTitle className="sr-only">{fileName}</DialogTitle>
           <DialogDescription className="sr-only">{fileType}</DialogDescription>
           {headerContent}

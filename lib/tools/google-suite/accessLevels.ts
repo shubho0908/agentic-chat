@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import {
   GOOGLE_CONNECTOR_SCOPES,
   GOOGLE_SCOPES,
@@ -282,7 +283,7 @@ export function resolveGoogleWorkspaceSelections(
     const matchedLevel =
       [...service.levels]
         .sort((left, right) => right.rank - left.rank)
-        .find((level) => level.id !== "off" && level.isGranted(grantedSet)) ?? OFF_LEVEL;
+        .find((level) => level.id !== STRING_ENUM.OFF && level.isGranted(grantedSet)) ?? OFF_LEVEL;
 
     acc[service.id] = matchedLevel.id;
     return acc;
@@ -336,6 +337,6 @@ export function countEnabledGoogleWorkspaceServices(
   selections: Partial<GoogleWorkspaceServiceSelections>
 ): number {
   return GOOGLE_WORKSPACE_SERVICE_CONFIGS.filter(
-    (service) => (selections[service.id] ?? "off") !== "off"
+    (service) => (selections[service.id] ?? "off") !== STRING_ENUM.OFF
   ).length;
 }

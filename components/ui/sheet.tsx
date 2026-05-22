@@ -1,5 +1,6 @@
 "use client"
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import * as React from "react"
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
@@ -53,13 +54,13 @@ function SheetContent({
         data-slot="sheet-content"
         className={cn(
           "bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur-2xl data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-[var(--shadow-apple)] border-black/5 dark:border-white/10 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
-          side === "right" &&
+          side === STRING_ENUM.RIGHT &&
             "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
-          side === "left" &&
+          side === STRING_ENUM.LEFT &&
             "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
-          side === "top" &&
+          side === STRING_ENUM.TOP &&
             "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
-          side === "bottom" &&
+          side === STRING_ENUM.BOTTOM &&
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}

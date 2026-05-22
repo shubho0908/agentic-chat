@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { AnimatePresence, m } from "framer-motion";
@@ -95,8 +96,8 @@ export function WebSearchScene({
     }),
   );
   const chipTransition = prefersReducedMotion ? { duration: 0 } : { duration: 0.2 };
-  const showSources = device !== "phone";
-  const showImages = device === "desktop" ? step >= 2 : step >= 3;
+  const showSources = device !== STRING_ENUM.PHONE;
+  const showImages = device === STRING_ENUM.DESKTOP ? step >= 2 : step >= 3;
   const timelineItems: Array<{ key: string; node: ReactNode }> = [];
 
   if (step >= 1) {
@@ -137,9 +138,9 @@ export function WebSearchScene({
       node: (
         <div
           className={`grid gap-2 ${
-            device === "desktop"
+            device === STRING_ENUM.DESKTOP
               ? "grid-cols-3"
-              : device === "tablet"
+              : device === STRING_ENUM.TABLET
                 ? "grid-cols-2"
                 : "grid-cols-1"
           }`}
@@ -155,9 +156,9 @@ export function WebSearchScene({
                   alt={item.alt}
                   fill
                   sizes={
-                    device === "desktop"
+                    device === STRING_ENUM.DESKTOP
                       ? "(max-width: 1023px) 33vw, 200px"
-                      : device === "tablet"
+                      : device === STRING_ENUM.TABLET
                         ? "(max-width: 719px) 100vw, 220px"
                         : "260px"
                   }
@@ -264,9 +265,9 @@ export function DeepResearchScene({
                         <div
                           key={item.key}
                           className={`rounded-xl border px-3 py-2 ${
-                            state === "current"
+                            state === STRING_ENUM.CURRENT
                               ? `border-border ${CHIP_SURFACE_CLASS}`
-                              : state === "completed"
+                              : state === STRING_ENUM.COMPLETED
                                 ? `border-border/50 ${SUBTLE_PANEL_SURFACE_CLASS}`
                                 : `border-border/40 ${PANEL_SURFACE_CLASS}`
                           }`}
@@ -276,7 +277,7 @@ export function DeepResearchScene({
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-[11px] font-medium text-foreground sm:text-[12px]">{item.title}</p>
-                                {item.key === "evaluator" && step >= 5 && (
+                                {item.key === STRING_ENUM.EVALUATOR && step >= 5 && (
                                   <span className="rounded-md border border-emerald-500/18 bg-emerald-500/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:border-emerald-400/[0.18] dark:text-emerald-300 sm:text-[11px]">
                                     91%
                                   </span>
@@ -285,7 +286,7 @@ export function DeepResearchScene({
                               <p className="mt-1 text-[10px] leading-[1.05rem] text-muted-foreground dark:text-white/[0.54] sm:text-[11px] sm:leading-[1.1rem]">
                                 {item.detail}
                               </p>
-                              {item.key === "worker" && step >= 3 && (
+                              {item.key === STRING_ENUM.WORKER && step >= 3 && (
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {["packaging shifts", "review workflows", "trust signals"].map((task) => (
                                     <span

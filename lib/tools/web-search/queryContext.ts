@@ -2,7 +2,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import type { Message } from "@/lib/schemas/chat";
 import { extractConversationHistory } from "@/lib/chat/messageHelpers";
-import { getStageModel } from "@/lib/modelPolicy";
+import { getLangChainChatModelOptions, getStageModel } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
 import { extractUrlsFromMessage, stripUrlsFromText } from "@/lib/url-scraper/scraper";
 
@@ -185,9 +185,13 @@ export async function resolveWebSearchQuery({
   }
 
   try {
+    const plannerModel = getStageModel(model, "tool_planner");
     const llm = new ChatOpenAI({
-      model: getStageModel(model, "tool_planner"),
+      model: plannerModel,
       apiKey,
+      ...getLangChainChatModelOptions(plannerModel, {
+        promptCacheKey: "agentic-chat-search-query",
+      }),
     });
 
     const rewritten = await llm.withStructuredOutput(contextualQuerySchema).invoke(

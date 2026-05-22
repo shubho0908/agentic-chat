@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "@/types/chat";
@@ -363,7 +364,7 @@ export async function handleStreamingResponse(
 
     return { success: true, assistantMessageId };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       if (messageCreated) {
         onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
       }

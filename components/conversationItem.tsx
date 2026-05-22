@@ -1,6 +1,7 @@
 "use client";
 
-import { forwardRef } from "react";
+import { STRING_ENUM } from "@/constants/stringEnums";
+import { useState, useEffect } from "react";
 import { Trash2, MoreHorizontal, Loader, Pencil, Share2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -42,20 +43,33 @@ interface ConversationItemProps {
   onToggleSelect?: (id: string) => void;
 }
 
-export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>(
-  ({
-    conversation,
-    isActive,
-    isDeleting,
-    isRenaming,
-    isToggling,
-    onDelete,
-    onRename,
-    onToggleSharing,
-    selectionMode = false,
-    isSelected = false,
-    onToggleSelect,
-  }, ref) => {
+function useRelativeTime(dateString: string): string {
+  const [relativeTime, setRelativeTime] = useState("");
+
+  useEffect(() => {
+    setRelativeTime(
+      formatDistanceToNow(new Date(dateString), { addSuffix: true })
+    );
+  }, [dateString]);
+
+  return relativeTime;
+}
+
+export function ConversationItem({
+  conversation,
+  isActive,
+  isDeleting,
+  isRenaming,
+  isToggling,
+  onDelete,
+  onRename,
+  onToggleSharing,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
+  ref,
+}: ConversationItemProps & { ref?: React.Ref<HTMLLIElement> }) {
+  const relativeTime = useRelativeTime(conversation.updatedAt);
     const handleRowClick = () => {
       if (selectionMode && onToggleSelect && !isDeleting) {
         onToggleSelect(conversation.id);
@@ -75,7 +89,7 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (e.key === STRING_ENUM.ENTER || e.key === STRING_ENUM.SPACE) {
                 e.preventDefault();
                 handleRowClick();
               }
@@ -90,9 +104,7 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
             <div className="flex flex-col gap-1 min-w-0 flex-1">
               <span className="truncate font-medium text-sm leading-none">{conversation.title}</span>
               <span className="text-xs text-muted-foreground leading-none">
-                {formatDistanceToNow(new Date(conversation.updatedAt), {
-                  addSuffix: true,
-                })}
+                {relativeTime}
               </span>
             </div>
           </div>
@@ -101,15 +113,13 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
             <ProtectedConversationLink
               conversationId={conversation.id}
               conversationTitle={conversation.title}
-              className="py-2 px-2"
+              className="p-2"
             >
               {isDeleting && <Loader className="size-4 shrink-0 animate-spin" />}
               <div className="flex flex-col gap-1 min-w-0 flex-1">
                 <span className="truncate font-medium text-sm leading-none">{conversation.title}</span>
                 <span className="text-xs text-muted-foreground leading-none">
-                  {formatDistanceToNow(new Date(conversation.updatedAt), {
-                    addSuffix: true,
-                  })}
+                  {relativeTime}
                 </span>
               </div>
             </ProtectedConversationLink>
@@ -182,6 +192,3 @@ export const ConversationItem = forwardRef<HTMLLIElement, ConversationItemProps>
       </SidebarMenuItem>
     );
   }
-);
-
-ConversationItem.displayName = "ConversationItem";

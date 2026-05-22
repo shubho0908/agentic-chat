@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
@@ -28,7 +29,7 @@ export async function GET(
     if (convError) return convError;
 
     const searchParams = request.nextUrl.searchParams;
-    const includeAttachments = searchParams.get('attachments') === 'true';
+    const includeAttachments = searchParams.get('attachments') === STRING_ENUM.TRUE;
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
 

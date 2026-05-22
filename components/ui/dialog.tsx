@@ -1,5 +1,6 @@
 "use client"
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
@@ -57,8 +58,8 @@ function DialogContent({
         data-slot="dialog-content"
         className={cn(
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 translate-x-[-50%] translate-y-[-50%] focus-visible:outline-none duration-200",
-          variant === "default" && "grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-black/5 bg-background/95 p-4 shadow-[var(--shadow-apple)] supports-[backdrop-filter]:bg-background/80 backdrop-blur-2xl dark:border-white/10 dark:shadow-[var(--shadow-apple-dark)] sm:max-w-lg sm:p-6",
-          variant === "bare" && "w-auto max-w-[calc(100%-2rem)]",
+          variant === STRING_ENUM.DEFAULT && "grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-black/5 bg-background/95 p-4 shadow-[var(--shadow-apple)] supports-[backdrop-filter]:bg-background/80 backdrop-blur-2xl dark:border-white/10 dark:shadow-[var(--shadow-apple-dark)] sm:max-w-lg sm:p-6",
+          variant === STRING_ENUM.BARE && "w-auto max-w-[calc(100%-2rem)]",
           className
         )}
         {...props}

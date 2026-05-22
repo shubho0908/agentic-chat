@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { z } from 'zod';
 
 export const searchDepthEnum = z.enum(['basic', 'advanced']);
@@ -33,5 +34,5 @@ export function getRecommendedMaxResults(searchDepth: SearchDepth, customMax?: n
     return customMax;
   }
   
-  return searchDepth === 'advanced' ? 12 : 5;
+  return searchDepth === STRING_ENUM.ADVANCED ? 12 : 5;
 }

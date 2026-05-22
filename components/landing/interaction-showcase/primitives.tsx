@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { m } from "framer-motion";
@@ -73,26 +74,26 @@ function ContentChrome({
   onPreviousScene: () => void;
   onNextScene: () => void;
 }) {
-  const isPhone = device === "phone";
-  const toolbarHeight = isPhone ? "h-[68px]" : device === "tablet" ? "h-[58px]" : "h-14";
+  const isPhone = device === STRING_ENUM.PHONE;
+  const toolbarHeight = isPhone ? "h-[68px]" : device === STRING_ENUM.TABLET ? "h-[58px]" : "h-14";
   const toolbarRadius =
-    device === "phone"
+    device === STRING_ENUM.PHONE
       ? "rounded-t-[24px]"
-      : device === "tablet"
+      : device === STRING_ENUM.TABLET
         ? "rounded-t-[22px]"
         : "rounded-t-[16px]";
   const omnibarClass =
-    device === "phone"
+    device === STRING_ENUM.PHONE
       ? "h-[1.875rem] max-w-[198px] rounded-full px-2.5"
-      : device === "tablet"
+      : device === STRING_ENUM.TABLET
         ? "h-[2.125rem] max-w-[250px] rounded-full px-3"
         : "h-9 max-w-[350px] rounded-full px-4";
   const omnibarSurfaceClass =
     "border border-black/[0.08] bg-[linear-gradient(180deg,rgba(241,243,248,0.98),rgba(232,235,241,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/[0.08] dark:bg-[linear-gradient(180deg,rgba(33,36,44,0.98),rgba(24,27,33,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
   const omnibarIcon =
-    scene === "workspace" ? (
+    scene === STRING_ENUM.WORKSPACE ? (
       <GoogleIcon className="size-3.5 shrink-0" />
-    ) : scene === "research" ? (
+    ) : scene === STRING_ENUM.RESEARCH ? (
       <Telescope className="size-3.5 shrink-0 text-muted-foreground/90" />
     ) : (
       <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />
@@ -158,7 +159,7 @@ export function DeviceShell({
   onNextScene: () => void;
   children: ReactNode;
 }) {
-  if (device === "phone") {
+  if (device === STRING_ENUM.PHONE) {
     return (
       <div className="mx-auto w-full max-w-[clamp(15.75rem,84vw,18.75rem)]">
         <div className={`relative aspect-[10/19] overflow-hidden rounded-[30px] bg-[#f5f6f9] p-[8px] shadow-sm dark:bg-[#07080b] ${FRAME_RING_CLASS}`}>
@@ -179,7 +180,7 @@ export function DeviceShell({
     );
   }
 
-  if (device === "tablet") {
+  if (device === STRING_ENUM.TABLET) {
     return (
       <div className="mx-auto w-full max-w-[clamp(20rem,80vw,29rem)]">
         <div className={`relative aspect-[4/5] overflow-hidden rounded-[28px] p-[8px] shadow-sm ${FRAME_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
@@ -371,7 +372,7 @@ export function ServiceAction({
               <p className="truncate text-[10px] text-muted-foreground dark:text-white/[0.5]">{action}</p>
             </div>
           </div>
-          {status === "completed" ? (
+          {status === STRING_ENUM.COMPLETED ? (
             <div className="flex shrink-0 items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-300">
               <CheckCircle2 className="size-3 shrink-0" />
               {statusLabel}
@@ -395,7 +396,7 @@ export function ProcessMarker({
   state: ProcessState;
   prefersReducedMotion?: boolean;
 }) {
-  if (state === "completed") {
+  if (state === STRING_ENUM.COMPLETED) {
     return (
       <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
         <CheckCircle2 className="size-3.5" />
@@ -403,7 +404,7 @@ export function ProcessMarker({
     );
   }
 
-  if (state === "current") {
+  if (state === STRING_ENUM.CURRENT) {
     return (
       <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-400">
         {prefersReducedMotion ? (

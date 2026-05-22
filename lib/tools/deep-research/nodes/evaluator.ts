@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { createEvaluationPrompt } from '../prompts';
 import type { EvaluationResult, StrictnessLevel } from '@/types/deepResearch';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 import { invokeStructuredOutput } from '../structuredOutput';
 import { DEEP_RESEARCH_MAX_ATTEMPTS } from '../constants';
 
@@ -23,9 +23,13 @@ export async function evaluatorNode(
   if (config.abortSignal?.aborted) {
     throw new Error('Research aborted by user');
   }
+  const evaluatorModel = getStageModel(config.model, 'research_evaluator');
   const llm = new ChatOpenAI({
-    model: getStageModel(config.model, 'research_evaluator'),
+    model: evaluatorModel,
     apiKey: config.openaiApiKey,
+    ...getLangChainChatModelOptions(evaluatorModel, {
+      promptCacheKey: 'agentic-chat-research-evaluator',
+    }),
   });
 
   try {

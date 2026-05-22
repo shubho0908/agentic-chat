@@ -1,0 +1,53 @@
+npm warn Unknown project config "node-linker". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "enable-pre-post-scripts". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+react-doctor v0.2.1
+
+✔ Select projects to scan › agentic-chat
+Scanning changes: refactor/chat → main
+
+Scanning /Users/shubhojeetbera/Desktop/Shubho/agentic-chat...
+
+- Detecting framework. Found Next.js.
+[32m✔[39m Detecting framework. Found Next.js.
+- Detecting React version. Found React 19.2.4.
+[32m✔[39m Detecting React version. Found React 19.2.4.
+- Detecting Tailwind. Found Tailwind ^4.
+[32m✔[39m Detecting Tailwind. Found Tailwind ^4.
+- Detecting language. Found TypeScript.
+[32m✔[39m Detecting language. Found TypeScript.
+- Detecting React Compiler. Not found.
+[32m✔[39m Detecting React Compiler. Not found.
+- Scanning 120 changed source files.
+[32m✔[39m Scanning 120 changed source files.
+- Loaded react-doctor config.
+[32m✔[39m Loaded react-doctor config.
+
+- Running lint checks...
+[32m✔[39m Running lint checks.
+
+  ⚠ react-doctor/no-many-boolean-props
+      Component "ConversationItem" takes 5 boolean-like props (isActive, isDeleting, isRenaming…) — consider compound components or explicit variants instead of stacking flags
+      → Split into compound components or named variants: `<Button.Primary />`, `<DialogConfirm />` instead of stacking `isPrimary`, `isConfirm` flags
+      components/conversationItem.tsx:58
+
+  ⚠ react-doctor/no-pure-black-background
+      Pure black background (bg-black) looks harsh — use a near-black tinted toward your brand hue (e.g. bg-gray-950)
+      → Tint the background slightly toward your brand hue — e.g. `#0a0a0f` or Tailwind's `bg-gray-950`. Pure black looks harsh on modern displays
+      components/ai-elements/richLink.tsx:219
+
+  ┌─────┐  99 / 100 Great
+  │ ◠ ◠ │  ██████████████████████████████████████████████████
+  │  ▽  │  React Doctor (www.react.doctor)
+  └─────┘
+
+  2 issues across 2/120 files  in 316ms
+  Full diagnostics written to /var/folders/yq/7c1n3zwx1vj424h4pv9fycsw0000gn/T/react-doctor-e7f15487-cd62-4f50-97f7-a3916bbe7b4d
+
+  → Share your results: https://www.react.doctor/share?p=agentic-chat&s=99&w=2&f=2
+
+  → Catch these issues on every PR: https://react.review
+  React Review is a GitHub App built on React Doctor, and it runs on each pull request,
+  posts new issues as inline review comments, and tracks your team's score over time.
+
+

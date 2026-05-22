@@ -1,13 +1,14 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { AttachmentStatus, PartitionedAttachments } from '@/types/rag';
 
 export function partitionByStatus<T extends AttachmentStatus>(
   attachments: T[]
 ): PartitionedAttachments<T> {
   return {
-    completed: attachments.filter(a => a.processingStatus === 'COMPLETED'),
-    processing: attachments.filter(a => a.processingStatus === 'PROCESSING'),
-    pending: attachments.filter(a => a.processingStatus === 'PENDING'),
-    failed: attachments.filter(a => a.processingStatus === 'FAILED'),
+    completed: attachments.filter(a => a.processingStatus === STRING_ENUM.COMPLETED_434F4D50),
+    processing: attachments.filter(a => a.processingStatus === STRING_ENUM.PROCESSING),
+    pending: attachments.filter(a => a.processingStatus === STRING_ENUM.PENDING_50454E44),
+    failed: attachments.filter(a => a.processingStatus === STRING_ENUM.FAILED_4641494C),
   };
 }
 
@@ -17,7 +18,7 @@ export function extractIds<T extends { id: string }>(items: T[]): string[] {
 
 function isDocumentAttachment(fileType: string): boolean {
   return fileType.startsWith('text/') || 
-    fileType === 'application/pdf' ||
+    fileType === STRING_ENUM.APPLICATION_PDF ||
     fileType.includes('wordprocessingml') ||
     fileType.includes('spreadsheetml') ||
     fileType.includes('msword') ||

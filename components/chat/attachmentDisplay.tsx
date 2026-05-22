@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -13,7 +14,7 @@ interface AttachmentDisplayProps {
 }
 
 function getDocumentIcon(fileType: string, fileName: string) {
-  if (fileType === "application/pdf" || fileName.endsWith(".pdf")) {
+  if (fileType === STRING_ENUM.APPLICATION_PDF || fileName.endsWith(".pdf")) {
     return <FileText className="size-5" />;
   }
   if (fileType.includes("spreadsheet") || fileName.match(/\.(xlsx?|csv)$/)) {

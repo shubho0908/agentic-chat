@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ChatOpenAI } from '@langchain/openai';
 import type OpenAI from 'openai';
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import { UNIFIED_SYSTEM_PROMPT } from '@/lib/prompts';
 import { WEB_SEARCH_PLANNING_PROMPT } from '@/lib/tools/web-search/prompts';
 import { PLANNER_SYSTEM_PROMPT as DEEP_RESEARCH_PLANNING_PROMPT } from '@/lib/tools/deep-research/prompts';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 
 
 import { logger } from "@/lib/logger";
@@ -115,10 +116,10 @@ function serializeMessageContent(content: OpenAI.Chat.Completions.ChatCompletion
 
   return content
     .map((part) => {
-      if (part.type === 'text') {
+      if (part.type === STRING_ENUM.TEXT) {
         return part.text;
       }
-      if (part.type === 'image_url') {
+      if (part.type === STRING_ENUM.IMAGE_URL) {
         return '[Image attached]';
       }
       return '';
@@ -144,7 +145,7 @@ function buildUserPrompt(config: UnifiedPlannerConfig): string {
     prompt += `\nCRITICAL: The user has attached images. Your plan MUST reference the visual information shown.`;
   }
 
-  if (config.hasDocuments && config.toolType === 'deep_research') {
+  if (config.hasDocuments && config.toolType === STRING_ENUM.DEEP_RESEARCH) {
     prompt += `\n\nAvailable: "rag" tool for document queries + "web_search" for internet research.`;
     prompt += `\nPrioritize combining both tools for comprehensive answers.`;
   }
@@ -202,7 +203,7 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
     }
   };
 
-  if (config.toolType === 'web_search' && config.searchDepth === 'basic') {
+  if (config.toolType === STRING_ENUM.WEB_SEARCH && config.searchDepth === STRING_ENUM.BASIC) {
     return {
       originalQuery: config.query,
       queryType: 'factual',
@@ -225,15 +226,19 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
       throw new Error('Planning aborted by user');
     }
 
+    const plannerModel = getStageModel(config.model, 'tool_planner');
     const llm = new ChatOpenAI({
-      model: getStageModel(config.model, 'tool_planner'),
+      model: plannerModel,
       apiKey: config.apiKey,
+      ...getLangChainChatModelOptions(plannerModel, {
+        promptCacheKey: 'agentic-chat-tool-planner',
+      }),
     });
 
     const systemPrompt = UNIFIED_SYSTEM_PROMPT + '\n\n' + getToolSpecificPrompt(config.toolType);
     const userPrompt = buildUserPrompt(config);
 
-    if (config.toolType === 'web_search') {
+    if (config.toolType === STRING_ENUM.WEB_SEARCH) {
       const plan = await llm
         .withStructuredOutput(webSearchPlannerOutputSchema)
         .invoke(
@@ -269,7 +274,7 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
       return plan;
     }
 
-    if (config.toolType === 'deep_research') {
+    if (config.toolType === STRING_ENUM.DEEP_RESEARCH) {
       const parsed = await llm
         .withStructuredOutput(deepResearchPlanSchema)
         .invoke(
@@ -309,7 +314,7 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
       return plan;
     }
 
-    if (config.toolType === 'google_suite') {
+    if (config.toolType === STRING_ENUM.GOOGLE_SUITE) {
       const plan = await llm
         .withStructuredOutput(googleSuitePlanSchema)
         .invoke(

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { getPgPool, ensurePgVectorExtension, getPgVectorVersion, EMBEDDING_DIMENSIONS } from './pgvectorClient';
 import { RAGError, RAGErrorCode } from '../common/errors';
 
@@ -129,7 +130,7 @@ async function getColumnType(client: ReturnType<typeof getPgPool>, tableName: st
     }
     
     const udtName = result.rows[0].udt_name;
-    if (udtName === 'vector' || udtName === 'halfvec') {
+    if (udtName === STRING_ENUM.VECTOR || udtName === STRING_ENUM.HALFVEC) {
       return udtName;
     }
     
@@ -185,7 +186,7 @@ export async function ensurePgVectorTables(): Promise<void> {
         await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
       } catch (error: unknown) {
         const err = error as { code?: string };
-        if (err.code !== '42710') {
+        if (err.code !== STRING_ENUM.PG_DUPLICATE_OBJECT) {
           // Postgres 13+ has built-in UUID, ignore if pgcrypto unavailable
         }
       }

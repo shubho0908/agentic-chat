@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
@@ -76,7 +77,7 @@ export async function continueIncompleteConversation(
     }
   );
 
-  if (!result.success && result.error && result.error !== "aborted") {
+  if (!result.success && result.error && result.error !== STRING_ENUM.ABORTED) {
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: result.error,
     });
@@ -146,7 +147,7 @@ export async function handleSendMessage(
 
   try {
     let currentConversationId = conversationId;
-    let shouldResumeOnConversationPage = false;
+    let navigateAfterStreamingPath: string | null = null;
 
     if (isNewConversation) {
       await handleConversationSaving(
@@ -166,7 +167,7 @@ export async function handleSendMessage(
           userMessageWasPersisted = true;
           onConversationIdUpdate(data.conversationId);
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
-          onNavigate(`/c/${data.conversationId}`);
+          navigateAfterStreamingPath = `/c/${data.conversationId}`;
         },
         attachments,
         true,
@@ -177,11 +178,6 @@ export async function handleSendMessage(
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
-
-      // New chats navigate to /c/:id immediately after the user message is saved.
-      // Let the destination page resume generation once, instead of starting a
-      // stream here that will be aborted during route teardown and retried there.
-      shouldResumeOnConversationPage = true;
     } else {
       if (!currentConversationId) {
         throw new Error("Conversation ID is required for existing conversations");
@@ -212,10 +208,6 @@ export async function handleSendMessage(
       throw new Error("Conversation ID is required before streaming the response");
     }
 
-    if (shouldResumeOnConversationPage) {
-      return { success: true };
-    }
-
     const result = await handleStreamingResponse(
       {
         messages,
@@ -240,7 +232,11 @@ export async function handleSendMessage(
       }
     );
 
-    if (!result.success && result.error && result.error !== "aborted") {
+    if (navigateAfterStreamingPath && result.success) {
+      onNavigate(navigateAfterStreamingPath);
+    }
+
+    if (!result.success && result.error && result.error !== STRING_ENUM.ABORTED) {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
         description: result.error,
       });
@@ -256,7 +252,7 @@ export async function handleSendMessage(
       );
     }
 
-    if ((err as Error).name === "AbortError") {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       return { success: false, error: "aborted" };
     }
 

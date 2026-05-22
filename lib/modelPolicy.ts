@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { DEFAULT_MODEL, OPENAI_MODELS } from "@/constants/openai-models";
 
 type ModelStage =
@@ -27,6 +28,77 @@ const STAGE_MODEL_FALLBACKS: Record<ModelStage, string> = {
   workspace_agent: "gpt-5.4-mini",
 };
 
+type ReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+type LangChainReasoningEffort = "minimal" | "low" | "medium" | "high";
+type ServiceTier = "auto" | "default" | "flex" | "scale" | "priority";
+type PromptCacheRetention = "in-memory" | "24h";
+type Verbosity = "low" | "medium" | "high";
+
+interface ChatCompletionTuningOptions {
+  reasoning_effort?: ReasoningEffort;
+  service_tier?: ServiceTier;
+  store?: boolean;
+  parallel_tool_calls?: boolean;
+  prompt_cache_key?: string;
+  prompt_cache_retention?: PromptCacheRetention;
+  verbosity?: Verbosity;
+}
+
+interface LangChainChatTuningOptions {
+  reasoning?: {
+    effort?: LangChainReasoningEffort;
+  };
+  service_tier?: ServiceTier;
+  promptCacheKey?: string;
+  verbosity?: Verbosity;
+  zdrEnabled?: boolean;
+}
+
+const FAST_INTERACTIVE_REASONING: Record<string, ReasoningEffort> = {
+  "gpt-5.5": "low",
+  "gpt-5.4": "none",
+  "gpt-5.4-mini": "none",
+  "gpt-5.4-nano": "none",
+  "gpt-5.3-codex": "low",
+};
+
+const EXTENDED_PROMPT_CACHE_MODELS = new Set(["gpt-5.5", "gpt-5.4"]);
+const SERVICE_TIERS = new Set<ServiceTier>([
+  "auto",
+  "default",
+  "flex",
+  "scale",
+  "priority",
+]);
+
+function toLangChainReasoningEffort(
+  effort: ReasoningEffort | undefined,
+): LangChainReasoningEffort | undefined {
+  if (!effort) {
+    return undefined;
+  }
+
+  if (effort === STRING_ENUM.NONE) {
+    return "minimal";
+  }
+
+  if (effort === STRING_ENUM.XHIGH) {
+    return "high";
+  }
+
+  return effort;
+}
+
+function getConfiguredServiceTier(): ServiceTier {
+  const configuredTier = process.env.OPENAI_SERVICE_TIER?.trim() as ServiceTier | undefined;
+
+  if (configuredTier && SERVICE_TIERS.has(configuredTier)) {
+    return configuredTier;
+  }
+
+  return "priority";
+}
+
 function isAllowedModel(model: string): boolean {
   return ALLOWED_MODELS.has(model);
 }
@@ -44,7 +116,7 @@ export function getStageModel(
   stage: ModelStage,
 ): string {
   const validatedRequestedModel = validateRequestedModel(requestedModel);
-  if (stage === "chat") {
+  if (stage === STRING_ENUM.CHAT) {
     return validatedRequestedModel ?? DEFAULT_MODEL;
   }
 
@@ -79,4 +151,49 @@ function getModelContextWindow(model: string): number {
 export function getResponseTokenReserve(model: string): number {
   const windowSize = getModelContextWindow(model);
   return Math.min(Math.max(Math.floor(windowSize * 0.1), 2048), 16000);
+}
+
+export function getOpenAIChatCompletionOptions(
+  model: string,
+  options: {
+    promptCacheKey?: string;
+    verbosity?: Verbosity;
+  } = {},
+): ChatCompletionTuningOptions {
+  const validatedModel = validateRequestedModel(model) ?? DEFAULT_MODEL;
+  const promptCacheKey = options.promptCacheKey ?? "agentic-chat";
+  const tunedOptions: ChatCompletionTuningOptions = {
+    reasoning_effort: FAST_INTERACTIVE_REASONING[validatedModel] ?? "low",
+    service_tier: getConfiguredServiceTier(),
+    store: false,
+    parallel_tool_calls: false,
+    prompt_cache_key: promptCacheKey,
+    verbosity: options.verbosity ?? "low",
+  };
+
+  if (EXTENDED_PROMPT_CACHE_MODELS.has(validatedModel)) {
+    tunedOptions.prompt_cache_retention = "24h";
+  }
+
+  return tunedOptions;
+}
+
+export function getLangChainChatModelOptions(
+  model: string,
+  options: {
+    promptCacheKey?: string;
+    verbosity?: Verbosity;
+  } = {},
+): LangChainChatTuningOptions {
+  const chatOptions = getOpenAIChatCompletionOptions(model, options);
+
+  return {
+    reasoning: {
+      effort: toLangChainReasoningEffort(chatOptions.reasoning_effort),
+    },
+    service_tier: chatOptions.service_tier,
+    promptCacheKey: chatOptions.prompt_cache_key,
+    verbosity: chatOptions.verbosity,
+    zdrEnabled: true,
+  };
 }

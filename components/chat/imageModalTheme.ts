@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 export interface ImageModalTheme {
   panel: string;
   mobilePanel: string;
@@ -19,7 +20,7 @@ export interface ImageModalTheme {
 }
 
 export function getImageModalTheme(resolvedTheme?: string): ImageModalTheme {
-  const isLight = resolvedTheme === "light";
+  const isLight = resolvedTheme === STRING_ENUM.LIGHT;
 
   if (isLight) {
     return {

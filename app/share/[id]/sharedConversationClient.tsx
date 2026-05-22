@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { use, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader, Lock, ArrowLeft } from "lucide-react";
@@ -76,7 +77,7 @@ export default function SharedConversationClient({
       <div className="flex h-screen items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader className="size-5 animate-spin" />
-          <span>Loading conversation...</span>
+          <span>Loading conversation…</span>
         </div>
       </div>
     );
@@ -86,7 +87,7 @@ export default function SharedConversationClient({
     const errorMessage = error instanceof Error ? error.message : "FAILED_TO_FETCH";
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-md px-6">
+        <div className="flex flex-col items-center justify-center gap-y-8 text-center max-w-md px-6">
           <div className="relative">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 blur-3xl rounded-full" />
             <div className="relative bg-muted/50 p-8 rounded-3xl border border-border/40">
@@ -95,18 +96,18 @@ export default function SharedConversationClient({
           </div>
 
           <div className="space-y-3">
-            <h1 className="text-3xl font-bold tracking-tight">
-              {errorMessage === "PRIVATE"
+            <h1 className="text-3xl font-semibold tracking-tight">
+              {errorMessage === STRING_ENUM.PRIVATE
                 ? "This Conversation is Private"
-                : errorMessage === "NOT_FOUND"
+                : errorMessage === STRING_ENUM.NOT_FOUND
                   ? "Conversation Not Found"
                   : "Failed to Load Conversation"
               }
             </h1>
             <p className="text-muted-foreground text-base leading-relaxed">
-              {errorMessage === "PRIVATE"
+              {errorMessage === STRING_ENUM.PRIVATE
                 ? "This conversation is not publicly shared or the owner has made it private. Only the owner can access private conversations."
-                : errorMessage === "NOT_FOUND"
+                : errorMessage === STRING_ENUM.NOT_FOUND
                   ? "The conversation you're looking for doesn't exist or has been deleted. It may have been removed by the owner."
                   : "Something went wrong while loading this conversation. Please try again later."
               }

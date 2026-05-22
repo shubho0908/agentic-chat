@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { usePathname, useRouter } from "next/navigation";
@@ -86,7 +87,7 @@ export function useAppSidebarController() {
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
   const { isStreaming, stopStreaming } = useStreaming();
-  const logoSrc = theme === "dark" ? "/dark.png" : "/light.png";
+  const logoSrc = theme === STRING_ENUM.DARK ? "/dark.png" : "/light.png";
   const { selectionMode, selectedIds, showDeleteDialog } = selectionState;
 
   const conversationsState = useConversations({ enabled: !!session });

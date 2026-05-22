@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import type {
@@ -14,7 +15,7 @@ import { getRAGContext } from '@/lib/rag/retrieval/context';
 import { executeMultiSearch } from '../../web-search/searchPlanner';
 import { createUnifiedPlan, type WebSearchPlan } from '../../unifiedPlanner';
 import { withTrace } from '@/lib/langsmithConfig';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 import {
   DEEP_RESEARCH_MAX_RETRIES,
   MAX_PARALLEL_RESEARCH_TASKS,
@@ -34,7 +35,7 @@ interface WorkerConfig {
 }
 
 export function getNextPendingTaskIndex(taskQueue: ResearchTask[]): number {
-  const nextPendingIndex = taskQueue.findIndex((task) => task.status === 'pending');
+  const nextPendingIndex = taskQueue.findIndex((task) => task.status === STRING_ENUM.PENDING);
   return nextPendingIndex === -1 ? taskQueue.length : nextPendingIndex;
 }
 
@@ -166,8 +167,8 @@ async function executeSingleTask(
       ({ phase, searchIndex, total, query, accumulatedSources, accumulatedImages }) => {
         config.onProgress?.(taskIndex, {
           toolName: 'web_search',
-          status: phase === 'complete' ? 'completed' : 'searching',
-          message: phase === 'complete'
+          status: phase === STRING_ENUM.COMPLETE ? 'completed' : 'searching',
+          message: phase === STRING_ENUM.COMPLETE
             ? `Completed search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`
             : `Search ${searchIndex}/${total}: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`,
           details: {
@@ -194,9 +195,13 @@ async function executeSingleTask(
     message: 'Analyzing findings...',
   });
 
+  const workerModel = getStageModel(config.model, 'research_worker');
   const llm = new ChatOpenAI({
-    model: getStageModel(config.model, 'research_worker'),
+    model: workerModel,
     apiKey: config.openaiApiKey,
+    ...getLangChainChatModelOptions(workerModel, {
+      promptCacheKey: 'agentic-chat-research-worker',
+    }),
     metadata: {
       taskIndex,
       taskQuestion: currentTask.question,
@@ -253,7 +258,7 @@ async function executeSingleTask(
   const result = Array.isArray(response.content)
     ? response.content
         .filter((part): part is { type: 'text'; text: string } =>
-          part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+          part && part.type === STRING_ENUM.TEXT && 'text' in part && typeof part.text === 'string'
         )
         .map((part) => part.text)
         .join('\n')
@@ -283,7 +288,7 @@ export async function workerNode(
 
   const pendingEntries = taskQueue
     .map((task, index) => ({ task, index }))
-    .filter(({ index, task }) => index >= currentTaskIndex && task.status !== 'completed');
+    .filter(({ index, task }) => index >= currentTaskIndex && task.status !== STRING_ENUM.COMPLETED);
 
   if (pendingEntries.length === 0) {
     return {
@@ -326,7 +331,7 @@ export async function workerNode(
       .sort((a, b) => a.index - b.index)
       .forEach(({ index, task }) => {
         updatedTaskQueue[index] = task;
-        if (task.status === 'completed' || task.status === 'failed') {
+        if (task.status === STRING_ENUM.COMPLETED || task.status === STRING_ENUM.FAILED) {
           completed.push(task);
         }
       });

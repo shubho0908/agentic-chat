@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Message } from '@/lib/schemas/chat';
 import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk } from './streamingHelpers';
 import { injectContextToMessages, extractConversationHistory } from './messageHelpers';
@@ -71,7 +72,7 @@ export async function executeWebSearchTool(
     }
     const preparedQuery = prepareWebSearchQuery(textQuery);
     const queryInput = preparedQuery.searchQuery || preparedQuery.originalQuery;
-    const useIntelligentPlanning = searchDepth === 'advanced' && apiKey && model;
+    const useIntelligentPlanning = searchDepth === STRING_ENUM.ADVANCED && apiKey && model;
     const queryResolution = await resolveWebSearchQuery({
       query: queryInput,
       messages: conversationMessages,
@@ -94,7 +95,7 @@ export async function executeWebSearchTool(
             explicitUrls: preparedQuery.explicitUrls,
             usedProvidedUrls: preparedQuery.explicitUrls.length > 0,
             searchDepth,
-            ...(searchDepth === 'advanced' ? { phase: 1, totalPhases } : {}),
+            ...(searchDepth === STRING_ENUM.ADVANCED ? { phase: 1, totalPhases } : {}),
           }
         ));
         setImmediate(() => {});
@@ -203,7 +204,7 @@ export async function executeWebSearchTool(
         ({ phase, searchIndex, total, query, completedSearches, accumulatedSources, accumulatedImages }) => {
           if (streamClosed || abortSignal?.aborted) return;
 
-          if (phase === 'start') {
+          if (phase === STRING_ENUM.START) {
             currentPhase = 3;
           }
 
@@ -211,7 +212,7 @@ export async function executeWebSearchTool(
             controller.enqueue(encodeToolProgress(
               TOOL_IDS.WEB_SEARCH,
               'phase_3_execution',
-              phase === 'complete'
+              phase === STRING_ENUM.COMPLETE
                 ? `Completed search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`
                 : `Executing search ${searchIndex}/${total}: "${query.substring(0, 60)}${query.length > 60 ? '...' : ''}"`,
               {
@@ -310,7 +311,7 @@ export async function executeWebSearchTool(
       
       controller.enqueue(encodeToolCall(TOOL_IDS.WEB_SEARCH, toolCallId, toolArgs));
       
-      if (searchDepth === 'advanced') {
+      if (searchDepth === STRING_ENUM.ADVANCED) {
         currentPhase = 1;
         try {
           controller.enqueue(encodeToolProgress(
@@ -341,8 +342,8 @@ export async function executeWebSearchTool(
         
         try {
           // Map search statuses to phases for advanced mode
-          if (searchDepth === 'advanced') {
-            if (progress.status === 'searching') {
+          if (searchDepth === STRING_ENUM.ADVANCED) {
+            if (progress.status === STRING_ENUM.SEARCHING) {
               if (currentPhase < 2) {
                 currentPhase = 2;
                 controller.enqueue(encodeToolProgress(
@@ -362,7 +363,7 @@ export async function executeWebSearchTool(
                   }
                 ));
               }
-            } else if (progress.status === 'found') {
+            } else if (progress.status === STRING_ENUM.FOUND) {
               if (currentPhase < 3) {
                 currentPhase = 3;
                 controller.enqueue(encodeToolProgress(
@@ -382,7 +383,7 @@ export async function executeWebSearchTool(
                   }
                 ));
               }
-            } else if (progress.status === 'processing_sources') {
+            } else if (progress.status === STRING_ENUM.PROCESSING_SOURCES) {
               if (currentPhase < 3) {
                 currentPhase = 3;
               }
@@ -402,7 +403,7 @@ export async function executeWebSearchTool(
                   totalPhases,
                 }
               ));
-            } else if (progress.status === 'completed') {
+            } else if (progress.status === STRING_ENUM.COMPLETED) {
               if (currentPhase < 4) {
                 currentPhase = 4;
                 controller.enqueue(encodeToolProgress(
@@ -459,7 +460,7 @@ export async function executeWebSearchTool(
     }
     
     // Advanced Search: Emit Phase 5 - Final Validation
-    if (searchDepth === 'advanced' && !streamClosed) {
+    if (searchDepth === STRING_ENUM.ADVANCED && !streamClosed) {
       currentPhase = 5;
       try {
         controller.enqueue(encodeToolProgress(

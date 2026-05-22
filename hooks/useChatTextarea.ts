@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState, useRef, KeyboardEvent } from "react";
 
 export function useChatTextarea(onSend: () => void) {
@@ -5,7 +6,7 @@ export function useChatTextarea(onSend: () => void) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === STRING_ENUM.ENTER && !e.shiftKey) {
       e.preventDefault();
       onSend();
     }

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { PoolClient } from 'pg';
 import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import {
@@ -174,7 +175,7 @@ async function countRunningJobsWithClient(
 }
 
 function hasActiveLease(row: OrchestrationJobRow): boolean {
-  if (row.status !== 'running') {
+  if (row.status !== STRING_ENUM.RUNNING) {
     return false;
   }
 
@@ -373,12 +374,12 @@ export async function enqueueOrStartJobWithinCapacity(params: {
       dedupeKey: params.dedupeKey,
       attempts: queuedRecord.attempts,
       attachmentId: extractAttachmentId(queuedRecord.payload),
-      queued: queuedRecord.status === 'queued',
+      queued: queuedRecord.status === STRING_ENUM.QUEUED,
       started: false,
       atCapacity: false,
     });
 
-    if (queuedJob.status === 'completed' || hasActiveLease(queuedJob)) {
+    if (queuedJob.status === STRING_ENUM.COMPLETED || hasActiveLease(queuedJob)) {
       return {
         job: queuedRecord,
         started: false,
@@ -715,7 +716,7 @@ export async function finishOrchestrationJob(
       attempts: finished.attempts,
       attachmentId: extractAttachmentId(finished.payload),
       latencyMs: finished.created_at ? measureLatencyMs(new Date(finished.created_at).getTime()) : undefined,
-      error: status === 'failed' ? payload?.error : undefined,
+      error: status === STRING_ENUM.FAILED ? payload?.error : undefined,
     });
   }
 }

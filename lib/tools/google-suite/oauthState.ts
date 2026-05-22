@@ -1,9 +1,10 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { getRequiredEnv } from '@/lib/env';
 
 const GOOGLE_WORKSPACE_STATE_TTL_MS = 10 * 60 * 1000;
 const DEVELOPMENT_GOOGLE_WORKSPACE_STATE_SECRET =
-  !process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV !== 'production'
+  !process.env.BETTER_AUTH_SECRET && process.env.NODE_ENV !== STRING_ENUM.PRODUCTION
     ? randomBytes(32).toString('hex')
     : undefined;
 

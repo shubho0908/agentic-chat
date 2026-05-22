@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { google } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
 import type { DriveSearchArgs, DriveListFolderArgs, DriveReadFileArgs, DriveCreateFileArgs, DriveCreateFolderArgs, DriveDeleteArgs, DriveMoveArgs, DriveCopyArgs, DriveShareArgs } from '../types/handlerTypes';
@@ -80,8 +81,8 @@ export async function handleDriveListFolder(
     return `Folder is empty or you don't have access to view its contents.`;
   }
 
-  const folders = response.data.files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
-  const files = response.data.files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+  const folders = response.data.files.filter(f => f.mimeType === STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_FOLDER);
+  const files = response.data.files.filter(f => f.mimeType !== STRING_ENUM.APPLICATION_VND_GOOGLE_APPS_FOLDER);
 
   let output = `**Folder Contents** (${response.data.files.length} items)\n\n`;
 

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { SearchResultWithSources, MultiSearchImage } from '@/types/tools';
 
 
@@ -94,7 +95,7 @@ export async function executeMultiSearch(
       const searchIndex = start + batchIndex;
       const plannedSearch = searchPlan.recommendedSearches[searchIndex];
 
-      if (result.status === 'fulfilled') {
+      if (result.status === STRING_ENUM.FULFILLED) {
         result.value.searchResult.sources.forEach(source => {
           if (!sourceUrls.has(source.url)) {
             sourceUrls.add(source.url);

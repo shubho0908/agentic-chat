@@ -1,8 +1,9 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ChatOpenAI } from '@langchain/openai';
 import { z } from 'zod';
 import type { ResearchState } from '../state';
 import type { Citation } from '@/types/deepResearch';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 import { invokeStructuredOutput } from '../structuredOutput';
 
 
@@ -59,11 +60,11 @@ export async function formatterNode(
 
   let contentToFormat = aggregatedResults;
   
-  if (!contentToFormat || contentToFormat === 'No research findings to aggregate.') {
+  if (!contentToFormat || contentToFormat === STRING_ENUM.NO_RESEARCH_FINDINGS_TO_AGGREGATE) {
     if (completedTasks.length > 0) {
       contentToFormat = completedTasks
         .map((task, index) => {
-          if (task.status === 'failed') {
+          if (task.status === STRING_ENUM.FAILED) {
             return `## Question ${index + 1}: ${task.question}\n**Status:** Failed - ${task.error || 'Unknown error'}`;
           }
           return `## Question ${index + 1}: ${task.question}\n\n${task.result || 'No result'}`;
@@ -79,9 +80,13 @@ export async function formatterNode(
     }
   }
 
+  const formatterModel = getStageModel(config.model, 'research_formatter');
   const llm = new ChatOpenAI({
-    model: getStageModel(config.model, 'research_formatter'),
+    model: formatterModel,
     apiKey: config.openaiApiKey,
+    ...getLangChainChatModelOptions(formatterModel, {
+      promptCacheKey: 'agentic-chat-research-formatter',
+    }),
   });
 
   try {

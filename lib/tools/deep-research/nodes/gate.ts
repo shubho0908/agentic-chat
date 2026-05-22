@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ResearchState } from '../state';
 import { RESEARCH_GATE_PROMPT, DIRECT_LLM_PROMPT } from '../prompts';
 import type { GateDecision, DirectLLMResponse } from '@/types/deepResearch';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 import { invokeStructuredOutput } from '../structuredOutput';
 
 
@@ -26,9 +26,13 @@ export async function gateNode(
   if (config.abortSignal?.aborted) {
     throw new Error('Research aborted by user');
   }
+  const gateModel = getStageModel(config.model, 'research_gate');
   const llm = new ChatOpenAI({
-    model: getStageModel(config.model, 'research_gate'),
+    model: gateModel,
     apiKey: config.openaiApiKey,
+    ...getLangChainChatModelOptions(gateModel, {
+      promptCacheKey: 'agentic-chat-research-gate',
+    }),
   });
 
   try {

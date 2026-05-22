@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Metadata } from "next";
 import { appBaseUrl } from "@/lib/appUrl";
 
@@ -102,7 +103,7 @@ export function createPageMetadata({
   const imageUrl = imagePath.startsWith("http") ? imagePath : absoluteUrl(imagePath);
   const uniqueKeywords = Array.from(new Set([...siteConfig.defaultKeywords, ...keywords]));
   const articleMetadata =
-    type === "article"
+    type === STRING_ENUM.ARTICLE
       ? {
           publishedTime,
           modifiedTime,

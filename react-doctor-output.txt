@@ -1,0 +1,137 @@
+npm warn Unknown project config "node-linker". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "enable-pre-post-scripts". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+react-doctor v0.2.1
+
+✔ Select projects to scan › agentic-chat
+Scanning changes: refactor/chat → main
+
+Scanning /Users/shubhojeetbera/Desktop/Shubho/agentic-chat...
+
+- Detecting framework. Found Next.js.
+[32m✔[39m Detecting framework. Found Next.js.
+- Detecting React version. Found React 19.2.4.
+[32m✔[39m Detecting React version. Found React 19.2.4.
+- Detecting Tailwind. Found Tailwind ^4.
+[32m✔[39m Detecting Tailwind. Found Tailwind ^4.
+- Detecting language. Found TypeScript.
+[32m✔[39m Detecting language. Found TypeScript.
+- Detecting React Compiler. Not found.
+[32m✔[39m Detecting React Compiler. Not found.
+- Scanning 119 changed source files.
+[32m✔[39m Scanning 119 changed source files.
+- Loaded react-doctor config.
+[32m✔[39m Loaded react-doctor config.
+
+- Running lint checks...
+[32m✔[39m Running lint checks.
+
+  ⚠ react-doctor/no-react19-deprecated-apis        ×20
+      forwardRef is no longer needed on React 19+ — refs are regular props on function components; remove forwardRef and pass ref directly
+      → Pass `ref` as a regular prop on function components — `forwardRef` is no longer needed in React 19+. Replace `useContext(X)` with `use(X)` for branch-aware context reads. Only enabled on projects detected as React 19+.
+      components/conversationItem.tsx:4
+      components/ui/sidebar.tsx:43
+      components/ui/sidebar.tsx:51
+      components/ui/sidebar.tsx:147
+      components/ui/sidebar.tsx:247
+      components/ui/sidebar.tsx:277
+      components/ui/sidebar.tsx:292
+      components/ui/sidebar.tsx:310
+      components/ui/sidebar.tsx:325
+      components/ui/sidebar.tsx:346
+      components/ui/sidebar.tsx:359
+      components/ui/sidebar.tsx:372
+      components/ui/sidebar.tsx:407
+      components/ui/sidebar.tsx:466
+      components/ui/sidebar.tsx:496
+      components/ui/scrollArea.tsx:10
+      components/ui/drawer.tsx:24
+      components/ui/drawer.tsx:36
+      components/ui/drawer.tsx:74
+      components/ui/drawer.tsx:89
+
+  ⚠ react-doctor/design-no-redundant-size-axes     ×10
+      w-4 h-4 → use the shorthand size-4 (Tailwind v3.4+)
+      → Collapse `w-N h-N` to `size-N` (Tailwind v3.4+) when both axes match
+      components/ui/sidebar.tsx:267
+      components/ui/sidebar.tsx:269
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:50
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:53
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:56
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:59
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:107
+      components/chat/aiThinkingAnimation/deepResearchTimeline.tsx:141
+      components/authModal.tsx:107
+      components/authModal.tsx:118
+
+  ⚠ react-doctor/design-no-three-period-ellipsis   ×5
+      Three-period ellipsis ("...") in JSX text — use the actual ellipsis character "…" (or `&hellip;`)
+      → Use the typographic ellipsis "…" (or `&hellip;`) instead of three periods — pairs with action-with-followup labels ("Rename…", "Loading…")
+      components/chat/chatContainer.tsx:131
+      components/export/exportSection.tsx:165
+      app/share/[id]/sharedConversationClient.tsx:80
+      components/authModal.tsx:108
+      components/chat/chatPageClient.tsx:181
+
+  ⚠ react-doctor/design-no-redundant-padding-axes  ×4
+      px-2 py-2 → use the shorthand p-2
+      → Collapse `px-N py-N` to `p-N` when both axes match. Keep them split only when one axis varies at a breakpoint (`py-2 md:py-3`)
+      components/conversationItem.tsx:105
+      components/chat/documentPreview.tsx:197
+      components/userMenu.tsx:90
+      components/userMenu.tsx:144
+
+  ⚠ react-doctor/design-no-bold-heading            ×3
+      font-bold on <h4> crushes counter shapes at display sizes — use font-semibold (600) or font-medium (500)
+      → Use `font-semibold` (600) or `font-medium` (500) on headings — 700+ crushes letter counter shapes at display sizes
+      components/ai-elements/richLink.tsx:184
+      components/ai-elements/richLink.tsx:285
+      app/share/[id]/sharedConversationClient.tsx:99
+
+  ⚠ react-doctor/rendering-hydration-mismatch-time ×2
+      new Date() reachable from JSX renders differently on server vs client — wrap in useEffect+useState (client-only) or add suppressHydrationWarning to the parent if intentional
+      → Wrap dynamic time/random values in useEffect+useState (client-only) or add suppressHydrationWarning to the parent if intentional
+      components/conversationItem.tsx:94
+      components/conversationItem.tsx:111
+
+  ⚠ react-doctor/design-no-space-on-flex-children  ×2
+      space-y-8 on a flex/grid parent — use gap-y-8 instead. Per-sibling margins phantom-gap on conditional render and don't mirror in RTL
+      → Use `gap-*` on the flex/grid parent. `space-x-*` / `space-y-*` produce phantom gaps when a sibling is conditionally rendered, lose vertical spacing on wrapped lines, and don't mirror in RTL
+      app/share/[id]/sharedConversationClient.tsx:90
+      components/authModal.tsx:72
+
+  ⚠ react-doctor/no-derived-useState
+      useState initialized from prop "defaultOpen" — if this value should stay in sync with the prop, derive it during render instead
+      → Remove useState and compute the value inline: `const value = transform(propName)`
+      components/ui/sidebar.tsx:74
+
+  ⚠ react-doctor/no-pure-black-background
+      Pure black background (bg-black) looks harsh — use a near-black tinted toward your brand hue (e.g. bg-gray-950)
+      → Tint the background slightly toward your brand hue — e.g. `#0a0a0f` or Tailwind's `bg-gray-950`. Pure black looks harsh on modern displays
+      components/ai-elements/richLink.tsx:219
+
+  ⚠ react-doctor/no-many-boolean-props
+      Component "ActionButtons" takes 4 boolean-like props (isLoading, isUploading, isSending…) — consider compound components or explicit variants instead of stacking flags
+      → Split into compound components or named variants: `<Button.Primary />`, `<DialogConfirm />` instead of stacking `isPrimary`, `isConfirm` flags
+      components/chat/actionButtons.tsx:22
+
+  ⚠ react-doctor/rendering-usetransition-loading
+      useState for "isLoading" — if this guards a state transition (not an async fetch), consider useTransition instead
+      → Replace with `const [isPending, startTransition] = useTransition()` — avoids a re-render for the loading state
+      components/authModal.tsx:30
+
+  ┌─────┐  96 / 100 Great
+  │ ◠ ◠ │  ████████████████████████████████████████████████░░
+  │  ▽  │  React Doctor (www.react.doctor)
+  └─────┘
+
+  50 issues across 14/119 files  in 282ms
+  Full diagnostics written to /var/folders/yq/7c1n3zwx1vj424h4pv9fycsw0000gn/T/react-doctor-174b75b9-792d-4da1-89be-961860290547
+
+  → Share your results: https://www.react.doctor/share?p=agentic-chat&s=96&w=50&f=14
+
+  → Catch these issues on every PR: https://react.review
+  React Review is a GitHub App built on React Doctor, and it runs on each pull request,
+  posts new issues as inline review comments, and tracks your team's score over time.
+
+

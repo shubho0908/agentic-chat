@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Search, Target, Network, ShieldCheck, Boxes, BadgeCheck } from "lucide-react";
 import { ToolProgressStatus } from "@/types/chat";
 import { ContextItem } from "./contextItem";
@@ -6,7 +7,7 @@ import type { MemoryStatusProps } from "./types";
 import { UrlContentContext } from "./urlContentContext";
 
 export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
-  const isAdvancedSearch = memoryStatus.toolProgress?.details?.searchDepth === 'advanced';
+  const isAdvancedSearch = memoryStatus.toolProgress?.details?.searchDepth === STRING_ENUM.ADVANCED;
   const currentPhase = memoryStatus.toolProgress?.details?.phase as number | undefined;
   const totalPhases = memoryStatus.toolProgress?.details?.totalPhases as number | undefined;
 

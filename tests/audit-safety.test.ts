@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { STRING_ENUM } from "@/constants/stringEnums";
 
 delete process.env.DATABASE_URL;
 delete process.env.DIRECT_DATABASE_URL;
@@ -21,6 +22,8 @@ import {
   validateRequestedModel,
   getStageModel,
   getSupportedTemperature,
+  getOpenAIChatCompletionOptions,
+  getLangChainChatModelOptions,
 } from "@/lib/modelPolicy";
 import { getRequiredEnv } from "@/lib/env";
 import { setObservabilityLogSinkForTests } from "@/lib/observability";
@@ -213,7 +216,7 @@ test("google workspace only exposes tools allowed by granted scopes", () => {
     GOOGLE_SCOPES.GMAIL_READONLY,
   ]);
   const toolNames = gmailReadTools
-    .filter((tool) => tool.type === "function")
+    .filter((tool) => tool.type === STRING_ENUM.FUNCTION)
     .map((tool) => tool.function.name);
 
   assert.equal(toolNames.includes("gmail_read"), true);
@@ -227,7 +230,7 @@ test("google workspace narrows exposed tools to request-relevant services when k
     [GOOGLE_SCOPES.DRIVE],
   );
   const toolNames = driveTools
-    .filter((tool) => tool.type === "function")
+    .filter((tool) => tool.type === STRING_ENUM.FUNCTION)
     .map((tool) => tool.function.name);
 
   assert.equal(toolNames.includes("drive_search"), true);
@@ -270,7 +273,7 @@ test("google workspace keeps Drive discovery tools for Docs-family requests", ()
     [GOOGLE_SCOPES.DOCS],
   );
   const toolNames = tools
-    .filter((tool) => tool.type === "function")
+    .filter((tool) => tool.type === STRING_ENUM.FUNCTION)
     .map((tool) => tool.function.name);
 
   assert.equal(toolNames.includes("docs_create"), true);
@@ -434,27 +437,37 @@ test("document error retryability keeps permanent failures out of retry loop", (
 });
 
 test("server model policy rejects unknown models and downshifts orchestration stages", () => {
-  assert.equal(validateRequestedModel("gpt-5.4"), "gpt-5.4");
+  assert.equal(validateRequestedModel("gpt-5.5"), "gpt-5.5");
+  assert.equal(validateRequestedModel("gpt-5.3-codex"), "gpt-5.3-codex");
+  assert.equal(validateRequestedModel("gpt-5.5-pro"), null);
+  assert.equal(validateRequestedModel("gpt-5.2"), null);
   assert.equal(validateRequestedModel("not-a-real-model"), null);
-  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5.4-nano");
-  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5.4-mini");
-  assert.equal(getSupportedTemperature("gpt-5.4", 0.1), undefined);
-  assert.equal(getSupportedTemperature("gpt-5-mini", 0), undefined);
-  assert.equal(getSupportedTemperature("gpt-4.1", 0.1), 0.1);
+  assert.equal(getStageModel("gpt-5.5", "research_gate"), "gpt-5.4-nano");
+  assert.equal(getStageModel("gpt-5.5", "research_formatter"), "gpt-5.4-mini");
+  assert.equal(getSupportedTemperature("gpt-5.5", 0.1), undefined);
+  assert.equal(getSupportedTemperature("gpt-5.4-mini", 0), undefined);
+
+  const chatOptions = getOpenAIChatCompletionOptions("gpt-5.4-mini");
+  assert.equal(chatOptions.reasoning_effort, "none");
+  assert.equal(chatOptions.store, false);
+  assert.equal(chatOptions.parallel_tool_calls, false);
+
+  const langChainOptions = getLangChainChatModelOptions("gpt-5.4-mini");
+  assert.equal(langChainOptions.reasoning?.effort, "minimal");
 });
 
 test("token counter includes reserve in percentage and bounds suffix-only truncation", () => {
   const truncated = truncateTextToTokenLimit(
     "alpha beta gamma",
-    "gpt-5-mini",
+    "gpt-5.4-mini",
     2,
     "very long suffix",
   );
-  assert.equal(countTextTokens(truncated, "gpt-5-mini") <= 2, true);
+  assert.equal(countTextTokens(truncated, "gpt-5.4-mini") <= 2, true);
 
   const usage = calculateTokenUsage(
     [{ role: "user", content: "hello world" }],
-    "gpt-5-mini",
+    "gpt-5.4-mini",
   );
   assert.equal(usage.percentage <= 100, true);
   assert.equal(usage.remaining >= 0, true);
@@ -798,9 +811,9 @@ test("hybrid retrieval diversification preserves attachment coverage and caps do
 
   assert.equal(diversified.length, 4);
   assert.equal(
-    diversified.filter((item) => item.metadata.attachmentId === "A").length,
+    diversified.filter((item) => item.metadata.attachmentId === STRING_ENUM.A_UPPER).length,
     2,
   );
-  assert.ok(diversified.some((item) => item.metadata.attachmentId === "B"));
-  assert.ok(diversified.some((item) => item.metadata.attachmentId === "C"));
+  assert.ok(diversified.some((item) => item.metadata.attachmentId === STRING_ENUM.B_UPPER));
+  assert.ok(diversified.some((item) => item.metadata.attachmentId === STRING_ENUM.C_UPPER));
 });

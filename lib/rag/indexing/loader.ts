@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { CSVLoader } from '@langchain/community/document_loaders/fs/csv';
@@ -27,7 +28,7 @@ export async function loadDocument(
     const lowerFileType = fileType.toLowerCase();
     const lowerFileName = fileName.toLowerCase();
 
-    if (lowerFileType === 'application/pdf' || lowerFileType.includes('pdf')) {
+    if (lowerFileType === STRING_ENUM.APPLICATION_PDF || lowerFileType.includes('pdf')) {
       loader = new PDFLoader(fileBlob, {
         splitPages: true,
       });
@@ -68,7 +69,7 @@ export async function loadDocument(
         },
       };
     } else if (
-      lowerFileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      lowerFileType === STRING_ENUM.APPLICATION_VND_OPENXMLFORMATS_OFFICEDOCUMENT_WORDPROCESSINGML_DOCUMENT ||
       lowerFileType.includes('docx') ||
       lowerFileName.endsWith('.docx')
     ) {
@@ -83,7 +84,7 @@ export async function loadDocument(
         },
       };
     } else if (
-      lowerFileType === 'application/msword'
+      lowerFileType === STRING_ENUM.APPLICATION_MSWORD
     ) {
       const arrayBuffer = await fileBlob.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
@@ -109,8 +110,8 @@ export async function loadDocument(
         },
       };
     } else if (
-      lowerFileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      lowerFileType === 'application/vnd.ms-excel' ||
+      lowerFileType === STRING_ENUM.APPLICATION_VND_OPENXMLFORMATS_OFFICEDOCUMENT_SPREADSHEETML_SHEET ||
+      lowerFileType === STRING_ENUM.APPLICATION_VND_MS_EXCEL ||
       lowerFileType.includes('xlsx') ||
       lowerFileType.includes('xls')
     ) {
@@ -143,7 +144,7 @@ export async function loadDocument(
           fileType: 'excel',
         },
       };
-    } else if (lowerFileType === 'text/csv' || fileName.toLowerCase().endsWith('.csv')) {
+    } else if (lowerFileType === STRING_ENUM.TEXT_CSV || fileName.toLowerCase().endsWith('.csv')) {
       loader = new CSVLoader(fileBlob);
       documents = await loader.load();
 
@@ -156,7 +157,7 @@ export async function loadDocument(
       };
     } else if (
       lowerFileType.startsWith('text/') || 
-      lowerFileType === 'text/plain' ||
+      lowerFileType === STRING_ENUM.TEXT_PLAIN ||
       lowerFileName.endsWith('.txt')
     ) {
       const content = await fileBlob.text();

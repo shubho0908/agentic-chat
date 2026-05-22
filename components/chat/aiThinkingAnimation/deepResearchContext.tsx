@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { DeepResearchTimeline } from "./deepResearchTimeline";
 import type { MemoryStatusProps } from "./types";
 
@@ -6,7 +7,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   const details = progress?.details;
   const progressStatus = details?.status || progress?.status;
 
-  if (progressStatus === 'gate_skip') {
+  if (progressStatus === STRING_ENUM.GATE_SKIP) {
     return null;
   }
 
@@ -18,7 +19,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   const isAfterGate = progressStatus && !['gate_check', 'gate_skip', ...docPrepStatuses].includes(progressStatus);
   timelineSteps.push({
     label: 'Query Analysis',
-    status: (isAfterGate ? 'completed' : progressStatus === 'gate_check' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
+    status: (isAfterGate ? 'completed' : progressStatus === STRING_ENUM.GATE_CHECK ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
     details: isAfterGate ? 'Deep research needed' : undefined,
   });
 
@@ -27,7 +28,7 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   const researchPlanLength = details?.researchPlan?.length ?? 0;
   timelineSteps.push({
     label: hasResearchPlan ? `Planning (${researchPlanLength} tasks)` : 'Planning',
-    status: (isAfterPlanning ? 'completed' : progressStatus === 'planning' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
+    status: (isAfterPlanning ? 'completed' : progressStatus === STRING_ENUM.PLANNING ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
     details: hasResearchPlan && isAfterPlanning ? `${researchPlanLength} research tasks created` : undefined,
     data: { researchPlan: details?.researchPlan },
   });
@@ -52,21 +53,21 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
   const isAfterAggregating = progressStatus && !['gate_check', 'planning', 'task_start', 'task_progress', 'task_complete', 'aggregating', ...docPrepStatuses].includes(progressStatus);
   timelineSteps.push({
     label: 'Synthesizing',
-    status: (isAfterAggregating ? 'completed' : progressStatus === 'aggregating' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
+    status: (isAfterAggregating ? 'completed' : progressStatus === STRING_ENUM.AGGREGATING ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
     details: isAfterAggregating ? 'Findings combined' : undefined,
   });
 
   const hasEvaluation = details?.evaluationResult;
-  const isAfterEvaluation = hasEvaluation && progressStatus !== 'evaluating' && progressStatus !== 'retrying' && !isDocPrep;
+  const isAfterEvaluation = hasEvaluation && progressStatus !== STRING_ENUM.EVALUATING && progressStatus !== STRING_ENUM.RETRYING && !isDocPrep;
   const evaluationScore = details?.evaluationResult?.score;
   const evaluationMeetsStandards = details?.evaluationResult?.meetsStandards;
   timelineSteps.push({
     label: hasEvaluation && evaluationScore !== undefined
       ? `Quality Check`
-      : progressStatus === 'retrying'
+      : progressStatus === STRING_ENUM.RETRYING
         ? 'Quality Check (retrying)'
         : 'Quality Check',
-    status: (isAfterEvaluation ? 'completed' : (progressStatus === 'evaluating' || progressStatus === 'retrying') ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
+    status: (isAfterEvaluation ? 'completed' : (progressStatus === STRING_ENUM.EVALUATING || progressStatus === STRING_ENUM.RETRYING) ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
     details: hasEvaluation && isAfterEvaluation
       ? evaluationMeetsStandards
         ? 'Quality standards met'
@@ -77,8 +78,8 @@ export function DeepResearchContext({ memoryStatus }: MemoryStatusProps) {
 
   timelineSteps.push({
     label: 'Formatting Report',
-    status: (progressStatus === 'completed' ? 'completed' : progressStatus === 'formatting' ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
-    details: progressStatus === 'completed' ? 'Report ready' : undefined,
+    status: (progressStatus === STRING_ENUM.COMPLETED ? 'completed' : progressStatus === STRING_ENUM.FORMATTING ? 'current' : 'pending') as 'completed' | 'current' | 'pending' | 'failed',
+    details: progressStatus === STRING_ENUM.COMPLETED ? 'Report ready' : undefined,
   });
 
   let currentTaskDetails: { question?: string; tools?: string[] } | undefined = undefined;

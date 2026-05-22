@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { FinalizeEditedMessageResponse, UpdateMessageResponse } from "@/types/chat";
@@ -83,7 +84,7 @@ export async function saveUserMessage(
     
     return savedMessage.id;
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       throw err;
     }
     logger.error("Failed to save user message:", err);

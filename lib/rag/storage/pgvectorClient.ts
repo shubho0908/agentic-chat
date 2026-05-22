@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Pool } from 'pg';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getCacheTtlSeconds, getEmbeddingDimensions } from '@/lib/env';
@@ -74,7 +75,7 @@ export async function ensurePgVectorExtension(): Promise<void> {
   } catch (error: unknown) {
     const err = error as { code?: string; message?: string };
     
-    if (err.code === '42501') {
+    if (err.code === STRING_ENUM.PG_INSUFFICIENT_PRIVILEGE) {
       throw new RAGError(
         'Insufficient privileges to create pgvector extension. Run as superuser: CREATE EXTENSION vector;',
         RAGErrorCode.DATABASE_INIT_ERROR,
@@ -82,7 +83,7 @@ export async function ensurePgVectorExtension(): Promise<void> {
       );
     }
     
-    if (err.code === '58P01' || err.message?.includes('could not open extension')) {
+    if (err.code === STRING_ENUM.PG_MISSING_EXTENSION_FILE || err.message?.includes('could not open extension')) {
       throw new RAGError(
         'pgvector extension not available. Install it first: https://github.com/pgvector/pgvector#installation',
         RAGErrorCode.DATABASE_INIT_ERROR,

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
@@ -84,7 +85,7 @@ export async function generateMetadata({
 
   const title = conversation.conversation.title || "Shared Conversation";
   const userName = conversation.conversation.user.name || conversation.conversation.user.email.split('@')[0];
-  const firstUserMessage = conversation.messages.items.find(m => m.role === 'user');
+  const firstUserMessage = conversation.messages.items.find(m => m.role === STRING_ENUM.USER);
   const normalizedSnippet = firstUserMessage?.content.replace(/\s+/g, " ").trim();
   const description = normalizedSnippet
     ? normalizedSnippet.slice(0, 155) + (normalizedSnippet.length > 155 ? "..." : "")

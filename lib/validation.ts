@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { VALIDATION_LIMITS } from '@/constants/validation';
 import { isTrustedAttachmentUrl } from '@/lib/network/ssrf';
 import type { AttachmentInput } from '@/lib/schemas/chat';
@@ -94,11 +95,11 @@ function validateChatMessage(message: Record<string, unknown>): ValidationResult
         return { valid: false, error: 'Content part must have a type' };
       }
 
-      if (contentPart.type === 'text') {
+      if (contentPart.type === STRING_ENUM.TEXT) {
         if (typeof contentPart.text !== 'string' || !contentPart.text.trim()) {
           return { valid: false, error: 'Text content part must have non-empty text' };
         }
-      } else if (contentPart.type === 'image_url') {
+      } else if (contentPart.type === STRING_ENUM.IMAGE_URL) {
         const imageUrl = contentPart.image_url as Record<string, unknown>;
         if (!imageUrl || typeof imageUrl.url !== 'string' || !imageUrl.url.trim()) {
           return { valid: false, error: 'Image content part must have a valid URL' };
@@ -141,7 +142,7 @@ function isValidUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
     // Only allow http and https protocols
-    return (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') && !parsedUrl.username && !parsedUrl.password;
+    return (parsedUrl.protocol === STRING_ENUM.HTTP || parsedUrl.protocol === STRING_ENUM.HTTPS) && !parsedUrl.username && !parsedUrl.password;
   } catch {
     return false;
   }

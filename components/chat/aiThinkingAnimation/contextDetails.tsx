@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { RoutingDecision } from "@/types/chat";
 import { TOOL_IDS } from "@/lib/tools/config";
 import { isToolActive } from "./utils";
@@ -22,7 +23,7 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
     
     const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', 'analyzing_documents'];
     const isPreparingDocs = status && docPrepStatuses.includes(status);
-    const isProcessingImages = status === 'processing_images';
+    const isProcessingImages = status === STRING_ENUM.PROCESSING_IMAGES;
     
     const researchHasStarted = status && !['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'].includes(status);
     

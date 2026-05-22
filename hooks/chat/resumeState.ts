@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Message } from "@/lib/schemas/chat";
 
 interface ResumeConversationState {
@@ -7,7 +8,7 @@ interface ResumeConversationState {
 
 function isPendingAssistantPlaceholder(message: Message): boolean {
   return (
-    message.role === "assistant" &&
+    message.role === STRING_ENUM.ASSISTANT &&
     !message.content &&
     typeof message.id === "string" &&
     message.id.startsWith("assistant-pending-")

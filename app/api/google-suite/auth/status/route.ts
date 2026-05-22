@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
@@ -136,7 +137,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
       oauthConsentReady: oauthReadiness.ready,
       oauthConsentMessage: oauthReadiness.message,
       message:
-        accessLevel === 'full'
+        accessLevel === STRING_ENUM.FULL
           ? 'Google Workspace access is ready for all supported apps.'
           : 'Google Workspace access is ready for the apps you selected.',
       missingScopes,

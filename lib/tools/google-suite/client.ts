@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { google, type Auth } from 'googleapis';
 import { GaxiosError } from 'gaxios';
 import { decodeJwt } from 'jose';
@@ -341,8 +342,8 @@ export function isAuthRevokedError(error: unknown): boolean {
   return (
     gaxError.response?.status === 401 ||
     gaxError.response?.status === 403 ||
-    gaxError.response?.data?.error === 'invalid_grant' ||
-    gaxError.response?.data?.error === 'invalid_token' ||
+    gaxError.response?.data?.error === STRING_ENUM.INVALID_GRANT ||
+    gaxError.response?.data?.error === STRING_ENUM.INVALID_TOKEN ||
     (error as Error).message?.includes('invalid_grant') ||
     (error as Error).message?.includes('revoked')
   );

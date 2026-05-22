@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { CheckCircle2, Circle, Loader2, Search, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
     <div className="flex flex-col gap-0.5">
       {steps.map((step, index) => {
         const isLast = index === steps.length - 1;
-        const showTaskProgress = step.status === 'current' && step.label.startsWith('Research');
+        const showTaskProgress = step.status === STRING_ENUM.CURRENT && step.label.startsWith('Research');
         const stepKeyCount = stepKeys.get(step.label) ?? 0;
         stepKeys.set(step.label, stepKeyCount + 1);
 
@@ -39,23 +40,23 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
               <div className="flex flex-col items-center">
                 {/* Status icon */}
                 <div className={cn(
-                  "flex items-center justify-center w-4 h-4 rounded-full",
-                  step.status === 'completed' && "bg-green-500/20",
-                  step.status === 'current' && "bg-purple-500/20",
-                  step.status === 'pending' && "bg-muted",
-                  step.status === 'failed' && "bg-red-500/20"
+                  "flex items-center justify-center size-4 rounded-full",
+                  step.status === STRING_ENUM.COMPLETED && "bg-green-500/20",
+                  step.status === STRING_ENUM.CURRENT && "bg-purple-500/20",
+                  step.status === STRING_ENUM.PENDING && "bg-muted",
+                  step.status === STRING_ENUM.FAILED && "bg-red-500/20"
                 )}>
-                  {step.status === 'completed' && (
-                    <CheckCircle2 className="w-3 h-3 text-green-600 dark:text-green-400" />
+                  {step.status === STRING_ENUM.COMPLETED && (
+                    <CheckCircle2 className="size-3 text-green-600 dark:text-green-400" />
                   )}
-                  {step.status === 'current' && (
-                    <Loader2 className="w-3 h-3 text-purple-600 dark:text-purple-400 animate-spin" />
+                  {step.status === STRING_ENUM.CURRENT && (
+                    <Loader2 className="size-3 text-purple-600 dark:text-purple-400 animate-spin" />
                   )}
-                  {step.status === 'pending' && (
-                    <Circle className="w-3 h-3 text-muted-foreground" />
+                  {step.status === STRING_ENUM.PENDING && (
+                    <Circle className="size-3 text-muted-foreground" />
                   )}
-                  {step.status === 'failed' && (
-                    <XCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
+                  {step.status === STRING_ENUM.FAILED && (
+                    <XCircle className="size-3 text-red-600 dark:text-red-400" />
                   )}
                 </div>
                 
@@ -63,7 +64,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
                 {!isLast && (
                   <div className={cn(
                     "w-px h-5 mt-0.5",
-                    step.status === 'completed' ? "bg-green-500/30" : "bg-border"
+                    step.status === STRING_ENUM.COMPLETED ? "bg-green-500/30" : "bg-border"
                   )} />
                 )}
               </div>
@@ -72,10 +73,10 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
               <div className="flex-1 pb-2">
                 <div className={cn(
                   "text-xs font-medium",
-                  step.status === 'completed' && "text-green-700 dark:text-green-300",
-                  step.status === 'current' && "text-purple-700 dark:text-purple-300",
-                  step.status === 'pending' && "text-muted-foreground",
-                  step.status === 'failed' && "text-red-700 dark:text-red-300"
+                  step.status === STRING_ENUM.COMPLETED && "text-green-700 dark:text-green-300",
+                  step.status === STRING_ENUM.CURRENT && "text-purple-700 dark:text-purple-300",
+                  step.status === STRING_ENUM.PENDING && "text-muted-foreground",
+                  step.status === STRING_ENUM.FAILED && "text-red-700 dark:text-red-300"
                 )}>
                   {step.label}
                 </div>
@@ -88,7 +89,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
                 )}
                 
                 {/* Show completed tasks for research step */}
-                {step.status === 'completed' && step.data?.completedTasks && step.data.completedTasks.length > 0 && (
+                {step.status === STRING_ENUM.COMPLETED && step.data?.completedTasks && step.data.completedTasks.length > 0 && (
                   <div className="mt-1 space-y-0.5">
                     {(() => {
                       const taskKeys = new Map<string, number>();
@@ -103,7 +104,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
                             key={taskKeyCount === 0 ? taskKeyBase : `${taskKeyBase}-${taskKeyCount}`}
                             className="text-[10px] text-muted-foreground flex items-start gap-1"
                           >
-                            <CheckCircle2 className="w-2.5 h-2.5 mt-0.5 text-green-500 flex-shrink-0" />
+                            <CheckCircle2 className="size-2.5 mt-0.5 text-green-500 flex-shrink-0" />
                             <span className="line-clamp-1">{task.question}</span>
                           </div>
                         );
@@ -118,7 +119,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
                 )}
                 
                 {/* Show evaluation result */}
-                {step.status === 'completed' && step.data?.evaluationResult && (
+                {step.status === STRING_ENUM.COMPLETED && step.data?.evaluationResult && (
                   <div className="mt-1 flex items-center gap-1.5">
                     <div className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded",
@@ -137,7 +138,7 @@ export function DeepResearchTimeline({ steps, currentTaskDetails }: DeepResearch
               <div className="ml-6 flex flex-col gap-0.5 mt-0.5 pb-2">
                 {currentTaskDetails.question && (
                   <div className="flex items-start gap-1.5">
-                    <Search className="w-3 h-3 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                    <Search className="size-3 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                     <span className="text-[11px] text-foreground/70">
                       {currentTaskDetails.question}
                     </span>

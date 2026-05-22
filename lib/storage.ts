@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 import { parseToolId, type ToolId } from '@/lib/tools/config';
@@ -77,7 +78,7 @@ export function getMemoryEnabled(): boolean {
   if (!isLocalStorageAvailable()) return true;
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED);
-    return stored === null ? true : stored === 'true';
+    return stored === null ? true : stored === STRING_ENUM.TRUE;
   } catch {
     return true;
   }
@@ -139,7 +140,7 @@ export function removeActiveTool(): void {
 export function getDeepResearchEnabled(): boolean {
   if (!isLocalStorageAvailable()) return false;
   try {
-    return localStorage.getItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED) === 'true';
+    return localStorage.getItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED) === STRING_ENUM.TRUE;
   } catch {
     return false;
   }
@@ -159,7 +160,7 @@ export function getSearchDepth(): SearchDepth {
   if (!isLocalStorageAvailable()) return 'basic';
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_DEPTH);
-    return stored === 'advanced' ? 'advanced' : 'basic';
+    return stored === STRING_ENUM.ADVANCED ? 'advanced' : 'basic';
   } catch {
     return 'basic';
   }

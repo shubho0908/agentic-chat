@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
@@ -106,7 +107,7 @@ async function checkCache(
     return result;
 
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
+    if ((err as Error).name === STRING_ENUM.ABORT_ERROR) {
       logger.log('[Cache] Aborted by user');
       return { cached: false };
     }

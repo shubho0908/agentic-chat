@@ -1,7 +1,8 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { ChatOpenAI } from '@langchain/openai';
 import type { ResearchState } from '../state';
 import { AGGREGATOR_SYSTEM_PROMPT } from '../prompts';
-import { getStageModel } from '@/lib/modelPolicy';
+import { getLangChainChatModelOptions, getStageModel } from '@/lib/modelPolicy';
 
 
 import { logger } from "@/lib/logger";
@@ -21,15 +22,19 @@ export async function aggregatorNode(
     };
   }
 
+  const aggregatorModel = getStageModel(config.model, 'research_aggregator');
   const llm = new ChatOpenAI({
-    model: getStageModel(config.model, 'research_aggregator'),
+    model: aggregatorModel,
     apiKey: config.openaiApiKey,
+    ...getLangChainChatModelOptions(aggregatorModel, {
+      promptCacheKey: 'agentic-chat-research-aggregator',
+    }),
   });
 
   try {
     const findingsText = completedTasks
       .map((task, index) => {
-        if (task.status === 'failed') {
+        if (task.status === STRING_ENUM.FAILED) {
           return `## Question ${index + 1}: ${task.question}\n**Status:** Failed - ${task.error || 'Unknown error'}`;
         }
         return `## Question ${index + 1}: ${task.question}\n\n${task.result || 'No result'}`;
@@ -50,7 +55,7 @@ export async function aggregatorNode(
     const aggregated = Array.isArray(response.content)
       ? response.content
           .filter((part): part is { type: 'text'; text: string } => 
-            part && part.type === 'text' && 'text' in part && typeof part.text === 'string'
+            part && part.type === STRING_ENUM.TEXT && 'text' in part && typeof part.text === 'string'
           )
           .map((part) => part.text)
           .join('\n')

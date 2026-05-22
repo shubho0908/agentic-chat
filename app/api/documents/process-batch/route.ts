@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { z } from 'zod';
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     );
 
     const batchResults: BatchResult[] = results.map((result, index) => {
-      if (result.status === 'fulfilled') {
+      if (result.status === STRING_ENUM.FULFILLED) {
         return {
           attachmentId: attachmentIds[index],
           jobId: result.value.jobId,

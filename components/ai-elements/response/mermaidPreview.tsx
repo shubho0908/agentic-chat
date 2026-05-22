@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { AlertCircle, Code2, Expand, Eye, X } from "lucide-react";
@@ -120,11 +121,11 @@ async function loadMermaidModule() {
 function getMermaidAppearance(
   resolvedTheme: MermaidResolvedTheme | null | undefined,
 ): MermaidAppearance | null {
-  if (resolvedTheme !== "light" && resolvedTheme !== "dark") {
+  if (resolvedTheme !== STRING_ENUM.LIGHT && resolvedTheme !== STRING_ENUM.DARK) {
     return null;
   }
 
-  if (resolvedTheme === "light") {
+  if (resolvedTheme === STRING_ENUM.LIGHT) {
     return {
       cacheKey: "light-v2",
       mermaidTheme: "base",
@@ -233,15 +234,17 @@ function normalizeMermaidError(error: unknown): string {
 function createMermaidRenderHost(): HTMLDivElement {
   const host = document.createElement("div");
   host.setAttribute("aria-hidden", "true");
-  host.style.position = "fixed";
-  host.style.left = "-10000px";
-  host.style.top = "0";
-  host.style.width = "1px";
-  host.style.height = "1px";
-  host.style.overflow = "hidden";
-  host.style.opacity = "0";
-  host.style.pointerEvents = "none";
-  host.style.zIndex = "-1";
+  host.style.cssText = [
+    "position: fixed",
+    "left: -10000px",
+    "top: 0",
+    "width: 1px",
+    "height: 1px",
+    "overflow: hidden",
+    "opacity: 0",
+    "pointer-events: none",
+    "z-index: -1",
+  ].join(";");
   document.body.appendChild(host);
   return host;
 }
@@ -340,8 +343,10 @@ function MermaidSvgCanvas({
     previewElement.innerHTML = cleanSvg;
     const svgElement = previewElement.querySelector("svg");
     if (svgElement) {
-      svgElement.style.display = "block";
-      svgElement.style.overflow = "visible";
+      Object.assign(svgElement.style, {
+        display: "block",
+        overflow: "visible",
+      });
     }
     onSvgRenderedRef.current?.(svgElement);
 
@@ -379,7 +384,7 @@ function MermaidPanSurface({
       ref={viewportRef}
       className={`${className} ${expanded ? (isDragging ? "cursor-grabbing" : "cursor-grab") : ""}`}
       onPointerDown={(event) => {
-        if (!expanded || event.pointerType !== "mouse" || event.button !== 0 || !viewportRef.current) {
+        if (!expanded || event.pointerType !== STRING_ENUM.MOUSE || event.button !== 0 || !viewportRef.current) {
           return;
         }
 
@@ -576,12 +581,12 @@ function MermaidPreviewContent({
             <button
               type="button"
               role="tab"
-              aria-selected={viewMode === "preview"}
+              aria-selected={viewMode === STRING_ENUM.PREVIEW}
               aria-controls={previewPanelId}
               aria-label="Show Mermaid preview"
               onClick={() => setViewMode("preview")}
               className={`${tabButtonClass} ${
-                viewMode === "preview"
+                viewMode === STRING_ENUM.PREVIEW
                   ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
                   : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
               }`}
@@ -591,12 +596,12 @@ function MermaidPreviewContent({
             <button
               type="button"
               role="tab"
-              aria-selected={viewMode === "code"}
+              aria-selected={viewMode === STRING_ENUM.CODE}
               aria-controls={codePanelId}
               aria-label="Show Mermaid code"
               onClick={() => setViewMode("code")}
               className={`${tabButtonClass} ${
-                viewMode === "code"
+                viewMode === STRING_ENUM.CODE
                   ? "border-zinc-900/90 bg-zinc-900 text-white shadow-sm dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-950"
                   : "text-zinc-600 hover:border-zinc-200 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
               }`}
@@ -617,7 +622,7 @@ function MermaidPreviewContent({
       </div>
 
       <div className="mermaidPreview px-3 py-4 sm:px-4 sm:py-5">
-        {viewMode === "preview" && (
+        {viewMode === STRING_ENUM.PREVIEW && (
           <div role="tabpanel" id={previewPanelId}>
             {state.isLoading && (
               <div className="mermaidPreview-viewport inline-flex min-h-[140px] min-w-[16rem] items-center justify-center rounded-lg border border-dashed border-zinc-300/70 bg-white/70 px-4 py-6 text-sm text-zinc-500 dark:border-zinc-700/70 dark:bg-zinc-900/40 dark:text-zinc-400">
@@ -647,7 +652,7 @@ function MermaidPreviewContent({
           </div>
         )}
 
-        {viewMode === "code" && (
+        {viewMode === STRING_ENUM.CODE && (
           <div role="tabpanel" id={codePanelId} className="inline-block max-w-full">
             {state.error && (
               <div className="mb-3 flex max-w-[42rem] items-start gap-2 rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">

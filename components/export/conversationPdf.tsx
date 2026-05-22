@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { ElementType, ReactElement } from "react";
 import type { ExportConversation, ExportMessage } from "@/types/export";
 
@@ -157,7 +158,7 @@ function MessageComponent({
   Text,
   View,
 }: MessageComponentProps) {
-  const isUser = message.role === "user";
+  const isUser = message.role === STRING_ENUM.USER;
 
   return (
     <View style={styles.messageContainer} break={message.content.length > 500}>

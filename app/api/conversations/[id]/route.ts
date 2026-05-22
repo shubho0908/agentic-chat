@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
@@ -58,8 +59,8 @@ export async function GET(
     const { conversation, error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
 
-    const includeAttachments = searchParams.get('attachments') !== 'false';
-    const includeVersions = searchParams.get('versions') === 'true';
+    const includeAttachments = searchParams.get('attachments') !== STRING_ENUM.FALSE;
+    const includeVersions = searchParams.get('versions') === STRING_ENUM.TRUE;
 
     const originalMessages = await prisma.message.findMany({
       where: {
@@ -254,7 +255,7 @@ export async function PATCH(
 
     return jsonResponse(updatedConversation);
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
+    if (error && typeof error === 'object' && 'code' in error && error.code === STRING_ENUM.PRISMA_RECORD_NOT_FOUND) {
       return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
 

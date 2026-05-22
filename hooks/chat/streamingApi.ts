@@ -1,11 +1,12 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { StreamConfig } from "@/types/chat";
 
 
 function isAbortError(error: unknown): boolean {
   return (
-    error instanceof DOMException && error.name === "AbortError"
+    error instanceof DOMException && error.name === STRING_ENUM.ABORT_ERROR
   ) || (
-    error instanceof Error && error.name === "AbortError"
+    error instanceof Error && error.name === STRING_ENUM.ABORT_ERROR
   );
 }
 
@@ -30,7 +31,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   if (deepResearchEnabled === true) {
     requestPayload.deepResearchEnabled = true;
   }
-  if (searchDepth && searchDepth !== 'basic') {
+  if (searchDepth && searchDepth !== STRING_ENUM.BASIC) {
     requestPayload.searchDepth = searchDepth;
   }
   
@@ -79,7 +80,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 
         const data = trimmedLine.slice(5).trim();
 
-        if (data === '[DONE]') continue;
+        if (data === STRING_ENUM.SSE_DONE) continue;
 
         try {
           const parsed = JSON.parse(data);
@@ -88,7 +89,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             throw new Error(parsed.error);
           }
 
-          if (parsed.type === 'memory_status' && onMemoryStatus) {
+          if (parsed.type === STRING_ENUM.MEMORY_STATUS && onMemoryStatus) {
             onMemoryStatus({
               hasMemories: parsed.hasMemories,
               attemptedMemory: parsed.attemptedMemory,
@@ -106,7 +107,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.type === 'tool_call' && onToolCall) {
+          if (parsed.type === STRING_ENUM.TOOL_CALL && onToolCall) {
             onToolCall({
               toolName: parsed.toolName,
               toolCallId: parsed.toolCallId,
@@ -114,7 +115,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.type === 'tool_result' && onToolResult) {
+          if (parsed.type === STRING_ENUM.TOOL_RESULT && onToolResult) {
             onToolResult({
               toolName: parsed.toolName,
               toolCallId: parsed.toolCallId,
@@ -122,7 +123,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.type === 'tool_progress' && onToolProgress) {
+          if (parsed.type === STRING_ENUM.TOOL_PROGRESS && onToolProgress) {
             onToolProgress({
               toolName: parsed.toolName,
               status: parsed.status,
@@ -131,7 +132,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.type === 'usage_updated' && onUsageUpdated) {
+          if (parsed.type === STRING_ENUM.USAGE_UPDATED && onUsageUpdated) {
             onUsageUpdated({
               usageCount: parsed.usageCount,
               remaining: parsed.remaining,
@@ -144,7 +145,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             onChunk(fullContent);
           }
         } catch (err) {
-          if (err instanceof Error && err.message !== 'Unexpected token') {
+          if (err instanceof Error && err.message !== STRING_ENUM.UNEXPECTED_TOKEN) {
             throw err;
           }
           logger.warn('Failed to parse SSE data:', data, err);
@@ -156,7 +157,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
           const trimmedLine = buffer.trim();
           if (trimmedLine.startsWith('data:')) {
             const data = trimmedLine.slice(5).trim();
-            if (data !== '[DONE]') {
+            if (data !== STRING_ENUM.SSE_DONE) {
               try {
                 const parsed = JSON.parse(data);
 
@@ -169,7 +170,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
                   onChunk(fullContent);
                 }
               } catch (err) {
-                if (err instanceof Error && err.message !== 'Unexpected token') {
+                if (err instanceof Error && err.message !== STRING_ENUM.UNEXPECTED_TOKEN) {
                   throw err;
                 }
                 logger.warn('Failed to parse final SSE data:', data, err);

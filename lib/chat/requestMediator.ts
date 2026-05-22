@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { wrapOpenAIWithLangSmith } from "@/lib/langsmithConfig";
-import { getSupportedTemperature } from "@/lib/modelPolicy";
+import { getOpenAIChatCompletionOptions, getSupportedTemperature } from "@/lib/modelPolicy";
 
 const MEDIATOR_MODEL = "gpt-5.4-nano";
 import { logger } from "@/lib/logger";
@@ -237,7 +237,11 @@ async function runAIMediator({
     const temperature = getSupportedTemperature(MEDIATOR_MODEL, 0);
     const completion = await openai.chat.completions.create({
       model: MEDIATOR_MODEL,
+      ...getOpenAIChatCompletionOptions(MEDIATOR_MODEL, {
+        promptCacheKey: "agentic-chat-memory-mediator",
+      }),
       ...(temperature !== undefined ? { temperature } : {}),
+      max_completion_tokens: 120,
       response_format: { type: "json_object" },
       messages: [
         {

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import * as React from "react";
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { cn } from "@/lib/utils";
@@ -6,8 +7,13 @@ interface ScrollAreaProps extends React.ComponentProps<typeof ScrollAreaPrimitiv
   onScroll?: (event: React.UIEvent<HTMLDivElement>) => void;
 }
 
-const ScrollArea = React.forwardRef<HTMLDivElement, ScrollAreaProps>(
-  ({ className, children, onScroll, ...props }, ref) => {
+const ScrollArea = ({
+  className,
+  children,
+  onScroll,
+  ref,
+  ...props
+}: ScrollAreaProps & { ref?: React.Ref<HTMLDivElement> }) => {
     return (
       <ScrollAreaPrimitive.Root
         className={cn("relative overflow-hidden", className)}
@@ -25,8 +31,6 @@ const ScrollArea = React.forwardRef<HTMLDivElement, ScrollAreaProps>(
       </ScrollAreaPrimitive.Root>
     );
   }
-);
-ScrollArea.displayName = "ScrollArea";
 
 function ScrollBar({
   className,
@@ -38,9 +42,9 @@ function ScrollBar({
       orientation={orientation}
       className={cn(
         "flex touch-none select-none transition-colors",
-        orientation === "vertical" &&
+        orientation === STRING_ENUM.VERTICAL &&
           "h-full w-2.5 border-l border-l-transparent p-px",
-        orientation === "horizontal" &&
+        orientation === STRING_ENUM.HORIZONTAL &&
           "h-2.5 flex-col border-t border-t-transparent p-px",
         className
       )}

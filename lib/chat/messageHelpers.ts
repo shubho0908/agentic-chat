@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Message } from '@/lib/schemas/chat';
 import type OpenAI from 'openai';
 import { truncateTextToTokenLimit } from '@/lib/utils/tokenCounter';
@@ -25,7 +26,7 @@ export function injectContextToMessages(messages: Message[], context: string, mo
       `<reference_context>\n${safeContext}\n</reference_context>`,
   };
 
-  const insertionIndex = messages.length > 0 && messages[messages.length - 1].role === 'user'
+  const insertionIndex = messages.length > 0 && messages[messages.length - 1].role === STRING_ENUM.USER
     ? messages.length - 1
     : messages.length;
 
@@ -55,7 +56,7 @@ export function extractConversationHistory(
   const messagesToProcess = excludeLastMessage ? messages.slice(0, -1) : messages;
   
   const totalUserMessages = messagesToProcess.filter(
-    m => m && m.role === 'user' && extractTextFromMessage(m.content).trim()
+    m => m && m.role === STRING_ENUM.USER && extractTextFromMessage(m.content).trim()
   ).length;
   
   const effectiveMaxExchanges = includeAllForShortConversations && totalUserMessages <= 10
@@ -67,7 +68,7 @@ export function extractConversationHistory(
   for (let i = messagesToProcess.length - 1; i >= 0 && exchangeCount < effectiveMaxExchanges; i--) {
     const msg = messagesToProcess[i];
     
-    if (!msg || msg.role === 'system') continue;
+    if (!msg || msg.role === STRING_ENUM.SYSTEM) continue;
     
     const textContent = extractTextFromMessage(msg.content);
     if (!textContent.trim()) continue;
@@ -77,7 +78,7 @@ export function extractConversationHistory(
       content: textContent,
     });
     
-    if (msg.role === 'user') {
+    if (msg.role === STRING_ENUM.USER) {
       exchangeCount++;
     }
   }

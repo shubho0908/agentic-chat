@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -38,7 +39,7 @@ function getConnectionTone(status: {
     };
   }
 
-  if (status.hasWorkspaceAccess && status.accessLevel === "full") {
+  if (status.hasWorkspaceAccess && status.accessLevel === STRING_ENUM.FULL) {
     return {
       label: "Full suite ready",
       className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
@@ -101,18 +102,18 @@ export function useGoogleWorkspaceSettingsController() {
 
     void refetch();
 
-    if (oauthResult === "success") {
+    if (oauthResult === STRING_ENUM.SUCCESS) {
       toast.success("Google access updated", {
         description: "Your selected Google Workspace permissions are now synced.",
       });
     } else {
       toast.error("Google access update failed", {
         description:
-          oauthReason === "account_mismatch"
+          oauthReason === STRING_ENUM.ACCOUNT_MISMATCH
             ? "Finish the reconnect with the same Google account you originally linked to this workspace."
-            : oauthReason === "account_linked"
+            : oauthReason === STRING_ENUM.ACCOUNT_LINKED
               ? "That Google account is already linked elsewhere. Reconnect with the original account for this workspace."
-              : oauthReason === "persist_failed"
+              : oauthReason === STRING_ENUM.PERSIST_FAILED
                 ? "Google returned successfully, but we could not save the new grant. Please try again."
                 : "Google did not finish the Workspace permission update. Please try again.",
       });

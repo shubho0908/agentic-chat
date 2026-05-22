@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Info, Zap, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -91,13 +92,13 @@ export function ToolMenuItem({
             <div className="flex items-center gap-1.5">
               <span className="font-medium truncate">{tool.name}</span>
               <Badge
-                variant={searchDepth === 'advanced' ? 'default' : 'outline'}
+                variant={searchDepth === STRING_ENUM.ADVANCED ? 'default' : 'outline'}
                 className={cn(
                   "text-[10px] py-0 px-1.5 h-4 shrink-0 hover:bg-secondary",
-                  searchDepth === 'advanced' && "bg-primary/20 text-primary border-primary/30"
+                  searchDepth === STRING_ENUM.ADVANCED && "bg-primary/20 text-primary border-primary/30"
                 )}
               >
-                {searchDepth === 'advanced' ? 'Advanced' : 'Basic'}
+                {searchDepth === STRING_ENUM.ADVANCED ? 'Advanced' : 'Basic'}
               </Badge>
             </div>
             <span className="text-xs text-muted-foreground truncate">
@@ -128,7 +129,7 @@ export function ToolMenuItem({
               <span className="font-medium text-sm">Basic Search</span>
               <span className="text-xs text-muted-foreground">Quick results, faster response</span>
             </div>
-            {isActive && searchDepth === 'basic' && (
+            {isActive && searchDepth === STRING_ENUM.BASIC && (
               <Check className="size-4 text-primary ml-auto" />
             )}
           </DropdownMenuItem>
@@ -151,7 +152,7 @@ export function ToolMenuItem({
               <span className="font-medium text-sm">Advanced Search</span>
               <span className="text-xs text-muted-foreground">Deeper analysis, comprehensive results</span>
             </div>
-            {isActive && searchDepth === 'advanced' && (
+            {isActive && searchDepth === STRING_ENUM.ADVANCED && (
               <Check className="size-4 text-primary ml-auto" />
             )}
           </DropdownMenuItem>
@@ -270,7 +271,7 @@ export function ToolMenuItem({
                         const serviceId = service.name.toLowerCase() as keyof typeof googleWorkspaceSelections;
                         const levelId = googleWorkspaceSelections[serviceId];
                         const level = getGoogleWorkspaceLevel(serviceId, levelId);
-                        const isEnabled = level.id !== "off";
+                        const isEnabled = level.id !== STRING_ENUM.OFF;
 
                         return (
                           <div

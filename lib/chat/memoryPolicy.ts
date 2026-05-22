@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { Attachment } from "@/lib/schemas/chat";
 import { RoutingDecision, type MemoryStatus } from "@/types/chat";
 
@@ -71,7 +72,7 @@ export function shouldPersistConversationMemory({
     return false;
   }
 
-  if (flow === "regenerate") {
+  if (flow === STRING_ENUM.REGENERATE) {
     return false;
   }
 

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader } from "lucide-react";
@@ -114,7 +115,7 @@ export function ChatContainer({
     isContextBlocked &&
     !isLoading &&
     messages.length > 0 &&
-    lastMessage?.role === 'assistant';
+    lastMessage?.role === STRING_ENUM.ASSISTANT;
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
@@ -127,7 +128,7 @@ export function ChatContainer({
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading older messages...</span>
+            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
         )}
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (

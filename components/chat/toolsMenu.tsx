@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
@@ -17,7 +18,7 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
+import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
@@ -154,7 +155,7 @@ export function ToolsMenu({
             <p>
               {toolConfig.name}
               {activeTool === TOOL_IDS.WEB_SEARCH && (
-                <span className="text-muted-foreground"> ({searchDepth === 'advanced' ? 'Advanced' : 'Basic'})</span>
+                <span className="text-muted-foreground"> ({searchDepth === STRING_ENUM.ADVANCED ? 'Advanced' : 'Basic'})</span>
               )}
             </p>
           </TooltipContent>
@@ -281,8 +282,7 @@ export function ToolsMenu({
                   </p>
                 </div>
                 {Object.values(AVAILABLE_TOOLS)
-                  .filter((tool): tool is ToolConfig => tool !== undefined)
-                  .map((tool) => (
+                  .flatMap((tool) => tool === undefined ? [] : [
                     <div key={tool.id}>
                       <ToolMenuItem
                         tool={tool}
@@ -290,8 +290,8 @@ export function ToolsMenu({
                         isAuthenticated={!!session}
                         {...commonToolProps}
                       />
-                    </div>
-                  ))}
+                    </div>,
+                  ])}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </DropdownMenuContent>

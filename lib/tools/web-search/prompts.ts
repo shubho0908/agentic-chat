@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
 const WEB_SEARCH_BASIC_INSTRUCTIONS = `
@@ -285,8 +286,8 @@ professionally structured response that demonstrates deep analysis and multi-sou
 verification.`;
 
 export function getWebSearchInstructions(searchDepth: SearchDepth): string {
-  return searchDepth === 'advanced' 
-    ? WEB_SEARCH_ADVANCED_INSTRUCTIONS 
+  return searchDepth === STRING_ENUM.ADVANCED
+    ? WEB_SEARCH_ADVANCED_INSTRUCTIONS
     : WEB_SEARCH_BASIC_INSTRUCTIONS;
 }
 export const WEB_SEARCH_PLANNING_PROMPT = `You are an expert search strategist that analyzes queries and creates optimal search plans.

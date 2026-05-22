@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState } from "react";
 import {
   Dialog,
@@ -37,11 +38,11 @@ export function DeleteConversationDialog(props: DeleteConversationDialogProps) {
 
   const [internalOpen, setInternalOpen] = useState(false);
 
-  const isOpen = mode === "bulk" ? props.open : internalOpen;
-  const setOpen = mode === "bulk" ? props.onOpenChange : setInternalOpen;
+  const isOpen = mode === STRING_ENUM.BULK ? props.open : internalOpen;
+  const setOpen = mode === STRING_ENUM.BULK ? props.onOpenChange : setInternalOpen;
 
   const handleConfirm = () => {
-    if (mode === "single") {
+    if (mode === STRING_ENUM.SINGLE) {
       props.onDelete(props.conversationId);
     } else {
       props.onConfirm();
@@ -49,9 +50,9 @@ export function DeleteConversationDialog(props: DeleteConversationDialogProps) {
     setOpen(false);
   };
 
-  const title = mode === "single" ? "Delete conversation" : "Delete conversations";
+  const title = mode === STRING_ENUM.SINGLE ? "Delete conversation" : "Delete conversations";
   const description =
-    mode === "single"
+    mode === STRING_ENUM.SINGLE
       ? `Are you sure you want to delete "${props.conversationTitle}"? This action cannot be undone.`
       : `Are you sure you want to delete ${props.selectedCount} conversation${props.selectedCount === 1 ? "" : "s"}? This action cannot be undone.`;
 
@@ -84,7 +85,7 @@ export function DeleteConversationDialog(props: DeleteConversationDialogProps) {
     </DialogContent>
   );
 
-  if (mode === "single") {
+  if (mode === STRING_ENUM.SINGLE) {
     return (
       <Dialog open={isOpen} onOpenChange={setOpen}>
         <DialogTrigger asChild>

@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import type { MessageContentPart } from '@/lib/schemas/chat';
 
 type MessageContent = string | MessageContentPart[];
@@ -8,7 +9,7 @@ export function extractTextFromMessage(content: MessageContent): string {
   }
 
   return content
-    .filter((part) => part.type === 'text')
-    .map((part) => (part.type === 'text' ? part.text : ''))
+    .filter((part) => part.type === STRING_ENUM.TEXT)
+    .map((part) => (part.type === STRING_ENUM.TEXT ? part.text : ''))
     .join(' ');
 }

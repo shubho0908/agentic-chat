@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import * as cheerio from "cheerio";
@@ -176,7 +177,7 @@ async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): P
     return cheerioResult;
   } catch (error) {
     if (error instanceof Error) {
-      if (error.name === "AbortError") {
+      if (error.name === STRING_ENUM.ABORT_ERROR) {
         logError({ event: 'url_scrape_timeout', url, error: error.message });
         throw new Error("Request timeout - the website took too long to respond");
       }
@@ -211,7 +212,7 @@ export function stripUrlsFromText(text: string): string {
 export function extractUrlsFromMessage(message: string | Array<{ type: string; text?: string }>): string[] {
   const textContent = typeof message === 'string' 
     ? message 
-    : message.filter(p => p.type === 'text' && p.text).map(p => p.text || '').join(' ');
+    : message.filter(p => p.type === STRING_ENUM.TEXT && p.text).map(p => p.text || '').join(' ');
 
   const matches = textContent.match(URL_REGEX);
   if (!matches) return [];
@@ -244,14 +245,14 @@ export async function scrapeMultipleUrls(
   );
 
   const successful = results.filter(
-    (result): result is PromiseFulfilledResult<ScrapedContent> => result.status === 'fulfilled'
+    (result): result is PromiseFulfilledResult<ScrapedContent> => result.status === STRING_ENUM.FULFILLED
   );
   
-  const failed = results.filter(result => result.status === 'rejected');
+  const failed = results.filter(result => result.status === STRING_ENUM.REJECTED);
   
   if (failed.length > 0) {
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
+      if (result.status === STRING_ENUM.REJECTED) {
         logError({
           event: 'url_scrape_batch_failed',
           url: urlsToProcess[index],

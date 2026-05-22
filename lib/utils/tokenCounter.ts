@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { encoding_for_model, get_encoding, type TiktokenModel } from 'tiktoken';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type { TokenUsage } from '@/types/chat';
@@ -78,9 +79,9 @@ function countContentTokens(
   let imageCount = 0;
 
   for (const part of content) {
-    if (part.type === 'text') {
+    if (part.type === STRING_ENUM.TEXT) {
       textTokens += countTokens(part.text, model);
-    } else if (part.type === 'image_url') {
+    } else if (part.type === STRING_ENUM.IMAGE_URL) {
       imageCount++;
     }
   }

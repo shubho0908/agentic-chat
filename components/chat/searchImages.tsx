@@ -1,5 +1,6 @@
 "use client";
 
+import { STRING_ENUM } from "@/constants/stringEnums";
 import { useState, useCallback } from "react";
 import Image from "next/image";
 import { ImageOff, AlertCircle, Loader, X } from "lucide-react";
@@ -64,7 +65,7 @@ function ImageCard({
     onStatusChange?.(image.url, "loaded");
   }, [image.url, onStatusChange]);
 
-  const handleClick = useCallback(() => {
+  const handleImageSelection = useCallback(() => {
     if (isOverflowTile || (!isLoading && !hasError)) {
       onClick();
     }
@@ -78,7 +79,7 @@ function ImageCard({
           ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]'
           : 'cursor-default'
       } ${className ?? ""}`}
-      onClick={handleClick}
+      onClick={handleImageSelection}
       disabled={!isOverflowTile && (isLoading || hasError)}
       aria-label={isOverflowTile ? "Show all images" : image.description || `Open search result image ${index + 1}`}
     >
@@ -185,7 +186,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
     return null;
   }
 
-  const availableImages = images.filter((image) => imageStatuses[image.url] !== "error");
+  const availableImages = images.filter((image) => imageStatuses[image.url] !== STRING_ENUM.ERROR);
   const failedCount = images.length - availableImages.length;
   const visibleImages = availableImages;
   const hasAvailableImages = visibleImages.length > 0;

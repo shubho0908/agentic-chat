@@ -1,3 +1,4 @@
+import { STRING_ENUM } from "@/constants/stringEnums";
 interface GoogleWorkspaceOAuthReadiness {
   ready: boolean;
   message?: string;
@@ -17,7 +18,7 @@ function parseEnvList(value?: string): string[] {
 export function getGoogleWorkspaceOAuthReadiness(
   email?: string | null
 ): GoogleWorkspaceOAuthReadiness {
-  const isVerified = process.env.GOOGLE_WORKSPACE_OAUTH_READY === "true";
+  const isVerified = process.env.GOOGLE_WORKSPACE_OAUTH_READY === STRING_ENUM.TRUE;
 
   if (isVerified) {
     return { ready: true };
