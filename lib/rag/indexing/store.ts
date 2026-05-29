@@ -1,5 +1,3 @@
-'use server';
-
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import type { Document } from '@langchain/core/documents';

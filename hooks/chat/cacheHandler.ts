@@ -11,14 +11,12 @@ interface CacheCheckContext {
   attachments?: Attachment[];
   abortSignal: AbortSignal;
   activeTool?: string | null;
-  deepResearchEnabled?: boolean;
 }
 
 export function shouldUseSemanticCache(
   messages: Message[],
   attachments?: Attachment[], 
-  activeTool?: string | null,
-  deepResearchEnabled?: boolean
+  activeTool?: string | null
 ): boolean {
   const hasCurrentDocument = attachments?.some((attachment) =>
     isSupportedForRAG(attachment.fileType)
@@ -33,10 +31,6 @@ export function shouldUseSemanticCache(
   }
   
   if (activeTool) {
-    return false;
-  }
-  
-  if (deepResearchEnabled) {
     return false;
   }
   
@@ -118,9 +112,9 @@ async function checkCache(
 export async function performCacheCheck(
   context: CacheCheckContext
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
-  const { messages, content, attachments, abortSignal, activeTool, deepResearchEnabled } = context;
+  const { messages, content, attachments, abortSignal, activeTool } = context;
   
-  const useCaching = shouldUseSemanticCache(messages, attachments, activeTool, deepResearchEnabled);
+  const useCaching = shouldUseSemanticCache(messages, attachments, activeTool);
   let cacheQuery = '';
   let cacheData: CacheCheckResult = { cached: false };
 

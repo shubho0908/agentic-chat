@@ -1,7 +1,8 @@
 "use client";
 
 import { Paperclip, Settings2 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/lib/buttonVariants";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -31,11 +32,6 @@ interface ToolsDrawerProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   session: Session | null;
   searchDepth?: SearchDepth;
-  deepResearchUsage?: {
-    remaining: number;
-    limit: number;
-    loading: boolean;
-  };
   googleSuiteStatus?: {
     authorized: boolean;
     loading: boolean;
@@ -59,7 +55,6 @@ export function ToolsDrawer({
   fileInputRef,
   session,
   searchDepth = 'basic',
-  deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
 }: ToolsDrawerProps) {
@@ -130,7 +125,8 @@ export function ToolsDrawer({
                       onOpenChange(false);
                     }}
                     disabled={disabled}
-                    className="w-full flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
+                    type="button"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
                   >
                     <Paperclip className="size-4 text-muted-foreground" />
                     <div className="flex flex-col gap-0.5 text-left">
@@ -165,7 +161,6 @@ export function ToolsDrawer({
                       isActive={activeTool === tool.id}
                       isAuthenticated={!!session}
                       searchDepth={searchDepth}
-                      deepResearchUsage={deepResearchUsage}
                       googleSuiteStatus={googleSuiteStatus}
                       onToolSelect={onToolSelect}
                     />

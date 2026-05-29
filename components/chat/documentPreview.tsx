@@ -142,7 +142,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   );
 
   const contentView = !fileUrl ? null : isPDF ? (
-    <iframe src={fileUrl} className="w-full h-full border-0" title={fileName} />
+    <iframe src={fileUrl} className="w-full h-full border-0" title={fileName} sandbox="" />
   ) : isTextFile ? (
     isLoading ? (
       renderStatus("Loading...")
@@ -168,7 +168,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
       renderStatus("No content available")
     )
   ) : isOfficeDoc ? (
-    <iframe src={getViewerUrl()} className="w-full h-full border-0" title={fileName} />
+    <iframe src={getViewerUrl()} className="w-full h-full border-0" title={fileName} sandbox="" />
   ) : (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
       <p className="text-muted-foreground">Preview not available for this file type</p>
@@ -193,7 +193,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
     return (
       <Drawer open={open && !!fileUrl} onOpenChange={onClose}>
         <DrawerContent className="h-[80vh] p-0 flex flex-col">
-          <DrawerHeader className="px-4 py-4 border-b bg-muted/30">
+          <DrawerHeader className="p-4 border-b bg-muted/30">
             <DrawerTitle className="sr-only">{fileName}</DrawerTitle>
             <DrawerDescription className="sr-only">{fileType}</DrawerDescription>
             {headerContent}

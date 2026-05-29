@@ -23,7 +23,6 @@ export const siteConfig = {
     "AI with memory",
     "Google Workspace AI",
     "bring your own key AI",
-    "research assistant",
     "knowledge assistant",
     "Agentic Chat",
   ],
@@ -32,7 +31,6 @@ export const siteConfig = {
 export const homepageKeywords = [
   "AI search assistant",
   "chat with documents",
-  "AI research workflow",
   "Gmail Drive Docs Sheets assistant",
   "context-aware AI",
 ];

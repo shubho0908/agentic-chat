@@ -1,5 +1,3 @@
-'use server';
-
 import { getMemoryContextResult } from './memory';
 import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
@@ -260,7 +258,6 @@ export async function routeContext(
   conversationId?: string,
   activeTool?: string | null,
   memoryEnabled: boolean = false,
-  deepResearchEnabled: boolean = false,
   options?: {
     apiKey?: string;
   },
@@ -303,30 +300,6 @@ export async function routeContext(
     });
   }
 
-
-  if (deepResearchEnabled) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
-
-    if (conversationId) {
-      const attachmentInfo = await getAttachmentInfo(conversationId);
-      if (attachmentInfo.hasDocuments) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = attachmentInfo.documentCount;
-      }
-    }
-
-    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
-    if (urlContext) {
-      return {
-        context: urlContext,
-        metadata,
-      };
-    }
-
-    return { context: '', metadata };
-  }
 
   if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
     metadata.routingDecision = RoutingDecision.ToolOnly;

@@ -19,8 +19,7 @@ function getRagAttachmentIds(
   }
 
   return attachments
-    .filter((attachment) => isSupportedForRAG(attachment.fileType))
-    .map((attachment) => attachment.id);
+    .flatMap((attachment) => isSupportedForRAG(attachment.fileType) ? [attachment.id] : []);
 }
 
 function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {

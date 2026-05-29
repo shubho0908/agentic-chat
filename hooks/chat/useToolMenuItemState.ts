@@ -6,12 +6,6 @@ import { TOOL_IDS, type ToolConfig } from "@/lib/tools/config";
 import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
 import { resolveGoogleWorkspaceSelections } from "@/lib/tools/google-suite/accessLevels";
 
-export interface ToolMenuDeepResearchUsage {
-  remaining: number;
-  limit: number;
-  loading: boolean;
-}
-
 export interface ToolMenuGoogleSuiteStatus {
   authorized: boolean;
   loading: boolean;
@@ -23,19 +17,16 @@ export interface ToolMenuGoogleSuiteStatus {
 interface UseToolMenuItemStateArgs {
   tool: ToolConfig;
   isAuthenticated: boolean;
-  deepResearchUsage?: ToolMenuDeepResearchUsage;
   googleSuiteStatus?: ToolMenuGoogleSuiteStatus;
 }
 
 export function useToolMenuItemState({
   tool,
   isAuthenticated,
-  deepResearchUsage,
   googleSuiteStatus,
 }: UseToolMenuItemStateArgs) {
   const router = useRouter();
   const ToolIcon = tool.icon;
-  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
   const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
@@ -49,7 +40,6 @@ export function useToolMenuItemState({
     !googleSuiteStatus?.workspaceConnected;
   const isDisabled =
     !isAuthenticated ||
-    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
     (isGoogleSuite && !!googleSuiteStatus?.loading);
   const needsPermissions =
     isGoogleSuite &&
@@ -83,7 +73,6 @@ export function useToolMenuItemState({
     googleWorkspaceSelections,
     handleOpenGoogleSettings,
     hasWorkspaceAccess,
-    isDeepResearch,
     isDisabled,
     isGoogleSuite,
     isWebSearch,

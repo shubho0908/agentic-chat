@@ -40,6 +40,7 @@ export function FileUploadButton({ onFilesSelected, disabled, fileCount = 0 }: F
         multiple
         onChange={handleFileSelect}
         className="hidden"
+        aria-label="Upload files"
         accept={ACCEPTED_FILE_TYPES}
         disabled={disabled}
       />

@@ -140,8 +140,7 @@ export function isTrustedAttachmentUrl(url: string): boolean {
 
     const extraHosts = (process.env.TRUSTED_ATTACHMENT_HOSTS ?? '')
       .split(',')
-      .map((host) => host.trim())
-      .filter(Boolean);
+      .flatMap((host) => { const h = host.trim(); return h ? [h] : []; });
 
     return [...trustedOrigins, ...extraHosts].some((pattern) =>
       matchesHostPattern(hostname, pattern)

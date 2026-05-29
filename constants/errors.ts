@@ -127,14 +127,6 @@ export const TOAST_ERROR_MESSAGES = {
     DEACTIVATED: "Tool deactivated",
     AUTH_REQUIRED_DESCRIPTION: "Please sign in to use tools",
   },
-  DEEP_RESEARCH_UI: {
-    DEACTIVATED: "Deep Research deactivated",
-    LIMIT_REACHED: "Deep Research limit reached",
-    LIMIT_REACHED_DESCRIPTION: "You have used all your deep research requests for this month. Your message will be sent with standard processing.",
-    UNAVAILABLE: "Deep Research unavailable",
-    MONTHLY_LIMIT_DESCRIPTION: (limit: number, resetDate: string) =>
-      `You have used all ${limit} deep research requests for this month. Resets on ${resetDate}.`,
-  },
   MEMORY_UI: {
     ENABLED: "Memory enabled",
     DISABLED: "Memory disabled",
@@ -173,16 +165,6 @@ export const TOOL_ERROR_MESSAGES = {
     SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
     ABORTED: 'Search was aborted, please try again later.',
     FAILED_FALLBACK: 'Search failed, continuing without web results...',
-  },
-  DEEP_RESEARCH: {
-    ABORTED: 'Research was aborted, please try again later.',
-    FAILED: 'Research failed',
-    FAILED_DETAILED: 'Deep research encountered an error and could not be completed. Please try again or rephrase your query.',
-    FAILED_FALLBACK: 'I encountered an issue while conducting deep research. Let me provide an answer based on my knowledge instead.\n\n',
-    EXECUTION_ERROR: '⚠️ Unable to complete deep research. Let me answer based on my knowledge instead.\n\n',
-    RATE_LIMIT: '⚠️ **Deep Research Limit Reached**\n\nYou have used all your deep research requests for this month.\n\n📅 Your limit will reset at the beginning of next month.\n\nI\'ll answer your question using standard processing instead.\n\n---\n\n',
-    TECHNICAL_ERROR: '⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n',
-    AUTH_REQUIRED: '⚠️ Authentication error: Unable to verify your identity for deep research. Please refresh and try again.\n\n',
   },
   GOOGLE_SUITE: {
     ABORTED: 'Google Suite operation was aborted, please try again later.',

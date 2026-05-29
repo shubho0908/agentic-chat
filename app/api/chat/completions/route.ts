@@ -19,7 +19,7 @@ import { parseToolId } from '@/lib/tools/config';
 import { searchDepthEnum, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { logger } from "@/lib/logger";
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes for deep research & google suite tools
+export const maxDuration = 300; // 5 minutes for tool execution
 
 function parseOptionalBoolean(
   value: unknown,
@@ -104,15 +104,9 @@ export async function POST(request: NextRequest) {
       return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const deepResearchEnabledResult = parseOptionalBoolean(body.deepResearchEnabled, 'deepResearchEnabled', false);
-    if (!deepResearchEnabledResult.success) {
-      return errorResponse(deepResearchEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-    const deepResearchEnabled = deepResearchEnabledResult.value;
-
-    if (!stream && (deepResearchEnabled || activeTool)) {
+    if (!stream && activeTool) {
       return errorResponse(
-        'Non-stream responses do not support tool execution or deep research. Retry with streaming enabled.',
+        'Non-stream responses do not support tool execution. Retry with streaming enabled.',
         undefined,
         HTTP_STATUS.BAD_REQUEST
       );
@@ -176,7 +170,6 @@ export async function POST(request: NextRequest) {
         openai,
         apiKey,
         memoryEnabled,
-        deepResearchEnabled,
         abortSignal: abortController.signal,
         userId: authUser.id,
         conversationId,
@@ -219,7 +212,6 @@ export async function POST(request: NextRequest) {
               conversationId,
               sanitizedActiveTool,
               memoryEnabled,
-              deepResearchEnabled,
               { apiKey }
             );
           },
@@ -228,7 +220,6 @@ export async function POST(request: NextRequest) {
             conversationId,
             activeTool: sanitizedActiveTool,
             memoryEnabled,
-            deepResearchEnabled,
             model: validatedModel,
           }
         );

@@ -12,11 +12,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { type ToolId, type ToolConfig } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
-import { GOOGLE_SUITE_SERVICES } from "@/components/icons/googleSuiteIcons";
+import { GOOGLE_SUITE_SERVICES } from "@/components/icons/googleSuiteServices";
 import { getGoogleWorkspaceLevel } from "@/lib/tools/google-suite/accessLevels";
 import {
   useToolMenuItemState,
-  type ToolMenuDeepResearchUsage,
   type ToolMenuGoogleSuiteStatus,
 } from "@/hooks/chat/useToolMenuItemState";
 
@@ -25,7 +24,6 @@ interface ToolMenuItemProps {
   isActive: boolean;
   isAuthenticated: boolean;
   searchDepth?: SearchDepth;
-  deepResearchUsage?: ToolMenuDeepResearchUsage;
   googleSuiteStatus?: ToolMenuGoogleSuiteStatus;
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
@@ -35,7 +33,6 @@ export function ToolMenuItem({
   isActive,
   isAuthenticated,
   searchDepth = 'basic',
-  deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
 }: ToolMenuItemProps) {
@@ -43,7 +40,6 @@ export function ToolMenuItem({
     ToolIcon,
     googleWorkspaceSelections,
     handleOpenGoogleSettings,
-    isDeepResearch,
     isDisabled,
     isGoogleSuite,
     isWebSearch,
@@ -54,7 +50,6 @@ export function ToolMenuItem({
   } = useToolMenuItemState({
     tool,
     isAuthenticated,
-    deepResearchUsage,
     googleSuiteStatus,
   });
 
@@ -206,42 +201,6 @@ export function ToolMenuItem({
             <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
               {googleSuiteNeedsSetup ? "Enable first" : needsPermissions ? "Limited" : "Setup"}
             </Badge>
-          )}
-          {isDeepResearch && (
-            <TooltipProvider>
-              <Tooltip delayDuration={200}>
-                <TooltipTrigger asChild>
-                  <Info
-                    className="size-3.5 text-muted-foreground hover:text-foreground transition-colors cursor-help shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-xs">
-                  <div className="space-y-1">
-                    <p className="font-medium">
-                      {deepResearchUsage?.loading ? (
-                        "Loading usage..."
-                      ) : deepResearchUsage?.remaining === 0 ? (
-                        "Limit Reached"
-                      ) : (
-                        "Usage Information"
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {!isAuthenticated ? (
-                        "Please login to use this tool. Deep Research performs comprehensive research across multiple sources to provide in-depth analysis."
-                      ) : deepResearchUsage?.loading ? (
-                        "Please wait..."
-                      ) : deepResearchUsage?.remaining === 0 ? (
-                        `You've used all ${deepResearchUsage?.limit} deep research queries this month. Resets next month.`
-                      ) : (
-                        `${deepResearchUsage?.remaining} of ${deepResearchUsage?.limit} deep research queries remaining this month.`
-                      )}
-                    </p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           )}
           {isGoogleSuite && (
             <TooltipProvider>

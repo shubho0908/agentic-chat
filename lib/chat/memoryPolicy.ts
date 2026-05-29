@@ -7,7 +7,6 @@ interface MemoryPersistenceArgs {
   userMessage: string;
   assistantMessage: string;
   activeTool?: string | null;
-  deepResearchEnabled?: boolean;
   userAttachments?: Attachment[];
   memoryStatus?: Pick<MemoryStatus, "routingDecision">;
   flow?: MemoryPersistenceFlow;
@@ -59,7 +58,6 @@ export function shouldPersistConversationMemory({
   userMessage,
   assistantMessage,
   activeTool,
-  deepResearchEnabled = false,
   userAttachments,
   memoryStatus,
   flow = "send",
@@ -75,7 +73,7 @@ export function shouldPersistConversationMemory({
     return false;
   }
 
-  if (deepResearchEnabled || activeTool) {
+  if (activeTool) {
     return false;
   }
 

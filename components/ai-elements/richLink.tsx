@@ -215,7 +215,7 @@ export function RichLink({ url, className, variant = "default" }: RichLinkProps)
           className="group block rounded-2xl no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2"
         >
           <div className="relative flex items-center gap-3.5 p-3 pr-4 transition-all duration-300 cursor-pointer shadow-sm rounded-2xl bg-black/5 dark:bg-[#1E1E1E] border border-black/5 dark:border-white/5 hover:bg-black/10 dark:hover:bg-[#2C2C2E]">
-            <div className="relative size-[60px] flex-shrink-0 overflow-hidden rounded-[12px] bg-white dark:bg-black flex items-center justify-center shadow-sm dark:shadow-none border border-black/5 dark:border-white/10">
+            <div className="relative size-[60px] flex-shrink-0 overflow-hidden rounded-[12px] bg-white dark:bg-gray-950 flex items-center justify-center shadow-sm dark:shadow-none border border-black/5 dark:border-white/10">
               {metadata.image ? (
                 <SafeImage
                   src={metadata.image}

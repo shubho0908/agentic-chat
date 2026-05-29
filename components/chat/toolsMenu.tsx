@@ -19,7 +19,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
-import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -59,14 +58,8 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage({ enabled: !!session });
   const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
-  const deepResearchUsage = {
-    remaining: usageData?.remaining ?? 3,
-    limit: usageData?.limit ?? 3,
-    loading: usageLoading,
-  };
 
   const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
     if (!session) {
@@ -105,7 +98,6 @@ export function ToolsMenu({
   const commonToolProps = {
     session,
     searchDepth,
-    deepResearchUsage,
     googleSuiteStatus: {
       authorized: googleSuiteStatus?.authorized ?? false,
       loading: googleSuiteLoading,
@@ -173,6 +165,7 @@ export function ToolsMenu({
         className="hidden"
         accept={ACCEPTED_FILE_TYPES}
         disabled={disabled}
+        aria-label="Upload files"
       />
 
       {isMobile ? (

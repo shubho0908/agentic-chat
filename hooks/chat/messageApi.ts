@@ -73,8 +73,7 @@ export async function saveUserMessage(
     
     if (savedMessage.attachments && savedMessage.attachments.length > 0) {
       const documentAttachmentIds = savedMessage.attachments
-        .filter((att) => isSupportedForRAG(att.fileType))
-        .map((att) => att.id);
+        .flatMap((att) => isSupportedForRAG(att.fileType) ? [att.id] : []);
       
       if (documentAttachmentIds.length > 0) {
         processDocumentsAsync(documentAttachmentIds);
@@ -165,8 +164,7 @@ export async function finalizeEditedMessage(
 
   if (finalized.updatedMessage.attachments && finalized.updatedMessage.attachments.length > 0) {
     const documentAttachmentIds = finalized.updatedMessage.attachments
-      .filter((att) => att.id && isSupportedForRAG(att.fileType))
-      .map((att) => att.id as string);
+      .flatMap((att) => att.id && isSupportedForRAG(att.fileType) ? [att.id as string] : []);
 
     if (documentAttachmentIds.length > 0) {
       processDocumentsAsync(documentAttachmentIds);

@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Clock3,
   Globe,
-  Telescope,
 } from "lucide-react";
 import { GoogleIcon } from "@/components/icons/googleIcon";
 import { OpenAIIcon } from "@/components/icons/openaiIcon";
@@ -23,7 +22,7 @@ import {
   SURFACE_BORDER_CLASS,
   VIEWPORT_SURFACE_CLASS,
 } from "@/components/landing/interaction-showcase/constants";
-import type { DeviceKind, ProcessState, SceneKind } from "@/components/landing/interaction-showcase/types";
+import type { DeviceKind, SceneKind } from "@/components/landing/interaction-showcase/types";
 
 function ChromeUtilityRail({
   onPreviousScene,
@@ -92,8 +91,6 @@ function ContentChrome({
   const omnibarIcon =
     scene === "workspace" ? (
       <GoogleIcon className="size-3.5 shrink-0" />
-    ) : scene === "research" ? (
-      <Telescope className="size-3.5 shrink-0 text-muted-foreground/90" />
     ) : (
       <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />
     );
@@ -384,44 +381,6 @@ export function ServiceAction({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-export function ProcessMarker({
-  state,
-  prefersReducedMotion = false,
-}: {
-  state: ProcessState;
-  prefersReducedMotion?: boolean;
-}) {
-  if (state === "completed") {
-    return (
-      <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
-        <CheckCircle2 className="size-3.5" />
-      </div>
-    );
-  }
-
-  if (state === "current") {
-    return (
-      <div className="mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-400">
-        {prefersReducedMotion ? (
-          <div className="size-2 rounded-full bg-current" />
-        ) : (
-          <m.div
-            animate={{ scale: [0.8, 1, 0.8], opacity: [0.6, 1, 0.6] }}
-            transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.2 }}
-            className="size-2 rounded-full bg-current"
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`mt-0.5 flex size-5 min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-background dark:bg-[#121418] ${SOFT_BORDER_CLASS}`}>
-      <div className="size-1.5 rounded-full bg-muted-foreground/40" />
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function ContextItem({
         {treeSymbol}
       </span>
       <Icon
-        className={`w-3.5 h-3.5 flex-shrink-0 ${
+        className={`size-3.5 flex-shrink-0 ${
           skipped ? "" : "animate-pulse"
         } ${iconClassName}`}
         suppressHydrationWarning

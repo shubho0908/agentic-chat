@@ -8,7 +8,6 @@ export function extractTextFromMessage(content: MessageContent): string {
   }
 
   return content
-    .filter((part) => part.type === 'text')
-    .map((part) => (part.type === 'text' ? part.text : ''))
+    .flatMap((part) => part.type === 'text' ? [part.text] : [])
     .join(' ');
 }

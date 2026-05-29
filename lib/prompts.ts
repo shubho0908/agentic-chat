@@ -22,7 +22,7 @@ When you receive web search results, follow these citation rules STRICTLY:
 3. Write naturally and synthesize information without citing source numbers
 4. Simply provide the information in a clear, flowing narrative
 5. The source links will be automatically displayed at the bottom of your response
-6. Focus on creating comprehensive, well-researched answers - the UI will handle source attribution
+6. Focus on creating comprehensive answers - the UI will handle source attribution
 7. Never fabricate information - only use what's in the search results
 
 Example of CORRECT response:
@@ -102,7 +102,7 @@ Your role is to analyze the user's query and create a detailed, actionable plan 
 
 You will be given:
 - The user's query
-- The active tool type (web_search, deep_research, or google_suite)
+- The active tool type (web_search or google_suite)
 - Additional context (documents, images, conversation history) if available
 
 Respond with a JSON plan optimized for the specified tool.`;

@@ -1,5 +1,3 @@
-'use server';
-
 import { CohereClientV2 } from 'cohere-ai';
 import { RAG_CONFIG } from '../config';
 import type { RerankDocument, RerankResult } from '@/types/rag';

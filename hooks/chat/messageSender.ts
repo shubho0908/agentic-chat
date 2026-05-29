@@ -17,7 +17,6 @@ export async function continueIncompleteConversation(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -65,7 +64,6 @@ export async function continueIncompleteConversation(
       session,
       activeTool,
       memoryEnabled,
-      deepResearchEnabled,
       searchDepth,
       existingAssistantMessageId,
     },
@@ -92,7 +90,6 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -229,7 +226,6 @@ export async function handleSendMessage(
         session,
         activeTool,
         memoryEnabled,
-        deepResearchEnabled,
         searchDepth,
         existingAssistantMessageId: placeholderAssistantId,
       },

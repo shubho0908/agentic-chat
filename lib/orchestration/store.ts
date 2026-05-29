@@ -2,7 +2,6 @@ import type { PoolClient } from 'pg';
 import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import {
   createRequestId,
-  logError,
   logInfo,
   logOrchestrationJobEnqueue,
   logOrchestrationJobFinish,
@@ -16,9 +15,8 @@ import {
   shouldRetryJob,
 } from './retryPolicy';
 
-type OrchestrationJobType = 'deep_research' | 'document_process';
+type OrchestrationJobType = 'document_process';
 type OrchestrationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
-type DeepResearchRunStatus = 'running' | 'completed' | 'failed' | 'aborted';
 const DEFAULT_LEASE_MS = 15 * 60 * 1000;
 
 let initialized = false;
@@ -282,28 +280,6 @@ async function ensureOrchestrationTables(): Promise<void> {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS orchestration_job_retry_idx
       ON orchestration_job (type, status, next_attempt_at ASC, created_at ASC);
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS deep_research_run (
-        id TEXT PRIMARY KEY,
-        request_id TEXT,
-        user_id TEXT,
-        conversation_id TEXT,
-        query TEXT NOT NULL,
-        status TEXT NOT NULL,
-        current_node TEXT,
-        checkpoint JSONB NOT NULL DEFAULT '{}'::jsonb,
-        result JSONB,
-        error TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS deep_research_run_status_idx
-      ON deep_research_run (user_id, status, created_at DESC);
     `);
 
     initialized = true;
@@ -682,129 +658,5 @@ export async function resolveOrchestrationJobRun(params: {
   }
 }
 
-export async function finishOrchestrationJob(
-  jobId: string,
-  status: Extract<OrchestrationJobStatus, 'completed' | 'failed'>,
-  payload?: { result?: unknown; error?: string }
-): Promise<void> {
-  await ensureOrchestrationTables();
-  const pool = getPgPool();
-  const result = await pool.query<OrchestrationJobRow>(
-    `
-      UPDATE orchestration_job
-      SET
-        status = $2,
-        result = $3::jsonb,
-        error = $4,
-        lease_owner = NULL,
-        lease_expires_at = NULL,
-        next_attempt_at = NULL,
-        updated_at = NOW()
-      WHERE id = $1
-      RETURNING id, type, user_id, payload, attempts, created_at
-    `,
-    [jobId, status, safeJson(payload?.result), payload?.error ?? null]
-  );
 
-  const finished = result.rows[0];
-  if (finished) {
-    logOrchestrationJobFinish({
-      jobId: finished.id,
-      jobType: finished.type,
-      userId: finished.user_id,
-      attempts: finished.attempts,
-      attachmentId: extractAttachmentId(finished.payload),
-      latencyMs: finished.created_at ? measureLatencyMs(new Date(finished.created_at).getTime()) : undefined,
-      error: status === 'failed' ? payload?.error : undefined,
-    });
-  }
-}
 
-export async function createDeepResearchRun(params: {
-  userId?: string;
-  conversationId?: string;
-  query: string;
-  requestId?: string;
-}): Promise<string | null> {
-  try {
-    await ensureOrchestrationTables();
-    const pool = getPgPool();
-    const runId = createRequestId('research');
-
-    await pool.query(
-      `
-        INSERT INTO deep_research_run (id, request_id, user_id, conversation_id, query, status)
-        VALUES ($1, $2, $3, $4, $5, 'running')
-      `,
-      [runId, params.requestId ?? null, params.userId ?? null, params.conversationId ?? null, params.query]
-    );
-
-    return runId;
-  } catch (error) {
-    logError({
-      event: 'deep_research_run_create_failed',
-      requestId: params.requestId,
-      userId: params.userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-export async function saveDeepResearchCheckpoint(params: {
-  runId: string;
-  node: string;
-  state: unknown;
-  requestId?: string;
-}): Promise<void> {
-  try {
-    await ensureOrchestrationTables();
-    const pool = getPgPool();
-    await pool.query(
-      `
-        UPDATE deep_research_run
-        SET current_node = $2,
-            checkpoint = $3::jsonb,
-            updated_at = NOW()
-        WHERE id = $1
-      `,
-      [params.runId, params.node, safeJson(params.state)]
-    );
-  } catch (error) {
-    logError({
-      event: 'deep_research_checkpoint_failed',
-      requestId: params.requestId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
-export async function finishDeepResearchRun(params: {
-  runId: string;
-  status: DeepResearchRunStatus;
-  result?: unknown;
-  error?: string;
-  requestId?: string;
-}): Promise<void> {
-  try {
-    await ensureOrchestrationTables();
-    const pool = getPgPool();
-    await pool.query(
-      `
-        UPDATE deep_research_run
-        SET status = $2,
-            result = $3::jsonb,
-            error = $4,
-            updated_at = NOW()
-        WHERE id = $1
-      `,
-      [params.runId, params.status, safeJson(params.result), params.error ?? null]
-    );
-  } catch (error) {
-    logError({
-      event: 'deep_research_run_finish_failed',
-      requestId: params.requestId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}

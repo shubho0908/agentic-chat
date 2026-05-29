@@ -6,8 +6,15 @@ interface ScrollAreaProps extends React.ComponentProps<typeof ScrollAreaPrimitiv
   onScroll?: (event: React.UIEvent<HTMLDivElement>) => void;
 }
 
-const ScrollArea = React.forwardRef<HTMLDivElement, ScrollAreaProps>(
-  ({ className, children, onScroll, ...props }, ref) => {
+const ScrollArea = ({
+  className,
+  children,
+  onScroll,
+  ref,
+  ...props
+}: ScrollAreaProps & {
+  ref?: React.Ref<HTMLDivElement>;
+}) => {
     return (
       <ScrollAreaPrimitive.Root
         className={cn("relative overflow-hidden", className)}
@@ -24,8 +31,7 @@ const ScrollArea = React.forwardRef<HTMLDivElement, ScrollAreaProps>(
         <ScrollAreaPrimitive.Corner />
       </ScrollAreaPrimitive.Root>
     );
-  }
-);
+  };
 ScrollArea.displayName = "ScrollArea";
 
 function ScrollBar({

@@ -15,7 +15,6 @@ interface PersistConversationMemoryArgs {
   userId?: string;
   memoryEnabled?: boolean;
   activeTool?: string | null;
-  deepResearchEnabled?: boolean;
   userAttachments?: Attachment[];
   memoryStatus?: Pick<MemoryStatus, "routingDecision">;
   flow?: MemoryPersistenceFlow;
@@ -27,7 +26,6 @@ export function persistConversationMemoryIfEligible({
   userId,
   memoryEnabled = true,
   activeTool,
-  deepResearchEnabled = false,
   userAttachments,
   memoryStatus,
   flow = "send",
@@ -42,7 +40,6 @@ export function persistConversationMemoryIfEligible({
       userMessage,
       assistantMessage: assistantContent,
       activeTool,
-      deepResearchEnabled,
       userAttachments,
       memoryStatus,
       flow,

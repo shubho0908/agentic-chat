@@ -1,11 +1,9 @@
-import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
 import type {
   WebSearchImage,
   WebSearchProgressDetails,
   WebSearchSource,
-  ResearchTask,
 } from './tools';
-import type { GateDecision, EvaluationResult, Citation } from './deepResearch';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
 export enum RoutingDecision {
@@ -83,26 +81,12 @@ export interface MemoryStatus {
       tool?: string;
       error?: string;
 
-      // Deep research fields
-      status?: string; // Deep research status
-      gateDecision?: GateDecision;
+      // Shared fields
+      citations?: MessageMetadata['citations'];
       skipped?: boolean;
-      researchPlan?: ResearchTask[];
+      status?: string;
       currentTaskIndex?: number;
-      totalTasks?: number;
-      completedTasks?: ResearchTask[];
-      evaluationResult?: EvaluationResult;
-      currentAttempt?: number;
-      maxAttempts?: number;
-      strictnessLevel?: 0 | 1 | 2;
-      citations?: Citation[];
-      followUpQuestions?: string[];
-      wordCount?: number;
-      toolProgress?: {
-        toolName: string;
-        status: string;
-        message: string;
-      };
+      completedTasks?: string[];
     };
   };
 }
@@ -120,6 +104,12 @@ export interface VersionData {
 export interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
+  autoContinue?: {
+    session?: { user: { id: string } };
+    activeTool?: string | null;
+    memoryEnabled?: boolean;
+    searchDepth?: SearchDepth;
+  } | null;
 }
 
 export interface SendMessageOptions {
@@ -128,7 +118,6 @@ export interface SendMessageOptions {
   attachments?: Attachment[];
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
 }
 
@@ -142,7 +131,6 @@ export type MessageSendHandler = (
   attachments?: Attachment[],
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
 ) => Promise<MessageSendResult> | MessageSendResult;
 
@@ -153,7 +141,6 @@ export interface EditMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
 }
 
@@ -162,7 +149,6 @@ export interface RegenerateMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
 }
 
@@ -171,7 +157,6 @@ export interface ContinueConversationOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
 }
 
@@ -246,6 +231,5 @@ export interface StreamConfig {
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
 }

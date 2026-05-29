@@ -11,8 +11,6 @@ import {
   hasAnyGoogleWorkspaceScopes,
 } from '@/lib/tools/google-suite/scopes';
 import { getGoogleWorkspaceOAuthReadiness } from '@/lib/tools/google-suite/oauthReadiness';
-import { isAuthRevokedError, synchronizeGoogleAccount } from '@/lib/tools/google-suite/client';
-
 import { logger } from "@/lib/logger";
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +22,6 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
     const account = await prisma.account.findFirst({
       where: { userId: user.id, providerId: GOOGLE_PROVIDER_ID },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, scope: true },
     });
 
     if (!account) {
@@ -42,43 +39,8 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
     }
 
     const oauthReadiness = getGoogleWorkspaceOAuthReadiness(user.email);
-    let synchronizedAccount;
-
-    try {
-      synchronizedAccount = await synchronizeGoogleAccount(user.id);
-    } catch (syncError) {
-      if (isAuthRevokedError(syncError)) {
-        await prisma.account.update({
-          where: { id: account.id },
-          data: {
-            accessToken: null,
-            refreshToken: null,
-            accessTokenExpiresAt: null,
-            refreshTokenExpiresAt: null,
-          },
-        });
-
-        return NextResponse.json<GoogleAuthorizationStatus>({
-          authorized: false,
-          connected: true,
-          workspaceConnected: false,
-          oauthConsentReady: oauthReadiness.ready,
-          oauthConsentMessage: oauthReadiness.message,
-          reason: 'token_invalid',
-          message: 'Google Workspace access expired or was revoked. Reconnect the apps you want in Settings.',
-          grantedScopes: [],
-          configuredScopes: Array.from(getGrantedGoogleScopes(account.scope)),
-          missingScopes: getMissingGoogleWorkspaceScopes(null),
-        });
-      }
-
-      throw syncError;
-    }
-
-    const scope = synchronizedAccount?.scope ?? null;
-    const workspaceConnected = Boolean(
-      synchronizedAccount?.accessToken && synchronizedAccount?.refreshToken
-    );
+    const scope = account.scope;
+    const workspaceConnected = Boolean(account.accessToken && account.refreshToken);
     const configuredScopes = Array.from(getGrantedGoogleScopes(scope));
     const grantedScopes = workspaceConnected ? configuredScopes : [];
     const missingScopes = workspaceConnected
@@ -91,7 +53,7 @@ export async function GET(): Promise<NextResponse<GoogleAuthorizationStatus | { 
         ? 'partial'
         : 'full';
 
-    if (!synchronizedAccount?.accessToken || !synchronizedAccount?.refreshToken) {
+    if (!account.accessToken || !account.refreshToken) {
       return NextResponse.json<GoogleAuthorizationStatus>({
         authorized: false,
         connected: true,

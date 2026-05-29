@@ -126,7 +126,7 @@ export function dedupeCandidates(
 }
 
 function sortByScoreDesc(candidates: RetrievalCandidate[]): RetrievalCandidate[] {
-  return [...candidates].sort((a, b) => b.score - a.score);
+  return candidates.toSorted((a, b) => b.score - a.score);
 }
 
 export function diversifyCandidates(

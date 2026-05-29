@@ -1,6 +1,6 @@
 # Agentic Chat
 
-Multi-modal AI chat platform with intelligent query routing, semantic caching, RAG-powered document intelligence, and autonomous research capabilities.
+Multi-modal AI chat platform with intelligent query routing, semantic caching, RAG-powered document intelligence, and tool-based capabilities.
 
 ## Overview
 
@@ -50,12 +50,6 @@ Conversational AI system built with Next.js 15, React 19, and PostgreSQL. Featur
 - **Google Sheets**: Create, read, write, append, clear ranges
 - **Google Slides**: Create, read, add slides
 - OAuth 2.0 authentication with automatic token refresh
-
-#### Deep Research
-- Multi-step autonomous research with usage limits (3/month)
-- LangGraph-powered workflow: gate check → planning → research tasks → aggregation → evaluation → formatting
-- Intelligent gate system to determine research necessity
-- Iterative quality evaluation with adjustable strictness
 
 ### 📚 Document Intelligence (RAG)
 - **Multi-format Support**: PDF, DOCX, DOC, TXT, XLS, XLSX, CSV
@@ -168,7 +162,7 @@ pgvector-based similarity caching reduces redundant API calls for semantically s
 Documents processed through format-specific loaders, chunked, embedded, stored in pgvector, and retrieved with semantic search + Cohere reranking. Real-time status tracking and batch operations supported.
 
 **Multi-Agent Orchestration**  
-LangGraph-powered workflows with access to RAG, web search, Google Suite, and URL scraping tools. Deep research uses multi-phase workflow with quality evaluation (3/month limit).
+LangGraph-powered workflows with access to RAG, web search, Google Suite, and URL scraping tools.
 
 **Vision Processing**  
 Multimodal support across all models for image analysis, OCR, and hybrid vision+document workflows. Search results include image galleries.

@@ -345,8 +345,9 @@ function MermaidSvgCanvas({
     }
     onSvgRenderedRef.current?.(svgElement);
 
+    const onSvgRenderedSnapshot = onSvgRenderedRef.current;
     return () => {
-      onSvgRenderedRef.current?.(null);
+      onSvgRenderedSnapshot?.(null);
       previewElement.replaceChildren();
     };
   }, [svg]);

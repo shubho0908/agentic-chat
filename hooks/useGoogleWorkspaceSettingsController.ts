@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { authorizeGoogleWorkspace, useSession } from "@/lib/authClient";
@@ -9,7 +9,6 @@ import {
 
   compareGoogleWorkspaceSelections,
   countEnabledGoogleWorkspaceServices,
-  DEFAULT_GOOGLE_WORKSPACE_SELECTIONS,
   getGoogleWorkspaceScopesFromSelections,
   resolveGoogleWorkspaceSelections,
   type GoogleWorkspaceServiceId,
@@ -63,9 +62,10 @@ export function useGoogleWorkspaceSettingsController() {
   const { data: session, isPending } = useSession();
   const { status, isLoading, refetch } = useGoogleSuiteAuth({ enabled: !!session });
   const router = useRouter();
-  const [selectedLevels, setSelectedLevels] = useState<GoogleWorkspaceServiceSelections>(
-    DEFAULT_GOOGLE_WORKSPACE_SELECTIONS
-  );
+  const [userOverride, setUserOverride] = useState<{
+    scopeKey: string;
+    levels: GoogleWorkspaceServiceSelections;
+  } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
   const grantedScopes = status?.grantedScopes ?? [];
@@ -73,18 +73,19 @@ export function useGoogleWorkspaceSettingsController() {
   const currentSelections = resolveGoogleWorkspaceSelections(grantedScopes);
   const suggestedSelections = resolveGoogleWorkspaceSelections(configuredScopes);
   const selectionSource = status?.workspaceConnected ? grantedScopes : configuredScopes;
-  const selectionScopeKey = [...selectionSource].sort().join(",");
+  const selectionScopeKey = selectionSource.toSorted().join(",");
   const hasStatus = Boolean(status);
 
-  useEffect(() => {
-    if (!hasStatus) {
-      return;
-    }
+  const serverDerivedLevels = useMemo(
+    () => resolveGoogleWorkspaceSelections(selectionScopeKey ? selectionScopeKey.split(",") : []),
+    [selectionScopeKey]
+  );
 
-    setSelectedLevels(
-      resolveGoogleWorkspaceSelections(selectionScopeKey ? selectionScopeKey.split(",") : [])
-    );
-  }, [hasStatus, selectionScopeKey]);
+  const selectedLevels =
+    hasStatus && userOverride?.scopeKey === selectionScopeKey
+      ? userOverride.levels
+      : serverDerivedLevels;
+
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -150,14 +151,17 @@ export function useGoogleWorkspaceSettingsController() {
   };
 
   const handleLevelChange = (serviceId: GoogleWorkspaceServiceId, levelId: string) => {
-    setSelectedLevels((current) => ({
-      ...current,
-      [serviceId]: levelId,
-    }));
+    setUserOverride({
+      scopeKey: selectionScopeKey,
+      levels: {
+        ...(userOverride?.scopeKey === selectionScopeKey ? userOverride.levels : serverDerivedLevels),
+        [serviceId]: levelId,
+      },
+    });
   };
 
   const handleResetSelection = () => {
-    setSelectedLevels(currentSelections);
+    setUserOverride(null);
   };
 
   const handleApply = async () => {

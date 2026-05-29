@@ -16,7 +16,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
         number: 1,
         icon: Target,
         label: 'Query Analysis',
-        description: 'Analyzing query and decomposing research questions',
+        description: 'Analyzing query for comprehensive search',
         color: 'text-purple-600 dark:text-purple-400',
         bgColor: 'bg-purple-500/10',
       },

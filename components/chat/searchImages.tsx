@@ -64,7 +64,7 @@ function ImageCard({
     onStatusChange?.(image.url, "loaded");
   }, [image.url, onStatusChange]);
 
-  const handleClick = useCallback(() => {
+  const handleImageClick = useCallback(() => {
     if (isOverflowTile || (!isLoading && !hasError)) {
       onClick();
     }
@@ -78,7 +78,7 @@ function ImageCard({
           ? 'cursor-pointer hover:border-primary/40 hover:shadow-lg active:scale-[0.98]'
           : 'cursor-default'
       } ${className ?? ""}`}
-      onClick={handleClick}
+      onClick={handleImageClick}
       disabled={!isOverflowTile && (isLoading || hasError)}
       aria-label={isOverflowTile ? "Show all images" : image.description || `Open search result image ${index + 1}`}
     >

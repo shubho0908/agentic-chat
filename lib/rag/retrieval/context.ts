@@ -1,5 +1,3 @@
-'use server';
-
 import { searchDocumentChunks } from './search';
 import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';

@@ -19,7 +19,6 @@ import {
 import { validateGoogleToolArgs } from "@/lib/tools/google-suite/toolSchemas";
 import {
   validateRequestedModel,
-  getStageModel,
   getSupportedTemperature,
 } from "@/lib/modelPolicy";
 import { getRequiredEnv } from "@/lib/env";
@@ -35,9 +34,6 @@ import {
   GOOGLE_SIGN_IN_SCOPES,
   resolveGoogleWorkspaceScopesForRequest,
 } from "@/lib/tools/google-suite/scopes";
-import { shouldRetryOrFormat } from "@/lib/tools/deep-research/graph";
-import { DEEP_RESEARCH_MAX_ATTEMPTS } from "@/lib/tools/deep-research/constants";
-import { getNextPendingTaskIndex } from "@/lib/tools/deep-research/nodes/worker";
 import {
   uploadResponsesToAttachments,
   filterDocumentAttachments,
@@ -325,68 +321,6 @@ test("google workspace approval barrier includes batch item identifiers", async 
   assert.match(message, /fileIds: \[file-1, file-2, file-3, \+1 more\]/);
 });
 
-test("deep research exhaustion now formats instead of terminating empty", () => {
-  const nextNode = shouldRetryOrFormat({
-    evaluationResult: {
-      meetsStandards: false,
-      confidenceScore: 0.2,
-      weaknesses: ["missing citations"],
-    },
-    currentAttempt: DEEP_RESEARCH_MAX_ATTEMPTS,
-  } as never);
-
-  assert.equal(nextNode, "formatter");
-});
-
-test("deep research worker retries resume from the next pending task", () => {
-  assert.equal(
-    getNextPendingTaskIndex([
-      {
-        id: "1",
-        question: "done",
-        tools: ["web_search"],
-        status: "completed",
-        retries: 0,
-      },
-      {
-        id: "2",
-        question: "retry",
-        tools: ["web_search"],
-        status: "pending",
-        retries: 1,
-      },
-      {
-        id: "3",
-        question: "later",
-        tools: ["web_search"],
-        status: "pending",
-        retries: 0,
-      },
-    ]),
-    1,
-  );
-
-  assert.equal(
-    getNextPendingTaskIndex([
-      {
-        id: "1",
-        question: "done",
-        tools: ["web_search"],
-        status: "completed",
-        retries: 0,
-      },
-      {
-        id: "2",
-        question: "failed",
-        tools: ["web_search"],
-        status: "failed",
-        retries: 2,
-      },
-    ]),
-    2,
-  );
-});
-
 test("orchestration retry policy uses bounded exponential backoff", () => {
   assert.equal(computeRetryBackoffMs(1), 2000);
   assert.equal(computeRetryBackoffMs(2), 4000);
@@ -436,8 +370,6 @@ test("document error retryability keeps permanent failures out of retry loop", (
 test("server model policy rejects unknown models and downshifts orchestration stages", () => {
   assert.equal(validateRequestedModel("gpt-5.4"), "gpt-5.4");
   assert.equal(validateRequestedModel("not-a-real-model"), null);
-  assert.equal(getStageModel("gpt-5.4", "research_gate"), "gpt-5.4-nano");
-  assert.equal(getStageModel("gpt-5.4", "research_formatter"), "gpt-5.4-mini");
   assert.equal(getSupportedTemperature("gpt-5.4", 0.1), undefined);
   assert.equal(getSupportedTemperature("gpt-5-mini", 0), undefined);
   assert.equal(getSupportedTemperature("gpt-4.1", 0.1), 0.1);

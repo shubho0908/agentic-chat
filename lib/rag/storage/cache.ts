@@ -1,5 +1,3 @@
-'use server';
-
 import { getPgPool, SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS, EMBEDDING_DIMENSIONS } from "./pgvectorClient";
 import { ensurePgVectorTables } from './pgvectorInit';
 import { RAGError, RAGErrorCode } from '../common/errors';

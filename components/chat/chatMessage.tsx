@@ -410,7 +410,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
       prevProgress?.message !== nextProgress?.message ||
       prevProgress?.details?.status !== nextProgress?.details?.status ||
       prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
-      prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
+
       prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
       prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
       return false;

@@ -9,11 +9,8 @@ import { ContextDetails } from "./aiThinkingAnimation/contextDetails";
 import { ThinkingMessage } from "./aiThinkingAnimation/thinkingMessage";
 
 export function AIThinkingAnimation({ memoryStatus, isLoading }: AIThinkingAnimationProps & { isLoading?: boolean }) {
-  const researchSkipped = memoryStatus?.toolProgress?.details?.skipped === true;
-  
   const hasContext =
     memoryStatus &&
-    !researchSkipped &&
     (memoryStatus.hasMemories ||
       memoryStatus.attemptedMemory ||
       memoryStatus.hasDocuments ||

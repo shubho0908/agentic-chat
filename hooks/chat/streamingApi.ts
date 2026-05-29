@@ -10,7 +10,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, searchDepth } = config;
   
   const requestPayload: Record<string, unknown> = {
     model,
@@ -26,9 +26,6 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   }
   if (memoryEnabled !== undefined && memoryEnabled !== true) {
     requestPayload.memoryEnabled = memoryEnabled;
-  }
-  if (deepResearchEnabled === true) {
-    requestPayload.deepResearchEnabled = true;
   }
   if (searchDepth && searchDepth !== 'basic') {
     requestPayload.searchDepth = searchDepth;

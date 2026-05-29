@@ -1,121 +1,6 @@
-import type { ElementType, ReactElement } from "react";
-import type { ExportConversation, ExportMessage } from "@/types/export";
-
-const styles = {
-  page: {
-    padding: 40,
-    fontSize: 10,
-    fontFamily: "Helvetica",
-    backgroundColor: "#ffffff",
-    lineHeight: 1.5,
-  },
-  header: {
-    marginBottom: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1.5,
-    borderBottomColor: "#000000",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 8,
-    color: "#000000",
-  },
-  metadata: {
-    fontSize: 8,
-    color: "#666666",
-    marginTop: 5,
-    lineHeight: 1.4,
-  },
-  metadataRow: {
-    flexDirection: "row",
-    marginBottom: 2,
-    flexWrap: "wrap",
-  },
-  metadataLabel: {
-    fontWeight: "bold",
-    width: 65,
-    marginRight: 5,
-  },
-  metadataValue: {
-    flex: 1,
-  },
-  messageContainer: {
-    marginBottom: 16,
-    padding: 10,
-    backgroundColor: "#fafafa",
-    borderRadius: 2,
-    borderLeftWidth: 2,
-    borderLeftColor: "#000000",
-  },
-  messageHeader: {
-    marginBottom: 6,
-    paddingBottom: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#cccccc",
-  },
-  messageHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  messageRole: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#000000",
-    marginRight: 10,
-  },
-  messageTime: {
-    fontSize: 7,
-    color: "#666666",
-  },
-  messageContent: {
-    fontSize: 9,
-    lineHeight: 1.5,
-    color: "#000000",
-  },
-  attachmentsSection: {
-    marginTop: 8,
-    paddingTop: 6,
-    borderTopWidth: 0.5,
-    borderTopColor: "#cccccc",
-  },
-  attachmentsTitle: {
-    fontSize: 8,
-    fontWeight: "bold",
-    color: "#000000",
-    marginBottom: 4,
-  },
-  attachment: {
-    fontSize: 7,
-    color: "#333333",
-    marginBottom: 4,
-    paddingLeft: 8,
-    lineHeight: 1.4,
-  },
-  attachmentName: {
-    fontWeight: "bold",
-    color: "#000000",
-  },
-  attachmentUrl: {
-    fontSize: 6,
-    color: "#666666",
-    marginTop: 1,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 25,
-    left: 40,
-    right: 40,
-    textAlign: "center",
-    fontSize: 7,
-    color: "#666666",
-    borderTopWidth: 0.5,
-    borderTopColor: "#cccccc",
-    paddingTop: 8,
-  },
-} as const;
+import type { ElementType } from "react";
+import type { ExportMessage } from "@/types/export";
+import { styles } from "./pdfStyles";
 
 interface MessageComponentProps {
   message: ExportMessage;
@@ -125,32 +10,11 @@ interface MessageComponentProps {
   View: ElementType;
 }
 
-function formatDate(dateString: string | undefined | null): string {
-  if (!dateString) {
-    return "Date unavailable";
-  }
-
-  const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Invalid date";
-  }
-
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
 function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(2)} KB`;
 }
 
-function MessageComponent({
+export function MessageComponent({
   message,
   index,
   includeAttachments,
@@ -195,68 +59,23 @@ function MessageComponent({
   );
 }
 
-export async function createConversationPDFDocument(
-  conversation: ExportConversation,
-  includeAttachments = true,
-): Promise<ReactElement> {
-  const { Document, Page, Text, View } = await import("@react-pdf/renderer");
+function formatDate(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return "Date unavailable";
+  }
 
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header} fixed>
-          <Text style={styles.title}>
-            {conversation.title || "Untitled Conversation"}
-          </Text>
-          <View style={styles.metadata}>
-            <View style={styles.metadataRow}>
-              <Text style={styles.metadataLabel}>Created:</Text>
-              <Text style={styles.metadataValue}>
-                {formatDate(conversation.createdAt)}
-              </Text>
-            </View>
-            <View style={styles.metadataRow}>
-              <Text style={styles.metadataLabel}>Updated:</Text>
-              <Text style={styles.metadataValue}>
-                {formatDate(conversation.updatedAt)}
-              </Text>
-            </View>
-            <View style={styles.metadataRow}>
-              <Text style={styles.metadataLabel}>Exported:</Text>
-              <Text style={styles.metadataValue}>
-                {formatDate(conversation.exportedAt)}
-              </Text>
-            </View>
-            {conversation.user?.name ? (
-              <View style={styles.metadataRow}>
-                <Text style={styles.metadataLabel}>User:</Text>
-                <Text style={styles.metadataValue}>{conversation.user.name}</Text>
-              </View>
-            ) : null}
-            <View style={styles.metadataRow}>
-              <Text style={styles.metadataLabel}>Messages:</Text>
-              <Text style={styles.metadataValue}>{conversation.messages.length}</Text>
-            </View>
-          </View>
-        </View>
+  const date = new Date(dateString);
 
-        {conversation.messages.map((message, index) => (
-          <MessageComponent
-            key={message.id}
-            message={message}
-            index={index + 1}
-            includeAttachments={includeAttachments}
-            Text={Text}
-            View={View}
-          />
-        ))}
+  if (Number.isNaN(date.getTime())) {
+    return "Invalid date";
+  }
 
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`}
-          fixed
-        />
-      </Page>
-    </Document>
-  );
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }

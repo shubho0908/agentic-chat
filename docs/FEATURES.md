@@ -8,7 +8,6 @@ Visual walkthroughs showcasing the key capabilities of Agentic Chat.
 |---------|-------------|
 | [Web Search](#web-search) | Real-time internet search with AI planning |
 | [RAG Document Intelligence](#rag-document-intelligence) | Multi-format document processing with semantic search |
-| [Deep Research](#deep-research) | Autonomous multi-step research workflows |
 | [URL Scraping](#url-scraping) | Automatic web page content extraction |
 | [Google Suite Integration](#google-suite-integration) | Gmail, Calendar, Drive, Docs, Sheets, Slides |
 
@@ -57,22 +56,6 @@ https://github.com/user-attachments/assets/b368b5c0-0bc1-462d-bad7-a8a25710deba
 
 ---
 
-## Deep Research
-
-Autonomous multi-step research using LangGraph workflows (3 uses/month).
-
-**Workflow Phases:**
-1. **Gate Check** - Determines if deep research is necessary
-2. **Planning** - Breaks down query into research steps
-3. **Parallel Research** - Executes searches concurrently
-4. **Aggregation** - Synthesizes findings
-5. **Evaluation** - Quality assessment with iterative refinement
-6. **Formatting** - Structured output generation
-
-
-https://github.com/user-attachments/assets/4cb42b81-a6da-47a6-813b-991d4a3ba28f
-
----
 
 ## URL Scraping
 

@@ -240,11 +240,6 @@ export const GOOGLE_WORKSPACE_SERVICE_CONFIGS: GoogleWorkspaceServiceConfig[] = 
 
 export type GoogleWorkspaceServiceSelections = Record<GoogleWorkspaceServiceId, string>;
 
-export const DEFAULT_GOOGLE_WORKSPACE_SELECTIONS: GoogleWorkspaceServiceSelections =
-  GOOGLE_WORKSPACE_SERVICE_CONFIGS.reduce((acc, service) => {
-    acc[service.id] = "off";
-    return acc;
-  }, {} as GoogleWorkspaceServiceSelections);
 
 function uniqueScopes(scopes: string[]): string[] {
   return Array.from(new Set(scopes));

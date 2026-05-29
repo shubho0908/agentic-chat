@@ -2,9 +2,9 @@ import { z } from "zod";
 
 export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
-export const toolStatusSchema = z.enum(["calling", "completed", "error"]);
+const toolStatusSchema = z.enum(["calling", "completed", "error"]);
 
-export const attachmentSchema = z.object({
+const attachmentSchema = z.object({
   id: z.string().optional(),
   fileUrl: z.url(),
   fileName: z.string(),
@@ -99,15 +99,7 @@ const messageMetadataBaseSchema = z.object({
     searchIndex: z.number().optional(),
     searchQuery: z.string().optional(),
   })).optional(),
-  researchTask: z.object({
-    gateDecision: z.object({
-      shouldResearch: z.boolean(),
-      reason: z.string(),
-      confidence: z.enum(['low', 'medium', 'high']),
-    }).optional(),
-    totalTasks: z.number().optional(),
-    completedTasks: z.number().optional(),
-  }).optional(),
+
 });
 
 export const messageMetadataSchema = messageMetadataBaseSchema.optional();
@@ -130,7 +122,7 @@ type MessageType = z.infer<typeof baseMessageSchema> & {
   versions?: MessageType[];
 };
 
-export const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
+const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
   versions: z.array(z.lazy(() => messageSchema)).optional(),
 });
 

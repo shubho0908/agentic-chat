@@ -28,7 +28,6 @@ export async function handleRegenerateResponse(
   context: RegenerateContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -83,8 +82,7 @@ export async function handleRegenerateResponse(
     const useCaching = shouldUseSemanticCache(
       messagesUpToAssistant,
       previousUserMessage.attachments,
-      activeTool,
-      deepResearchEnabled
+      activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model);
@@ -199,12 +197,8 @@ export async function handleRegenerateResponse(
           }
         }
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deepResearchUsage'] });
-      },
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
-      deepResearchEnabled: deepResearchEnabled ?? false,
       searchDepth: searchDepth ?? 'basic',
     });
 
@@ -265,7 +259,6 @@ export async function handleRegenerateResponse(
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,
-        deepResearchEnabled: deepResearchEnabled ?? false,
         userAttachments: previousUserMessage.attachments,
         memoryStatus: currentMemoryStatus,
         flow: "regenerate",

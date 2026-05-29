@@ -69,7 +69,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                 </div>
               </div>
             ) : (
-              <span className="text-[15px] text-muted-foreground sm:text-[13px]">Select a model...</span>
+              <span className="text-[15px] text-muted-foreground sm:text-[13px]">Select a model…</span>
             )}
             <div className="flex items-center justify-center size-6 text-muted-foreground/50 group-hover:text-foreground shrink-0 transition-colors">
               <ChevronDown className="size-[14px]" />

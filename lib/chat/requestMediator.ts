@@ -217,8 +217,7 @@ export function buildMemoryLookupQueries(
   }
 
   return Array.from(queries)
-    .map((query) => trimAndNormalize(query))
-    .filter(Boolean)
+    .flatMap((query) => { const q = trimAndNormalize(query); return q ? [q] : []; })
     .slice(0, 5);
 }
 

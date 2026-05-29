@@ -1,11 +1,10 @@
-import { Telescope, Globe } from "lucide-react";
+import { Globe } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { GoogleIcon } from "@/components/icons/googleIcon";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',
-  DEEP_RESEARCH: 'deep_research',
   GOOGLE_SUITE: 'google_suite',
 } as const;
 
@@ -38,19 +37,6 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
       to: '#4f46e5',
     },
     iconColorClass: 'text-blue-500',
-  },
-  [TOOL_IDS.DEEP_RESEARCH]: {
-    id: TOOL_IDS.DEEP_RESEARCH,
-    name: 'Deep Research',
-    description: 'Multi-step comprehensive research',
-    icon: Telescope,
-    inputPrefix: 'Research topic: ',
-    gradientColors: {
-      from: '#ffffff',
-      via: '#7031ff',
-      to: '#6e70db',
-    },
-    iconColorClass: 'text-black dark:text-white',
   },
   [TOOL_IDS.GOOGLE_SUITE]: {
     id: TOOL_IDS.GOOGLE_SUITE,

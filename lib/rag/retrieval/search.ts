@@ -1,5 +1,3 @@
-'use server';
-
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { ensurePgVectorTables } from '../storage/pgvectorInit';
@@ -82,7 +80,7 @@ export async function searchDocumentChunks(
   
   await vectorStore.ensureTableInDatabase();
 
-  const filter: Record<string, string | { $in: string[] }> = {
+  const filter: Record<string, string | { in: string[] }> = {
     userId,
   };
 
@@ -91,7 +89,7 @@ export async function searchDocumentChunks(
   }
 
   if (attachmentIds && attachmentIds.length > 0) {
-    filter.attachmentId = { $in: attachmentIds };
+    filter.attachmentId = { in: attachmentIds };
   }
 
   const enableReranking = useReranking && RAG_CONFIG.rerank.enabled;

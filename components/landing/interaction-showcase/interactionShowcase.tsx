@@ -5,7 +5,6 @@ import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "
 import { useInteractionTimeline, useShowcaseWidth, useViewportBounds } from "@/components/landing/interaction-showcase/hooks";
 import { DeviceShell } from "@/components/landing/interaction-showcase/primitives";
 import {
-  DeepResearchScene,
   GoogleWorkspaceScene,
   WebSearchScene,
 } from "@/components/landing/interaction-showcase/scenes";
@@ -44,13 +43,6 @@ export function InteractionShowcase() {
               {scene === "web" && (
                 <WebSearchScene
                   device={device}
-                  step={step}
-                  sceneElapsed={sceneElapsed}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
-              {scene === "research" && (
-                <DeepResearchScene
                   step={step}
                   sceneElapsed={sceneElapsed}
                   prefersReducedMotion={prefersReducedMotion}

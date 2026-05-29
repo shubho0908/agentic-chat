@@ -63,12 +63,12 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
               duration: 0.2,
               ease: [0.16, 1, 0.3, 1]
             }}
-            className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-xl backdrop-blur-xl dark:bg-black/80"
+            className="relative overflow-hidden rounded-2xl border border-border bg-background shadow-xl backdrop-blur-xl dark:bg-gray-950/80"
           >
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
 
             <div className="p-8">
-              <div className="flex flex-col items-center text-center space-y-6">
+              <div className="flex flex-col items-center text-center gap-y-6">
                 <Image
                   src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
                   alt="Agentic Chat"
@@ -103,8 +103,8 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                       exit={{ opacity: 0 }}
                       className="flex items-center gap-2"
                     >
-                      <Loader className="w-4 h-4 animate-spin" />
-                      <span>Signing in...</span>
+                      <Loader className="size-4 animate-spin" />
+                      <span>Signing in…</span>
                     </m.div>
                   ) : (
                     <m.div
@@ -114,7 +114,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
                       exit={{ opacity: 0 }}
                       className="flex items-center gap-2.5"
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <svg className="size-4" viewBox="0 0 24 24">
                         <path
                           fill="#4285F4"
                           d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

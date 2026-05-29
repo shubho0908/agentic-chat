@@ -30,7 +30,6 @@ export async function handleEditMessage(
   context: EditMessageContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
   searchDepth?: SearchDepth
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -105,8 +104,7 @@ export async function handleEditMessage(
     const useCaching = shouldUseSemanticCache(
       messagesUpToEdit,
       attachments,
-      activeTool,
-      deepResearchEnabled
+      activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model);
@@ -221,12 +219,8 @@ export async function handleEditMessage(
           }
         }
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deepResearchUsage'] });
-      },
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
-      deepResearchEnabled: deepResearchEnabled ?? false,
       searchDepth: searchDepth ?? 'basic',
     });
 
@@ -337,7 +331,6 @@ export async function handleEditMessage(
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,
-        deepResearchEnabled: deepResearchEnabled ?? false,
         userAttachments: attachments,
         memoryStatus: currentMemoryStatus,
         flow: "edit",

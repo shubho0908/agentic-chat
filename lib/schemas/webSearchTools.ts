@@ -15,7 +15,7 @@ export const webSearchParamsSchema = z.object({
     .default('basic')
     .describe(`Search depth mode:
 - BASIC: Quick search with 3-5 results for fast responses to straightforward queries. Optimized for speed and efficiency. Use when the user needs quick facts, definitions, or simple information.
-- ADVANCED: Deep search with 10-15 results for comprehensive research. Provides extensive coverage, multiple perspectives, and detailed analysis. Use when the query is complex, requires thorough investigation, or the user explicitly asks for in-depth information.`),
+- ADVANCED: Deep search with 10-15 results for comprehensive coverage. Provides extensive coverage, multiple perspectives, and detailed analysis. Use when the query is complex, requires thorough investigation, or the user explicitly asks for in-depth information.`),
   includeAnswer: z
     .boolean()
     .optional()
@@ -25,7 +25,7 @@ export const webSearchParamsSchema = z.object({
     .boolean()
     .optional()
     .default(true)
-    .describe('Whether to include relevant images in the search results. When enabled, returns image URLs that visually complement the text results. Useful for visual research, product searches, diagrams, infographics, and any query that benefits from visual context.'),
+    .describe('Whether to include relevant images in the search results. When enabled, returns image URLs that visually complement the text results. Useful for visual context, product searches, diagrams, infographics, and any query that benefits from visual context.'),
 });
 
 export function getRecommendedMaxResults(searchDepth: SearchDepth, customMax?: number): number {

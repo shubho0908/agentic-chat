@@ -3,13 +3,12 @@ import type OpenAI from 'openai';
 import { z } from 'zod';
 import { UNIFIED_SYSTEM_PROMPT } from '@/lib/prompts';
 import { WEB_SEARCH_PLANNING_PROMPT } from '@/lib/tools/web-search/prompts';
-import { PLANNER_SYSTEM_PROMPT as DEEP_RESEARCH_PLANNING_PROMPT } from '@/lib/tools/deep-research/prompts';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { getStageModel } from '@/lib/modelPolicy';
 
 
 import { logger } from "@/lib/logger";
-type ToolType = 'web_search' | 'deep_research' | 'google_suite';
+type ToolType = 'web_search' | 'google_suite';
 
 interface UnifiedPlannerConfig {
   query: string;
@@ -39,16 +38,6 @@ export interface WebSearchPlan {
   reasoning: string;
 }
 
-export interface DeepResearchPlan {
-  questions: Array<{
-    question: string;
-    rationale: string;
-    suggestedTools: string[];
-  }>;
-  complexity: 'simple' | 'moderate' | 'complex';
-  reasoning: string;
-}
-
 interface GoogleSuitePlan {
   actions: Array<{
     tool: string;
@@ -60,7 +49,7 @@ interface GoogleSuitePlan {
   reasoning: string;
 }
 
-type UnifiedPlan = WebSearchPlan | DeepResearchPlan | GoogleSuitePlan;
+type UnifiedPlan = WebSearchPlan | GoogleSuitePlan;
 
 const webSearchPlannerOutputSchema = z.object({
   queryType: z.enum(['factual', 'comparative', 'analytical', 'exploratory', 'how-to', 'current-events']),
@@ -72,14 +61,6 @@ const webSearchPlannerOutputSchema = z.object({
     priority: z.enum(['high', 'medium', 'low']),
   })).min(1),
   reasoning: z.string(),
-});
-
-const deepResearchPlanSchema = z.object({
-  plan: z.array(z.object({
-    question: z.string(),
-    rationale: z.string(),
-    suggestedTools: z.array(z.string()).min(1),
-  })).min(1),
 });
 
 const googleSuitePlanSchema = z.object({
@@ -97,8 +78,6 @@ function getToolSpecificPrompt(toolType: ToolType): string {
   switch (toolType) {
     case 'web_search':
       return WEB_SEARCH_PLANNING_PROMPT;
-    case 'deep_research':
-      return DEEP_RESEARCH_PLANNING_PROMPT;
     case 'google_suite':
       return GOOGLE_SUITE_PLANNING_PROMPT;
   }
@@ -144,11 +123,6 @@ function buildUserPrompt(config: UnifiedPlannerConfig): string {
     prompt += `\nCRITICAL: The user has attached images. Your plan MUST reference the visual information shown.`;
   }
 
-  if (config.hasDocuments && config.toolType === 'deep_research') {
-    prompt += `\n\nAvailable: "rag" tool for document queries + "web_search" for internet research.`;
-    prompt += `\nPrioritize combining both tools for comprehensive answers.`;
-  }
-
   if (config.conversationHistory && config.conversationHistory.length > 0) {
     const recentHistory = config.conversationHistory.slice(-3);
     prompt += `\n\n## CONVERSATION CONTEXT:\n${recentHistory.map(m => `${m.role}: ${serializeMessageContent(m.content)}`).join('\n')}`;
@@ -178,20 +152,6 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
           totalResultsNeeded: 10,
           reasoning: 'Fallback: single direct search',
         } as WebSearchPlan;
-
-      case 'deep_research':
-        const defaultTools = config.hasDocuments ? ['rag', 'web_search'] : ['web_search'];
-        return {
-          questions: [
-            {
-              question: config.query,
-              rationale: 'Direct research (fallback)',
-              suggestedTools: defaultTools,
-            },
-          ],
-          complexity: 'moderate',
-          reasoning: 'Fallback: direct research question',
-        } as DeepResearchPlan;
 
       case 'google_suite':
         return {
@@ -265,46 +225,6 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
       }
 
       plan.originalQuery = config.query;
-
-      return plan;
-    }
-
-    if (config.toolType === 'deep_research') {
-      const parsed = await llm
-        .withStructuredOutput(deepResearchPlanSchema)
-        .invoke(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          { signal: config.abortSignal }
-        );
-      const questions = parsed.plan || [];
-      
-      if (questions.length === 0) {
-        return createFallbackPlan();
-      }
-
-      const plan: DeepResearchPlan = {
-        questions,
-        complexity: questions.length <= 3 ? 'simple' : questions.length <= 4 ? 'moderate' : 'complex',
-        reasoning: 'Research plan generated',
-      };
-
-      if (plan.questions.length > 6) {
-        plan.questions = plan.questions.slice(0, 6);
-      }
-
-      const webSearchCount = plan.questions.filter(q => q.suggestedTools.includes('web_search')).length;
-      if (webSearchCount < 2 && plan.questions.length >= 2) {
-        let added = 0;
-        for (let i = 0; i < plan.questions.length && added < 2 - webSearchCount; i++) {
-          if (!plan.questions[i].suggestedTools.includes('web_search')) {
-            plan.questions[i].suggestedTools = [...plan.questions[i].suggestedTools, 'web_search'];
-            added++;
-          }
-        }
-      }
 
       return plan;
     }

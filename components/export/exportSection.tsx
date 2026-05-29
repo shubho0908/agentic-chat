@@ -79,7 +79,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
           break;
         case 'pdf':
           {
-            const { createConversationPDFDocument } = await import("./conversationPdf");
+            const { createConversationPDFDocument } = await import("./createConversationPDFDocument");
             await downloadPDF(
               conversationData,
               await createConversationPDFDocument(conversationData, true)
@@ -162,7 +162,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
         {isExporting ? (
           <>
             <Loader className="size-4 animate-spin mr-2" />
-            Exporting...
+            Exporting…
           </>
         ) : (
           <>

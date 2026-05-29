@@ -4,12 +4,6 @@ type ModelStage =
   | "chat"
   | "vision"
   | "tool_planner"
-  | "research_gate"
-  | "research_planner"
-  | "research_worker"
-  | "research_aggregator"
-  | "research_evaluator"
-  | "research_formatter"
   | "workspace_agent";
 
 const ALLOWED_MODELS = new Map(OPENAI_MODELS.map((model) => [model.id, model]));
@@ -18,12 +12,6 @@ const STAGE_MODEL_FALLBACKS: Record<ModelStage, string> = {
   chat: DEFAULT_MODEL,
   vision: "gpt-5.4-mini",
   tool_planner: "gpt-5.4-nano",
-  research_gate: "gpt-5.4-nano",
-  research_planner: "gpt-5.4-nano",
-  research_worker: "gpt-5.4-mini",
-  research_aggregator: "gpt-5.4-mini",
-  research_evaluator: "gpt-5.4-nano",
-  research_formatter: "gpt-5.4-mini",
   workspace_agent: "gpt-5.4-mini",
 };
 

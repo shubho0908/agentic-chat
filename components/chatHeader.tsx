@@ -4,7 +4,7 @@ import { type RefObject } from "react";
 import { LogIn, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarTriggerWithShortcut } from "@/components/sidebarTriggerWithShortcut";
-import { BYOK } from "@/components/byok";
+import { Byok } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
 import { UserMenu } from "@/components/userMenu";
 import { ShareDialog } from "@/components/shareDialog";
@@ -13,7 +13,6 @@ import { useSession } from "@/lib/authClient";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatHeaderProps {
-  onConfigured: (configured: boolean) => void;
   onNewChat: () => void;
   byokTriggerRef?: RefObject<HTMLButtonElement | null>;
   autoOpenByok?: boolean;
@@ -24,7 +23,6 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({
-  onConfigured,
   byokTriggerRef,
   autoOpenByok = false,
   conversationId,
@@ -63,9 +61,8 @@ export function ChatHeader({
                   }
                 />
               )}
-              <BYOK
+              <Byok
                 autoOpen={autoOpenByok}
-                onConfigured={onConfigured}
                 triggerRef={byokTriggerRef}
                 hiddenTrigger
               />

@@ -1,0 +1,6 @@
+{
+  "serverAuthFunctionNames": ["getAuthenticatedUser"],
+  "ignore": {
+    "files": ["app/api/og/**"]
+  }
+}

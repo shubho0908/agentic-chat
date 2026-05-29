@@ -16,11 +16,6 @@ interface ToolMenuItemDrawerProps {
   isActive: boolean;
   isAuthenticated: boolean;
   searchDepth?: SearchDepth;
-  deepResearchUsage?: {
-    remaining: number;
-    limit: number;
-    loading: boolean;
-  };
   googleSuiteStatus?: {
     authorized: boolean;
     loading: boolean;
@@ -179,13 +174,13 @@ function GoogleSuiteDrawerItem({
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
-  const router = useRouter();
+  const { push } = useRouter();
   const ToolIcon = tool.icon;
 
   const handleOpenGoogleSettings = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    router.push("/settings/google-workspace");
+    push("/settings/google-workspace");
   };
 
   return (
@@ -201,7 +196,7 @@ function GoogleSuiteDrawerItem({
         )}
         onClick={() => {
           if (googleSuiteNeedsSetup) {
-            router.push("/settings/google-workspace");
+            push("/settings/google-workspace");
             return;
           }
 
@@ -274,7 +269,7 @@ function StandardDrawerItem({
   needsPermissions,
   onToolSelect,
 }: ToolMenuItemCommonProps) {
-  const router = useRouter();
+  const { push } = useRouter();
   const ToolIcon = tool.icon;
 
   return (
@@ -289,7 +284,7 @@ function StandardDrawerItem({
       )}
       onClick={() => {
         if (googleSuiteNeedsSetup) {
-          router.push("/settings/google-workspace");
+          push("/settings/google-workspace");
           return;
         }
 
@@ -348,11 +343,9 @@ export function ToolMenuItemDrawer({
   isActive,
   isAuthenticated,
   searchDepth = 'basic',
-  deepResearchUsage,
   googleSuiteStatus,
   onToolSelect,
 }: ToolMenuItemDrawerProps) {
-  const isDeepResearch = tool.id === TOOL_IDS.DEEP_RESEARCH;
   const isGoogleSuite = tool.id === TOOL_IDS.GOOGLE_SUITE;
   const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
   const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
@@ -366,7 +359,6 @@ export function ToolMenuItemDrawer({
     !googleSuiteStatus?.workspaceConnected;
   const isDisabled =
     !isAuthenticated ||
-    (isDeepResearch && !deepResearchUsage?.loading && deepResearchUsage?.remaining === 0) ||
     (isGoogleSuite && !!googleSuiteStatus?.loading);
   const needsPermissions =
     isGoogleSuite &&
@@ -379,7 +371,6 @@ export function ToolMenuItemDrawer({
     isActive,
     isAuthenticated,
     searchDepth,
-    deepResearchUsage,
     googleSuiteStatus,
     onToolSelect,
     isDisabled,

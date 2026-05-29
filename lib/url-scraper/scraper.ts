@@ -211,7 +211,7 @@ export function stripUrlsFromText(text: string): string {
 export function extractUrlsFromMessage(message: string | Array<{ type: string; text?: string }>): string[] {
   const textContent = typeof message === 'string' 
     ? message 
-    : message.filter(p => p.type === 'text' && p.text).map(p => p.text || '').join(' ');
+    : message.flatMap(p => p.type === 'text' && p.text ? [p.text] : []).join(' ');
 
   const matches = textContent.match(URL_REGEX);
   if (!matches) return [];

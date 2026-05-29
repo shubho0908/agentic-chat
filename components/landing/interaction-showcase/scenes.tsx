@@ -11,12 +11,9 @@ import {
   DRIVE_RESPONSE,
   GMAIL_RESPONSE,
   PANEL_SURFACE_CLASS,
-  RESEARCH_REPORT,
-  RESEARCH_STEPS,
   SCENE_TRANSITION,
   SOFT_BORDER_CLASS,
   SOURCE_ITEMS,
-  SUBTLE_PANEL_SURFACE_CLASS,
   SURFACE_BORDER_CLASS,
   WEB_IMAGE_ITEMS,
   WEB_RESPONSE,
@@ -24,14 +21,12 @@ import {
 import {
   AssistantShell,
   AutoScrollStage,
-  ProcessMarker,
   ResponseBubble,
   SceneFrame,
   ServiceAction,
   UserBubble,
 } from "@/components/landing/interaction-showcase/primitives";
 import {
-  getResearchStepState,
   getResponsiveTypingSpeed,
   getStepStart,
   getTypedText,
@@ -209,117 +204,6 @@ export function WebSearchScene({
                   prefersReducedMotion={prefersReducedMotion}
                 />
               ))}
-            </AnimatePresence>
-          </AutoScrollStage>
-        </AssistantShell>
-      </div>
-    </SceneFrame>
-  );
-}
-
-export function DeepResearchScene({
-  step,
-  sceneElapsed,
-  prefersReducedMotion,
-}: {
-  step: number;
-  sceneElapsed: number;
-  prefersReducedMotion: boolean;
-}) {
-  const reportStartStep = 7;
-  const report = getTypedText(
-    RESEARCH_REPORT,
-    sceneElapsed,
-    getStepStart("research", reportStartStep),
-    getResponsiveTypingSpeed({
-      scene: "research",
-      startStep: reportStartStep,
-      target: RESEARCH_REPORT,
-      preferredSpeed: 2.8,
-    }),
-  );
-  const visibleSteps = Math.min(step, RESEARCH_STEPS.length);
-  const reportVisible = step >= 7;
-  const motionProps = getMotionProps(prefersReducedMotion);
-
-  return (
-    <SceneFrame title="Deep research" caption="Multi-step research with quality control">
-      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
-        <UserBubble text="Do a comprehensive deep research run on how AI search products are repositioning for enterprise adoption." />
-
-        <AssistantShell>
-          <AutoScrollStage>
-            <AnimatePresence initial={false}>
-              {visibleSteps > 0 && (
-                <m.div
-                  key="research-pipeline"
-                  {...motionProps}
-                  className={`overflow-hidden rounded-2xl px-3 py-3 ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}
-                >
-                  <div className="flex flex-col gap-1.5">
-                    {RESEARCH_STEPS.slice(0, visibleSteps).map((item, index) => {
-                      const state = getResearchStepState(step, index);
-
-                      return (
-                        <div
-                          key={item.key}
-                          className={`rounded-xl border px-3 py-2 ${
-                            state === "current"
-                              ? `border-border ${CHIP_SURFACE_CLASS}`
-                              : state === "completed"
-                                ? `border-border/50 ${SUBTLE_PANEL_SURFACE_CLASS}`
-                                : `border-border/40 ${PANEL_SURFACE_CLASS}`
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <ProcessMarker state={state} prefersReducedMotion={prefersReducedMotion} />
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-[11px] font-medium text-foreground sm:text-[12px]">{item.title}</p>
-                                {item.key === "evaluator" && step >= 5 && (
-                                  <span className="rounded-md border border-emerald-500/18 bg-emerald-500/[0.08] px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:border-emerald-400/[0.18] dark:text-emerald-300 sm:text-[11px]">
-                                    91%
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-1 text-[10px] leading-[1.05rem] text-muted-foreground dark:text-white/[0.54] sm:text-[11px] sm:leading-[1.1rem]">
-                                {item.detail}
-                              </p>
-                              {item.key === "worker" && step >= 3 && (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {["packaging shifts", "review workflows", "trust signals"].map((task) => (
-                                    <span
-                                      key={task}
-                                      className={`rounded-md px-1.5 py-0.5 text-[9px] text-muted-foreground sm:text-[10px] ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}
-                                    >
-                                      {task}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </m.div>
-              )}
-
-              {reportVisible && (
-                <TimelineItem
-                  itemKey="research-report"
-                  node={
-                    <ResponseBubble
-                      text={report}
-                      minHeight="min-h-[148px]"
-                      showCursor={!prefersReducedMotion}
-                      prefersReducedMotion={prefersReducedMotion}
-                    />
-                  }
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
             </AnimatePresence>
           </AutoScrollStage>
         </AssistantShell>

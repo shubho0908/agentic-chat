@@ -1,6 +1,14 @@
 import { SourcesSheet } from "./sourcesSheet";
-import type { Citation } from "@/types/deepResearch";
 import { OpenAIIcon } from "@/components/icons/openaiIcon";
+
+interface Citation {
+  id?: string | null;
+  source?: string | null;
+  author?: string | null;
+  year?: string | number | null;
+  url?: string | null;
+  relevance?: string | null;
+}
 
 const EMPTY_CITATIONS: Citation[] = [];
 

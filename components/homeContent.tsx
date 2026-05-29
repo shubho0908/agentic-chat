@@ -11,10 +11,11 @@ import { AuthModal } from "@/components/authModal";
 import { LandingPage } from "@/components/landingPage";
 import { Loader } from "lucide-react";
 import { useSession } from "@/lib/authClient";
+import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
+import { getActiveTool, getMemoryEnabled, getSearchDepth } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -48,7 +49,8 @@ interface HomeContentProps {
 export function HomeContent({ currentYear }: HomeContentProps) {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat();
   const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({ memoryStatus });
-  const [isConfigured, setIsConfigured] = useState(false);
+  const { data: apiKeyData } = useApiKey();
+  const isConfigured = apiKeyData?.exists ?? false;
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [{ timedOut }, dispatchSessionLoad] = useReducer(sessionLoadReducer, { timedOut: false });
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
@@ -78,7 +80,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader className="size-5 animate-spin" />
-          <span>Loading...</span>
+          <span>Loading…</span>
         </div>
       </div>
     );
@@ -105,18 +107,16 @@ export function HomeContent({ currentYear }: HomeContentProps) {
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled });
+    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -137,7 +137,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       return { success: false, error: "API key required" };
     }
     const searchDepth = getSearchDepth();
-    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, searchDepth });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
@@ -146,14 +146,12 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     }
     const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
     const searchDepth = getSearchDepth();
     await sendMessage({
       content: question,
       session,
       activeTool,
       memoryEnabled,
-      deepResearchEnabled,
       searchDepth
     });
   };
@@ -174,7 +172,6 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     return (
       <>
         <ChatHeader
-          onConfigured={setIsConfigured}
           onNewChat={clearChat}
           byokTriggerRef={byokTriggerRef}
           autoOpenByok={true}
@@ -194,7 +191,6 @@ export function HomeContent({ currentYear }: HomeContentProps) {
   return (
     <div className="flex h-screen flex-col">
       <ChatHeader
-        onConfigured={setIsConfigured}
         onNewChat={clearChat}
         byokTriggerRef={byokTriggerRef}
       />

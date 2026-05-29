@@ -41,9 +41,10 @@ export function ShareDialog({
     : "";
 
   useEffect(() => {
+    const timeout = copiedTimeoutRef.current;
     return () => {
-      if (copiedTimeoutRef.current) {
-        clearTimeout(copiedTimeoutRef.current);
+      if (timeout) {
+        clearTimeout(timeout);
       }
     };
   }, []);

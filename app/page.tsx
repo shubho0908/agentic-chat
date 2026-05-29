@@ -79,7 +79,7 @@ export default async function Home() {
             <div className="flex h-screen items-center justify-center">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Loader className="size-5 animate-spin" />
-                <span>Loading...</span>
+                <span>Loading…</span>
               </div>
             </div>
           }

@@ -67,7 +67,7 @@ function NotFoundHeader() {
     <CardHeader className="text-center space-y-6 pb-6">
       <div className="relative group mx-auto">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/8 dark:from-primary/30 dark:to-primary/10 blur-2xl rounded-full scale-150 group-hover:scale-175 transition-transform duration-700" />
-        <CardTitle className="relative text-[120px] sm:text-[160px] font-bold leading-none tracking-tighter bg-gradient-to-br from-primary via-foreground to-primary/60 bg-clip-text text-transparent animate-gradient select-none">
+        <CardTitle className="relative text-[120px] sm:text-[160px] font-bold leading-none tracking-tighter text-primary select-none">
           404
         </CardTitle>
       </div>
@@ -99,13 +99,13 @@ function NotFoundContent() {
 }
 
 function NotFoundActions() {
-  const router = useRouter();
+  const { push, back } = useRouter();
   const { data: session } = useSession();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const handlePrimaryAction = () => {
     if (session) {
-      router.push("/");
+      push("/");
     } else {
       setShowAuthModal(true);
     }
@@ -116,7 +116,7 @@ function NotFoundActions() {
       <CardFooter className="flex flex-col gap-4 pt-6">
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <Button
-            onClick={() => router.back()}
+            onClick={() => back()}
             variant="outline"
             size="lg"
             className="w-full sm:flex-1 gap-2 rounded-xl group min-w-0 transition-all duration-200 ease-out active:scale-[0.98]"

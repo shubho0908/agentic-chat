@@ -31,7 +31,7 @@ export function CodeCopyButton({ content }: { content: string }) {
       variant="ghost"
       size="icon"
       onClick={handleCopy}
-      className="h-7 w-7 rounded-md border-0 bg-transparent p-0 text-zinc-500 shadow-none transition-colors hover:bg-transparent hover:text-zinc-900 focus-visible:bg-transparent dark:text-zinc-400 dark:hover:bg-transparent dark:hover:text-zinc-100"
+      className="size-7 rounded-md border-0 bg-transparent p-0 text-zinc-500 shadow-none transition-colors hover:bg-transparent hover:text-zinc-900 focus-visible:bg-transparent dark:text-zinc-400 dark:hover:bg-transparent dark:hover:text-zinc-100"
       aria-label={copied ? "Copied" : "Copy code"}
     >
       {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}

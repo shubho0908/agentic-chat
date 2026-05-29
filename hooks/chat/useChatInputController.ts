@@ -5,7 +5,6 @@ import type { Message } from "@/lib/schemas/chat";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
 import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
@@ -28,8 +27,6 @@ import {
   getPendingGoogleWorkspaceQuery,
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
-  getDeepResearchEnabled as getStoredDeepResearchEnabled,
-  setDeepResearchEnabled as storeDeepResearchEnabled,
   getSearchDepth as getStoredSearchDepth,
   setSearchDepth as storeSearchDepth,
   setPendingGoogleWorkspaceQuery,
@@ -54,7 +51,6 @@ interface ChatInputUiState {
   isSending: boolean;
   activeTool: ToolId | null;
   memoryEnabled: boolean;
-  deepResearchEnabled: boolean;
   searchDepth: SearchDepth;
 }
 
@@ -63,7 +59,6 @@ type ChatInputUiAction =
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
   | { type: "set-memory"; enabled: boolean }
-  | { type: "set-deep-research"; enabled: boolean }
   | { type: "activate-tool"; toolId: ToolId; searchDepth?: SearchDepth }
   | { type: "deactivate-tool" };
 
@@ -71,7 +66,6 @@ const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
   activeTool: null,
   memoryEnabled: false,
-  deepResearchEnabled: false,
   searchDepth: "basic",
 };
 
@@ -84,7 +78,6 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
         ...state,
         activeTool: null,
         memoryEnabled: false,
-        deepResearchEnabled: false,
       };
     case "set-sending":
       return {
@@ -96,16 +89,10 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
         ...state,
         memoryEnabled: action.enabled,
       };
-    case "set-deep-research":
-      return {
-        ...state,
-        deepResearchEnabled: action.enabled,
-      };
     case "activate-tool":
       return {
         ...state,
         activeTool: action.toolId,
-        deepResearchEnabled: action.toolId === TOOL_IDS.DEEP_RESEARCH,
         searchDepth:
           action.toolId === TOOL_IDS.WEB_SEARCH && action.searchDepth
             ? action.searchDepth
@@ -115,8 +102,6 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
       return {
         ...state,
         activeTool: null,
-        deepResearchEnabled:
-          state.activeTool === TOOL_IDS.DEEP_RESEARCH ? false : state.deepResearchEnabled,
       };
     default:
       return state;
@@ -135,10 +120,9 @@ export function useChatInputController({
   messages = [],
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
-  const { isSending, activeTool, memoryEnabled, deepResearchEnabled, searchDepth } = uiState;
+  const { isSending, activeTool, memoryEnabled, searchDepth } = uiState;
 
   const { data: session, isPending } = useSession();
-  const { data: usageData } = useDeepResearchUsage({ enabled: !!session });
   const { status: googleSuiteStatus, isLoading: googleSuiteAuthLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const router = useRouter();
 
@@ -169,7 +153,6 @@ export function useChatInputController({
           payload: {
             activeTool: stored,
             memoryEnabled: getStoredMemoryEnabled(),
-            deepResearchEnabled: getStoredDeepResearchEnabled(),
             searchDepth: getStoredSearchDepth(),
           },
         });
@@ -178,20 +161,6 @@ export function useChatInputController({
       }
     }
   }, [session, isPending]);
-
-  useEffect(() => {
-    if (usageData?.remaining === 0 && (deepResearchEnabled || activeTool === TOOL_IDS.DEEP_RESEARCH)) {
-      dispatchUi({ type: "set-deep-research", enabled: false });
-      if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
-        dispatchUi({ type: "deactivate-tool" });
-        removeActiveTool();
-      }
-      toast.info(TOAST_INFO_MESSAGES.DEEP_RESEARCH_DEACTIVATED, {
-        description: TOAST_INFO_MESSAGES.DEEP_RESEARCH_MONTHLY_LIMIT,
-        duration: 5000,
-      });
-    }
-  }, [usageData, deepResearchEnabled, activeTool]);
 
   useEffect(() => {
     if (!session || activeTool !== TOOL_IDS.GOOGLE_SUITE || input.trim()) {
@@ -229,21 +198,8 @@ export function useChatInputController({
       return false;
     }
 
-    if (toolId === TOOL_IDS.DEEP_RESEARCH && usageData && usageData.remaining === 0) {
-      const resetDate = new Date(usageData.resetDate).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-      });
-      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.UNAVAILABLE, {
-        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.MONTHLY_LIMIT_DESCRIPTION(usageData.limit, resetDate),
-        duration: 5000,
-      });
-      return false;
-    }
-
     dispatchUi({ type: "activate-tool", toolId, searchDepth: selectedDepth });
     storeActiveTool(toolId);
-    storeDeepResearchEnabled(toolId === TOOL_IDS.DEEP_RESEARCH);
 
     if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
       storeSearchDepth(selectedDepth);
@@ -299,14 +255,6 @@ export function useChatInputController({
       return;
     }
 
-    if (deepResearchEnabled && usageData && usageData.remaining === 0) {
-      dispatchUi({ type: "set-deep-research", enabled: false });
-      toast.error(TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED, {
-        description: TOAST_ERROR_MESSAGES.DEEP_RESEARCH_UI.LIMIT_REACHED_DESCRIPTION,
-        duration: 5000,
-      });
-    }
-
     if (activeTool === TOOL_IDS.GOOGLE_SUITE && session) {
       if (googleSuiteAuthLoading) {
         toast.info("Checking Google Workspace permissions...", {
@@ -317,8 +265,7 @@ export function useChatInputController({
 
       const recentMessages = messages
         .slice(-6)
-        .map((message) => extractTextFromMessage(message.content))
-        .filter((messageText) => messageText.trim().length > 0);
+        .flatMap((message) => { const t = extractTextFromMessage(message.content); return t.trim().length > 0 ? [t] : []; });
       const scopeResolution = resolveGoogleWorkspaceScopesForRequest(input, recentMessages);
       const missingRequiredScopes = getMissingGoogleScopes(
         scopeResolution.requiredScopes,
@@ -370,13 +317,11 @@ export function useChatInputController({
         return;
       }
 
-      const finalDeepResearchEnabled = deepResearchEnabled && (!usageData || usageData.remaining > 0);
       const result = await onSend(
         messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         activeTool,
         !!session && memoryEnabled,
-        finalDeepResearchEnabled,
         searchDepth
       );
 
@@ -427,10 +372,6 @@ export function useChatInputController({
   function handleToolDeactivated() {
     dispatchUi({ type: "deactivate-tool" });
     removeActiveTool();
-
-    if (activeTool === TOOL_IDS.DEEP_RESEARCH) {
-      storeDeepResearchEnabled(false);
-    }
 
     toast.info(TOAST_INFO_MESSAGES.TOOL_DEACTIVATED, {
       duration: 2000,

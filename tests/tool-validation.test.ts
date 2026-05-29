@@ -53,7 +53,6 @@ test.beforeEach(() => {
 
 test("parseToolId only accepts supported tool ids", () => {
   assert.equal(parseToolId(TOOL_IDS.WEB_SEARCH), TOOL_IDS.WEB_SEARCH);
-  assert.equal(parseToolId(TOOL_IDS.DEEP_RESEARCH), TOOL_IDS.DEEP_RESEARCH);
   assert.equal(parseToolId("youtube"), null);
   assert.equal(parseToolId(null), null);
 });
@@ -86,7 +85,6 @@ test("setActiveTool persists valid ids and rejects invalid ids at runtime", () =
   assert.equal(setActiveTool("youtube" as unknown as ToolId), false);
   assert.equal(localStorage.getItem("agentic-chat-active-tool"), null);
 
-  setActiveTool(TOOL_IDS.DEEP_RESEARCH);
   removeActiveTool();
   assert.equal(localStorage.getItem("agentic-chat-active-tool"), null);
 });

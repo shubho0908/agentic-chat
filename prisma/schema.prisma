@@ -22,7 +22,6 @@ model User {
   accounts          Account[]
   sessions          Session[]
   conversations     Conversation[]
-  deepResearchUsage DeepResearchUsage[]
 
   @@map("user")
 }
@@ -148,17 +147,3 @@ model Attachment {
   @@map("attachment")
 }
 
-model DeepResearchUsage {
-  id         String   @id @default(cuid())
-  userId     String
-  year       Int
-  month      Int
-  usageCount Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, year, month])
-  @@map("deep_research_usage")
-}

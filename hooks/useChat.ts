@@ -28,7 +28,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { initialMessages = [], conversationId: initialConversationId } = options;
+  const { initialMessages = [], conversationId: initialConversationId, autoContinue } = options;
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
@@ -38,6 +38,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const router = useRouter();
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
+  const autoContinuedRef = useRef(false);
   const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   useEffect(() => {
@@ -49,11 +50,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setMessages(initialMessages);
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
+      autoContinuedRef.current = false;
     }
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: SendMessageOptions) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled, searchDepth }: SendMessageOptions) => {
       if (!content.trim() || isLoading) {
         return { success: false, error: "Unable to send message" };
       }
@@ -85,7 +87,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           session,
           activeTool,
           memoryEnabled,
-          deepResearchEnabled,
           searchDepth
         );
         return result;
@@ -105,7 +106,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: EditMessageOptions) => {
+    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, searchDepth }: EditMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -131,7 +132,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           activeTool,
           memoryEnabled,
-          deepResearchEnabled,
           searchDepth
         );
       } catch (error) {
@@ -148,7 +148,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: RegenerateMessageOptions) => {
+    async ({ messageId, session, activeTool, memoryEnabled, searchDepth }: RegenerateMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -172,7 +172,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           activeTool,
           memoryEnabled,
-          deepResearchEnabled,
           searchDepth
         );
       } catch (error) {
@@ -189,7 +188,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const continueConversation = useCallback(
-    async ({ userMessage, session, activeTool, memoryEnabled, deepResearchEnabled, searchDepth }: ContinueConversationOptions) => {
+    async ({ userMessage, session, activeTool, memoryEnabled, searchDepth }: ContinueConversationOptions) => {
       if (isLoading || !conversationId) return;
 
       setIsLoading(true);
@@ -213,7 +212,6 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           session,
           activeTool,
           memoryEnabled,
-          deepResearchEnabled,
           searchDepth
         );
       } catch (error) {
@@ -228,6 +226,30 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     },
     [messages, isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
+
+  useEffect(() => {
+    if (autoContinuedRef.current || isLoading || messages.length === 0 || !autoContinue?.session) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const lastUserMessage = messages.findLast(msg => msg.role === "user");
+    const isIncomplete =
+      (lastMessage?.role === "user" && lastMessage.id) ||
+      (lastMessage?.role === "assistant" && !lastMessage.content && lastUserMessage?.id);
+
+    if (isIncomplete && lastUserMessage?.id) {
+      autoContinuedRef.current = true;
+      const timerId = setTimeout(() => {
+        continueConversation({
+          userMessage: lastUserMessage,
+          session: autoContinue.session,
+          activeTool: autoContinue.activeTool ?? null,
+          memoryEnabled: autoContinue.memoryEnabled,
+          searchDepth: autoContinue.searchDepth,
+        });
+      }, 0);
+      return () => clearTimeout(timerId);
+    }
+  }, [messages, isLoading, autoContinue, continueConversation]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
@@ -247,9 +269,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [stopStreamingContext]);
 
   useEffect(() => {
+    const controller = abortControllerRef.current;
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (controller) {
+        controller.abort();
         abortControllerRef.current = null;
       }
     };

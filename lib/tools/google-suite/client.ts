@@ -109,7 +109,7 @@ async function resolveGoogleGrantedScopes(
   }
 }
 
-export async function synchronizeGoogleAccount(userId: string): Promise<SynchronizedGoogleAccount | null> {
+async function synchronizeGoogleAccount(userId: string): Promise<SynchronizedGoogleAccount | null> {
   const account = await prisma.account.findFirst({
     where: { userId, providerId: GOOGLE_PROVIDER_ID },
     orderBy: { updatedAt: 'desc' },

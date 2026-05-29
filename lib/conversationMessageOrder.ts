@@ -45,7 +45,7 @@ export function compareConversationMessagesDesc(
 }
 
 export function orderConversationMessagesDesc<T extends ConversationMessageLike>(messages: T[]): T[] {
-  return [...messages].sort(compareConversationMessagesDesc);
+  return messages.toSorted(compareConversationMessagesDesc);
 }
 
 export function orderConversationMessagesAsc<T extends ConversationMessageLike>(messages: T[]): T[] {

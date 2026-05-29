@@ -127,7 +127,7 @@ export function ChatContainer({
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading older messages...</span>
+            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
         )}
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (

@@ -23,7 +23,6 @@ interface StreamingContext {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
   searchDepth?: SearchDepth;
   existingAssistantMessageId?: string;
 }
@@ -116,7 +115,6 @@ export async function handleStreamingResponse(
     session,
     activeTool,
     memoryEnabled = true,
-    deepResearchEnabled = false,
     searchDepth,
     existingAssistantMessageId,
   } = context;
@@ -136,7 +134,6 @@ export async function handleStreamingResponse(
       attachments: userAttachments,
       abortSignal,
       activeTool,
-      deepResearchEnabled,
     });
 
     if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
@@ -183,7 +180,6 @@ export async function handleStreamingResponse(
           userId: session?.user?.id,
           memoryEnabled,
           activeTool,
-          deepResearchEnabled,
           userAttachments,
           flow: "send",
         });
@@ -305,12 +301,8 @@ export async function handleStreamingResponse(
           messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deepResearchUsage'] });
-      },
       activeTool,
       memoryEnabled,
-      deepResearchEnabled,
       searchDepth,
     });
 
@@ -354,7 +346,6 @@ export async function handleStreamingResponse(
           userId: session?.user?.id,
           memoryEnabled,
           activeTool,
-          deepResearchEnabled,
           userAttachments,
           memoryStatus: currentMemoryStatus,
           flow: "send",

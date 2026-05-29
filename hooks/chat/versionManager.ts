@@ -122,7 +122,7 @@ export function updateMessageWithVersions(
     return { ...message, id: newMessageId };
   }
 
-  const sortedVersions = [...versions].sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
+  const sortedVersions = versions.toSorted((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
   
   const currentVersion = sortedVersions.find(v => v.id === newMessageId) || sortedVersions[0];
   const olderVersions = sortedVersions.filter(v => v.id !== currentVersion.id);
