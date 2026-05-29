@@ -82,9 +82,7 @@ function configureLangChainTracing(): void {
     process.env.LANGCHAIN_PROJECT = LANGSMITH_CONFIG.project;
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';
-  }
+  process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';
 }
 
 if (typeof window === 'undefined') {

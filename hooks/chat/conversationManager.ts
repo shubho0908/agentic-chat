@@ -131,7 +131,8 @@ async function createNewConversation(
   attachments?: Attachment[],
   earlyCreate: boolean = false,
   signal?: AbortSignal,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
+  onConversationIdReady?: (conversationId: string) => void
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
@@ -146,6 +147,8 @@ async function createNewConversation(
 
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
+
+    onConversationIdReady?.(conversationId);
 
     const userMessageId = await saveUserMessage(conversationId, userContent, attachments, signal);
     
@@ -280,10 +283,11 @@ export async function handleConversationSaving(
   attachments?: Attachment[],
   earlyCreate: boolean = false,
   signal?: AbortSignal,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
+  onConversationIdReady?: (conversationId: string) => void
 ): Promise<void> {
   if (isNewConversation) {
-    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata);
+    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata, onConversationIdReady);
 
     if (result && onConversationCreated) {
       if (earlyCreate) {

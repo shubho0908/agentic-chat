@@ -161,23 +161,24 @@ export async function handleSendMessage(
             )
           );
           userMessageWasPersisted = true;
-          onConversationIdUpdate(data.conversationId);
           queryClient.invalidateQueries({ queryKey: ["conversations"] });
           onNavigate(`/c/${data.conversationId}`);
         },
         attachments,
         true,
         abortSignal,
-        undefined
+        undefined,
+        (conversationId: string) => {
+          currentConversationId = conversationId;
+          onConversationIdUpdate(conversationId);
+          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+        }
       );
 
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
 
-      // New chats navigate to /c/:id immediately after the user message is saved.
-      // Let the destination page resume generation once, instead of starting a
-      // stream here that will be aborted during route teardown and retried there.
       shouldResumeOnConversationPage = true;
     } else {
       if (!currentConversationId) {

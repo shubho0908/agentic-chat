@@ -18,6 +18,7 @@ import {
 } from './streamingHelpers';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
+import { getChatReasoningEffort } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 
 import { logger } from "@/lib/logger";
@@ -201,6 +202,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           return;
         }
         
+        const reasoningEffort = getChatReasoningEffort(model);
         const streamResponse = await withRetry(
           () =>
             openai.chat.completions.create(
@@ -208,6 +210,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 model,
                 messages: toOpenAIMessages(enhancedMessages),
                 stream: true,
+                ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
               },
               { signal: abortSignal }
             ),

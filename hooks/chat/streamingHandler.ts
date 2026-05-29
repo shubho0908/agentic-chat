@@ -156,7 +156,7 @@ export async function handleStreamingResponse(
           },
         ]);
       }
-	      await handleConversationSaving(
+	      handleConversationSaving(
 	        false,
 	        conversationId,
         userMessageContent,
@@ -172,7 +172,9 @@ export async function handleStreamingResponse(
         false,
         undefined,
 	        undefined 
-	      );
+	      ).catch((err) => {
+          console.error("[streamingHandler] Background assistant message save (cache) failed:", err);
+        });
 
         persistConversationMemoryIfEligible({
           userMessageContent,
@@ -321,7 +323,8 @@ export async function handleStreamingResponse(
           response: assistantContent,
         });
       }
-      await handleConversationSaving(
+
+      handleConversationSaving(
         false,
         conversationId,
         userMessageContent,
@@ -338,7 +341,9 @@ export async function handleStreamingResponse(
         false,
         undefined,
         messageMetadata
-      );
+      ).catch((err) => {
+        console.error("[streamingHandler] Background assistant message save failed:", err);
+      });
 
         persistConversationMemoryIfEligible({
           userMessageContent,

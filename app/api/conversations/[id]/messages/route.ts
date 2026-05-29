@@ -1,7 +1,7 @@
 import { NextRequest, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
+import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateMessageData, validateAttachmentInputs } from '@/lib/validation';
 import type { AttachmentInput } from '@/lib/schemas/chat';
@@ -79,34 +79,39 @@ export async function POST(
       validatedAttachments = attachmentValidation.attachments;
     }
 
-    const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
-    if (convError) return convError;
-
-    const [message] = await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversationId,
-          role,
-          content,
-          ...(metadata && { metadata }),
-          attachments: validatedAttachments && validatedAttachments.length > 0 ? {
-            create: validatedAttachments.map(att => ({
-              fileUrl: att.fileUrl,
-              fileName: att.fileName,
-              fileType: att.fileType,
-              fileSize: att.fileSize,
-            }))
-          } : undefined,
-        },
-        include: {
-          attachments: true,
-        }
-      }),
-      prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() }
-      })
-    ]);
+    let message: Awaited<ReturnType<typeof prisma.message.create>> & { attachments: { id: string; fileType: string }[] };
+    try {
+      const [, created] = await prisma.$transaction([
+        prisma.conversation.update({
+          where: { id: conversationId, userId: user.id },
+          data: { updatedAt: new Date() },
+          select: { id: true },
+        }),
+        prisma.message.create({
+          data: {
+            conversationId,
+            role,
+            content,
+            ...(metadata && { metadata }),
+            attachments: validatedAttachments && validatedAttachments.length > 0 ? {
+              create: validatedAttachments.map(att => ({
+                fileUrl: att.fileUrl,
+                fileName: att.fileName,
+                fileType: att.fileType,
+                fileSize: att.fileSize,
+              }))
+            } : undefined,
+          },
+          include: { attachments: true },
+        }),
+      ]);
+      message = created;
+    } catch (txErr) {
+      if (txErr && typeof txErr === "object" && "code" in txErr && txErr.code === "P2025") {
+        return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
+      }
+      throw txErr;
+    }
 
     scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);
 

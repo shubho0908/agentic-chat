@@ -38,7 +38,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const router = useRouter();
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
-  const autoContinuedRef = useRef(false);
+  const autoContinuedRef = useRef<string | null>(null);
   const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setMessages(initialMessages);
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
-      autoContinuedRef.current = false;
+      autoContinuedRef.current = null;
     }
   }, [initialConversationId, initialMessages, messages.length]);
 
@@ -228,7 +228,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   useEffect(() => {
-    if (autoContinuedRef.current || isLoading || messages.length === 0 || !autoContinue?.session) return;
+    if (isLoading || messages.length === 0 || !autoContinue?.session) return;
 
     const lastMessage = messages[messages.length - 1];
     const lastUserMessage = messages.findLast(msg => msg.role === "user");
@@ -237,8 +237,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       (lastMessage?.role === "assistant" && !lastMessage.content && lastUserMessage?.id);
 
     if (isIncomplete && lastUserMessage?.id) {
-      autoContinuedRef.current = true;
+      const resumeKey = `${conversationId}:${lastUserMessage.id}`;
+      if (autoContinuedRef.current === resumeKey) return;
+
       const timerId = setTimeout(() => {
+        if (autoContinuedRef.current === resumeKey) return;
+        autoContinuedRef.current = resumeKey;
         continueConversation({
           userMessage: lastUserMessage,
           session: autoContinue.session,

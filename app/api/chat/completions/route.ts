@@ -5,6 +5,16 @@ import { prisma } from '@/lib/prisma';
 import { decryptApiKey } from '@/lib/encryption';
 import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+
+const openaiClientCache = new Map<string, OpenAI>();
+function getOpenAIClient(apiKey: string): OpenAI {
+  let client = openaiClientCache.get(apiKey);
+  if (!client) {
+    client = new OpenAI({ apiKey });
+    openaiClientCache.set(apiKey, client);
+  }
+  return client;
+}
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import type { MemoryStatus } from '@/types/chat';
@@ -12,7 +22,7 @@ import type { Message } from '@/lib/schemas/chat';
 import { createChatStreamHandler } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel } from '@/lib/modelPolicy';
+import { validateRequestedModel, getChatReasoningEffort } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { parseToolId } from '@/lib/tools/config';
@@ -157,7 +167,7 @@ export async function POST(request: NextRequest) {
       skippedMemory: false,
     };
 
-    const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
+    const openai = wrapOpenAIWithLangSmith(getOpenAIClient(apiKey));
 
     if (stream) {
       const abortController = new AbortController();
@@ -272,6 +282,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const reasoningEffort = getChatReasoningEffort(validatedModel);
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(
@@ -279,6 +290,7 @@ export async function POST(request: NextRequest) {
               model: validatedModel,
               messages: enhancedMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
               stream: false,
+              ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
             },
             { signal: request.signal }
           ),

@@ -1,3 +1,4 @@
+import type { ReasoningEffort } from "openai/resources/shared";
 import { DEFAULT_MODEL, OPENAI_MODELS } from "@/constants/openai-models";
 
 type ModelStage =
@@ -47,6 +48,18 @@ export function getStageModel(
 function supportsCustomTemperature(model: string): boolean {
   const m = model.trim().toLowerCase();
   return !m.startsWith("gpt-5");
+}
+
+function getReasoningSeriesMinorVersion(model: string): number | null {
+  const match = model.trim().toLowerCase().match(/^gpt-5(?:\.(\d+))?/);
+  if (!match) return null;
+  return match[1] ? Number(match[1]) : 0;
+}
+
+export function getChatReasoningEffort(model: string): ReasoningEffort | undefined {
+  const minorVersion = getReasoningSeriesMinorVersion(model);
+  if (minorVersion === null) return undefined;
+  return minorVersion >= 1 ? "none" : "minimal";
 }
 
 export function getSupportedTemperature(

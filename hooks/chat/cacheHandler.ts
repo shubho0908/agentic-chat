@@ -4,6 +4,8 @@ import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 
+const MIN_CACHEABLE_QUERY_LENGTH = 80;
+
 
 interface CacheCheckContext {
   messages: Message[];
@@ -67,6 +69,10 @@ async function checkCache(
 ): Promise<CacheCheckResult> {
   try {
     if (signal.aborted) {
+      return { cached: false };
+    }
+
+    if (query.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
       return { cached: false };
     }
 
