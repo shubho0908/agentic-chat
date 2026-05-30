@@ -12,7 +12,7 @@ import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
-
+import { queryKeys } from "@/lib/queryKeys";
 
 import { logger } from "@/lib/logger";
 function toJsonValue(value: unknown): JsonValue | undefined {
@@ -28,7 +28,8 @@ export async function handleRegenerateResponse(
   context: RegenerateContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth
+  searchDepth?: SearchDepth,
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -200,6 +201,16 @@ export async function handleRegenerateResponse(
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
       searchDepth: searchDepth ?? 'basic',
+      thinkingEnabled,
+      onThinking: (thinking) => {
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, thinking }
+              : msg
+          )
+        );
+      },
     });
 
     onMessagesUpdate((prev) =>
@@ -249,8 +260,8 @@ export async function handleRegenerateResponse(
           )
         );
         
-        queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
       persistConversationMemoryIfEligible({

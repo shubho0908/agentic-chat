@@ -35,7 +35,6 @@ export interface GmailGetAttachmentsArgs {
   messageId: string;
 }
 
-// Drive handler argument types
 export interface DriveSearchArgs {
   query: string;
   maxResults?: number;
@@ -86,7 +85,6 @@ export interface DriveShareArgs {
   sendNotification?: boolean;
 }
 
-// Docs handler argument types
 export interface DocsCreateArgs {
   title: string;
   content?: string;
@@ -107,7 +105,6 @@ export interface DocsReplaceArgs {
   replaceText: string;
 }
 
-// Calendar handler argument types
 export interface CalendarListEventsArgs {
   calendarId?: string;
   timeMin?: string;
@@ -141,7 +138,6 @@ export interface CalendarDeleteEventArgs {
   calendarId?: string;
 }
 
-// Sheets handler argument types
 export interface SheetsCreateArgs {
   title: string;
 }
@@ -168,7 +164,6 @@ export interface SheetsClearArgs {
   range: string;
 }
 
-// Slides handler argument types
 export interface SlidesCreateArgs {
   title: string;
 }
@@ -183,7 +178,6 @@ export interface SlidesAddSlideArgs {
   body?: string;
 }
 
-// Union type of all handler arguments
 export type HandlerArgs =
   | GmailSearchArgs
   | GmailReadArgs

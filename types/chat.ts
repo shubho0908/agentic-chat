@@ -3,6 +3,7 @@ import type {
   WebSearchImage,
   WebSearchProgressDetails,
   WebSearchSource,
+  GoogleSuiteTask,
 } from './tools';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
@@ -56,7 +57,6 @@ export interface MemoryStatus {
     status: ToolProgressStatus | string;
     message: string;
     details?: {
-      // Web search fields
       originalQuery?: string;
       query?: string;
       resultsCount?: number;
@@ -76,17 +76,24 @@ export interface MemoryStatus {
       searchPlan?: WebSearchProgressDetails['searchPlan'];
       usedConversationContext?: boolean;
 
-      // Google Suite fields
       operation?: string;
       tool?: string;
       error?: string;
 
-      // Shared fields
       citations?: MessageMetadata['citations'];
       skipped?: boolean;
       status?: string;
       currentTaskIndex?: number;
-      completedTasks?: string[];
+      currentTask?: GoogleSuiteTask;
+      allTasks?: GoogleSuiteTask[];
+      completedTasks?: GoogleSuiteTask[];
+      thinking?: string;
+      planning?: {
+        toolsToUse: string[];
+        estimatedSteps: number;
+      };
+      totalCompleted?: number;
+      completedInIteration?: number;
     };
   };
 }
@@ -109,6 +116,7 @@ export interface UseChatOptions {
     activeTool?: string | null;
     memoryEnabled?: boolean;
     searchDepth?: SearchDepth;
+    thinkingEnabled?: boolean;
   } | null;
 }
 
@@ -119,9 +127,10 @@ export interface SendMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
-export interface MessageSendResult {
+interface MessageSendResult {
   success: boolean;
   error?: string;
 }
@@ -131,7 +140,8 @@ export type MessageSendHandler = (
   attachments?: Attachment[],
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth
+  searchDepth?: SearchDepth,
+  thinkingEnabled?: boolean
 ) => Promise<MessageSendResult> | MessageSendResult;
 
 export interface EditMessageOptions {
@@ -142,6 +152,7 @@ export interface EditMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface RegenerateMessageOptions {
@@ -150,6 +161,7 @@ export interface RegenerateMessageOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface ContinueConversationOptions {
@@ -158,6 +170,7 @@ export interface ContinueConversationOptions {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface UseChatReturn {
@@ -199,19 +212,19 @@ export interface CacheCheckResult {
   response?: string;
 }
 
-export interface ToolCallEvent {
+interface ToolCallEvent {
   toolName: string;
   toolCallId: string;
   args: ToolArgs;
 }
 
-export interface ToolResultEvent {
+interface ToolResultEvent {
   toolName: string;
   toolCallId: string;
   result: string | Record<string, unknown> | unknown[];
 }
 
-export interface ToolProgressEvent {
+interface ToolProgressEvent {
   toolName: string;
   status: ToolProgressStatus | string;
   message: string;
@@ -229,7 +242,9 @@ export interface StreamConfig {
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
+  onThinking?: (thinking: string) => void;
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }

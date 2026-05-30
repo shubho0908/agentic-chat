@@ -21,14 +21,14 @@ export interface WebSearchSource {
   searchQuery?: string;
 }
 
-export interface PlannedWebSearch {
+interface PlannedWebSearch {
   query: string;
   rationale: string;
   expectedResultCount: number;
   priority: 'high' | 'medium' | 'low';
 }
 
-export interface WebSearchPlanSummary {
+interface WebSearchPlanSummary {
   originalQuery?: string;
   queryType?: 'factual' | 'comparative' | 'analytical' | 'exploratory' | 'how-to' | 'current-events';
   complexity?: 'simple' | 'moderate' | 'complex';

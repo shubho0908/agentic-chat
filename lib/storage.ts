@@ -2,13 +2,13 @@ import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
 import { parseToolId, type ToolId } from '@/lib/tools/config';
 
-
 import { logger } from "@/lib/logger";
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
   ACTIVE_TOOL: 'agentic-chat-active-tool',
   MEMORY_ENABLED: 'agentic-chat-memory-enabled',
   SEARCH_DEPTH: 'agentic-chat-search-depth',
+  THINKING_ENABLED: 'agentic-chat-thinking-enabled',
   PENDING_GOOGLE_WORKSPACE_QUERY: 'agentic-chat-pending-google-workspace-query',
 } as const;
 
@@ -161,9 +161,30 @@ export function clearUserStorage(): void {
     localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
     localStorage.removeItem(STORAGE_KEYS.SEARCH_DEPTH);
+    localStorage.removeItem(STORAGE_KEYS.THINKING_ENABLED);
     localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
   } catch (error) {
     logger.error('Error clearing user storage:', error);
+  }
+}
+
+export function getThinkingEnabled(): boolean {
+  if (!isLocalStorageAvailable()) return false;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.THINKING_ENABLED);
+    return stored === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setThinkingEnabled(enabled: boolean): boolean {
+  if (!isLocalStorageAvailable()) return false;
+  try {
+    localStorage.setItem(STORAGE_KEYS.THINKING_ENABLED, String(enabled));
+    return true;
+  } catch {
+    return false;
   }
 }
 

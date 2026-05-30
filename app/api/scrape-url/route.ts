@@ -3,7 +3,6 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { scrapeUrl, validateUrl } from '@/lib/url-scraper/scraper';
 
-
 import { logger } from "@/lib/logger";
 export const dynamic = 'force-dynamic';
 

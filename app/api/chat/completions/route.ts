@@ -18,8 +18,7 @@ function getOpenAIClient(apiKey: string): OpenAI {
 import { validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import type { MemoryStatus } from '@/types/chat';
-import type { Message } from '@/lib/schemas/chat';
-import { createChatStreamHandler } from '@/lib/chat/streamHandler';
+import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
 import { validateRequestedModel, getChatReasoningEffort } from '@/lib/modelPolicy';
@@ -28,8 +27,9 @@ import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { parseToolId } from '@/lib/tools/config';
 import { searchDepthEnum, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { logger } from "@/lib/logger";
+import { isRecord } from '@/lib/typeGuards';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes for tool execution
+export const maxDuration = 300;
 
 function parseOptionalBoolean(
   value: unknown,
@@ -72,11 +72,11 @@ export async function POST(request: NextRequest) {
       return errorResponse('Request body must be valid JSON.', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+    if (!isRecord(rawBody)) {
       return errorResponse('Request body must be a JSON object.', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const body = rawBody as Record<string, unknown>;
+    const body = rawBody;
     const { model, messages } = body;
     const conversationId =
       body.conversationId === undefined || body.conversationId === null
@@ -131,6 +131,12 @@ export async function POST(request: NextRequest) {
     const searchDepth: SearchDepth = parsedSearchDepth.data;
     const sanitizedActiveTool = activeTool ? parseToolId(activeTool) : null;
 
+    const thinkingEnabledResult = parseOptionalBoolean(body.thinkingEnabled, 'thinkingEnabled', false);
+    if (!thinkingEnabledResult.success) {
+      return errorResponse(thinkingEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+    const thinkingEnabled = thinkingEnabledResult.value;
+
     if (activeTool && !sanitizedActiveTool) {
       logWarn({
         event: 'chat_invalid_active_tool_ignored',
@@ -148,12 +154,12 @@ export async function POST(request: NextRequest) {
       return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const validation = validateChatMessages(messages as Array<Record<string, unknown>>);
+    const validation = validateChatMessages(messages);
     if (!validation.valid) {
       return errorResponse(validation.error || 'Invalid messages', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const validatedMessages = messages as Message[];
+    const validatedMessages = validation.messages;
     const baseMemoryStatusInfo: MemoryStatus = {
       hasMemories: false, 
       attemptedMemory: false,
@@ -185,6 +191,7 @@ export async function POST(request: NextRequest) {
         conversationId,
         searchDepth,
         requestId,
+        thinkingEnabled,
       });
       const readableStream = new ReadableStream({
         ...streamHandler,
@@ -282,13 +289,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const reasoningEffort = getChatReasoningEffort(validatedModel);
+      const reasoningEffort = getChatReasoningEffort(validatedModel, thinkingEnabled);
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(
             {
               model: validatedModel,
-              messages: enhancedMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+              messages: toOpenAIChatMessages(enhancedMessages),
               stream: false,
               ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
             },

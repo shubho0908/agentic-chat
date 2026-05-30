@@ -1,4 +1,8 @@
 import type { ExportConversation, ExportOptions } from '@/types/export';
+import {
+  downloadTextFile,
+  getConversationExportFileName,
+} from '@/lib/export/downloadFile';
 
 function exportToJSON(
   conversation: ExportConversation,
@@ -28,30 +32,7 @@ function exportToJSON(
 
 export function downloadJSON(conversation: ExportConversation, options?: ExportOptions): void {
   const jsonContent = exportToJSON(conversation, options);
-  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const fileName = `${sanitizeFileName(conversation.title || 'conversation')}_${new Date().toISOString().split('T')[0]}.json`;
-  
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 100);
-}
+  const fileName = getConversationExportFileName(conversation.title, 'json');
 
-function sanitizeFileName(name: string): string {
-  const sanitized = name
-    .replace(/[^a-z0-9]/gi, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase()
-    .slice(0, 50)
-    .replace(/_+$/g, '');
-  
-  return sanitized || 'conversation';
+  downloadTextFile(jsonContent, fileName, 'application/json;charset=utf-8');
 }

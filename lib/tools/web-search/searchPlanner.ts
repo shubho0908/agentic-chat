@@ -1,6 +1,5 @@
 import type { SearchResultWithSources, MultiSearchImage } from '@/types/tools';
 
-
 interface SearchPlan {
   originalQuery: string;
   queryType: 'factual' | 'comparative' | 'analytical' | 'exploratory' | 'how-to' | 'current-events';

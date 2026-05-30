@@ -4,12 +4,13 @@ import { getAuthenticatedUser } from "@/lib/apiUtils";
 import { createGoogleOAuth2Client } from "@/lib/tools/google-suite/client";
 import { ALL_GOOGLE_SUITE_SCOPES, GOOGLE_CONNECTOR_SCOPES } from "@/lib/tools/google-suite/scopes";
 import { createGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
+import { apiRoutes, appRoutes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
 function normalizeReturnTo(value: string | null): string {
   if (!value || !value.startsWith("/")) {
-    return "/settings/google-workspace";
+    return appRoutes.googleWorkspaceSettings;
   }
 
   return value;
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const returnTo = normalizeReturnTo(requestUrl.searchParams.get("returnTo"));
   const requestedScopes = normalizeScopes(requestUrl.searchParams.getAll("scope"));
-  const redirectUri = `${requestUrl.origin}/api/google-suite/auth/callback`;
+  const redirectUri = `${requestUrl.origin}${apiRoutes.googleSuiteAuthCallback}`;
   const oauth2Client = createGoogleOAuth2Client(redirectUri);
   const state = createGoogleWorkspaceOAuthState(user.id, returnTo);
 

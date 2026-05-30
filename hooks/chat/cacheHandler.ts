@@ -6,7 +6,6 @@ import { isSupportedForRAG } from "@/lib/rag/utils";
 
 const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
-
 interface CacheCheckContext {
   messages: Message[];
   content: string | MessageContentPart[];
@@ -27,7 +26,6 @@ export function shouldUseSemanticCache(
     message.attachments?.some((attachment) => isSupportedForRAG(attachment.fileType))
   );
 
-  // Document-grounded conversations should always re-run retrieval.
   if (hasCurrentDocument || hasConversationDocuments) {
     return false;
   }

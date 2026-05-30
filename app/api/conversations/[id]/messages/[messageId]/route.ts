@@ -9,7 +9,6 @@ import { messageMetadataSchema } from '@/lib/schemas/chat';
 import { isSupportedForRAG } from '@/lib/rag/utils';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
-
 import { logger } from "@/lib/logger";
 function getRagAttachmentIds(
   attachments?: Array<{ id: string; fileType: string }>

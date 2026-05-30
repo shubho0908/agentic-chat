@@ -4,7 +4,6 @@ import type { GmailSearchArgs, GmailReadArgs, GmailSendArgs, GmailReplyArgs, Gma
 import { parseEmailContent } from '@/utils/google/email';
 import { formatEmailDate } from '@/utils/dateFormatter';
 
-
 const MAX_GMAIL_SEARCH_FETCHES = 10;
 
 import { logger } from "@/lib/logger";
@@ -194,7 +193,7 @@ export async function handleGmailModify(
   allLabels.forEach(label => {
     if (label.name && label.id) {
       labelMap.set(label.name.toLowerCase(), label.id);
-      labelMap.set(label.id.toLowerCase(), label.id); // Allow ID passthrough
+      labelMap.set(label.id.toLowerCase(), label.id);
     }
   });
   

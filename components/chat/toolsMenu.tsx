@@ -24,6 +24,7 @@ import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
 import { ToolMenuItem } from "./toolMenuItem";
 import { MemoryToggle } from "./memoryToggle";
+import { ThinkingToggle } from "./thinkingToggle";
 import { ToolsDrawer } from "./toolsDrawer";
 
 const ACCEPTED_FILE_TYPES = [
@@ -38,6 +39,8 @@ interface ToolsMenuProps {
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
+  thinkingEnabled?: boolean;
+  onThinkingToggle?: (enabled: boolean) => void;
   searchDepth?: SearchDepth;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
@@ -50,6 +53,8 @@ export function ToolsMenu({
   activeTool = null,
   memoryEnabled = true,
   onMemoryToggle,
+  thinkingEnabled = false,
+  onThinkingToggle,
   searchDepth = 'basic',
   onFilesSelected,
   fileCount = 0,
@@ -178,6 +183,8 @@ export function ToolsMenu({
           activeTool={activeTool}
           memoryEnabled={memoryEnabled}
           onMemoryToggle={onMemoryToggle}
+          thinkingEnabled={thinkingEnabled}
+          onThinkingToggle={onThinkingToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
           {...commonToolProps}
@@ -252,6 +259,8 @@ export function ToolsMenu({
             )}
 
             <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
+
+            <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
 
             <DropdownMenuSeparator />
 

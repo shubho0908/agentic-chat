@@ -1,5 +1,5 @@
 import { Mail, CheckCircle, AlertCircle, HardDrive, FileText, Calendar, Sheet, Presentation, LucideIcon, ChartGantt, Lightbulb, CheckCheck, ListChecks, ListTodo } from "lucide-react";
-import { GoogleSuiteStatus, type GoogleSuiteTask } from "@/types/tools";
+import { GoogleSuiteStatus } from "@/types/tools";
 import { GoogleIcon } from "@/components/icons/googleIcon";
 import { getToolDisplayName } from "@/utils/google/toolNames";
 import { ContextItem } from "./contextItem";
@@ -19,16 +19,16 @@ const SERVICE_BADGE_CLASSES: Record<string, string> = {
 export function GoogleSuiteContext({ memoryStatus }: MemoryStatusProps) {
   const progress = memoryStatus.toolProgress;
   const status = progress?.status as GoogleSuiteStatus;
-  const details = progress?.details as Record<string, unknown>;
-  const tool = details?.tool as string;
-  const operation = details?.operation as string;
-  const currentTask = details?.currentTask as GoogleSuiteTask | undefined;
-  const allTasks = details?.allTasks as GoogleSuiteTask[] | undefined;
-  const completedTasks = details?.completedTasks as GoogleSuiteTask[] | undefined;
-  const thinking = details?.thinking as string | undefined;
-  const planning = details?.planning as { toolsToUse: string[]; estimatedSteps: number } | undefined;
-  const totalCompleted = details?.totalCompleted as number | undefined;
-  const completedInIteration = details?.completedInIteration as number | undefined;
+  const details = progress?.details;
+  const tool = details?.tool;
+  const operation = details?.operation;
+  const currentTask = details?.currentTask;
+  const allTasks = details?.allTasks;
+  const completedTasks = details?.completedTasks;
+  const thinking = details?.thinking;
+  const planning = details?.planning;
+  const totalCompleted = details?.totalCompleted;
+  const completedInIteration = details?.completedInIteration;
 
   const getServiceName = (): string => {
     if (!tool) return "Google Workspace";

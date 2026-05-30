@@ -2,6 +2,7 @@ import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
+import { ThinkingAccordion } from "./thinkingAccordion";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import { MessageHeader } from "./messageHeader";
@@ -82,7 +83,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
 
-  const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
+  const versions = useMemo(() => message.versions ?? [], [message.versions]);
   const totalVersions = versions.length + 1;
   const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
 
@@ -299,6 +300,14 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     ? "border border-chat-user-bubble-border bg-chat-user-bubble text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words" 
                     : "max-w-none min-w-0 text-foreground ml-1"
                 )}>
+                  {!isUser && message.thinking && (
+                    <ThinkingAccordion
+                      thinking={message.thinking}
+                      isLoading={isLoading}
+                      durationMs={message.metadata?.thinkingDurationMs}
+                    />
+                  )}
+
                   {textContent ? (
                     isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
                   ) : message.content ? (
@@ -370,6 +379,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   if (
     prevProps.message.id !== nextProps.message.id ||
     prevProps.message.content !== nextProps.message.content ||
+    prevProps.message.thinking !== nextProps.message.thinking ||
     prevProps.isLastMessage !== nextProps.isLastMessage ||
     prevProps.isLoading !== nextProps.isLoading
   ) {

@@ -20,40 +20,14 @@ function sqlFormat(template: string, ...args: (string | number)[]): string {
   });
 }
 
-/**
- * PgVector Table Initialization
- * 
- * DIMENSION HANDLING STRATEGY:
- * 
- * PostgreSQL has a fundamental 8KB page size limit:
- * - fp32 (vector): 8KB / 4 bytes = 2000 dimensions max for indexes
- * - fp16 (halfvec): 8KB / 2 bytes = 4000 dimensions max for indexes
- * 
- * SOLUTION FOR HIGH DIMENSIONS (>2000):
- * Use halfvec (half-precision floating point) storage and indexes.
- * - Supports up to 4000 dimensions
- * - Minimal accuracy loss in practice (fp16 vs fp32)
- * - Officially recommended by pgvector maintainer
- * - Requires pgvector >= 0.7.0
- * 
- * Index parameters:
- * - HNSW (<=2000 dims, fp32): m=16, ef_construction=64
- * - HNSW (2001-4000 dims, fp16): m=16, ef_construction=64
- * 
- * For embeddings >4000 dimensions, consider:
- * 1. Reduce dimensions via OpenAI API (text-embedding-3-large supports 'dimensions' parameter)
- * 2. Use binary quantization with reranking
- * 3. Sequential scans without indexes (suitable for <50k rows)
- */
-
 let initialized = false;
 let initializationPromise: Promise<void> | null = null;
 
 const HNSW_M = 16;
 const HNSW_EF_CONSTRUCTION = 64;
-const FP32_MAX_DIMENSIONS = 2000; // fp32 4-byte floats: 8KB / 4 = 2000
-const FP16_MAX_DIMENSIONS = 4000; // fp16 2-byte floats: 8KB / 2 = 4000
-const MIN_VERSION_HALFVEC = '0.7.0'; // halfvec introduced in 0.7.0
+const FP32_MAX_DIMENSIONS = 2000;
+const FP16_MAX_DIMENSIONS = 4000;
+const MIN_VERSION_HALFVEC = '0.7.0';
 
 function compareVersions(v1: string, v2: string): number {
   const parts1 = v1.split('.').map(Number);
@@ -110,8 +84,6 @@ async function validatePgVectorVersion(): Promise<void> {
     );
   }
 }
-
-
 
 async function getColumnType(client: ReturnType<typeof getPgPool>, tableName: string, columnName: string): Promise<string | null> {
   try {
@@ -186,7 +158,6 @@ export async function ensurePgVectorTables(): Promise<void> {
       } catch (error: unknown) {
         const err = error as { code?: string };
         if (err.code !== '42710') {
-          // Postgres 13+ has built-in UUID, ignore if pgcrypto unavailable
         }
       }
       
@@ -195,7 +166,6 @@ export async function ensurePgVectorTables(): Promise<void> {
       const vectorConfig = getVectorTypeAndOps();
       const vectorType = vectorConfig.type;
       
-      // Create document_chunk table (LangChain PGVectorStore compatible)
       await client.query(`
         CREATE TABLE IF NOT EXISTS document_chunk (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -206,7 +176,6 @@ export async function ensurePgVectorTables(): Promise<void> {
         );
       `);
 
-      // Create semantic_cache table
       await client.query(`
         CREATE TABLE IF NOT EXISTS semantic_cache (
           id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -228,7 +197,6 @@ export async function ensurePgVectorTables(): Promise<void> {
         }
       }
 
-      // Create HNSW vector indexes with appropriate ops
       await client.query(
         sqlFormat(
           'CREATE INDEX IF NOT EXISTS %I ON %I USING hnsw (embedding %s) WITH (m = %s, ef_construction = %s)',

@@ -16,6 +16,7 @@ import {
 } from "@/lib/tools/google-suite/accessLevels";
 
 import { logger } from "@/lib/logger";
+import { apiRoutes, appRoutes } from "@/lib/routes";
 function getConnectionTone(status: {
   connected?: boolean;
   workspaceConnected?: boolean;
@@ -86,7 +87,6 @@ export function useGoogleWorkspaceSettingsController() {
       ? userOverride.levels
       : serverDerivedLevels;
 
-
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
@@ -119,7 +119,7 @@ export function useGoogleWorkspaceSettingsController() {
       });
     }
 
-    window.history.replaceState(null, "", "/settings/google-workspace");
+    window.history.replaceState(null, "", appRoutes.googleWorkspaceSettings);
   }, [refetch]);
 
   const comparison = compareGoogleWorkspaceSelections(currentSelections, selectedLevels);
@@ -173,7 +173,7 @@ export function useGoogleWorkspaceSettingsController() {
 
     try {
       if (comparison.hasRemovals) {
-        const resetResponse = await fetch("/api/google-suite/auth/reset", {
+        const resetResponse = await fetch(apiRoutes.googleSuiteAuthReset, {
           method: "POST",
         });
 
@@ -202,7 +202,7 @@ export function useGoogleWorkspaceSettingsController() {
         }
       );
 
-      await authorizeGoogleWorkspace("/settings/google-workspace", selectedScopes);
+      await authorizeGoogleWorkspace(appRoutes.googleWorkspaceSettings, selectedScopes);
       setIsApplying(false);
     } catch (error) {
       logger.error("Google Workspace settings error:", error);

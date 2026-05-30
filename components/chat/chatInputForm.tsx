@@ -19,6 +19,7 @@ interface FormState {
   activeTool: ToolId | null;
   memoryEnabled: boolean;
   searchDepth: SearchDepth;
+  thinkingEnabled: boolean;
 }
 
 interface FormHandlers {
@@ -30,6 +31,7 @@ interface FormHandlers {
   onRemoveFile: (index: number) => void;
   onToolSelected: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
   onMemoryToggle: (enabled: boolean) => void;
+  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
   onAuthRequired?: () => void;
@@ -63,8 +65,8 @@ export function ChatInputForm({
   maxFilesReached,
   centered = false,
 }: ChatInputFormProps) {
-  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, searchDepth } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
+  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = state;
+  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onThinkingToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
 
   const textareaClassName = centered
     ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
@@ -111,6 +113,8 @@ export function ChatInputForm({
                 activeTool={activeTool}
                 memoryEnabled={memoryEnabled}
                 onMemoryToggle={onMemoryToggle}
+                thinkingEnabled={thinkingEnabled}
+                onThinkingToggle={onThinkingToggle}
                 searchDepth={searchDepth}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}

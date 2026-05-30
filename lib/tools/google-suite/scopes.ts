@@ -1,32 +1,25 @@
 export const GOOGLE_SCOPES = {
-  // Core sign-in scopes
   OPENID: 'openid',
   USERINFO_EMAIL: 'https://www.googleapis.com/auth/userinfo.email',
   USERINFO_PROFILE: 'https://www.googleapis.com/auth/userinfo.profile',
   
-  // Gmail scopes
   GMAIL_READONLY: 'https://www.googleapis.com/auth/gmail.readonly',
   GMAIL_SEND: 'https://www.googleapis.com/auth/gmail.send',
   GMAIL_MODIFY: 'https://www.googleapis.com/auth/gmail.modify',
   GMAIL_LABELS: 'https://www.googleapis.com/auth/gmail.labels',
   
-  // Google Drive scopes
   DRIVE_READONLY: 'https://www.googleapis.com/auth/drive.readonly',
   DRIVE: 'https://www.googleapis.com/auth/drive',
   
-  // Google Calendar scopes
   CALENDAR_READONLY: 'https://www.googleapis.com/auth/calendar.readonly',
   CALENDAR: 'https://www.googleapis.com/auth/calendar',
   
-  // Google Docs scopes
   DOCS_READONLY: 'https://www.googleapis.com/auth/documents.readonly',
   DOCS: 'https://www.googleapis.com/auth/documents',
   
-  // Google Sheets scopes
   SHEETS_READONLY: 'https://www.googleapis.com/auth/spreadsheets.readonly',
   SHEETS: 'https://www.googleapis.com/auth/spreadsheets',
 
-  // Google Slides scopes
   SLIDES_READONLY: 'https://www.googleapis.com/auth/presentations.readonly',
   SLIDES: 'https://www.googleapis.com/auth/presentations',
 } as const;
@@ -214,5 +207,4 @@ export function resolveGoogleWorkspaceScopesForRequest(
   };
 }
 
-// Better Auth uses 'google' as the provider ID for Google OAuth
 export const GOOGLE_PROVIDER_ID = 'google';

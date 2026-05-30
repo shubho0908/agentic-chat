@@ -54,8 +54,6 @@ export function DriveIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-// SVGL currently does not publish a Google Docs asset, so this remains the
-// existing TSX component until the registry adds one.
 export function DocsIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -239,5 +237,3 @@ export function SlidesIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
-

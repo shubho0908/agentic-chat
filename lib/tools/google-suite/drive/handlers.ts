@@ -3,6 +3,10 @@ import type { ToolHandlerContext } from '../types';
 import type { DriveSearchArgs, DriveListFolderArgs, DriveReadFileArgs, DriveCreateFileArgs, DriveCreateFolderArgs, DriveDeleteArgs, DriveMoveArgs, DriveCopyArgs, DriveShareArgs } from '../types/handlerTypes';
 import { formatFileSize, formatMimeType, formatDate } from '@/utils/google/formatters';
 
+function getTextResponseData(data: unknown): string {
+  return typeof data === 'string' ? data : String(data ?? '');
+}
+
 export async function handleDriveSearch(
   context: ToolHandlerContext,
   args: DriveSearchArgs
@@ -119,7 +123,6 @@ export async function handleDriveReadFile(
 ): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: context.oauth2Client });
   
-  // Get file metadata to detect if it's a Google Workspace document
   const meta = await drive.files.get({ 
     fileId: args.fileId, 
     fields: 'mimeType', 
@@ -134,14 +137,14 @@ export async function handleDriveReadFile(
       fileId: args.fileId,
       mimeType: args.mimeType || 'text/plain',
     }, { responseType: 'text' });
-    return response.data as string;
+    return getTextResponseData(response.data);
   } else {
     const response = await drive.files.get({
       fileId: args.fileId,
       alt: 'media',
       supportsAllDrives: true,
     }, { responseType: 'text' });
-    return response.data as string;
+    return getTextResponseData(response.data);
   }
 }
 

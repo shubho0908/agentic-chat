@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { getActiveTool, setActiveTool, removeActiveTool } from "@/lib/storage";
-import { parseToolId, TOOL_IDS, type ToolId } from "@/lib/tools/config";
+import { parseToolId, TOOL_IDS } from "@/lib/tools/config";
 
 class LocalStorageMock {
   private store = new Map<string, string>();
@@ -36,7 +36,6 @@ test.before(() => {
 
 test.after(() => {
   if (originalLocalStorage === undefined) {
-    // Match the pre-test environment when localStorage is absent.
     delete (globalThis as { localStorage?: Storage }).localStorage;
     return;
   }
@@ -82,7 +81,7 @@ test("setActiveTool persists valid ids and rejects invalid ids at runtime", () =
   assert.equal(setActiveTool(TOOL_IDS.WEB_SEARCH), true);
   assert.equal(getActiveTool(), TOOL_IDS.WEB_SEARCH);
 
-  assert.equal(setActiveTool("youtube" as unknown as ToolId), false);
+  assert.equal(Reflect.apply(setActiveTool, undefined, ["youtube"]), false);
   assert.equal(localStorage.getItem("agentic-chat-active-tool"), null);
 
   removeActiveTool();

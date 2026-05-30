@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { VALIDATION_LIMITS } from "@/constants/validation";
 
-export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
+const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
 const toolStatusSchema = z.enum(["calling", "completed", "error"]);
 
@@ -14,12 +15,12 @@ const attachmentSchema = z.object({
 
 export const attachmentInputSchema = z.object({
   fileUrl: z.url(),
-  fileName: z.string().min(1).max(255),
-  fileType: z.string().min(1).max(100),
-  fileSize: z.number().int().min(0).max(16 * 1024 * 1024),
+  fileName: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH),
+  fileType: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH),
+  fileSize: z.number().int().min(0).max(VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE),
 });
 
-export const messageContentPartSchema = z.union([
+const messageContentPartSchema = z.union([
   z.object({
     type: z.literal("text"),
     text: z.string(),
@@ -57,7 +58,7 @@ const messageHistoryEntrySchema = z.object({
   editedAt: z.number(),
 });
 
-export const toolActivitySchema = z.object({
+const toolActivitySchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
   status: toolStatusSchema,
@@ -74,6 +75,8 @@ export const toolActivitySchema = z.object({
 });
 
 const messageMetadataBaseSchema = z.object({
+  thinking: z.string().optional(),
+  thinkingDurationMs: z.number().optional(),
   citations: z.array(z.object({
     id: z.string(),
     source: z.string(),
@@ -116,13 +119,14 @@ const baseMessageSchema = z.object({
   parentMessageId: z.string().nullable().optional(),
   siblingIndex: z.number().optional(),
   toolActivities: z.array(toolActivitySchema).optional(),
+  thinking: z.string().optional(),
 });
 
 type MessageType = z.infer<typeof baseMessageSchema> & {
   versions?: MessageType[];
 };
 
-const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
+export const messageSchema: z.ZodType<MessageType> = baseMessageSchema.extend({
   versions: z.array(z.lazy(() => messageSchema)).optional(),
 });
 
@@ -147,5 +151,5 @@ export const ToolStatus = {
   Error: 'error' as const,
 } as const;
 
-export type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
+type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
 export type ToolArgs = Record<string, ToolArgValue>;

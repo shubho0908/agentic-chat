@@ -1,5 +1,5 @@
 import type { StreamConfig } from "@/types/chat";
-
+import { apiRoutes } from "@/lib/routes";
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -10,7 +10,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, activeTool, memoryEnabled, searchDepth } = config;
+  const { messages, model, signal, onChunk, conversationId, onMemoryStatus, onToolCall, onToolResult, onToolProgress, onUsageUpdated, onThinking, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = config;
   
   const requestPayload: Record<string, unknown> = {
     model,
@@ -30,8 +30,11 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   if (searchDepth && searchDepth !== 'basic') {
     requestPayload.searchDepth = searchDepth;
   }
+  if (thinkingEnabled) {
+    requestPayload.thinkingEnabled = thinkingEnabled;
+  }
   
-  const response = await fetch('/api/chat/completions', {
+  const response = await fetch(apiRoutes.chatCompletions, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(requestPayload),
@@ -57,6 +60,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   }
 
   let fullContent = "";
+  let thinkingContent = "";
   let buffer = "";
 
   try {
@@ -103,6 +107,11 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
+          if (parsed.type === 'thinking' && onThinking) {
+            thinkingContent += parsed.content;
+            onThinking(thinkingContent);
+          }
+
           if (parsed.type === 'tool_call' && onToolCall) {
             onToolCall({
               toolName: parsed.toolName,
@@ -136,7 +145,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
             });
           }
 
-          if (parsed.content) {
+          if (parsed.content && !parsed.type) {
             fullContent += parsed.content;
             onChunk(fullContent);
           }
@@ -161,7 +170,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
                   throw new Error(parsed.error);
                 }
 
-                if (parsed.content) {
+                if (parsed.content && !parsed.type) {
                   fullContent += parsed.content;
                   onChunk(fullContent);
                 }

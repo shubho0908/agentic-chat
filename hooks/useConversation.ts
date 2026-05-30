@@ -5,6 +5,8 @@ import { useMemo } from "react";
 import { ERROR_CODES } from "@/constants/errors";
 import { getModel } from "@/lib/storage";
 import { orderConversationMessagesAsc } from "@/lib/conversationMessageOrder";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 import type { Attachment } from "@/lib/schemas/chat";
 import type { TokenUsage } from "@/types/chat";
 
@@ -39,6 +41,8 @@ interface ConversationData {
   tokenUsage?: TokenUsage;
 }
 
+const FIRST_MESSAGES_CURSOR: string | undefined = undefined;
+
 async function fetchConversation(
   conversationId: string,
   cursor?: string
@@ -46,7 +50,7 @@ async function fetchConversation(
   try {
     const model = getModel();
     const url = new URL(
-      `/api/conversations/${conversationId}`,
+      apiRoutes.conversation(conversationId),
       window.location.origin
     );
     url.searchParams.set("versions", "true");
@@ -90,11 +94,11 @@ async function fetchConversation(
 
 export function useConversation(conversationId: string | null) {
   const query = useInfiniteQuery({
-    queryKey: ["conversation", conversationId],
+    queryKey: queryKeys.conversation(conversationId),
     queryFn: ({ pageParam }) =>
       fetchConversation(conversationId!, pageParam),
     getNextPageParam: (lastPage) => lastPage.messages.nextCursor,
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: FIRST_MESSAGES_CURSOR,
     enabled: !!conversationId,
     retry: (failureCount, error) => {
       if (

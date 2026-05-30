@@ -9,10 +9,13 @@ import {
 import { verifyGoogleWorkspaceOAuthState } from "@/lib/tools/google-suite/oauthState";
 
 import { logger } from "@/lib/logger";
+import { apiRoutes, appRoutes } from "@/lib/routes";
 export const dynamic = "force-dynamic";
 
 function buildReturnUrl(origin: string, returnTo: string, status: "success" | "error", reason?: string) {
-  const url = new URL(returnTo.startsWith("/") ? `${origin}${returnTo}` : `${origin}/settings/google-workspace`);
+  const url = new URL(
+    returnTo.startsWith("/") ? `${origin}${returnTo}` : `${origin}${appRoutes.googleWorkspaceSettings}`
+  );
   url.searchParams.set("google_workspace", status);
   url.searchParams.set("ts", Date.now().toString());
 
@@ -32,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   if (!state) {
     return NextResponse.redirect(
-      buildReturnUrl(origin, "/settings/google-workspace", "error", "missing_state")
+      buildReturnUrl(origin, appRoutes.googleWorkspaceSettings, "error", "missing_state")
     );
   }
 
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     logger.error("[Google Workspace OAuth] Invalid state:", error);
     return NextResponse.redirect(
-      buildReturnUrl(origin, "/settings/google-workspace", "error", "invalid_state")
+      buildReturnUrl(origin, appRoutes.googleWorkspaceSettings, "error", "invalid_state")
     );
   }
 
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
   try {
     await persistGoogleWorkspaceGrant({
       userId: verifiedState.userId,
-      redirectUri: `${origin}/api/google-suite/auth/callback`,
+      redirectUri: `${origin}${apiRoutes.googleSuiteAuthCallback}`,
       code,
     });
 

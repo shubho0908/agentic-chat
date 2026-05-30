@@ -14,6 +14,7 @@ import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { logger } from "@/lib/logger";
+import { queryKeys } from "@/lib/queryKeys";
 
 function toJsonValue(value: unknown): JsonValue | undefined {
   if (value === undefined) {
@@ -30,7 +31,8 @@ export async function handleEditMessage(
   context: EditMessageContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth
+  searchDepth?: SearchDepth,
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -222,6 +224,16 @@ export async function handleEditMessage(
       activeTool,
       memoryEnabled: memoryEnabled ?? true,
       searchDepth: searchDepth ?? 'basic',
+      thinkingEnabled,
+      onThinking: (thinking) => {
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === placeholderAssistantId
+              ? { ...msg, thinking }
+              : msg
+          )
+        );
+      },
     });
 
     onMessagesUpdate((prev) =>
@@ -274,7 +286,7 @@ export async function handleEditMessage(
               assistantParentId,
               assistantMessageId: finalizedEdit.assistantMessage.id,
             });
-            queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
           }
         } catch (assistantVersionsError) {
           shouldUseAssistantFallback = true;
@@ -286,7 +298,7 @@ export async function handleEditMessage(
               ? assistantVersionsError.message
               : String(assistantVersionsError),
           });
-          queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
         }
 
         onMessagesUpdate((prev) =>
@@ -321,8 +333,8 @@ export async function handleEditMessage(
           })
         );
         
-        queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
       persistConversationMemoryIfEligible({

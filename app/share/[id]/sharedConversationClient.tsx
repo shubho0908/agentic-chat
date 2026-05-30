@@ -9,6 +9,8 @@ import { ChatContainer } from "@/components/chat/chatContainer";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useLayout } from "@/components/providers/layoutProvider";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 interface SharedMessage {
   id: string;
@@ -30,7 +32,7 @@ interface SharedConversation {
 }
 
 async function fetchSharedConversation(conversationId: string): Promise<SharedConversation> {
-  const response = await fetch(`/api/share/${conversationId}`);
+  const response = await fetch(apiRoutes.share(conversationId));
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -59,7 +61,7 @@ export default function SharedConversationClient({
   }, [setShowSidebar]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["shared-conversation", id],
+    queryKey: queryKeys.sharedConversation(id),
     queryFn: () => fetchSharedConversation(id),
     retry: false,
   });

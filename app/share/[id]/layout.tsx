@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
-
+import { apiRoutes, appRoutes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -90,18 +90,19 @@ export async function generateMetadata({
     ? normalizedSnippet.slice(0, 155) + (normalizedSnippet.length > 155 ? "..." : "")
     : `A conversation shared by ${userName} on ${siteConfig.name}`;
   const fullTitle = `${title} | Shared on ${siteConfig.name}`;
-  const ogImageUrl = absoluteUrl(`/api/og?title=${encodeURIComponent(title)}`);
+  const route = appRoutes.share(id);
+  const ogImageUrl = absoluteUrl(`${apiRoutes.og}?title=${encodeURIComponent(title)}`);
 
   return {
     title: `${title} | Shared Conversation`,
     description,
     alternates: {
-      canonical: `/share/${id}`,
+      canonical: route,
     },
     openGraph: {
       title: fullTitle,
       description,
-      url: `/share/${id}`,
+      url: route,
       siteName: siteConfig.name,
       images: [
         {

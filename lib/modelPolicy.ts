@@ -56,9 +56,10 @@ function getReasoningSeriesMinorVersion(model: string): number | null {
   return match[1] ? Number(match[1]) : 0;
 }
 
-export function getChatReasoningEffort(model: string): ReasoningEffort | undefined {
+export function getChatReasoningEffort(model: string, thinkingEnabled?: boolean): ReasoningEffort | undefined {
   const minorVersion = getReasoningSeriesMinorVersion(model);
   if (minorVersion === null) return undefined;
+  if (thinkingEnabled) return "high";
   return minorVersion >= 1 ? "none" : "minimal";
 }
 

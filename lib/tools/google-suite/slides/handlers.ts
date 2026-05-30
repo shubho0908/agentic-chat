@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google, type slides_v1 } from 'googleapis';
 import type { ToolHandlerContext } from '../types';
 import type { SlidesCreateArgs, SlidesReadArgs, SlidesAddSlideArgs } from '../types/handlerTypes';
 
@@ -73,11 +73,7 @@ export async function handleSlidesAddSlide(
   const titleBoxId = `titleBox_${Date.now()}`;
   const bodyBoxId = `bodyBox_${Date.now()}`;
 
-  const requests: Array<{
-    createSlide?: unknown;
-    createShape?: unknown;
-    insertText?: unknown;
-  }> = [
+  const requests: slides_v1.Schema$Request[] = [
     {
       createSlide: {
         objectId: slideId,
@@ -151,7 +147,7 @@ export async function handleSlidesAddSlide(
 
   await slides.presentations.batchUpdate({
     presentationId: args.presentationId,
-    requestBody: { requests: requests as never[] },
+    requestBody: { requests },
   });
 
   return `Slide added successfully!

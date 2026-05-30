@@ -1,3 +1,5 @@
+import { getEmbeddingModel, getRerankerModel } from '@/lib/env';
+
 export const RAG_CONFIG = {
   chunking: {
     defaultSize: 800,
@@ -13,7 +15,7 @@ export const RAG_CONFIG = {
       ', ',
       ' ',
       '',
-    ] as string[],
+    ],
     sizeByType: {
       pdf: { size: 1000, overlap: 150 },
       doc: { size: 800, overlap: 100 },
@@ -46,11 +48,11 @@ export const RAG_CONFIG = {
   },
   rerank: {
     enabled: !!process.env.COHERE_API_KEY,
-    model: process.env.RERANKER_MODEL as string,
+    model: getRerankerModel(),
     candidateMultiplier: 4,
   },
   embeddings: {
-    model: process.env.EMBEDDING_MODEL as string,
+    model: getEmbeddingModel(),
   },
   supportedFileTypes: [
     'application/pdf',

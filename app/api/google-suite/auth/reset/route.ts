@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/apiUtils";
 import { revokeGoogleWorkspaceAccess } from "@/lib/tools/google-suite/client";
 
-
 import { logger } from "@/lib/logger";
 export const dynamic = "force-dynamic";
 

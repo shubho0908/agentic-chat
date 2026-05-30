@@ -4,7 +4,6 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
 
-
 interface CacheCheckResult {
   cached: boolean;
   response?: string;

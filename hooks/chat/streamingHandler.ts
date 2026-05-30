@@ -24,6 +24,7 @@ interface StreamingContext {
   activeTool?: string | null;
   memoryEnabled?: boolean;
   searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
   existingAssistantMessageId?: string;
 }
 
@@ -116,6 +117,7 @@ export async function handleStreamingResponse(
     activeTool,
     memoryEnabled = true,
     searchDepth,
+    thinkingEnabled = false,
     existingAssistantMessageId,
   } = context;
 
@@ -126,6 +128,8 @@ export async function handleStreamingResponse(
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata | undefined;
   let messageCreated = !!existingAssistantMessageId;
+  let thinkingContent = "";
+  let thinkingStartTime = 0;
 
   try {
     const { cacheQuery, cacheData } = await performCacheCheck({
@@ -306,9 +310,39 @@ export async function handleStreamingResponse(
       activeTool,
       memoryEnabled,
       searchDepth,
+      thinkingEnabled,
+      onThinking: (thinking) => {
+        if (!thinkingStartTime) thinkingStartTime = Date.now();
+        thinkingContent = thinking;
+        if (!messageCreated) {
+          messageCreated = true;
+          onMessagesUpdate((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "",
+              thinking,
+              id: assistantMessageId,
+              timestamp: Date.now(),
+              model,
+              toolActivities: [],
+              metadata: messageMetadata,
+            },
+          ]);
+        } else {
+          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+            thinking,
+          });
+        }
+      },
     });
 
     assistantContent = responseContent;
+
+    if (thinkingContent) {
+      const thinkingDurationMs = thinkingStartTime ? Date.now() - thinkingStartTime : undefined;
+      messageMetadata = { ...messageMetadata, thinking: thinkingContent, thinkingDurationMs };
+    }
 
     if (messageMetadata) {
       updateAssistantMessage(onMessagesUpdate, assistantMessageId, {

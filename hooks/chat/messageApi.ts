@@ -2,7 +2,7 @@ import { type Attachment, type MessageContentPart, type MessageMetadata } from "
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { FinalizeEditedMessageResponse, UpdateMessageResponse } from "@/types/chat";
 import { isSupportedForRAG } from "@/lib/rag/utils";
-
+import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 interface SavedMessageWithAttachments {
@@ -22,7 +22,7 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
 
   try {
     if (attachmentIds.length === 1) {
-      fetch('/api/documents/process', {
+      fetch(apiRoutes.documentsProcess, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentId: attachmentIds[0] }),
@@ -31,7 +31,7 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
         logDocumentProcessingDispatchError('dispatch single document processing', error);
       });
     } else {
-      fetch('/api/documents/process-batch', {
+      fetch(apiRoutes.documentsProcessBatch, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentIds }),
@@ -54,7 +54,7 @@ export async function saveUserMessage(
   try {
     const contentToSave = extractTextFromContent(content);
 
-    const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+    const response = await fetch(apiRoutes.conversationMessages(conversationId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -102,7 +102,7 @@ export async function saveAssistantMessage(
       ...(metadata && { metadata }),
     };
 
-    const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+    const response = await fetch(apiRoutes.conversationMessages(conversationId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -132,7 +132,7 @@ export async function finalizeEditedMessage(
 ): Promise<FinalizeEditedMessageResponse> {
   const contentToSave = extractTextFromContent(content);
 
-  const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
+  const response = await fetch(apiRoutes.conversationMessage(conversationId, messageId), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -155,7 +155,6 @@ export async function finalizeEditedMessage(
         errorMessage = errorData.message;
       }
     } catch {
-      // Keep the default response status text when no JSON body is available.
     }
     throw new Error(errorMessage);
   }
@@ -164,7 +163,7 @@ export async function finalizeEditedMessage(
 
   if (finalized.updatedMessage.attachments && finalized.updatedMessage.attachments.length > 0) {
     const documentAttachmentIds = finalized.updatedMessage.attachments
-      .flatMap((att) => att.id && isSupportedForRAG(att.fileType) ? [att.id as string] : []);
+      .flatMap((att) => typeof att.id === "string" && isSupportedForRAG(att.fileType) ? [att.id] : []);
 
     if (documentAttachmentIds.length > 0) {
       processDocumentsAsync(documentAttachmentIds);
@@ -185,7 +184,7 @@ export async function updateAssistantMessage(
     ...(metadata && { metadata }),
   };
 
-  const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}`, {
+  const response = await fetch(apiRoutes.conversationMessage(conversationId, messageId), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

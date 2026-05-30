@@ -7,8 +7,10 @@ import { UrlContentContext } from "./urlContentContext";
 
 export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
   const isAdvancedSearch = memoryStatus.toolProgress?.details?.searchDepth === 'advanced';
-  const currentPhase = memoryStatus.toolProgress?.details?.phase as number | undefined;
-  const totalPhases = memoryStatus.toolProgress?.details?.totalPhases as number | undefined;
+  const phase = memoryStatus.toolProgress?.details?.phase;
+  const totalPhaseCount = memoryStatus.toolProgress?.details?.totalPhases;
+  const currentPhase = typeof phase === "number" ? phase : undefined;
+  const totalPhases = typeof totalPhaseCount === "number" ? totalPhaseCount : undefined;
 
   if (isAdvancedSearch && currentPhase) {
     const phases = [
@@ -65,7 +67,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
           <VisionContextItem imageCount={memoryStatus.imageCount} />
         )}
 
-        {/* Advanced Search Header */}
         <div className="flex items-center gap-2">
           <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
           <div className="flex items-center gap-2">
@@ -81,7 +82,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
           </div>
         </div>
 
-        {/* Current Phase with Icon and Description */}
         {currentPhaseData && (
           <div className="flex items-start gap-2 ml-6">
             <span className="text-foreground/40 font-mono text-[10px] select-none mt-0.5">└─</span>
@@ -99,7 +99,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
           </div>
         )}
 
-        {/* Sources Display (Phase 3 onwards) */}
         {currentPhase >= 3 && memoryStatus.toolProgress?.details?.sources &&
           memoryStatus.toolProgress.details.sources.length > 0 && (
             <div className="flex items-start gap-2 ml-6">

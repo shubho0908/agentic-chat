@@ -15,6 +15,7 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
+import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { getActiveTool, getMemoryEnabled, getSearchDepth } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
@@ -116,7 +117,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, searchDepth?: SearchDepth, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -136,8 +137,8 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    const searchDepth = getSearchDepth();
-    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, searchDepth });
+    const resolvedSearchDepth = searchDepth ?? getSearchDepth();
+    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, searchDepth: resolvedSearchDepth, thinkingEnabled });
   };
 
   const handleFollowUpQuestion = async (question: string) => {

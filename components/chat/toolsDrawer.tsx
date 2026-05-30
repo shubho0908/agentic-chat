@@ -18,6 +18,7 @@ import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { Session } from "@/lib/auth";
 import { ToolMenuItemDrawer } from "./toolMenuItemDrawer";
 import { MemoryToggle } from "./memoryToggle";
+import { ThinkingToggle } from "./thinkingToggle";
 
 interface ToolsDrawerProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ interface ToolsDrawerProps {
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
+  thinkingEnabled?: boolean;
+  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   session: Session | null;
@@ -51,6 +54,8 @@ export function ToolsDrawer({
   activeTool,
   memoryEnabled = true,
   onMemoryToggle,
+  thinkingEnabled = false,
+  onThinkingToggle,
   onFilesSelected,
   fileInputRef,
   session,
@@ -143,6 +148,10 @@ export function ToolsDrawer({
 
             <div className="px-2">
               <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
+            </div>
+
+            <div className="px-2 mt-2">
+              <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
             </div>
 
             <div className="h-px bg-border my-3" />

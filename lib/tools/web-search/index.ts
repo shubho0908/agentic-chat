@@ -5,6 +5,7 @@ import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { WebSearchSource, WebSearchProgress, WebSearchImage } from '@/types/tools';
 import { withRetry } from '@/lib/retry';
 import { logError, logWarn } from '@/lib/observability';
+import { isRecord } from '@/lib/typeGuards';
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 
@@ -49,8 +50,6 @@ export async function executeWebSearch(
       return TOOL_ERROR_MESSAGES.WEB_SEARCH.SEARCH_FAILED('Query is empty or invalid');
     }
 
-    // Tavily has a query length limit (typically ~400 chars)
-    // Truncate long queries while preserving meaning
     const MAX_QUERY_LENGTH = 400;
     let query = rawQuery.trim();
     
@@ -226,20 +225,17 @@ ${result.position}. ${result.title}
         error: error instanceof Error ? error.message : String(error),
       });
       
-      if (error && typeof error === 'object') {
-        const errorObj = error as Record<string, unknown>;
-        if ('response' in errorObj) {
-          const response = errorObj.response as Record<string, unknown> | undefined;
+      if (isRecord(error)) {
+        if (isRecord(error.response)) {
           logError({
             event: 'web_search_failed_response',
-            status: response?.status,
+            status: error.response.status,
           });
         }
-        if ('request' in errorObj) {
-          const request = errorObj.request as Record<string, unknown> | undefined;
+        if (isRecord(error.request)) {
           logError({
             event: 'web_search_failed_request',
-            method: request?.method,
+            method: error.request.method,
           });
         }
       }

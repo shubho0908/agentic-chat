@@ -75,6 +75,10 @@ export function encodeChatChunk(content: string): Uint8Array {
   return encodeSSEMessage({ content });
 }
 
+export function encodeThinkingChunk(content: string): Uint8Array {
+  return encodeSSEMessage({ type: 'thinking', content });
+}
+
 export function encodeError(message: string): Uint8Array {
   return encodeSSEMessage({ error: message });
 }

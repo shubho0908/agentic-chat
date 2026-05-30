@@ -3,7 +3,6 @@ import { wrapOpenAI } from 'langsmith/wrappers';
 import { traceable } from 'langsmith/traceable';
 import type OpenAI from 'openai';
 
-
 import { logger } from "@/lib/logger";
 const LANGSMITH_CONFIG = {
   tracing: process.env.LANGSMITH_TRACING !== 'false',

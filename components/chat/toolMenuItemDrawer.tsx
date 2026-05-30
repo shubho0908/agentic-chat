@@ -10,6 +10,7 @@ import { TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { Button } from "../ui/button";
 import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
+import { appRoutes } from "@/lib/routes";
 
 interface ToolMenuItemDrawerProps {
   tool: ToolConfig;
@@ -180,7 +181,7 @@ function GoogleSuiteDrawerItem({
   const handleOpenGoogleSettings = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    push("/settings/google-workspace");
+    push(appRoutes.googleWorkspaceSettings);
   };
 
   return (
@@ -196,7 +197,7 @@ function GoogleSuiteDrawerItem({
         )}
         onClick={() => {
           if (googleSuiteNeedsSetup) {
-            push("/settings/google-workspace");
+            push(appRoutes.googleWorkspaceSettings);
             return;
           }
 
@@ -284,7 +285,7 @@ function StandardDrawerItem({
       )}
       onClick={() => {
         if (googleSuiteNeedsSetup) {
-          push("/settings/google-workspace");
+          push(appRoutes.googleWorkspaceSettings);
           return;
         }
 

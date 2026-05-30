@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { appBaseUrl } from "@/lib/appUrl";
+import { apiRoutes } from "@/lib/routes";
 
 export const siteConfig = {
   name: "Agentic Chat",
@@ -8,7 +9,7 @@ export const siteConfig = {
     "Agentic Chat is an AI chat app for web search, document analysis, memory, and Google Workspace workflows.",
   fullDescription:
     "Agentic Chat is an AI chat app for web search, document analysis, long-running context, and Google Workspace workflows, with optional bring-your-own-key control.",
-  defaultOgImagePath: "/api/og/home",
+  defaultOgImagePath: apiRoutes.ogHome,
   url: appBaseUrl,
   locale: "en_US",
   contactEmail: "dev@shubhojeet.com",

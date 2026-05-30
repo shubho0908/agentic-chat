@@ -121,7 +121,7 @@ const allowDirectMutation =
 if (isDirectRun) {
   if (!allowDirectMutation) {
     logger.error(
-      "Refusing to mutate local env files directly. Use `pnpm run ci:local` for local checks or pass `--write` explicitly."
+      "Refusing to mutate local env files directly. Pass `--write` explicitly."
     );
     process.exit(1);
   }

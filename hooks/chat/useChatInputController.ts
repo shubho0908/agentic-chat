@@ -29,9 +29,12 @@ import {
   setMemoryEnabled as storeMemoryEnabled,
   getSearchDepth as getStoredSearchDepth,
   setSearchDepth as storeSearchDepth,
+  getThinkingEnabled as getStoredThinkingEnabled,
+  setThinkingEnabled as storeThinkingEnabled,
   setPendingGoogleWorkspaceQuery,
   clearPendingGoogleWorkspaceQuery,
 } from "@/lib/storage";
+import { appRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 interface UseChatInputControllerProps {
@@ -52,6 +55,7 @@ interface ChatInputUiState {
   activeTool: ToolId | null;
   memoryEnabled: boolean;
   searchDepth: SearchDepth;
+  thinkingEnabled: boolean;
 }
 
 type ChatInputUiAction =
@@ -59,6 +63,7 @@ type ChatInputUiAction =
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
   | { type: "set-memory"; enabled: boolean }
+  | { type: "set-thinking"; enabled: boolean }
   | { type: "activate-tool"; toolId: ToolId; searchDepth?: SearchDepth }
   | { type: "deactivate-tool" };
 
@@ -67,6 +72,7 @@ const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   activeTool: null,
   memoryEnabled: false,
   searchDepth: "basic",
+  thinkingEnabled: false,
 };
 
 function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction): ChatInputUiState {
@@ -78,6 +84,7 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
         ...state,
         activeTool: null,
         memoryEnabled: false,
+        thinkingEnabled: false,
       };
     case "set-sending":
       return {
@@ -88,6 +95,11 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
       return {
         ...state,
         memoryEnabled: action.enabled,
+      };
+    case "set-thinking":
+      return {
+        ...state,
+        thinkingEnabled: action.enabled,
       };
     case "activate-tool":
       return {
@@ -120,7 +132,7 @@ export function useChatInputController({
   messages = [],
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
-  const { isSending, activeTool, memoryEnabled, searchDepth } = uiState;
+  const { isSending, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = uiState;
 
   const { data: session, isPending } = useSession();
   const { status: googleSuiteStatus, isLoading: googleSuiteAuthLoading } = useGoogleSuiteAuth({ enabled: !!session });
@@ -154,6 +166,7 @@ export function useChatInputController({
             activeTool: stored,
             memoryEnabled: getStoredMemoryEnabled(),
             searchDepth: getStoredSearchDepth(),
+            thinkingEnabled: getStoredThinkingEnabled(),
           },
         });
       } else {
@@ -279,7 +292,7 @@ export function useChatInputController({
             "Open Settings > Google Workspace to enable at least one Google app before sending Workspace requests.",
           action: {
             label: "Open settings",
-            onClick: () => router.push("/settings/google-workspace"),
+            onClick: () => router.push(appRoutes.googleWorkspaceSettings),
           },
           duration: 6000,
         });
@@ -295,7 +308,7 @@ export function useChatInputController({
               : "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
           action: {
             label: "Open settings",
-            onClick: () => router.push("/settings/google-workspace"),
+            onClick: () => router.push(appRoutes.googleWorkspaceSettings),
           },
           duration: 6000,
         });
@@ -322,7 +335,8 @@ export function useChatInputController({
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         activeTool,
         !!session && memoryEnabled,
-        searchDepth
+        searchDepth,
+        thinkingEnabled
       );
 
       if (result.success) {
@@ -395,6 +409,11 @@ export function useChatInputController({
     });
   }
 
+  function handleThinkingToggle(enabled: boolean) {
+    dispatchUi({ type: "set-thinking", enabled });
+    storeThinkingEnabled(enabled);
+  }
+
   return {
     centered,
     placeholder: isContextBlocked
@@ -415,6 +434,7 @@ export function useChatInputController({
       activeTool,
       memoryEnabled,
       searchDepth,
+      thinkingEnabled,
     },
     formHandlers: {
       onSubmit: (e: React.FormEvent) => {
@@ -428,6 +448,7 @@ export function useChatInputController({
       onRemoveFile: handleRemoveFile,
       onToolSelected: handleToolSelected,
       onMemoryToggle: handleMemoryToggle,
+      onThinkingToggle: handleThinkingToggle,
       onFilesSelected: handleFilesSelectedWithAuth,
       onStop,
       onAuthRequired,

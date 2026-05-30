@@ -145,4 +145,11 @@ export function getEmbeddingModel(): string {
   });
 }
 
+export function getRerankerModel(): string {
+  return getRequiredEnv('RERANKER_MODEL', {
+    fallback: 'rerank-v3.5',
+    description: 'Reranker model',
+  });
+}
+
 logServerEnvIssues();

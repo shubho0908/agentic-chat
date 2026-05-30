@@ -3,7 +3,6 @@ import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import type { ToolHandlerContext } from '../types';
 import type { CalendarListEventsArgs, CalendarCreateEventArgs, CalendarUpdateEventArgs, CalendarDeleteEventArgs } from '../types/handlerTypes';
 
-
 import { logger } from "@/lib/logger";
 export async function handleCalendarListEvents(
   context: ToolHandlerContext,
@@ -113,7 +112,10 @@ export async function handleCalendarUpdateEvent(
     eventId: args.eventId,
   });
 
-  const timeZone = (event.data.start?.timeZone as string | undefined) || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const eventTimeZone = event.data.start?.timeZone;
+  const timeZone = typeof eventTimeZone === 'string'
+    ? eventTimeZone
+    : Intl.DateTimeFormat().resolvedOptions().timeZone;
   
   const updatedEvent: {
     summary?: string;

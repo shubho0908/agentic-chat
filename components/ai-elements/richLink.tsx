@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 interface LinkMetadata {
   url: string;
@@ -55,14 +57,14 @@ const SafeImage = ({
 };
 
 const fetchLinkMetadata = async (url: string): Promise<LinkMetadata> => {
-  const response = await fetch(`/api/link-preview?url=${encodeURIComponent(url)}`);
+  const response = await fetch(apiRoutes.linkPreview(url));
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 };
 
 export function RichLink({ url, className, variant = "default" }: RichLinkProps) {
   const { data: metadata, isLoading, isError } = useQuery({
-    queryKey: ["link-preview", url],
+    queryKey: queryKeys.linkPreview(url),
     queryFn: () => fetchLinkMetadata(url),
     staleTime: Infinity,
     gcTime: Infinity,

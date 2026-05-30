@@ -18,6 +18,7 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import { clearUserStorage } from "@/lib/storage";
 import { useThemeToggle } from "@/hooks/useThemeToggle";
+import { appRoutes } from "@/lib/routes";
 
 interface UserMenuProps {
   byokTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -101,7 +102,7 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
               size="sm"
         onClick={() => {
           setOpen(false);
-          push("/settings/google-workspace");
+          push(appRoutes.googleWorkspaceSettings);
         }}
               className="h-9 w-full justify-start gap-2.5 rounded-lg px-2.5 text-sm hover:bg-accent"
             >

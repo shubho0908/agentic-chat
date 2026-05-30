@@ -1,6 +1,5 @@
 
 import { logger } from "@/lib/logger";
-/* eslint-disable @next/next/no-img-element */
 
 import { ImageResponse } from 'next/og';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
@@ -28,7 +27,6 @@ export async function GET(request: Request) {
             overflow: 'hidden',
           }}
         >
-          {/* Animated Gradient Background */}
           <div
             style={{
               position: 'absolute',
@@ -41,7 +39,6 @@ export async function GET(request: Request) {
             }}
           />
 
-          {/* Grid Pattern Overlay */}
           <div
             style={{
               position: 'absolute',
@@ -55,7 +52,6 @@ export async function GET(request: Request) {
             }}
           />
 
-          {/* Gradient Orbs */}
           <div
             style={{
               position: 'absolute',
@@ -81,7 +77,6 @@ export async function GET(request: Request) {
             }}
           />
 
-          {/* Main Content */}
           <div
             style={{
               display: 'flex',
@@ -94,7 +89,6 @@ export async function GET(request: Request) {
               gap: '32px',
             }}
           >
-            {/* Icon with glow effect */}
             <div
               style={{
                 display: 'flex',
@@ -103,6 +97,7 @@ export async function GET(request: Request) {
                 position: 'relative',
               }}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- Satori OG renderer requires native <img>, next/image is unsupported */}
               <img
                 src={logoUrl}
                 alt="Agentic Chat"
@@ -114,7 +109,6 @@ export async function GET(request: Request) {
               />
             </div>
 
-            {/* Title with gradient text */}
             <div
               style={{
                 display: 'flex',
@@ -136,7 +130,6 @@ export async function GET(request: Request) {
                 Agentic Chat
               </div>
               
-              {/* Subtitle */}
               <div
                 style={{
                   fontSize: '32px',
@@ -153,7 +146,6 @@ export async function GET(request: Request) {
               </div>
             </div>
 
-            {/* Feature Pills */}
             <div
               style={{
                 display: 'flex',
@@ -203,7 +195,6 @@ export async function GET(request: Request) {
             </div>
           </div>
 
-          {/* Bottom decorative line */}
           <div
             style={{
               position: 'absolute',

@@ -10,6 +10,8 @@ import { handleConversationSaving } from "./conversationManager";
 import type { SendMessageContext, BaseChatContext } from "@/types/chatHooks";
 import { handleStreamingResponse } from "./streamingHandler";
 import { getResumeConversationState } from "./resumeState";
+import { queryKeys } from "@/lib/queryKeys";
+import { appRoutes } from "@/lib/routes";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -17,7 +19,8 @@ export async function continueIncompleteConversation(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth
+  searchDepth?: SearchDepth,
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -65,6 +68,7 @@ export async function continueIncompleteConversation(
       activeTool,
       memoryEnabled,
       searchDepth,
+      thinkingEnabled,
       existingAssistantMessageId,
     },
     {
@@ -90,7 +94,8 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth
+  searchDepth?: SearchDepth,
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -161,8 +166,8 @@ export async function handleSendMessage(
             )
           );
           userMessageWasPersisted = true;
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
-          onNavigate(`/c/${data.conversationId}`);
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+          onNavigate(appRoutes.conversation(data.conversationId));
         },
         attachments,
         true,
@@ -171,7 +176,7 @@ export async function handleSendMessage(
         (conversationId: string) => {
           currentConversationId = conversationId;
           onConversationIdUpdate(conversationId);
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
         }
       );
 
@@ -228,6 +233,7 @@ export async function handleSendMessage(
         activeTool,
         memoryEnabled,
         searchDepth,
+        thinkingEnabled,
         existingAssistantMessageId: placeholderAssistantId,
       },
       {

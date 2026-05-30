@@ -10,7 +10,7 @@ import { downloadJSON } from "@/lib/export/jsonExporter";
 import { downloadMarkdown } from "@/lib/export/markdownExporter";
 import { downloadPDF } from "@/lib/export/pdfExporter";
 import { cn } from "@/lib/utils";
-
+import { apiRoutes } from "@/lib/routes";
 
 interface ExportSectionProps {
   conversationId: string;
@@ -46,7 +46,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
     setIsExporting(true);
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/export`);
+      const response = await fetch(apiRoutes.conversationExport(conversationId));
       
       if (!response.ok) {
         let errorMessage = 'Failed to fetch conversation data';

@@ -6,7 +6,6 @@ import { WEB_SEARCH_PLANNING_PROMPT } from '@/lib/tools/web-search/prompts';
 import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { getStageModel } from '@/lib/modelPolicy';
 
-
 import { logger } from "@/lib/logger";
 type ToolType = 'web_search' | 'google_suite';
 

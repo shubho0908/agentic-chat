@@ -14,7 +14,6 @@ import { prepareWebSearchQuery, resolveWebSearchQuery } from '../tools/web-searc
 import { createUnifiedPlan, type WebSearchPlan } from '../tools/unifiedPlanner';
 import { truncateTextToTokenLimit } from '@/lib/utils/tokenCounter';
 
-
 import { logger } from "@/lib/logger";
 const MAX_TOOL_CONTEXT_TOKENS = 1600;
 
@@ -338,7 +337,6 @@ export async function executeWebSearchTool(
         if (streamClosed || abortSignal?.aborted) return;
         
         try {
-          // Map search statuses to phases for advanced mode
           if (searchDepth === 'advanced') {
             if (progress.status === 'searching') {
               if (currentPhase < 2) {
@@ -422,7 +420,6 @@ export async function executeWebSearchTool(
               }
             }
           } else {
-            // Basic mode: Use standard progress
             controller.enqueue(encodeToolProgress(
               TOOL_IDS.WEB_SEARCH,
               progress.status,
@@ -456,7 +453,6 @@ export async function executeWebSearchTool(
       }
     }
     
-    // Advanced Search: Emit Phase 5 - Final Validation
     if (searchDepth === 'advanced' && !streamClosed) {
       currentPhase = 5;
       try {

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto';
 import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
 import { logError, logWarn } from '@/lib/observability';
 import { getToolDisplayName } from '@/utils/google/toolNames';
+import { isRecord } from '@/lib/typeGuards';
 
 export interface GoogleWorkspacePlannedAction {
   toolName: string;
@@ -106,8 +107,8 @@ function stableStringify(value: unknown): string {
     return `[${value.map((item) => stableStringify(item)).join(',')}]`;
   }
 
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    return `{${Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
       .join(',')}}`;
@@ -279,7 +280,7 @@ function extractApprovalToken(query: string): string | null {
 }
 
 function summarizeArgs(args: unknown): string {
-  if (!args || typeof args !== 'object') {
+  if (!isRecord(args)) {
     return '';
   }
 
@@ -302,11 +303,11 @@ function summarizeArgs(args: unknown): string {
     'parentFolderId',
   ];
   const parts = preferredKeys.flatMap((key) => {
-    if (!(key in (args as Record<string, unknown>))) {
+    if (!(key in args)) {
       return [];
     }
 
-    const value = (args as Record<string, unknown>)[key];
+    const value = args[key];
     if (typeof value === 'string') {
       const trimmed = value.trim();
       if (!trimmed) {

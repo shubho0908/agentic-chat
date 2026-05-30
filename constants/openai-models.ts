@@ -10,7 +10,6 @@ interface OpenAIModel {
 }
 
 export const OPENAI_MODELS: OpenAIModel[] = [
-  // ─── GPT-5.4 Series (Frontier Reasoning) ──────────────────────────────────
   {
     id: "gpt-5.4",
     name: "GPT-5.4",
@@ -42,7 +41,6 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     hasReasoning: true,
   },
 
-  // ─── GPT-5.2 Series (Previous Frontier) ───────────────────────────────────
   {
     id: "gpt-5.2",
     name: "GPT-5.2",
@@ -63,7 +61,6 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     hasReasoning: true,
   },
 
-  // ─── GPT-5 Series (Legacy Reasoning) ──────────────────────────────────────
   {
     id: "gpt-5",
     name: "GPT-5",

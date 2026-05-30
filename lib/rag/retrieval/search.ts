@@ -46,6 +46,19 @@ function getVectorStoreConfig() {
   };
 }
 
+function getMetadataString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function getMetadataPage(metadata: Record<string, unknown>): number | undefined {
+  const loc = metadata.loc;
+  if (loc && typeof loc === 'object' && 'pageNumber' in loc && typeof loc.pageNumber === 'number') {
+    return loc.pageNumber;
+  }
+
+  return typeof metadata.page === 'number' ? metadata.page : undefined;
+}
+
 export async function searchDocumentChunks(
   query: string,
   userId: string,
@@ -108,9 +121,9 @@ export async function searchDocumentChunks(
     content: doc.pageContent,
     score: Math.max(0, Math.min(1, 1 - distance)),
     metadata: {
-      attachmentId: doc.metadata.attachmentId as string,
-      fileName: doc.metadata.fileName as string,
-      page: doc.metadata.loc?.pageNumber || doc.metadata.page,
+      attachmentId: getMetadataString(doc.metadata.attachmentId),
+      fileName: getMetadataString(doc.metadata.fileName),
+      page: getMetadataPage(doc.metadata),
     },
     source: 'semantic',
   }));

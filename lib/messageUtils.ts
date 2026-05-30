@@ -50,6 +50,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
       parentMessageId: msg.parentMessageId,
       siblingIndex: msg.siblingIndex,
       ...(msg.metadata && { metadata: msg.metadata }),
+      ...(msg.metadata && typeof msg.metadata.thinking === 'string' ? { thinking: msg.metadata.thinking } : {}),
     };
 
     if (msg.versions && msg.versions.length > 0) {
@@ -62,6 +63,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
         parentMessageId: v.parentMessageId,
         siblingIndex: v.siblingIndex,
         ...(v.metadata && { metadata: v.metadata }),
+        ...(v.metadata && typeof v.metadata.thinking === 'string' ? { thinking: v.metadata.thinking } : {}),
       }));
     }
 

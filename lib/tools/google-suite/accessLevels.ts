@@ -240,7 +240,6 @@ export const GOOGLE_WORKSPACE_SERVICE_CONFIGS: GoogleWorkspaceServiceConfig[] = 
 
 export type GoogleWorkspaceServiceSelections = Record<GoogleWorkspaceServiceId, string>;
 
-
 function uniqueScopes(scopes: string[]): string[] {
   return Array.from(new Set(scopes));
 }

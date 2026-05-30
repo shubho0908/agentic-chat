@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TOOL_IDS, type ToolConfig } from "@/lib/tools/config";
 import { GOOGLE_SIGN_IN_SCOPES } from "@/lib/tools/google-suite/scopes";
 import { resolveGoogleWorkspaceSelections } from "@/lib/tools/google-suite/accessLevels";
+import { appRoutes } from "@/lib/routes";
 
 export interface ToolMenuGoogleSuiteStatus {
   authorized: boolean;
@@ -59,7 +60,7 @@ export function useToolMenuItemState({
         : tool.description;
 
   const openGoogleSettings = () => {
-    router.push("/settings/google-workspace");
+    router.push(appRoutes.googleWorkspaceSettings);
   };
 
   const handleOpenGoogleSettings = (event?: MouseEvent<HTMLElement>) => {

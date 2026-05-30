@@ -1,6 +1,13 @@
 import type OpenAI from 'openai';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { Message } from '@/lib/schemas/chat';
+import type {
+  ChatCompletionContentPart,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
+import type {
+  ResponseInputItem,
+  ResponseInputMessageContentList,
+} from 'openai/resources/responses/responses';
+import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 import type { ToolId } from '@/lib/tools/config';
@@ -15,6 +22,7 @@ import {
   encodeChatChunk,
   encodeError,
   encodeDone,
+  encodeThinkingChunk,
 } from './streamingHelpers';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
@@ -35,10 +43,64 @@ interface StreamHandlerOptions {
   conversationId?: string;
   searchDepth?: SearchDepth;
   requestId?: string;
+  thinkingEnabled?: boolean;
 }
 
-function toOpenAIMessages(messages: Message[]): ChatCompletionMessageParam[] {
-  return messages as ChatCompletionMessageParam[];
+function toChatCompletionContentPart(part: MessageContentPart): ChatCompletionContentPart {
+  if (part.type === 'text') {
+    return { type: 'text', text: part.text };
+  }
+
+  return {
+    type: 'image_url',
+    image_url: {
+      url: part.image_url.url,
+    },
+  };
+}
+
+function toResponseInputContentPart(part: MessageContentPart): ResponseInputMessageContentList[number] {
+  if (part.type === 'text') {
+    return { type: 'input_text', text: part.text };
+  }
+
+  return {
+    type: 'input_image',
+    image_url: part.image_url.url,
+    detail: 'auto',
+  };
+}
+
+function toTextContent(content: Message['content']): string {
+  return extractTextFromMessage(content);
+}
+
+export function toOpenAIChatMessages(messages: Message[]): ChatCompletionMessageParam[] {
+  return messages.map(({ role, content }) => {
+    if (role === 'user') {
+      return {
+        role,
+        content: typeof content === 'string'
+          ? content
+          : content.map(toChatCompletionContentPart),
+      };
+    }
+
+    return {
+      role,
+      content: toTextContent(content),
+    };
+  });
+}
+
+function toOpenAIResponseInput(messages: Message[]): ResponseInputItem[] {
+  return messages.map(({ role, content }) => ({
+    type: 'message',
+    role,
+    content: typeof content === 'string'
+      ? content
+      : content.map(toResponseInputContentPart),
+  }));
 }
 
 function logStreamWriteFailure(context: string, error: unknown): void {
@@ -57,6 +119,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     sanitizedActiveTool,
     searchDepth = 'basic',
     userId,
+    thinkingEnabled = false,
   } = options;
   let memoryStatusInfo: MemoryStatus = { ...options.memoryStatusInfo };
   let enhancedMessages = messages;
@@ -202,29 +265,65 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           return;
         }
         
-        const reasoningEffort = getChatReasoningEffort(model);
-        const streamResponse = await withRetry(
-          () =>
-            openai.chat.completions.create(
-              {
-                model,
-                messages: toOpenAIMessages(enhancedMessages),
-                stream: true,
-                ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
-              },
-              { signal: abortSignal }
-            ),
-          { signal: abortSignal }
-        );
-        
-        for await (const chunk of streamResponse) {
-          const text = chunk.choices[0]?.delta?.content || '';
-          if (text) {
-            try {
-              controller.enqueue(encodeChatChunk(text));
-            } catch {
-              logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
-              break;
+        const reasoningEffort = getChatReasoningEffort(model, thinkingEnabled);
+
+        if (thinkingEnabled && reasoningEffort && reasoningEffort !== 'none') {
+          const responseStream = await withRetry(
+            () =>
+              openai.responses.create(
+                {
+                  model,
+                  input: toOpenAIResponseInput(enhancedMessages),
+                  stream: true,
+                  reasoning: { effort: reasoningEffort, summary: 'detailed' },
+                },
+                { signal: abortSignal }
+              ),
+            { signal: abortSignal }
+          );
+
+          for await (const event of responseStream) {
+            if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
+              try {
+                controller.enqueue(encodeThinkingChunk(event.delta));
+              } catch {
+                logger.error('[Stream Handler] Could not enqueue thinking chunk (controller closed)');
+              }
+            } else if (event.type === 'response.output_text.delta') {
+              try {
+                controller.enqueue(encodeChatChunk(event.delta));
+              } catch {
+                logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
+                break;
+              }
+            }
+          }
+        } else {
+          const streamResponse = await withRetry(
+            () =>
+              openai.chat.completions.create(
+                {
+                  model,
+                  messages: toOpenAIChatMessages(enhancedMessages),
+                  stream: true,
+                  ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+                },
+                { signal: abortSignal }
+              ),
+            { signal: abortSignal }
+          );
+
+          for await (const chunk of streamResponse) {
+            const delta = chunk.choices[0]?.delta;
+            const text = delta?.content || '';
+
+            if (text) {
+              try {
+                controller.enqueue(encodeChatChunk(text));
+              } catch {
+                logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
+                break;
+              }
             }
           }
         }

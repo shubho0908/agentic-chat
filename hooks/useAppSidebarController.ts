@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -8,6 +9,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { useStreaming } from "@/contexts/streaming-context";
 import { useConversations } from "@/hooks/useConversations";
 import { useSession } from "@/lib/authClient";
+import { getConversationIdFromPathname } from "@/lib/routes";
 
 interface SidebarSelectionState {
   selectionMode: boolean;
@@ -74,7 +76,7 @@ export function useAppSidebarController() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme } = useTheme();
-  const currentConversationId = pathname?.startsWith("/c/") ? pathname.split("/c/")[1] : null;
+  const currentConversationId = getConversationIdFromPathname(pathname);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showGuardDialog, setShowGuardDialog] = useState(false);
   const [selectionState, dispatchSelection] = useReducer(
@@ -99,8 +101,7 @@ export function useAppSidebarController() {
     bulkDeleteConversations,
   } = conversationsState;
 
-  // TanStack Virtual returns non-memoizable functions; this hook intentionally opts out.
-  // eslint-disable-next-line react-hooks/incompatible-library
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns non-memoizable fns; file-level "use no memo" handles React Compiler
   const virtualizer = useVirtualizer({
     count: conversations.length,
     getScrollElement: () => parentRef.current,

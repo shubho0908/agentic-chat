@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStreaming } from "@/contexts/streaming-context";
 import { NavigationGuardDialog } from "./navigationGuardDialog";
+import { appRoutes } from "@/lib/routes";
 
 interface ProtectedConversationLinkProps extends Omit<ComponentPropsWithoutRef<typeof Link>, 'href'> {
   conversationId: string;
@@ -27,7 +28,7 @@ export const ProtectedConversationLink = ({
   const pendingNavigation = useRef<string | null>(null);
 
   const handleConversationLinkClick = (e: MouseEvent<HTMLAnchorElement>) => {
-    const targetPath = `/c/${conversationId}`;
+    const targetPath = appRoutes.conversation(conversationId);
     const currentPath = window.location.pathname;
 
     if (currentPath === targetPath) {
@@ -61,7 +62,7 @@ export const ProtectedConversationLink = ({
       <>
         <Link
           ref={ref}
-          href={`/c/${conversationId}`}
+          href={appRoutes.conversation(conversationId)}
           onClick={handleConversationLinkClick}
           {...props}
         >

@@ -13,7 +13,6 @@ import { estimateMemoryEntryCount } from './chat/memoryPolicy';
 import { extractTextQuery, isReferentialQuery } from './chat/referentialQuery';
 import { logWarn } from './observability';
 
-
 import { logger } from "@/lib/logger";
 interface ContextRoutingMetadata {
   hasMemories: boolean;
@@ -300,7 +299,6 @@ export async function routeContext(
     });
   }
 
-
   if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
     metadata.routingDecision = RoutingDecision.ToolOnly;
     metadata.skippedMemory = true;
@@ -393,7 +391,6 @@ export async function routeContext(
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
-    // If no document context but has images, treat as VisionOnly
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.VisionOnly;
       return { context: '', metadata };

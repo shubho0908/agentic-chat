@@ -55,7 +55,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, searchDepth }: SendMessageOptions) => {
+    async ({ content, session, attachments, activeTool, memoryEnabled, searchDepth, thinkingEnabled }: SendMessageOptions) => {
       if (!content.trim() || isLoading) {
         return { success: false, error: "Unable to send message" };
       }
@@ -87,7 +87,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           session,
           activeTool,
           memoryEnabled,
-          searchDepth
+          searchDepth,
+          thinkingEnabled
         );
         return result;
       } catch (error) {
@@ -106,7 +107,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, searchDepth }: EditMessageOptions) => {
+    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, searchDepth, thinkingEnabled }: EditMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -132,7 +133,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           activeTool,
           memoryEnabled,
-          searchDepth
+          searchDepth,
+          thinkingEnabled
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -148,7 +150,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, session, activeTool, memoryEnabled, searchDepth }: RegenerateMessageOptions) => {
+    async ({ messageId, session, activeTool, memoryEnabled, searchDepth, thinkingEnabled }: RegenerateMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -172,7 +174,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           activeTool,
           memoryEnabled,
-          searchDepth
+          searchDepth,
+          thinkingEnabled
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -188,7 +191,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const continueConversation = useCallback(
-    async ({ userMessage, session, activeTool, memoryEnabled, searchDepth }: ContinueConversationOptions) => {
+    async ({ userMessage, session, activeTool, memoryEnabled, searchDepth, thinkingEnabled }: ContinueConversationOptions) => {
       if (isLoading || !conversationId) return;
 
       setIsLoading(true);
@@ -212,7 +215,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           session,
           activeTool,
           memoryEnabled,
-          searchDepth
+          searchDepth,
+          thinkingEnabled
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -249,11 +253,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           activeTool: autoContinue.activeTool ?? null,
           memoryEnabled: autoContinue.memoryEnabled,
           searchDepth: autoContinue.searchDepth,
+          thinkingEnabled: autoContinue.thinkingEnabled,
         });
       }, 0);
       return () => clearTimeout(timerId);
     }
-  }, [messages, isLoading, autoContinue, continueConversation]);
+  }, [messages, isLoading, autoContinue, continueConversation, conversationId]);
 
   const clearChat = useCallback(() => {
     setMessages([]);

@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 interface ApiKeyResponse {
   exists: boolean;
@@ -9,9 +11,9 @@ interface ApiKeyResponse {
 
 export function useApiKey() {
   return useQuery<ApiKeyResponse>({
-    queryKey: ["api-key"],
+    queryKey: queryKeys.apiKey,
     queryFn: async () => {
-      const response = await fetch("/api/settings/api-key", {
+      const response = await fetch(apiRoutes.settingsApiKey, {
         method: "GET",
       });
 
@@ -35,7 +37,7 @@ export function useApiKeyMutations() {
 
   const saveApiKey = useMutation({
     mutationFn: async (apiKey: string) => {
-      const response = await fetch("/api/settings/api-key", {
+      const response = await fetch(apiRoutes.settingsApiKey, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey }),
@@ -49,13 +51,13 @@ export function useApiKeyMutations() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["api-key"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKey });
     },
   });
 
   const deleteApiKey = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/settings/api-key", {
+      const response = await fetch(apiRoutes.settingsApiKey, {
         method: "DELETE",
       });
 
@@ -66,7 +68,7 @@ export function useApiKeyMutations() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["api-key"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKey });
     },
   });
 

@@ -10,6 +10,7 @@ import {
 } from '@mem0/vercel-ai-provider';
 import { buildMemoryLookupQueries } from '@/lib/chat/requestMediator';
 import { logError, logWarn } from '@/lib/observability';
+import { isRecord } from '@/lib/typeGuards';
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 
@@ -56,11 +57,10 @@ function extractMemorySearchRecords(value: unknown): MemorySearchRecord[] {
 
   return rawItems
     .flatMap((item): Array<{ id: string | undefined; memory: string | undefined; score: number | undefined }> => {
-      if (!Boolean(item) || typeof item !== 'object') return [];
-      const rec = item as Record<string, unknown>;
-      const memory = typeof rec.memory === 'string' ? normalizeMemoryText(rec.memory) : undefined;
+      if (!isRecord(item)) return [];
+      const memory = typeof item.memory === 'string' ? normalizeMemoryText(item.memory) : undefined;
       if (!memory) return [];
-      return [{ id: typeof rec.id === 'string' ? rec.id : undefined, memory, score: typeof rec.score === 'number' ? rec.score : undefined }];
+      return [{ id: typeof item.id === 'string' ? item.id : undefined, memory, score: typeof item.score === 'number' ? item.score : undefined }];
     });
 }
 

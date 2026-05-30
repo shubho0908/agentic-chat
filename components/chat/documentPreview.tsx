@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { useIsMobile } from "@/hooks/useMobile";
 import Link from "next/link";
+import { queryKeys } from "@/lib/queryKeys";
 
 interface DocumentPreviewProps {
   fileUrl: string;
@@ -43,7 +44,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
     fileName.match(/\.(docx?|xlsx?|pptx?)$/);
 
   const { data: fetchedContent, isLoading, isError, error } = useQuery({
-    queryKey: ["textFileContent", fileUrl],
+    queryKey: queryKeys.textFileContent(fileUrl),
     queryFn: () => fetchTextFile(fileUrl),
     enabled: open && !!fileUrl && (isTextFile || isCSV),
     staleTime: Infinity,

@@ -7,7 +7,8 @@ import { saveUserMessage, saveAssistantMessage } from "./messageApi";
 import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
 import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referentialQuery";
-
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 function generateTitle(content: string | MessageContentPart[]): string {
@@ -136,7 +137,7 @@ async function createNewConversation(
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
-    const createResponse = await fetch("/api/conversations", {
+    const createResponse = await fetch(apiRoutes.conversations, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
@@ -203,7 +204,7 @@ function updateQueryCacheWithUserMessage(
     },
   ]);
 
-  queryClient.setQueryData(["conversation", conversationId], {
+  queryClient.setQueryData(queryKeys.conversation(conversationId), {
     pages: [{
       conversation: {
         id: conversationId,
@@ -252,7 +253,7 @@ function updateQueryCache(
     },
   ]);
 
-  queryClient.setQueryData(["conversation", conversationId], {
+  queryClient.setQueryData(queryKeys.conversation(conversationId), {
     pages: [{
       conversation: {
         id: conversationId,
@@ -269,7 +270,7 @@ function updateQueryCache(
     }],
     pageParams: [undefined],
   });
-  queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
 }
 
 export async function handleConversationSaving(
@@ -317,8 +318,8 @@ export async function handleConversationSaving(
   } else if (currentConversationId && assistantContent) {
     const assistantMessageId = await saveAssistantMessage(currentConversationId, assistantContent, metadata);
     if (assistantMessageId) {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversation(currentConversationId) });
       
       if (onConversationCreated) {
         onConversationCreated({

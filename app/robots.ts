@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { appRoutePrefixes, appRoutes } from "@/lib/routes";
 import { absoluteUrl, siteConfig } from "@/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
@@ -6,8 +7,13 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/privacy", "/terms"],
-        disallow: ["/api/", "/c/", "/settings/", "/share/"],
+        allow: [appRoutes.home, appRoutes.privacy, appRoutes.terms],
+        disallow: [
+          appRoutePrefixes.api,
+          appRoutePrefixes.conversation,
+          appRoutePrefixes.settings,
+          appRoutePrefixes.share,
+        ],
       },
     ],
     sitemap: absoluteUrl("/sitemap.xml"),

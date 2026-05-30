@@ -6,6 +6,7 @@ import { ChatMessage } from "./chatMessage";
 import { ContextLimitBanner } from "./contextLimitBanner";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
+import { isSharePathname } from "@/lib/routes";
 import type { MemoryStatus } from "@/types/chat";
 import { Button } from "../ui/button";
 
@@ -56,7 +57,7 @@ export function ChatContainer({
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
-  const isSharePage = pathname?.startsWith("/share/") ?? false;
+  const isSharePage = isSharePathname(pathname);
 
   useEffect(() => {
     if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {

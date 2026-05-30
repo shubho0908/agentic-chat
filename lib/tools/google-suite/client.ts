@@ -6,7 +6,6 @@ import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { GOOGLE_PROVIDER_ID, GOOGLE_SIGN_IN_SCOPES } from './scopes';
 import { appBaseUrl } from '@/lib/appUrl';
 
-
 interface GoogleSuiteClientContext {
   oauth2Client: Auth.OAuth2Client;
   userId: string;
@@ -401,7 +400,9 @@ export async function revokeGoogleWorkspaceAccess(userId: string): Promise<void>
   }
 
   const oauth2Client = createGoogleOAuth2Client();
-  const tokensToRevoke = [account.refreshToken, account.accessToken].filter(Boolean) as string[];
+  const tokensToRevoke = [account.refreshToken, account.accessToken].filter(
+    (token): token is string => typeof token === 'string' && token.length > 0
+  );
 
   for (const token of tokensToRevoke) {
     try {

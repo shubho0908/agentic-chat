@@ -9,11 +9,6 @@ function formatTime(date: Date): string {
   return `${displayHours}:${minutes} ${ampm}`;
 }
 
-/**
- * Format email date strings into human-readable relative time
- * @param dateString - Date string from email header (e.g., "Fri, Oct 17, 2025 06:19:08 -0500")
- * @returns Formatted date string (e.g., "Today at 3:12 PM", "Oct 17 at 6:19 AM")
- */
 export function formatEmailDate(dateString: string): string {
   if (!dateString) return '';
   

@@ -1,6 +1,6 @@
 import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
 import type { VersionData } from "@/types/chat";
-
+import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 export function createNewVersion(
@@ -77,7 +77,7 @@ export async function fetchMessageVersions(
 ): Promise<Message[]> {
   try {
     const versionsResponse = await fetch(
-      `/api/conversations/${conversationId}/messages/${parentMessageId}/versions`
+      apiRoutes.conversationMessageVersions(conversationId, parentMessageId)
     );
     
     if (!versionsResponse.ok) {
