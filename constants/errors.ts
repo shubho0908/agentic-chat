@@ -160,7 +160,7 @@ export const HOOK_ERROR_MESSAGES = {
 
 export const TOOL_ERROR_MESSAGES = {
   WEB_SEARCH: {
-    NOT_CONFIGURED: 'Web search is not configured. Please set TAVILY_API_KEY environment variable.',
+    NOT_CONFIGURED: 'Web search is not configured. Please set EXA_API_KEY environment variable.',
     NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
     SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
     ABORTED: 'Search was aborted, please try again later.',
