@@ -11,7 +11,6 @@ export const appRoutePrefixes = {
 
 export const appRoutes = {
   conversation: (conversationId: string) => `${appRoutePrefixes.conversation}${pathSegment(conversationId)}`,
-  googleWorkspaceSettings: "/settings/google-workspace",
   home: "/",
   notFound: "/not-found",
   privacy: "/privacy",
@@ -35,10 +34,6 @@ export const apiRoutes = {
   conversationsBulkDelete: "/api/conversations/bulk-delete",
   documentsProcess: "/api/documents/process",
   documentsProcessBatch: "/api/documents/process-batch",
-  googleSuiteAuthConnect: "/api/google-suite/auth/connect",
-  googleSuiteAuthCallback: "/api/google-suite/auth/callback",
-  googleSuiteAuthReset: "/api/google-suite/auth/reset",
-  googleSuiteAuthStatus: "/api/google-suite/auth/status",
   linkPreview: (url: string) => `/api/link-preview?url=${encodeURIComponent(url)}`,
   og: "/api/og",
   ogHome: "/api/og/home",

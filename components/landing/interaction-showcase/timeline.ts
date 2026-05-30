@@ -166,10 +166,6 @@ export function getDeviceKind(
   return "phone";
 }
 
-export function getSceneTitle(scene: SceneKind) {
-  if (scene === "workspace") {
-    return "Google Workspace";
-  }
-
+export function getSceneTitle() {
   return "Web search";
 }

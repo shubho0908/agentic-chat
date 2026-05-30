@@ -27,6 +27,12 @@ interface ContextRoutingMetadata {
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
+  citations?: Array<{
+    id: string;
+    source: string;
+    relevance: string;
+    page?: number;
+  }>;
   degradedContexts?: Array<{
     source: string;
     reason: string;
@@ -40,7 +46,7 @@ interface ContextRoutingResult {
 
 const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
 const CHAT_URL_CONTEXT_RETRIES = 0;
-const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 5_000;
+const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
 
 async function resolveExplicitUrlContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
@@ -154,17 +160,21 @@ async function resolveDocumentContext(
   }));
 
   for (const attempt of attempts) {
-    const result = await getRAGContext(attempt.query, userId, {
-      conversationId: options.conversationId,
-      attachmentIds: options.attachmentIds,
-      limit: attempt.limit,
-      scoreThreshold: attempt.scoreThreshold,
-      waitForProcessing: attempt.waitForProcessing,
-      processingTimeoutMs: options.processingTimeoutMs,
-    });
+    try {
+      const result = await getRAGContext(attempt.query, userId, {
+        conversationId: options.conversationId,
+        attachmentIds: options.attachmentIds,
+        limit: attempt.limit,
+        scoreThreshold: attempt.scoreThreshold,
+        waitForProcessing: attempt.waitForProcessing,
+        processingTimeoutMs: options.processingTimeoutMs,
+      });
 
-    if (result) {
-      return result;
+      if (result) {
+        return result;
+      }
+    } catch (error) {
+      logger.warn('[Context Router] RAG retrieval attempt failed:', error);
     }
   }
 
@@ -175,13 +185,13 @@ function buildMissingDocumentContext(query: string): string {
   const normalizedQuery = query.trim() || 'the attached documents';
 
   return (
-    '\n\nDocuments are attached to this conversation, but no strong supporting passage was retrieved for the current request.' +
-    '\n<document_retrieval_warning>' +
-    `\nCurrent request: ${normalizedQuery}` +
-    '\nDo not answer as though the documents were successfully retrieved.' +
-    '\nExplain that you need a more specific section, page, table, quote, or a clearer question.' +
-    '\nOffer to summarize the attached documents first if that would help.' +
-    '\n</document_retrieval_warning>'
+    '\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed.' +
+    '\n<document_processing_notice>' +
+    `\nUser's request: ${normalizedQuery}` +
+    '\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge.' +
+    '\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again.' +
+    '\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay.' +
+    '\n</document_processing_notice>'
   );
 }
 
@@ -357,6 +367,7 @@ export async function routeContext(
       if (ragResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = ragResult.documentCount;
+        metadata.citations = ragResult.citations;
         
         if (hasImages) {
           metadata.routingDecision = RoutingDecision.Hybrid;
@@ -410,6 +421,7 @@ export async function routeContext(
     if (ragResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = ragResult.documentCount;
+      metadata.citations = ragResult.citations;
       
       if (hasImages) {
         metadata.routingDecision = RoutingDecision.Hybrid;

@@ -9,7 +9,6 @@ const STORAGE_KEYS = {
   MEMORY_ENABLED: 'agentic-chat-memory-enabled',
   SEARCH_DEPTH: 'agentic-chat-search-depth',
   THINKING_ENABLED: 'agentic-chat-thinking-enabled',
-  PENDING_GOOGLE_WORKSPACE_QUERY: 'agentic-chat-pending-google-workspace-query',
 } as const;
 
 const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
@@ -162,7 +161,6 @@ export function clearUserStorage(): void {
     localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
     localStorage.removeItem(STORAGE_KEYS.SEARCH_DEPTH);
     localStorage.removeItem(STORAGE_KEYS.THINKING_ENABLED);
-    localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
   } catch (error) {
     logger.error('Error clearing user storage:', error);
   }
@@ -185,33 +183,5 @@ export function setThinkingEnabled(enabled: boolean): boolean {
     return true;
   } catch {
     return false;
-  }
-}
-
-export function getPendingGoogleWorkspaceQuery(): string | null {
-  if (!isLocalStorageAvailable()) return null;
-  try {
-    return localStorage.getItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
-  } catch {
-    return null;
-  }
-}
-
-export function setPendingGoogleWorkspaceQuery(query: string): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    localStorage.setItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY, query);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function clearPendingGoogleWorkspaceQuery(): void {
-  if (!isLocalStorageAvailable()) return;
-  try {
-    localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
-  } catch (error) {
-    logStorageError('clear pending Google Workspace query', error);
   }
 }

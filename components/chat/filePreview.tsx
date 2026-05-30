@@ -1,6 +1,6 @@
 "use client";
 
-import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
 import { useRef, useState, useEffect } from "react";
@@ -12,9 +12,10 @@ interface FilePreviewProps {
   files: File[];
   onRemove: (index: number) => void;
   disabled?: boolean;
+  isUploading?: boolean;
 }
 
-export function FilePreview({ files, onRemove, disabled = false }: FilePreviewProps) {
+export function FilePreview({ files, onRemove, disabled = false, isUploading = false }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -145,6 +146,11 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
                     transition={{ duration: 0.15 }}
                     className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
                   >
+                    {isUploading && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+                        <Loader className="size-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
                     {preview && !imageErrors[index] ? (
                       <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
                         <Image

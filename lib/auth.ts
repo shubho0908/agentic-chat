@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma";
-import { GOOGLE_SIGN_IN_SCOPES } from "./tools/google-suite/scopes";
 import { appBaseUrl, trustedOrigins } from "./appUrl";
 import { getRequiredEnv } from "./env";
 
@@ -33,7 +32,6 @@ export const auth = betterAuth({
         fallback: process.env.NODE_ENV !== "production" ? "missing-google-client-secret" : undefined,
         description: "Google OAuth client secret",
       }),
-      scope: GOOGLE_SIGN_IN_SCOPES,
       accessType: "offline",
       prompt: "select_account",
     },

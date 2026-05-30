@@ -5,7 +5,6 @@ import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "
 import { useInteractionTimeline, useShowcaseWidth, useViewportBounds } from "@/components/landing/interaction-showcase/hooks";
 import { DeviceShell } from "@/components/landing/interaction-showcase/primitives";
 import {
-  GoogleWorkspaceScene,
   WebSearchScene,
 } from "@/components/landing/interaction-showcase/scenes";
 import { SCENE_TRANSITION } from "@/components/landing/interaction-showcase/constants";
@@ -26,8 +25,7 @@ export function InteractionShowcase() {
       <div ref={showcaseRef} className="relative mx-auto w-full max-w-[700px]">
         <DeviceShell
           device={device}
-          scene={scene}
-          chromeTitle={getSceneTitle(scene)}
+          chromeTitle={getSceneTitle()}
           onPreviousScene={() => navigateScene(-1)}
           onNextScene={() => navigateScene(1)}
         >
@@ -43,13 +41,6 @@ export function InteractionShowcase() {
               {scene === "web" && (
                 <WebSearchScene
                   device={device}
-                  step={step}
-                  sceneElapsed={sceneElapsed}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
-              {scene === "workspace" && (
-                <GoogleWorkspaceScene
                   step={step}
                   sceneElapsed={sceneElapsed}
                   prefersReducedMotion={prefersReducedMotion}

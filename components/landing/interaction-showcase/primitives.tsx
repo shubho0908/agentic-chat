@@ -4,25 +4,18 @@ import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { m } from "framer-motion";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Globe,
 } from "lucide-react";
-import { GoogleIcon } from "@/components/icons/googleIcon";
 import { OpenAIIcon } from "@/components/icons/openaiIcon";
 import {
-  CHIP_SURFACE_CLASS,
   DIVIDER_CLASS,
   FRAME_RING_CLASS,
   FRAME_SURFACE_CLASS,
-  SOFT_BORDER_CLASS,
-  SUBTLE_PANEL_SURFACE_CLASS,
-  SURFACE_BORDER_CLASS,
   VIEWPORT_SURFACE_CLASS,
 } from "@/components/landing/interaction-showcase/constants";
-import type { DeviceKind, SceneKind } from "@/components/landing/interaction-showcase/types";
+import type { DeviceKind } from "@/components/landing/interaction-showcase/types";
 
 function ChromeUtilityRail({
   onPreviousScene,
@@ -61,13 +54,11 @@ function ChromeUtilityRail({
 
 function ContentChrome({
   device,
-  scene,
   chromeTitle,
   onPreviousScene,
   onNextScene,
 }: {
   device: DeviceKind;
-  scene: SceneKind;
   chromeTitle: string;
   onPreviousScene: () => void;
   onNextScene: () => void;
@@ -88,12 +79,7 @@ function ContentChrome({
         : "h-9 max-w-[350px] rounded-full px-4";
   const omnibarSurfaceClass =
     "border border-black/[0.08] bg-[linear-gradient(180deg,rgba(241,243,248,0.98),rgba(232,235,241,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/[0.08] dark:bg-[linear-gradient(180deg,rgba(33,36,44,0.98),rgba(24,27,33,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
-  const omnibarIcon =
-    scene === "workspace" ? (
-      <GoogleIcon className="size-3.5 shrink-0" />
-    ) : (
-      <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />
-    );
+  const omnibarIcon = <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />;
 
   return (
     <div
@@ -142,14 +128,12 @@ function ContentChrome({
 
 export function DeviceShell({
   device,
-  scene,
   chromeTitle,
   onPreviousScene,
   onNextScene,
   children,
 }: {
   device: DeviceKind;
-  scene: SceneKind;
   chromeTitle: string;
   onPreviousScene: () => void;
   onNextScene: () => void;
@@ -164,7 +148,6 @@ export function DeviceShell({
           <div className={`relative flex h-full flex-col overflow-hidden rounded-[24px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
             <ContentChrome
               device={device}
-              scene={scene}
               chromeTitle={chromeTitle}
               onPreviousScene={onPreviousScene}
               onNextScene={onNextScene}
@@ -184,7 +167,6 @@ export function DeviceShell({
           <div className={`relative flex h-full flex-col overflow-hidden rounded-[22px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
             <ContentChrome
               device={device}
-              scene={scene}
               chromeTitle={chromeTitle}
               onPreviousScene={onPreviousScene}
               onNextScene={onNextScene}
@@ -204,7 +186,6 @@ export function DeviceShell({
         <div className={`relative flex h-full flex-col overflow-hidden rounded-[16px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
           <ContentChrome
             device={device}
-            scene={scene}
             chromeTitle={chromeTitle}
             onPreviousScene={onPreviousScene}
             onNextScene={onNextScene}
@@ -340,47 +321,4 @@ export function ResponseBubble({
   );
 }
 
-export function ServiceAction({
-  icon,
-  service,
-  action,
-  status,
-  statusLabel,
-}: {
-  icon: ReactNode;
-  service: string;
-  action: string;
-  status: "current" | "completed";
-  statusLabel: string;
-}) {
-  return (
-    <div className="flex justify-start">
-      <div
-        className={`w-fit max-w-[95%] rounded-xl px-2.5 py-2 sm:max-w-[84%] ${SUBTLE_PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className={`flex size-6 min-h-6 min-w-6 shrink-0 items-center justify-center rounded-lg text-foreground ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}>
-              {icon}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium text-foreground sm:text-[12px]">{service}</p>
-              <p className="truncate text-[10px] text-muted-foreground dark:text-white/[0.5]">{action}</p>
-            </div>
-          </div>
-          {status === "completed" ? (
-            <div className="flex shrink-0 items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-300">
-              <CheckCircle2 className="size-3 shrink-0" />
-              {statusLabel}
-            </div>
-          ) : (
-            <div className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground dark:text-white/[0.5]">
-              <Clock3 className="size-3 shrink-0" />
-              {statusLabel}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+

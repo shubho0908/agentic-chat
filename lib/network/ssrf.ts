@@ -47,7 +47,7 @@ function isIpv4InRange(ip: string, range: readonly [string, number]): boolean {
   return (ipv4ToNumber(ip) & mask) === (ipv4ToNumber(baseIp) & mask);
 }
 
-export function isPrivateAddress(address: string): boolean {
+function isPrivateAddress(address: string): boolean {
   const ipVersion = net.isIP(address);
 
   if (ipVersion === 4) {

@@ -3,11 +3,10 @@ import type OpenAI from 'openai';
 import { z } from 'zod';
 import { UNIFIED_SYSTEM_PROMPT } from '@/lib/prompts';
 import { WEB_SEARCH_PLANNING_PROMPT } from '@/lib/tools/web-search/prompts';
-import { GOOGLE_WORKSPACE_SYSTEM_PROMPT as GOOGLE_SUITE_PLANNING_PROMPT } from '@/lib/tools/google-suite/prompts';
 import { getStageModel } from '@/lib/modelPolicy';
 
 import { logger } from "@/lib/logger";
-type ToolType = 'web_search' | 'google_suite';
+type ToolType = 'web_search';
 
 interface UnifiedPlannerConfig {
   query: string;
@@ -37,18 +36,7 @@ export interface WebSearchPlan {
   reasoning: string;
 }
 
-interface GoogleSuitePlan {
-  actions: Array<{
-    tool: string;
-    description: string;
-    args: Record<string, unknown>;
-    rationale: string;
-    priority: 'high' | 'medium' | 'low';
-  }>;
-  reasoning: string;
-}
-
-type UnifiedPlan = WebSearchPlan | GoogleSuitePlan;
+type UnifiedPlan = WebSearchPlan;
 
 const webSearchPlannerOutputSchema = z.object({
   queryType: z.enum(['factual', 'comparative', 'analytical', 'exploratory', 'how-to', 'current-events']),
@@ -62,23 +50,10 @@ const webSearchPlannerOutputSchema = z.object({
   reasoning: z.string(),
 });
 
-const googleSuitePlanSchema = z.object({
-  actions: z.array(z.object({
-    tool: z.string(),
-    description: z.string(),
-    args: z.record(z.string(), z.unknown()),
-    rationale: z.string(),
-    priority: z.enum(['high', 'medium', 'low']),
-  })),
-  reasoning: z.string(),
-});
-
 function getToolSpecificPrompt(toolType: ToolType): string {
   switch (toolType) {
     case 'web_search':
       return WEB_SEARCH_PLANNING_PROMPT;
-    case 'google_suite':
-      return GOOGLE_SUITE_PLANNING_PROMPT;
   }
 }
 
@@ -134,31 +109,21 @@ function buildUserPrompt(config: UnifiedPlannerConfig): string {
 
 export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<UnifiedPlan> {
   const createFallbackPlan = (): UnifiedPlan => {
-    switch (config.toolType) {
-      case 'web_search':
-        return {
-          originalQuery: config.query,
-          queryType: 'exploratory',
-          complexity: 'moderate',
-          recommendedSearches: [
-            {
-              query: config.query,
-              rationale: 'Direct search (fallback)',
-              expectedResultCount: 10,
-              priority: 'high',
-            },
-          ],
-          totalResultsNeeded: 10,
-          reasoning: 'Fallback: single direct search',
-        } as WebSearchPlan;
-
-      case 'google_suite':
-        return {
-          actions: [],
-          reasoning: 'Fallback: no actions planned',
-        } as GoogleSuitePlan;
-
-    }
+    return {
+      originalQuery: config.query,
+      queryType: 'exploratory',
+      complexity: 'moderate',
+      recommendedSearches: [
+        {
+          query: config.query,
+          rationale: 'Direct search (fallback)',
+          expectedResultCount: 10,
+          priority: 'high',
+        },
+      ],
+      totalResultsNeeded: 10,
+      reasoning: 'Fallback: single direct search',
+    } as WebSearchPlan;
   };
 
   if (config.toolType === 'web_search' && config.searchDepth === 'basic') {
@@ -226,23 +191,6 @@ export async function createUnifiedPlan(config: UnifiedPlannerConfig): Promise<U
       plan.originalQuery = config.query;
 
       return plan;
-    }
-
-    if (config.toolType === 'google_suite') {
-      const plan = await llm
-        .withStructuredOutput(googleSuitePlanSchema)
-        .invoke(
-          [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          { signal: config.abortSignal }
-        ) as GoogleSuitePlan;
-
-      return {
-        actions: plan.actions || [],
-        reasoning: plan.reasoning || 'Planned Google Workspace actions',
-      } as GoogleSuitePlan;
     }
 
     return createFallbackPlan();

@@ -3,9 +3,7 @@ import { encodeToolProgress, encodeToolCall, encodeToolResult, encodeChatChunk }
 import { injectContextToMessages, extractConversationHistory } from './messageHelpers';
 import { TOOL_IDS } from '@/lib/tools/config';
 import type { SearchResultWithSources, WebSearchSource, WebSearchImage } from '@/types/tools';
-import { mapGoogleSuiteStatus } from '@/lib/tools/statusMapping';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
-import { executeGoogleWorkspace } from '@/lib/tools/google-suite/executor';
 import { getRecommendedMaxResults, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { getWebSearchInstructions } from '../tools/web-search/prompts';
 import { executeWebSearch } from '../tools/web-search';
@@ -507,96 +505,4 @@ export async function executeWebSearchTool(
   }
 }
 
-export async function executeGoogleSuiteTool(
-  textQuery: string,
-  controller: ReadableStreamDefaultController,
-  messages: Message[],
-  userId: string,
-  apiKey: string,
-  model: string,
-  abortSignal?: AbortSignal
-): Promise<Message[]> {
-  const toolCallId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  let streamClosed = false;
 
-  try {
-    if (abortSignal?.aborted) {
-      try {
-        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
-      } catch (error) {
-        logToolWriteFailure('Google Workspace Tool', 'send aborted message', error);
-      }
-      return messages;
-    }
-
-    controller.enqueue(encodeToolCall(TOOL_IDS.GOOGLE_SUITE, toolCallId, { query: textQuery }));
-
-    const conversationHistory = extractConversationHistory(messages, {
-      maxExchanges: 15,
-      excludeLastMessage: true,
-      includeAllForShortConversations: true,
-    });
-
-    const workspaceResults = await executeGoogleWorkspace({
-      query: textQuery,
-      userId,
-      apiKey,
-      model,
-      conversationHistory,
-      onProgress: (progress) => {
-        if (streamClosed || abortSignal?.aborted) return;
-
-        const mappedStatus = mapGoogleSuiteStatus(progress.status);
-
-        try {
-          controller.enqueue(encodeToolProgress(
-            TOOL_IDS.GOOGLE_SUITE,
-            mappedStatus,
-            progress.message,
-            progress.details
-          ));
-          setImmediate(() => {});
-        } catch {
-          logger.error('[Google Workspace] Failed to enqueue progress (controller closed)');
-          streamClosed = true;
-        }
-      },
-      abortSignal,
-    });
-
-    if (!streamClosed && !abortSignal?.aborted) {
-      try {
-        controller.enqueue(encodeToolResult(TOOL_IDS.GOOGLE_SUITE, toolCallId, workspaceResults));
-      } catch {
-        streamClosed = true;
-      }
-    }
-
-    const workspaceContext = `## Google Workspace Context\n\n${truncateContext(workspaceResults, model, 1400)}`;
-
-    return injectContextToMessages(messages, workspaceContext, model);
-  } catch (error) {
-    logger.error('[Chat API] Google Workspace error:', error);
-
-    if (error instanceof Error && error.message.includes('aborted')) {
-      try {
-        controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.ABORTED));
-      } catch (enqueueError) {
-        logToolWriteFailure('Google Workspace Tool', 'send aborted fallback', enqueueError);
-      }
-      return messages;
-    }
-
-    try {
-      controller.enqueue(encodeToolProgress(
-        TOOL_IDS.GOOGLE_SUITE,
-        'completed',
-        TOOL_ERROR_MESSAGES.GOOGLE_SUITE.FAILED_FALLBACK
-      ));
-    } catch (enqueueError) {
-      logToolWriteFailure('Google Workspace Tool', 'send failure fallback', enqueueError);
-    }
-
-    return messages;
-  }
-}

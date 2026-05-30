@@ -2,7 +2,6 @@ import { searchDocumentChunks } from './search';
 import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';
 import {
-
   waitForDocumentProcessing,
   getCompletedAttachmentIds,
   getAttachmentStatuses,
@@ -14,10 +13,9 @@ import {
 } from './statusHelpers';
 import type { RAGContextOptions, RAGContextResult } from '@/types/rag';
 import { withTrace } from '@/lib/langsmithConfig';
-import { getPgPool } from '../storage/pgvectorClient';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
+import { logger } from '@/lib/logger';
 
-import { logger } from "@/lib/logger";
 interface ResolvedAttachmentScope {
   attachmentIds: string[];
   attachmentCount: number;
@@ -56,12 +54,28 @@ function formatRetrievedContext(
     })
     .join('\n\n---\n\n');
 
+  const seenSources = new Set<string>();
+  const citations = results
+    .map((result, index) => {
+      const key = `${result.metadata.fileName}:${result.metadata.page ?? ''}`;
+      if (seenSources.has(key)) return null;
+      seenSources.add(key);
+      return {
+        id: `rag-${index}`,
+        source: result.metadata.fileName,
+        relevance: 'high',
+        page: result.metadata.page,
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+
   return {
     context:
       `\n\nUse the following retrieved document evidence before answering.` +
       `\n<retrieved_documents>\n${context}\n</retrieved_documents>`,
     documentCount: usedAttachmentIds.length,
     usedAttachmentIds,
+    citations,
   };
 }
 
@@ -180,37 +194,34 @@ export async function getDocumentOverviewContext(
           return null;
         }
 
-        const pool = getPgPool();
-        const result = await pool.query<{
+        const rows = await prisma.$queryRaw<Array<{
           content: string;
           attachment_id: string;
           file_name: string;
           page: number | null;
           created_at: string;
-        }>(
-          `SELECT
-             content,
-             metadata->>'attachmentId' AS attachment_id,
-             metadata->>'fileName' AS file_name,
-             NULLIF(metadata->>'page', '')::int AS page,
-             created_at::text AS created_at
-           FROM document_chunk
-           WHERE metadata->>'userId' = $1
-             AND ($2::text IS NULL OR metadata->>'conversationId' = $2)
-             AND metadata->>'attachmentId' = ANY($3::text[])
-           ORDER BY created_at ASC
-           LIMIT 120`,
-          [userId, options.conversationId ?? null, scope.attachmentIds]
-        );
+        }>>`
+          SELECT
+            content,
+            metadata->>'attachmentId' AS attachment_id,
+            metadata->>'fileName' AS file_name,
+            NULLIF(metadata->>'page', '')::int AS page,
+            created_at::text AS created_at
+          FROM document_chunk
+          WHERE metadata->>'userId' = ${userId}
+            AND (${options.conversationId ?? null}::text IS NULL OR metadata->>'conversationId' = ${options.conversationId ?? null})
+            AND metadata->>'attachmentId' = ANY(${scope.attachmentIds}::text[])
+          ORDER BY created_at ASC
+          LIMIT 120`;
 
-        if (result.rows.length === 0) {
+        if (rows.length === 0) {
           return null;
         }
 
         const perAttachmentBudget = 3;
-        const rowsByAttachment = new Map<string, typeof result.rows>();
+        const rowsByAttachment = new Map<string, typeof rows>();
 
-        for (const row of result.rows) {
+        for (const row of rows) {
           const attachmentRows = rowsByAttachment.get(row.attachment_id) ?? [];
           attachmentRows.push(row);
           rowsByAttachment.set(row.attachment_id, attachmentRows);
@@ -251,6 +262,58 @@ export async function getDocumentOverviewContext(
   );
 }
 
+async function enrichWithNeighborChunks(
+  results: Array<{ content: string; score: number; metadata: { attachmentId: string; fileName: string; page?: number } }>,
+  userId: string
+): Promise<Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }>> {
+  if (results.length === 0) return [];
+
+  const enriched: Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }> = [];
+  const seenContent = new Set<string>();
+
+  for (const result of results) {
+    const neighbors = await prisma.$queryRaw<Array<{
+      content: string;
+      attachment_id: string;
+      file_name: string;
+      page: number | null;
+    }>>`
+      WITH target AS (
+        SELECT (metadata->>'charStart')::int AS char_start
+        FROM document_chunk
+        WHERE metadata->>'attachmentId' = ${result.metadata.attachmentId}
+          AND metadata->>'userId' = ${userId}
+          AND content = ${result.content}
+        LIMIT 1
+      )
+      SELECT content,
+             metadata->>'attachmentId' AS attachment_id,
+             metadata->>'fileName' AS file_name,
+             NULLIF(metadata->>'page', '')::int AS page
+      FROM document_chunk, target
+      WHERE metadata->>'attachmentId' = ${result.metadata.attachmentId}
+        AND metadata->>'userId' = ${userId}
+      ORDER BY ABS((metadata->>'charStart')::int - target.char_start)
+      LIMIT 3`;
+
+    for (const row of neighbors) {
+      const key = `${row.attachment_id}:${row.content.slice(0, 100)}`;
+      if (seenContent.has(key)) continue;
+      seenContent.add(key);
+      enriched.push({
+        content: row.content,
+        metadata: {
+          attachmentId: row.attachment_id,
+          fileName: row.file_name,
+          page: row.page ?? undefined,
+        },
+      });
+    }
+  }
+
+  return enriched;
+}
+
 export async function getRAGContext(
   query: string,
   userId: string,
@@ -260,31 +323,33 @@ export async function getRAGContext(
     'rag-context-retrieval',
     async () => {
       try {
-    const {
-      conversationId,
-      limit = RAG_CONFIG.search.defaultLimit,
-      scoreThreshold = RAG_CONFIG.search.scoreThreshold,
-    } = options;
+        const {
+          conversationId,
+          limit = RAG_CONFIG.search.defaultLimit,
+          scoreThreshold = RAG_CONFIG.search.scoreThreshold,
+        } = options;
 
-    const scope = await resolveCompletedAttachmentScope(userId, options);
-    if (!scope) {
-      return null;
-    }
+        const scope = await resolveCompletedAttachmentScope(userId, options);
+        if (!scope) {
+          return null;
+        }
 
-    const adjustedLimit = Math.max(limit, Math.min(scope.attachmentIds.length * 3, 15));
+        const adjustedLimit = Math.max(limit, Math.min(scope.attachmentIds.length * 3, 15));
 
-    const results = await searchDocumentChunks(query, userId, {
-      limit: adjustedLimit,
-      scoreThreshold,
-      conversationId,
-      attachmentIds: scope.attachmentIds,
-    });
+        const results = await searchDocumentChunks(query, userId, {
+          limit: adjustedLimit,
+          scoreThreshold,
+          conversationId,
+          attachmentIds: scope.attachmentIds,
+        });
 
-    if (results.length === 0) {
-      return null;
-    }
+        if (results.length === 0) {
+          return null;
+        }
 
-        return formatRetrievedContext(results);
+        const enrichedResults = await enrichWithNeighborChunks(results, userId);
+
+        return formatRetrievedContext(enrichedResults);
       } catch (error) {
         logger.error('[RAG] Context retrieval failed:', error);
         return null;

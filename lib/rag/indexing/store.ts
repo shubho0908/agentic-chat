@@ -1,8 +1,8 @@
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import type { Document } from '@langchain/core/documents';
-import { ensurePgVectorTables } from '../storage/pgvectorInit';
 import { getPgPool } from '../storage/pgvectorClient';
+import { prisma } from '@/lib/prisma';
 import { RAG_CONFIG } from '../config';
 import { RAGError, RAGErrorCode } from '../common/errors';
 import { getUserApiKey } from '@/lib/apiUtils';
@@ -17,16 +17,8 @@ async function getEmbeddings(userId: string) {
 }
 
 function getVectorStoreConfig() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new RAGError('DATABASE_URL is required', RAGErrorCode.DATABASE_CONFIG_ERROR);
-  }
-  
   return {
-    postgresConnectionOptions: {
-      type: 'pg' as const,
-      connectionString,
-    },
+    pool: getPgPool(),
     tableName: 'document_chunk',
     columns: {
       idColumnName: 'id',
@@ -43,10 +35,9 @@ export async function addDocumentsToPgVector(
   attachmentId: string,
   userId: string,
   fileName: string,
-  conversationId: string
+  conversationId: string,
+  fileType?: string
 ): Promise<void> {
-  await ensurePgVectorTables();
-
   await withTrace(
     'rag-document-indexing',
     async () => {
@@ -58,6 +49,7 @@ export async function addDocumentsToPgVector(
             attachmentId,
             userId,
             fileName,
+            fileType,
             conversationId,
             timestamp: new Date().toISOString(),
           },
@@ -90,12 +82,8 @@ export async function addDocumentsToPgVector(
 
 export async function deleteDocumentChunks(attachmentId: string): Promise<void> {
   try {
-    const pool = getPgPool();
-    
-    await pool.query(
-      `DELETE FROM document_chunk WHERE metadata->>'attachmentId' = $1`,
-      [attachmentId]
-    );
+    await prisma.$executeRaw`
+      DELETE FROM document_chunk WHERE metadata->>'attachmentId' = ${attachmentId}`;
   } catch (error) {
     throw new RAGError(
       `Error deleting document chunks: ${error instanceof Error ? error.message : String(error)}`,

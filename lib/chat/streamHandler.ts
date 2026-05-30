@@ -16,13 +16,14 @@ import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { injectContextToMessages } from '@/lib/chat/messageHelpers';
 import { extractTextFromMessage } from './messageContent';
-import { executeWebSearchTool, executeGoogleSuiteTool } from './toolExecutors';
+import { executeWebSearchTool } from './toolExecutors';
 import {
   encodeMemoryStatus,
   encodeChatChunk,
   encodeError,
   encodeDone,
   encodeThinkingChunk,
+  encodeToolProgress,
 } from './streamingHelpers';
 import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
@@ -202,6 +203,18 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             if (contextResult.context) {
               enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
             }
+
+            if (contextResult.metadata.citations?.length) {
+              try {
+                controller.enqueue(encodeToolProgress(
+                  'document_retrieval',
+                  'completed',
+                  'Retrieved relevant document passages',
+                  { citations: contextResult.metadata.citations }
+                ));
+              } catch {
+              }
+            }
           }
         } catch (error) {
           logger.error('[Stream Handler] Context routing failed:', error);
@@ -236,21 +249,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           }
         }
 
-        if (sanitizedActiveTool === TOOL_IDS.GOOGLE_SUITE) {
-          if (!userId) {
-            try {
-              controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GOOGLE_SUITE.AUTH_REQUIRED));
-            } catch (error) {
-              logStreamWriteFailure('send Google auth required message', error);
-            }
-          } else {
-            enhancedMessages = await executeGoogleSuiteTool(textQuery, controller, enhancedMessages, userId, apiKey, model, abortSignal);
-            if (!(await ensurePromptBudget())) {
-              return;
-            }
-          }
-        }
-        
         if (abortSignal?.aborted) {
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));

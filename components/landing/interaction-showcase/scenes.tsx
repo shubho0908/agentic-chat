@@ -4,12 +4,8 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { AnimatePresence, m } from "framer-motion";
 import { Search } from "lucide-react";
-import { CalendarIcon, DriveIcon, GmailIcon } from "@/components/icons/googleSuiteIcons";
 import {
-  CALENDAR_RESPONSE,
   CHIP_SURFACE_CLASS,
-  DRIVE_RESPONSE,
-  GMAIL_RESPONSE,
   PANEL_SURFACE_CLASS,
   SCENE_TRANSITION,
   SOFT_BORDER_CLASS,
@@ -23,7 +19,6 @@ import {
   AutoScrollStage,
   ResponseBubble,
   SceneFrame,
-  ServiceAction,
   UserBubble,
 } from "@/components/landing/interaction-showcase/primitives";
 import {
@@ -212,173 +207,4 @@ export function WebSearchScene({
   );
 }
 
-export function GoogleWorkspaceScene({
-  step,
-  sceneElapsed,
-  prefersReducedMotion,
-}: {
-  step: number;
-  sceneElapsed: number;
-  prefersReducedMotion: boolean;
-}) {
-  const gmailReply = getTypedText(
-    GMAIL_RESPONSE,
-    sceneElapsed,
-    getStepStart("workspace", 2),
-    getResponsiveTypingSpeed({
-      scene: "workspace",
-      startStep: 2,
-      target: GMAIL_RESPONSE,
-      preferredSpeed: 6,
-    }),
-  );
-  const driveReply = getTypedText(
-    DRIVE_RESPONSE,
-    sceneElapsed,
-    getStepStart("workspace", 5),
-    getResponsiveTypingSpeed({
-      scene: "workspace",
-      startStep: 5,
-      target: DRIVE_RESPONSE,
-      preferredSpeed: 6,
-    }),
-  );
-  const calendarReply = getTypedText(
-    CALENDAR_RESPONSE,
-    sceneElapsed,
-    getStepStart("workspace", 8),
-    getResponsiveTypingSpeed({
-      scene: "workspace",
-      startStep: 8,
-      target: CALENDAR_RESPONSE,
-      preferredSpeed: 6,
-      endHold: 180,
-    }),
-  );
-  const timelineItems: Array<{ key: string; node: ReactNode }> = [
-    {
-      key: "w-user-0",
-      node: <UserBubble text="Reply to Maya and confirm I can send the updated portfolio case study tonight." />,
-    },
-  ];
 
-  if (step >= 1) {
-    timelineItems.push({
-      key: "w-gmail-action",
-      node: (
-        <ServiceAction
-          icon={<GmailIcon className="size-4" />}
-          service="Gmail"
-          action="gmail_search -> gmail_reply"
-          status={step >= 2 ? "completed" : "current"}
-          statusLabel={step >= 2 ? "Done" : "Drafting"}
-        />
-      ),
-    });
-  }
-
-  if (step >= 2) {
-    timelineItems.push({
-      key: "w-gmail-reply",
-      node: (
-        <ResponseBubble
-          text={gmailReply}
-          minHeight="min-h-[72px]"
-          showCursor={step >= 2 && step < 5 && !prefersReducedMotion}
-          prefersReducedMotion={prefersReducedMotion}
-        />
-      ),
-    });
-  }
-
-  if (step >= 3) {
-    timelineItems.push({
-      key: "w-user-1",
-      node: <UserBubble text="Find the latest creator launch brief in Drive." />,
-    });
-  }
-
-  if (step >= 4) {
-    timelineItems.push({
-      key: "w-drive-action",
-      node: (
-        <ServiceAction
-          icon={<DriveIcon className="size-4" />}
-          service="Drive"
-          action="drive_search -> drive_read_file"
-          status={step >= 5 ? "completed" : "current"}
-          statusLabel={step >= 5 ? "Done" : "Reviewing"}
-        />
-      ),
-    });
-  }
-
-  if (step >= 5) {
-    timelineItems.push({
-      key: "w-drive-reply",
-      node: (
-        <ResponseBubble
-          text={driveReply}
-          minHeight="min-h-[72px]"
-          showCursor={step >= 5 && step < 8 && !prefersReducedMotion}
-          prefersReducedMotion={prefersReducedMotion}
-        />
-      ),
-    });
-  }
-
-  if (step >= 6) {
-    timelineItems.push({
-      key: "w-user-2",
-      node: <UserBubble text="Set up a portfolio review with Jordan next Tuesday at 6 PM." />,
-    });
-  }
-
-  if (step >= 7) {
-    timelineItems.push({
-      key: "w-calendar-action",
-      node: (
-        <ServiceAction
-          icon={<CalendarIcon className="size-4" />}
-          service="Calendar"
-          action="calendar_list_events -> calendar_create_event"
-          status={step >= 8 ? "completed" : "current"}
-          statusLabel={step >= 8 ? "Done" : "Scheduling"}
-        />
-      ),
-    });
-  }
-
-  if (step >= 8) {
-    timelineItems.push({
-      key: "w-calendar-reply",
-      node: (
-        <ResponseBubble
-          text={calendarReply}
-          minHeight="min-h-[72px]"
-          showCursor={!prefersReducedMotion}
-          prefersReducedMotion={prefersReducedMotion}
-        />
-      ),
-    });
-  }
-
-  return (
-    <SceneFrame title="Google Workspace" caption="Gmail, Drive, and Calendar in one flow">
-      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
-        <AutoScrollStage>
-          <AnimatePresence initial={false}>
-            {timelineItems.map((item) => (
-              <TimelineItem
-                key={item.key}
-                itemKey={item.key}
-                node={item.node}
-                prefersReducedMotion={prefersReducedMotion}
-              />
-            ))}
-          </AnimatePresence>
-        </AutoScrollStage>
-      </div>
-    </SceneFrame>
-  );
-}

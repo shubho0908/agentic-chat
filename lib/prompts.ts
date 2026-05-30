@@ -102,7 +102,7 @@ Your role is to analyze the user's query and create a detailed, actionable plan 
 
 You will be given:
 - The user's query
-- The active tool type (web_search or google_suite)
+- The active tool type (web_search)
 - Additional context (documents, images, conversation history) if available
 
 Respond with a JSON plan optimized for the specified tool.`;

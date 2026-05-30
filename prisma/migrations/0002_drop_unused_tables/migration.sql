@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS "agent_run_event" CASCADE;
+DROP TABLE IF EXISTS "tool_invocation" CASCADE;
+DROP TABLE IF EXISTS "chat_generation_run" CASCADE;
+DROP TABLE IF EXISTS "chat_processing_slot" CASCADE;
+DROP TABLE IF EXISTS "chat_run" CASCADE;
+DROP TABLE IF EXISTS "agent_run" CASCADE;
+DROP TABLE IF EXISTS "deep_research_usage" CASCADE;
+DROP TABLE IF EXISTS "deep_research_run" CASCADE;
+DROP TABLE IF EXISTS "human_approval" CASCADE;
+DROP TABLE IF EXISTS "youtube_video_cache" CASCADE;

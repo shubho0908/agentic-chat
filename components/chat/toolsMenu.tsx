@@ -19,7 +19,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
-import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
 import { ToolMenuItem } from "./toolMenuItem";
@@ -63,7 +62,6 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
 
   const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
@@ -103,13 +101,6 @@ export function ToolsMenu({
   const commonToolProps = {
     session,
     searchDepth,
-    googleSuiteStatus: {
-      authorized: googleSuiteStatus?.authorized ?? false,
-      loading: googleSuiteLoading,
-      workspaceConnected: googleSuiteStatus?.workspaceConnected ?? false,
-      hasWorkspaceAccess: googleSuiteStatus?.hasWorkspaceAccess ?? false,
-      grantedScopes: googleSuiteStatus?.grantedScopes ?? [],
-    },
     onToolSelect: handleToolSelect,
   };
 

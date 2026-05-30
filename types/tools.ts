@@ -70,26 +70,3 @@ export interface WebSearchProgress {
   message: string;
   details?: WebSearchProgressDetails;
 }
-
-export enum GoogleSuiteStatus {
-  INITIALIZING = 'initializing',
-  ANALYZING = 'analyzing',
-  PLANNING = 'planning',
-  THINKING = 'thinking',
-  TASK_START = 'task_start',
-  EXECUTING = 'executing',
-  TASK_COMPLETE = 'task_complete',
-  VALIDATING = 'validating',
-  COMPLETED = 'completed',
-  AUTH_REQUIRED = 'auth_required',
-}
-
-export interface GoogleSuiteTask {
-  id: string;
-  tool: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  iteration: number;
-  result?: string;
-  error?: string;
-}

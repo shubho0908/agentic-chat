@@ -12,7 +12,7 @@ export function shouldRetryJob(input: RetryDecisionInput): boolean {
   return input.retryable && input.attempts < input.maxAttempts;
 }
 
-export function computeRetryBackoffMs(
+function computeRetryBackoffMs(
   attempts: number,
   baseDelayMs: number = DEFAULT_RETRY_BASE_DELAY_MS,
   maxDelayMs: number = DEFAULT_RETRY_MAX_DELAY_MS

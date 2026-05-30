@@ -1,5 +1,5 @@
-import type { PoolClient } from 'pg';
-import { getPgPool } from '@/lib/rag/storage/pgvectorClient';
+import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import {
   createRequestId,
   logInfo,
@@ -18,9 +18,6 @@ import {
 type OrchestrationJobType = 'document_process';
 type OrchestrationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 const DEFAULT_LEASE_MS = 15 * 60 * 1000;
-
-let initialized = false;
-let initializationPromise: Promise<void> | null = null;
 
 function safeJson(value: unknown): string {
   return JSON.stringify(value ?? {});
@@ -50,6 +47,20 @@ interface OrchestrationJobRow {
   created_at?: Date | string | null;
 }
 
+interface OrchestrationJobRecord {
+  id: string;
+  type: OrchestrationJobType;
+  userId: string;
+  status: OrchestrationJobStatus;
+  payload: unknown;
+  result?: unknown;
+  error?: string | null;
+  attempts: number;
+  maxAttempts: number;
+  nextAttemptAt: string | null;
+  createdAt: string | null;
+}
+
 function mapOrchestrationJobRow(row: OrchestrationJobRow): OrchestrationJobRecord {
   return {
     id: row.id,
@@ -66,111 +77,6 @@ function mapOrchestrationJobRow(row: OrchestrationJobRow): OrchestrationJobRecor
   };
 }
 
-async function withTypeLock<T>(
-  type: OrchestrationJobType,
-  callback: (client: PoolClient) => Promise<T>
-): Promise<T> {
-  await ensureOrchestrationTables();
-  const client = await getPgPool().connect();
-
-  try {
-    await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [type]);
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-async function upsertOrchestrationJob(
-  client: PoolClient,
-  params: {
-    type: OrchestrationJobType;
-    userId: string;
-    payload: unknown;
-    dedupeKey?: string;
-    maxAttempts: number;
-  }
-): Promise<OrchestrationJobRow> {
-  const jobId = createRequestId(`job_${params.type}`);
-  const result = await client.query<OrchestrationJobRow>(
-    `
-      INSERT INTO orchestration_job (id, type, user_id, status, dedupe_key, payload, max_attempts, next_attempt_at)
-      VALUES ($1, $2, $3, 'queued', $4, $5::jsonb, $6, NOW())
-      ON CONFLICT (type, dedupe_key) WHERE dedupe_key IS NOT NULL
-      DO UPDATE SET
-        user_id = EXCLUDED.user_id,
-        payload = EXCLUDED.payload,
-        max_attempts = GREATEST(orchestration_job.max_attempts, EXCLUDED.max_attempts),
-        status = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN 'queued'
-          ELSE orchestration_job.status
-        END,
-        result = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
-          ELSE orchestration_job.result
-        END,
-        error = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
-          ELSE orchestration_job.error
-        END,
-        lease_owner = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
-          ELSE orchestration_job.lease_owner
-        END,
-        lease_expires_at = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
-          ELSE orchestration_job.lease_expires_at
-        END,
-        next_attempt_at = CASE
-          WHEN orchestration_job.status = 'failed'
-            AND orchestration_job.attempts < orchestration_job.max_attempts THEN NOW()
-          ELSE orchestration_job.next_attempt_at
-        END,
-        updated_at = NOW()
-      RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
-    `,
-    [
-      jobId,
-      params.type,
-      params.userId,
-      params.dedupeKey ?? null,
-      safeJson(params.payload),
-      params.maxAttempts,
-    ]
-  );
-
-  return result.rows[0];
-}
-
-async function countRunningJobsWithClient(
-  client: PoolClient,
-  type: OrchestrationJobType
-): Promise<number> {
-  const result = await client.query<{ count: string }>(
-    `
-      SELECT COUNT(*)::text AS count
-      FROM orchestration_job
-      WHERE type = $1
-        AND status = 'running'
-        AND lease_expires_at > NOW()
-    `,
-    [type]
-  );
-
-  return Number(result.rows[0]?.count ?? 0);
-}
-
 function hasActiveLease(row: OrchestrationJobRow): boolean {
   if (row.status !== 'running') {
     return false;
@@ -183,8 +89,89 @@ function hasActiveLease(row: OrchestrationJobRow): boolean {
   return !isLeaseExpired(row.lease_expires_at);
 }
 
-async function startOrchestrationJobWithClient(
-  client: PoolClient,
+type PrismaTx = Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
+async function withTypeLock<T>(
+  type: OrchestrationJobType,
+  callback: (tx: PrismaTx) => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${type}))`;
+    return callback(tx);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}
+
+async function upsertOrchestrationJob(
+  tx: PrismaTx,
+  params: {
+    type: OrchestrationJobType;
+    userId: string;
+    payload: unknown;
+    dedupeKey?: string;
+    maxAttempts: number;
+  }
+): Promise<OrchestrationJobRow> {
+  const jobId = createRequestId(`job_${params.type}`);
+  const rows = await tx.$queryRaw<OrchestrationJobRow[]>`
+    INSERT INTO orchestration_job (id, type, user_id, status, dedupe_key, payload, max_attempts, next_attempt_at)
+    VALUES (${jobId}, ${params.type}, ${params.userId}, 'queued', ${params.dedupeKey ?? null}, ${safeJson(params.payload)}::jsonb, ${params.maxAttempts}, NOW())
+    ON CONFLICT (type, dedupe_key) WHERE dedupe_key IS NOT NULL
+    DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      payload = EXCLUDED.payload,
+      max_attempts = GREATEST(orchestration_job.max_attempts, EXCLUDED.max_attempts),
+      status = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN 'queued'
+        ELSE orchestration_job.status
+      END,
+      result = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
+        ELSE orchestration_job.result
+      END,
+      error = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
+        ELSE orchestration_job.error
+      END,
+      lease_owner = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
+        ELSE orchestration_job.lease_owner
+      END,
+      lease_expires_at = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN NULL
+        ELSE orchestration_job.lease_expires_at
+      END,
+      next_attempt_at = CASE
+        WHEN orchestration_job.status = 'failed'
+          AND orchestration_job.attempts < orchestration_job.max_attempts THEN NOW()
+        ELSE orchestration_job.next_attempt_at
+      END,
+      updated_at = NOW()
+    RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at`;
+
+  return rows[0];
+}
+
+async function countRunningJobsWithTx(
+  tx: PrismaTx,
+  type: OrchestrationJobType
+): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ count: bigint }>>`
+    SELECT COUNT(*) AS count
+    FROM orchestration_job
+    WHERE type = ${type}
+      AND status = 'running'
+      AND lease_expires_at > NOW()`;
+
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function startOrchestrationJobWithTx(
+  tx: PrismaTx,
   params: {
     jobId: string;
     leaseOwner?: string;
@@ -192,114 +179,26 @@ async function startOrchestrationJobWithClient(
   }
 ): Promise<OrchestrationJobRow | null> {
   const leaseOwner = params.leaseOwner ?? createRequestId('lease');
-  const leaseMs = params.leaseMs ?? DEFAULT_LEASE_MS;
+  const leaseMs = String(params.leaseMs ?? DEFAULT_LEASE_MS);
 
-  const result = await client.query<OrchestrationJobRow>(
-    `
-      UPDATE orchestration_job
-      SET
-        status = 'running',
-        attempts = attempts + 1,
-        lease_owner = $2,
-        lease_expires_at = NOW() + ($3 || ' milliseconds')::interval,
-        last_heartbeat_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $1
-        AND attempts < max_attempts
-        AND (
-          (status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
-          OR (status = 'running' AND (lease_expires_at IS NULL OR lease_expires_at < NOW()))
-        )
-      RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
-    `,
-    [params.jobId, leaseOwner, String(leaseMs)]
-  );
+  const rows = await tx.$queryRaw<OrchestrationJobRow[]>`
+    UPDATE orchestration_job
+    SET
+      status = 'running',
+      attempts = attempts + 1,
+      lease_owner = ${leaseOwner},
+      lease_expires_at = NOW() + (${leaseMs} || ' milliseconds')::interval,
+      last_heartbeat_at = NOW(),
+      updated_at = NOW()
+    WHERE id = ${params.jobId}
+      AND attempts < max_attempts
+      AND (
+        (status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
+        OR (status = 'running' AND (lease_expires_at IS NULL OR lease_expires_at < NOW()))
+      )
+    RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at`;
 
-  return result.rows[0] ?? null;
-}
-
-async function ensureOrchestrationTables(): Promise<void> {
-  if (initialized) {
-    return;
-  }
-
-  if (initializationPromise) {
-    return initializationPromise;
-  }
-
-  initializationPromise = (async () => {
-    const pool = getPgPool();
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS orchestration_job (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        dedupe_key TEXT,
-        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-        result JSONB,
-        error TEXT,
-        attempts INT NOT NULL DEFAULT 0,
-        max_attempts INT NOT NULL DEFAULT 3,
-        next_attempt_at TIMESTAMPTZ,
-        lease_owner TEXT,
-        last_heartbeat_at TIMESTAMPTZ,
-        lease_expires_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
-
-    await pool.query(`
-      ALTER TABLE orchestration_job
-      ADD COLUMN IF NOT EXISTS max_attempts INT NOT NULL DEFAULT 3;
-    `);
-
-    await pool.query(`
-      ALTER TABLE orchestration_job
-      ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;
-    `);
-
-    await pool.query(`
-      ALTER TABLE orchestration_job
-      ADD COLUMN IF NOT EXISTS last_heartbeat_at TIMESTAMPTZ;
-    `);
-
-    await pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS orchestration_job_dedupe_idx
-      ON orchestration_job (type, dedupe_key)
-      WHERE dedupe_key IS NOT NULL;
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS orchestration_job_status_idx
-      ON orchestration_job (type, status, created_at DESC);
-    `);
-
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS orchestration_job_retry_idx
-      ON orchestration_job (type, status, next_attempt_at ASC, created_at ASC);
-    `);
-
-    initialized = true;
-  })();
-
-  return initializationPromise;
-}
-
-interface OrchestrationJobRecord {
-  id: string;
-  type: OrchestrationJobType;
-  userId: string;
-  status: OrchestrationJobStatus;
-  payload: unknown;
-  result?: unknown;
-  error?: string | null;
-  attempts: number;
-  maxAttempts: number;
-  nextAttemptAt: string | null;
-  createdAt: string | null;
+  return rows[0] ?? null;
 }
 
 export async function enqueueOrStartJobWithinCapacity(params: {
@@ -317,9 +216,9 @@ export async function enqueueOrStartJobWithinCapacity(params: {
   started: boolean;
   atCapacity: boolean;
 }> {
-  return withTypeLock(params.type, async (client) => {
+  return withTypeLock(params.type, async (tx) => {
     if (params.persistIfAtCapacity === false) {
-      const runningJobs = await countRunningJobsWithClient(client, params.type);
+      const runningJobs = await countRunningJobsWithTx(tx, params.type);
       if (runningJobs >= params.maxRunning) {
         logInfo({
           event: 'orchestration_job_enqueue_capacity_blocked',
@@ -328,15 +227,11 @@ export async function enqueueOrStartJobWithinCapacity(params: {
           maxRunning: params.maxRunning,
           runningJobs,
         });
-        return {
-          job: null,
-          started: false,
-          atCapacity: true,
-        };
+        return { job: null, started: false, atCapacity: true };
       }
     }
 
-    const queuedJob = await upsertOrchestrationJob(client, {
+    const queuedJob = await upsertOrchestrationJob(tx, {
       ...params,
       maxAttempts: params.maxAttempts ?? DEFAULT_JOB_MAX_ATTEMPTS,
     });
@@ -355,14 +250,10 @@ export async function enqueueOrStartJobWithinCapacity(params: {
     });
 
     if (queuedJob.status === 'completed' || hasActiveLease(queuedJob)) {
-      return {
-        job: queuedRecord,
-        started: false,
-        atCapacity: false,
-      };
+      return { job: queuedRecord, started: false, atCapacity: false };
     }
 
-    const runningJobs = await countRunningJobsWithClient(client, params.type);
+    const runningJobs = await countRunningJobsWithTx(tx, params.type);
     if (runningJobs >= params.maxRunning) {
       logInfo({
         event: 'orchestration_job_queue_waiting_for_capacity',
@@ -372,14 +263,10 @@ export async function enqueueOrStartJobWithinCapacity(params: {
         runningJobs,
         maxRunning: params.maxRunning,
       });
-      return {
-        job: queuedRecord,
-        started: false,
-        atCapacity: true,
-      };
+      return { job: queuedRecord, started: false, atCapacity: true };
     }
 
-    const startedJob = await startOrchestrationJobWithClient(client, {
+    const startedJob = await startOrchestrationJobWithTx(tx, {
       jobId: queuedJob.id,
       leaseOwner: params.leaseOwner,
       leaseMs: params.leaseMs,
@@ -412,26 +299,22 @@ export async function claimNextQueuedJobWithinCapacity(params: {
   job: OrchestrationJobRecord | null;
   atCapacity: boolean;
 }> {
-  return withTypeLock(params.type, async (client) => {
-    await client.query(
-      `
-        UPDATE orchestration_job
-        SET
-          status = 'failed',
-          error = COALESCE(error, 'Lease expired after max retry attempts'),
-          lease_owner = NULL,
-          lease_expires_at = NULL,
-          next_attempt_at = NULL,
-          updated_at = NOW()
-        WHERE type = $1
-          AND status = 'running'
-          AND lease_expires_at < NOW()
-          AND attempts >= max_attempts
-      `,
-      [params.type]
-    );
+  return withTypeLock(params.type, async (tx) => {
+    await tx.$executeRaw`
+      UPDATE orchestration_job
+      SET
+        status = 'failed',
+        error = COALESCE(error, 'Lease expired after max retry attempts'),
+        lease_owner = NULL,
+        lease_expires_at = NULL,
+        next_attempt_at = NULL,
+        updated_at = NOW()
+      WHERE type = ${params.type}
+        AND status = 'running'
+        AND lease_expires_at < NOW()
+        AND attempts >= max_attempts`;
 
-    const runningJobs = await countRunningJobsWithClient(client, params.type);
+    const runningJobs = await countRunningJobsWithTx(tx, params.type);
     if (runningJobs >= params.maxRunning) {
       logInfo({
         event: 'orchestration_job_claim_at_capacity',
@@ -443,43 +326,39 @@ export async function claimNextQueuedJobWithinCapacity(params: {
     }
 
     const owner = params.leaseOwner ?? createRequestId(`claim_${params.type}`);
-    const leaseMs = params.leaseMs ?? DEFAULT_LEASE_MS;
-    const result = await client.query<OrchestrationJobRow>(
-      `
-        WITH next_job AS (
-          SELECT id
-          FROM orchestration_job
-          WHERE type = $1
-            AND (
-              (status = 'queued'
-                AND attempts < max_attempts
-                AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
-              OR (
-                status = 'running'
-                AND attempts < max_attempts
-                AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
-              )
+    const leaseMs = String(params.leaseMs ?? DEFAULT_LEASE_MS);
+    const rows = await tx.$queryRaw<OrchestrationJobRow[]>`
+      WITH next_job AS (
+        SELECT id
+        FROM orchestration_job
+        WHERE type = ${params.type}
+          AND (
+            (status = 'queued'
+              AND attempts < max_attempts
+              AND (next_attempt_at IS NULL OR next_attempt_at <= NOW()))
+            OR (
+              status = 'running'
+              AND attempts < max_attempts
+              AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
             )
-          ORDER BY next_attempt_at ASC NULLS FIRST, created_at ASC
-          LIMIT 1
-          FOR UPDATE SKIP LOCKED
-        )
-        UPDATE orchestration_job
-        SET
-          status = 'running',
-          attempts = attempts + 1,
-          lease_owner = $2,
-          lease_expires_at = NOW() + ($3 || ' milliseconds')::interval,
-          last_heartbeat_at = NOW(),
-          updated_at = NOW()
-        WHERE id IN (SELECT id FROM next_job)
-        RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
-      `,
-      [params.type, owner, String(leaseMs)]
-    );
+          )
+        ORDER BY next_attempt_at ASC NULLS FIRST, created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE orchestration_job
+      SET
+        status = 'running',
+        attempts = attempts + 1,
+        lease_owner = ${owner},
+        lease_expires_at = NOW() + (${leaseMs} || ' milliseconds')::interval,
+        last_heartbeat_at = NOW(),
+        updated_at = NOW()
+      WHERE id IN (SELECT id FROM next_job)
+      RETURNING id, type, user_id, status, payload, result, error, attempts, max_attempts, next_attempt_at, lease_expires_at, created_at`;
 
-    if (result.rows[0]) {
-      const claimedRecord = mapOrchestrationJobRow(result.rows[0]);
+    if (rows[0]) {
+      const claimedRecord = mapOrchestrationJobRow(rows[0]);
       logOrchestrationJobStart({
         jobId: claimedRecord.id,
         jobType: claimedRecord.type,
@@ -490,7 +369,7 @@ export async function claimNextQueuedJobWithinCapacity(params: {
     }
 
     return {
-      job: result.rows[0] ? mapOrchestrationJobRow(result.rows[0]) : null,
+      job: rows[0] ? mapOrchestrationJobRow(rows[0]) : null,
       atCapacity: false,
     };
   });
@@ -501,26 +380,20 @@ export async function heartbeatOrchestrationJobLease(params: {
   leaseOwner?: string;
   leaseMs?: number;
 }): Promise<boolean> {
-  await ensureOrchestrationTables();
-  const pool = getPgPool();
-  const leaseMs = params.leaseMs ?? DEFAULT_LEASE_MS;
+  const leaseMs = String(params.leaseMs ?? DEFAULT_LEASE_MS);
   const hasOwnerConstraint = Boolean(params.leaseOwner);
 
-  const result = await pool.query(
-    `
-      UPDATE orchestration_job
-      SET
-        lease_expires_at = NOW() + ($3 || ' milliseconds')::interval,
-        last_heartbeat_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $1
-        AND status = 'running'
-        AND ($2::boolean = FALSE OR lease_owner = $4)
-    `,
-    [params.jobId, hasOwnerConstraint, String(leaseMs), params.leaseOwner ?? null]
-  );
+  const result = await prisma.$executeRaw`
+    UPDATE orchestration_job
+    SET
+      lease_expires_at = NOW() + (${leaseMs} || ' milliseconds')::interval,
+      last_heartbeat_at = NOW(),
+      updated_at = NOW()
+    WHERE id = ${params.jobId}
+      AND status = 'running'
+      AND (${hasOwnerConstraint}::boolean = FALSE OR lease_owner = ${params.leaseOwner ?? null})`;
 
-  return (result.rowCount ?? 0) > 0;
+  return result > 0;
 }
 
 export async function resolveOrchestrationJobRun(params: {
@@ -531,49 +404,33 @@ export async function resolveOrchestrationJobRun(params: {
   retryable?: boolean;
   retryAt?: Date;
 }): Promise<{ status: OrchestrationJobStatus; retried: boolean } | null> {
-  await ensureOrchestrationTables();
-  const pool = getPgPool();
-  const client = await pool.connect();
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<OrchestrationJobRow[]>`
+      SELECT
+        id, type, user_id, status, payload, result, error,
+        attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
+      FROM orchestration_job
+      WHERE id = ${params.jobId}
+      FOR UPDATE`;
 
-  try {
-    await client.query('BEGIN');
-
-    const rowResult = await client.query<OrchestrationJobRow>(
-      `
-        SELECT
-          id, type, user_id, status, payload, result, error,
-          attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
-        FROM orchestration_job
-        WHERE id = $1
-        FOR UPDATE
-      `,
-      [params.jobId]
-    );
-
-    const existing = rowResult.rows[0];
+    const existing = rows[0];
     if (!existing) {
-      await client.query('ROLLBACK');
       return null;
     }
 
     if (params.succeeded) {
-      await client.query(
-        `
-          UPDATE orchestration_job
-          SET
-            status = 'completed',
-            result = $2::jsonb,
-            error = NULL,
-            lease_owner = NULL,
-            lease_expires_at = NULL,
-            next_attempt_at = NULL,
-            updated_at = NOW()
-          WHERE id = $1
-        `,
-        [params.jobId, safeJson(params.result)]
-      );
+      await tx.$executeRaw`
+        UPDATE orchestration_job
+        SET
+          status = 'completed',
+          result = ${safeJson(params.result)}::jsonb,
+          error = NULL,
+          lease_owner = NULL,
+          lease_expires_at = NULL,
+          next_attempt_at = NULL,
+          updated_at = NOW()
+        WHERE id = ${params.jobId}`;
 
-      await client.query('COMMIT');
       logOrchestrationJobFinish({
         jobId: existing.id,
         jobType: existing.type,
@@ -594,23 +451,18 @@ export async function resolveOrchestrationJobRun(params: {
       })
     ) {
       const retryAt = params.retryAt ?? computeNextRetryAt(existing.attempts);
-      await client.query(
-        `
-          UPDATE orchestration_job
-          SET
-            status = 'queued',
-            result = $2::jsonb,
-            error = $3,
-            lease_owner = NULL,
-            lease_expires_at = NULL,
-            next_attempt_at = $4,
-            updated_at = NOW()
-          WHERE id = $1
-        `,
-        [params.jobId, safeJson(params.result), params.error ?? 'Job failed', retryAt]
-      );
+      await tx.$executeRaw`
+        UPDATE orchestration_job
+        SET
+          status = 'queued',
+          result = ${safeJson(params.result)}::jsonb,
+          error = ${params.error ?? 'Job failed'},
+          lease_owner = NULL,
+          lease_expires_at = NULL,
+          next_attempt_at = ${retryAt},
+          updated_at = NOW()
+        WHERE id = ${params.jobId}`;
 
-      await client.query('COMMIT');
       logInfo({
         event: 'orchestration_job_requeued',
         jobId: existing.id,
@@ -624,22 +476,18 @@ export async function resolveOrchestrationJobRun(params: {
       return { status: 'queued', retried: true };
     }
 
-    await client.query(
-      `
-        UPDATE orchestration_job
-        SET
-          status = 'failed',
-          result = $2::jsonb,
-          error = $3,
-          lease_owner = NULL,
-          lease_expires_at = NULL,
-          next_attempt_at = NULL,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [params.jobId, safeJson(params.result), params.error ?? 'Job failed']
-    );
-    await client.query('COMMIT');
+    await tx.$executeRaw`
+      UPDATE orchestration_job
+      SET
+        status = 'failed',
+        result = ${safeJson(params.result)}::jsonb,
+        error = ${params.error ?? 'Job failed'},
+        lease_owner = NULL,
+        lease_expires_at = NULL,
+        next_attempt_at = NULL,
+        updated_at = NOW()
+      WHERE id = ${params.jobId}`;
+
     logOrchestrationJobFinish({
       jobId: existing.id,
       jobType: existing.type,
@@ -650,10 +498,5 @@ export async function resolveOrchestrationJobRun(params: {
       error: params.error ?? 'Job failed',
     });
     return { status: 'failed', retried: false };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

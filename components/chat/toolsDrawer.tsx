@@ -35,13 +35,6 @@ interface ToolsDrawerProps {
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   session: Session | null;
   searchDepth?: SearchDepth;
-  googleSuiteStatus?: {
-    authorized: boolean;
-    loading: boolean;
-    workspaceConnected: boolean;
-    hasWorkspaceAccess: boolean;
-    grantedScopes: string[];
-  };
   onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
@@ -60,7 +53,6 @@ export function ToolsDrawer({
   fileInputRef,
   session,
   searchDepth = 'basic',
-  googleSuiteStatus,
   onToolSelect,
 }: ToolsDrawerProps) {
   const triggerButton = (
@@ -170,7 +162,6 @@ export function ToolsDrawer({
                       isActive={activeTool === tool.id}
                       isAuthenticated={!!session}
                       searchDepth={searchDepth}
-                      googleSuiteStatus={googleSuiteStatus}
                       onToolSelect={onToolSelect}
                     />
                   ))}

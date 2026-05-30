@@ -1,11 +1,9 @@
 import { type ClipboardEvent, useEffect, useReducer } from "react";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 import type { Message } from "@/lib/schemas/chat";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
 import { TOOL_IDS, type ToolId } from "@/lib/tools/config";
@@ -14,27 +12,17 @@ import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
-import { extractTextFromMessage } from "@/lib/chat/messageContent";
-import {
-  GOOGLE_SIGN_IN_SCOPES,
-  getMissingGoogleScopes,
-  resolveGoogleWorkspaceScopesForRequest,
-} from "@/lib/tools/google-suite/scopes";
 import {
   getActiveTool as getStoredActiveTool,
   setActiveTool as storeActiveTool,
   removeActiveTool,
-  getPendingGoogleWorkspaceQuery,
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
   getSearchDepth as getStoredSearchDepth,
   setSearchDepth as storeSearchDepth,
   getThinkingEnabled as getStoredThinkingEnabled,
   setThinkingEnabled as storeThinkingEnabled,
-  setPendingGoogleWorkspaceQuery,
-  clearPendingGoogleWorkspaceQuery,
 } from "@/lib/storage";
-import { appRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 interface UseChatInputControllerProps {
@@ -129,14 +117,11 @@ export function useChatInputController({
   centered,
   onAuthRequired,
   tokenUsage,
-  messages = [],
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
   const { isSending, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = uiState;
 
   const { data: session, isPending } = useSession();
-  const { status: googleSuiteStatus, isLoading: googleSuiteAuthLoading } = useGoogleSuiteAuth({ enabled: !!session });
-  const router = useRouter();
 
   const {
     selectedFiles,
@@ -175,31 +160,8 @@ export function useChatInputController({
     }
   }, [session, isPending]);
 
-  useEffect(() => {
-    if (!session || activeTool !== TOOL_IDS.GOOGLE_SUITE || input.trim()) {
-      return;
-    }
-
-    const pendingQuery = getPendingGoogleWorkspaceQuery();
-
-    if (!pendingQuery) {
-      return;
-    }
-
-    setInput(pendingQuery);
-    clearPendingGoogleWorkspaceQuery();
-    toast.success("Google Workspace request restored", {
-      description: "Your draft was restored after the permissions flow.",
-      duration: 3000,
-    });
-  }, [activeTool, input, session, setInput]);
-
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
   const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
-  const signInScopes = new Set<string>(GOOGLE_SIGN_IN_SCOPES);
-  const hasWorkspaceAccess = (googleSuiteStatus?.hasWorkspaceAccess ?? false) || (googleSuiteStatus?.grantedScopes ?? []).some(
-    (scope) => !signInScopes.has(scope)
-  );
 
   function activateTool(toolId: ToolId, selectedDepth?: SearchDepth) {
     if (!session) {
@@ -218,7 +180,7 @@ export function useChatInputController({
       storeSearchDepth(selectedDepth);
     }
 
-    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : toolId.replace("_", " ");
+    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : (toolId as string).replace("_", " ");
     const currentDepth = selectedDepth || searchDepth;
     const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
       ? ` (${currentDepth === "advanced" ? "Advanced" : "Basic"})`
@@ -266,54 +228,6 @@ export function useChatInputController({
       });
       dispatchUi({ type: "set-sending", isSending: false });
       return;
-    }
-
-    if (activeTool === TOOL_IDS.GOOGLE_SUITE && session) {
-      if (googleSuiteAuthLoading) {
-        toast.info("Checking Google Workspace permissions...", {
-          duration: 2000,
-        });
-        return;
-      }
-
-      const recentMessages = messages
-        .slice(-6)
-        .flatMap((message) => { const t = extractTextFromMessage(message.content); return t.trim().length > 0 ? [t] : []; });
-      const scopeResolution = resolveGoogleWorkspaceScopesForRequest(input, recentMessages);
-      const missingRequiredScopes = getMissingGoogleScopes(
-        scopeResolution.requiredScopes,
-        googleSuiteStatus?.grantedScopes ?? []
-      );
-
-      if (!hasWorkspaceAccess) {
-        setPendingGoogleWorkspaceQuery(input);
-        toast.error("Google Workspace access needed", {
-          description:
-            "Open Settings > Google Workspace to enable at least one Google app before sending Workspace requests.",
-          action: {
-            label: "Open settings",
-            onClick: () => router.push(appRoutes.googleWorkspaceSettings),
-          },
-          duration: 6000,
-        });
-        return;
-      }
-
-      if (missingRequiredScopes.length > 0) {
-        setPendingGoogleWorkspaceQuery(input);
-        toast.error("Google Workspace access needed", {
-          description:
-            scopeResolution.source === "context"
-              ? "This follow-up needs broader Google Workspace access than your current selection. Open Settings > Google Workspace to add it."
-              : "Open Settings > Google Workspace to choose the Gmail, Drive, Calendar, Docs, Sheets, or Slides access this request needs.",
-          action: {
-            label: "Open settings",
-            onClick: () => router.push(appRoutes.googleWorkspaceSettings),
-          },
-          duration: 6000,
-        });
-        return;
-      }
     }
 
     dispatchUi({ type: "set-sending", isSending: true });

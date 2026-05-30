@@ -419,9 +419,6 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     if (prevProgress?.status !== nextProgress?.status ||
       prevProgress?.message !== nextProgress?.message ||
       prevProgress?.details?.status !== nextProgress?.details?.status ||
-      prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
-
-      prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
       prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
       return false;
     }

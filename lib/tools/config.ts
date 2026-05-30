@@ -1,11 +1,9 @@
 import { Globe } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
-import { GoogleIcon } from "@/components/icons/googleIcon";
 
 export const TOOL_IDS = {
   WEB_SEARCH: 'web_search',
-  GOOGLE_SUITE: 'google_suite',
 } as const;
 
 export type ToolId = typeof TOOL_IDS[keyof typeof TOOL_IDS];
@@ -37,19 +35,6 @@ export const AVAILABLE_TOOLS: Partial<Record<ToolId, ToolConfig>> = {
       to: '#4f46e5',
     },
     iconColorClass: 'text-blue-500',
-  },
-  [TOOL_IDS.GOOGLE_SUITE]: {
-    id: TOOL_IDS.GOOGLE_SUITE,
-    name: 'Google Suite',
-    description: 'Smart agent for Google Suite',
-    icon: GoogleIcon,
-    inputPrefix: 'Gmail request: ',
-    gradientColors: {
-      from: '#4285F4',
-      via: '#DB4437',
-      to: '#F4B400',
-    },
-    iconColorClass: 'text-blue-600',
   },
 };
 

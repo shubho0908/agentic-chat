@@ -147,8 +147,15 @@ export async function processDocument(
       attachmentId,
       userId,
       attachment.fileName,
-      conversationId
+      conversationId,
+      attachment.fileType
     );
+
+    try {
+      await prisma.$executeRaw`
+        DELETE FROM semantic_cache WHERE user_id = ${userId} AND conversation_id = ${conversationId}`;
+    } catch {
+    }
 
     await prisma.attachment.update({
       where: { id: attachmentId },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type RefObject } from "react";
-import { LogOut, Moon, Settings2, SlidersHorizontal, Sun } from "lucide-react";
+import { LogOut, Moon, SlidersHorizontal, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 
@@ -18,7 +18,6 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import { clearUserStorage } from "@/lib/storage";
 import { useThemeToggle } from "@/hooks/useThemeToggle";
-import { appRoutes } from "@/lib/routes";
 
 interface UserMenuProps {
   byokTriggerRef?: RefObject<HTMLButtonElement | null>;
@@ -96,18 +95,6 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
             >
               <SlidersHorizontal className="size-4" />
               <span className="flex-1 text-left">API Settings</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-        onClick={() => {
-          setOpen(false);
-          push(appRoutes.googleWorkspaceSettings);
-        }}
-              className="h-9 w-full justify-start gap-2.5 rounded-lg px-2.5 text-sm hover:bg-accent"
-            >
-              <Settings2 className="size-4" />
-              <span className="flex-1 text-left">Google Workspace</span>
             </Button>
             <Button
               variant="ghost"

@@ -1,12 +1,14 @@
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_DATABASE_URL")
+  extensions = [vector, pgcrypto]
 }
 
 model User {
@@ -146,4 +148,55 @@ model Attachment {
   @@index([messageId])
   @@map("attachment")
 }
+
+model DocumentChunk {
+  id        String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content   String                         @db.Text
+  embedding Unsupported("vector(1536)")?
+  metadata  Json                           @default("{}") @db.JsonB
+  createdAt DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("document_chunk")
+}
+
+model SemanticCache {
+  id             String                         @id @default(dbgenerated("gen_random_uuid()::text"))
+  userId         String                         @map("user_id")
+  conversationId String?                        @map("conversation_id")
+  question       String                         @db.Text
+  answer         String                         @db.Text
+  embedding      Unsupported("vector(1536)")?
+  createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "semantic_cache_user_id_idx")
+  @@index([userId, createdAt(sort: Desc)], map: "semantic_cache_user_created_idx")
+  @@index([userId, conversationId], map: "semantic_cache_user_conv_idx")
+  @@index([createdAt], map: "semantic_cache_created_at_idx")
+  @@map("semantic_cache")
+}
+
+model OrchestrationJob {
+  id              String    @id
+  type            String
+  userId          String    @map("user_id")
+  status          String    @default("queued")
+  dedupeKey       String?   @map("dedupe_key")
+  payload         Json      @default("{}") @db.JsonB
+  result          Json?     @db.JsonB
+  error           String?   @db.Text
+  attempts        Int       @default(0)
+  maxAttempts     Int       @default(3) @map("max_attempts")
+  leaseOwner      String?   @map("lease_owner")
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at") @db.Timestamptz(6)
+  leaseExpiresAt  DateTime? @map("lease_expires_at") @db.Timestamptz(6)
+  nextAttemptAt   DateTime? @map("next_attempt_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([type, dedupeKey], map: "orchestration_job_dedupe_idx")
+  @@index([type, status, createdAt(sort: Desc)], map: "orchestration_job_status_idx")
+  @@index([type, status, nextAttemptAt, createdAt], map: "orchestration_job_retry_idx")
+  @@map("orchestration_job")
+}
+
 

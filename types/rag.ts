@@ -26,6 +26,12 @@ export interface RAGContextResult {
   context: string;
   documentCount: number;
   usedAttachmentIds: string[];
+  citations?: Array<{
+    id: string;
+    source: string;
+    relevance: string;
+    page?: number;
+  }>;
 }
 
 export interface RerankDocument {

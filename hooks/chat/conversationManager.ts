@@ -82,12 +82,16 @@ export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
   systemPrompt: string,
-  model: string
+  model: string,
+  currentAttachments?: { fileType: string }[]
 ): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
+  const hasCurrentDocumentAttachment = currentAttachments?.some(att =>
+    !att.fileType.startsWith('image/')
+  ) ?? false;
 
-  if (isReferential && hasAttachmentsInContext) {
+  if ((isReferential && hasAttachmentsInContext) || hasCurrentDocumentAttachment) {
     const recentMessages = messages.slice(-DOCUMENT_CONTEXT_MESSAGES);
     
     return trimMessagesByApproximateTokenBudget([

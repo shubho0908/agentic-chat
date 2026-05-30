@@ -45,11 +45,7 @@ const defaultLogSink: LogSink = (level, serialized) => {
   writeWithConsoleFallback(level, serialized);
 };
 
-let logSink: LogSink = defaultLogSink;
-
-export function setObservabilityLogSinkForTests(nextSink: LogSink | null): void {
-  logSink = nextSink ?? defaultLogSink;
-}
+const logSink: LogSink = defaultLogSink;
 
 function write(
   level: LogLevel,

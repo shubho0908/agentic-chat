@@ -3,7 +3,6 @@ import type {
   WebSearchImage,
   WebSearchProgressDetails,
   WebSearchSource,
-  GoogleSuiteTask,
 } from './tools';
 import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
@@ -83,17 +82,6 @@ export interface MemoryStatus {
       citations?: MessageMetadata['citations'];
       skipped?: boolean;
       status?: string;
-      currentTaskIndex?: number;
-      currentTask?: GoogleSuiteTask;
-      allTasks?: GoogleSuiteTask[];
-      completedTasks?: GoogleSuiteTask[];
-      thinking?: string;
-      planning?: {
-        toolsToUse: string[];
-        estimatedSteps: number;
-      };
-      totalCompleted?: number;
-      completedInIteration?: number;
     };
   };
 }

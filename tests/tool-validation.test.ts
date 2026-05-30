@@ -57,10 +57,10 @@ test("parseToolId only accepts supported tool ids", () => {
 });
 
 test("getActiveTool returns valid stored tool ids", () => {
-  localStorage.setItem("agentic-chat-active-tool", TOOL_IDS.GOOGLE_SUITE);
+  localStorage.setItem("agentic-chat-active-tool", TOOL_IDS.WEB_SEARCH);
 
-  assert.equal(getActiveTool(), TOOL_IDS.GOOGLE_SUITE);
-  assert.equal(localStorage.getItem("agentic-chat-active-tool"), TOOL_IDS.GOOGLE_SUITE);
+  assert.equal(getActiveTool(), TOOL_IDS.WEB_SEARCH);
+  assert.equal(localStorage.getItem("agentic-chat-active-tool"), TOOL_IDS.WEB_SEARCH);
 });
 
 test("getActiveTool purges legacy invalid stored tool ids", () => {
