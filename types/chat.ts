@@ -4,9 +4,6 @@ import type {
   WebSearchSource,
 } from './tools';
 
-/** @deprecated Will be removed once LangGraph orchestrator handles search autonomously */
-export type SearchDepth = 'basic' | 'advanced';
-
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
   DocumentsOnly = 'documents-only',
@@ -93,7 +90,6 @@ export interface UseChatOptions {
     session?: { user: { id: string } };
     activeTool?: string | null;
     memoryEnabled?: boolean;
-    searchDepth?: SearchDepth;
     thinkingEnabled?: boolean;
   } | null;
 }
@@ -104,7 +100,6 @@ export interface SendMessageOptions {
   attachments?: Attachment[];
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
 }
 
@@ -118,7 +113,6 @@ export type MessageSendHandler = (
   attachments?: Attachment[],
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth,
   thinkingEnabled?: boolean
 ) => Promise<MessageSendResult> | MessageSendResult;
 
@@ -129,7 +123,6 @@ export interface EditMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
 }
 
@@ -138,7 +131,6 @@ export interface RegenerateMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
 }
 
@@ -147,7 +139,6 @@ export interface ContinueConversationOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
 }
 

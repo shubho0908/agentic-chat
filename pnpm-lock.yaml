@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@langchain/community':
         specifier: ^1.1.29
-        version: 1.1.29(@browserbasehq/sdk@2.12.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.0)(deepmerge@4.3.1)(dotenv@17.4.2)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(zod@4.4.3))(@ibm-cloud/watsonx-ai@1.6.13)(@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(ws@8.21.0))(@mozilla/readability@0.6.0)(@opentelemetry/api@1.9.0)(cheerio@1.2.0)(cohere-ai@8.0.0)(d3-dsv@3.0.1)(ibm-cloud-sdk-core@5.4.3)(ignore@7.0.5)(jsonwebtoken@9.0.3)(mammoth@1.12.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(pdf-parse@2.4.5)(pg@8.21.0)(word-extractor@1.0.4)(ws@8.21.0)
+        version: 1.1.29(@browserbasehq/sdk@2.12.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.0)(deepmerge@4.3.1)(dotenv@17.4.2)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(zod@4.4.3))(@ibm-cloud/watsonx-ai@1.6.13)(@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(ws@8.21.0))(@mendable/firecrawl-js@4.25.1)(@mozilla/readability@0.6.0)(@opentelemetry/api@1.9.0)(cheerio@1.2.0)(cohere-ai@8.0.0)(d3-dsv@3.0.1)(ibm-cloud-sdk-core@5.4.3)(ignore@7.0.5)(jsonwebtoken@9.0.3)(mammoth@1.12.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(pdf-parse@2.4.5)(pg@8.21.0)(word-extractor@1.0.4)(ws@8.21.0)
       '@langchain/core':
         specifier: ^1.1.48
         version: 1.1.48(@opentelemetry/api@1.9.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(ws@8.21.0)
@@ -23,6 +23,9 @@ importers:
       '@mem0/vercel-ai-provider':
         specifier: ^2.0.5
         version: 2.0.5(zod@4.4.3)
+      '@mendable/firecrawl-js':
+        specifier: 4.25.1
+        version: 4.25.1
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -1323,6 +1326,10 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@mendable/firecrawl-js@4.25.1':
+    resolution: {integrity: sha512-Oo5tFCltCRMEJiaIsFOIBAzeRNq+OZ5qocrexvRcxXCnoEkqAoKunzbadSEEFZXYYayWj6yyYoGhRcGg5R14Dg==}
+    engines: {node: '>=22.0.0'}
 
   '@mermaid-js/parser@1.1.1':
     resolution: {integrity: sha512-VuHdsYMK1bT6X2JbcAaWAhugTRvRBRyuZgd+c22swUeI9g/ntaxF7CY7dYarhZovofCbUNO0G7JesfmNtjYOCw==}
@@ -3077,6 +3084,9 @@ packages:
     resolution: {integrity: sha512-KunSNx+TVpkAw/6ULfhnx+HWRecjqZGTOyquAoWHYLRSdK1tB5Ihce1ZW+UY3fj33bYAFWPu7W/GRSmmrCGuxA==}
     engines: {node: '>=4'}
 
+  axios@1.15.2:
+    resolution: {integrity: sha512-wLrXxPtcrPTsNlJmKjkPnNPK2Ihe0hn0wGSaTEiHRPxwjvJwT3hKmXF4dpqxmPO9SoNb2FsYXj/xEo0gHN+D5A==}
+
   axios@1.16.1:
     resolution: {integrity: sha512-caYkukvroVPO8KrzuJEb50Hm07KwfBZPEC3VeFHTsqWHvKTsy54hjJz9BS/cdaypROE2rH6xvm9mHX4fgWkr3A==}
 
@@ -4042,6 +4052,10 @@ packages:
   find-up@5.0.0:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
+
+  firecrawl@4.16.0:
+    resolution: {integrity: sha512-7SJ/FWhZBtW2gTCE/BsvU+gbfIpfTq+D9IH82l9MacauLVptaY6EdYAhrK3YSMC9yr5NxvxRcpZKcXG/nqjiiQ==}
+    engines: {node: '>=22.0.0'}
 
   flat-cache@4.0.1:
     resolution: {integrity: sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==}
@@ -5929,6 +5943,9 @@ packages:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
       typescript: '>=4.8.4 <6.1.0'
 
+  typescript-event-target@1.1.2:
+    resolution: {integrity: sha512-TvkrTUpv7gCPlcnSoEwUVUBwsdheKm+HF5u2tPAKubkIGMfovdSizCTaZRY/NhR8+Ijy8iZZUapbVQAsNrkFrw==}
+
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
@@ -6822,7 +6839,7 @@ snapshots:
       - openai
       - ws
 
-  '@langchain/community@1.1.29(@browserbasehq/sdk@2.12.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.0)(deepmerge@4.3.1)(dotenv@17.4.2)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(zod@4.4.3))(@ibm-cloud/watsonx-ai@1.6.13)(@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(ws@8.21.0))(@mozilla/readability@0.6.0)(@opentelemetry/api@1.9.0)(cheerio@1.2.0)(cohere-ai@8.0.0)(d3-dsv@3.0.1)(ibm-cloud-sdk-core@5.4.3)(ignore@7.0.5)(jsonwebtoken@9.0.3)(mammoth@1.12.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(pdf-parse@2.4.5)(pg@8.21.0)(word-extractor@1.0.4)(ws@8.21.0)':
+  '@langchain/community@1.1.29(@browserbasehq/sdk@2.12.0)(@browserbasehq/stagehand@1.14.0(@playwright/test@1.56.0)(deepmerge@4.3.1)(dotenv@17.4.2)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(zod@4.4.3))(@ibm-cloud/watsonx-ai@1.6.13)(@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(ws@8.21.0))(@mendable/firecrawl-js@4.25.1)(@mozilla/readability@0.6.0)(@opentelemetry/api@1.9.0)(cheerio@1.2.0)(cohere-ai@8.0.0)(d3-dsv@3.0.1)(ibm-cloud-sdk-core@5.4.3)(ignore@7.0.5)(jsonwebtoken@9.0.3)(mammoth@1.12.0)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(pdf-parse@2.4.5)(pg@8.21.0)(word-extractor@1.0.4)(ws@8.21.0)':
     dependencies:
       '@browserbasehq/stagehand': 1.14.0(@playwright/test@1.56.0)(deepmerge@4.3.1)(dotenv@17.4.2)(openai@6.39.1(ws@8.21.0)(zod@4.4.3))(zod@4.4.3)
       '@ibm-cloud/watsonx-ai': 1.6.13
@@ -6840,6 +6857,7 @@ snapshots:
       zod: 4.4.3
     optionalDependencies:
       '@browserbasehq/sdk': 2.12.0
+      '@mendable/firecrawl-js': 4.25.1
       '@mozilla/readability': 0.6.0
       cheerio: 1.2.0
       cohere-ai: 8.0.0
@@ -6901,6 +6919,17 @@ snapshots:
       partial-json: 0.1.7
     optionalDependencies:
       zod: 4.4.3
+
+  '@mendable/firecrawl-js@4.25.1':
+    dependencies:
+      axios: 1.15.2
+      firecrawl: 4.16.0
+      typescript-event-target: 1.1.2
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   '@mermaid-js/parser@1.1.1':
     dependencies:
@@ -8474,6 +8503,14 @@ snapshots:
 
   axe-core@4.11.4: {}
 
+  axios@1.15.2:
+    dependencies:
+      follow-redirects: 1.16.0(debug@4.4.3)
+      form-data: 4.0.5
+      proxy-from-env: 2.1.0
+    transitivePeerDependencies:
+      - debug
+
   axios@1.16.1(debug@4.4.3):
     dependencies:
       follow-redirects: 1.16.0(debug@4.4.3)
@@ -9610,6 +9647,16 @@ snapshots:
     dependencies:
       locate-path: 6.0.0
       path-exists: 4.0.0
+
+  firecrawl@4.16.0:
+    dependencies:
+      axios: 1.16.1(debug@4.4.3)
+      typescript-event-target: 1.1.2
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   flat-cache@4.0.1:
     dependencies:
@@ -11943,6 +11990,8 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  typescript-event-target@1.1.2: {}
 
   typescript@6.0.3: {}
 

@@ -1,6 +1,5 @@
 import { type JsonValue, type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
-import type { SearchDepth } from "@/types/chat";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
@@ -28,7 +27,6 @@ export async function handleRegenerateResponse(
   context: RegenerateContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth,
   thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {

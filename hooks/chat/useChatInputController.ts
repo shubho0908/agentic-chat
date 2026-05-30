@@ -178,7 +178,6 @@ export function useChatInputController({
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         null,
         !!session && memoryEnabled,
-        undefined,
         thinkingEnabled
       );
 
@@ -258,7 +257,6 @@ export function useChatInputController({
       disabled: disabled || !!isContextBlocked,
       activeTool: null,
       memoryEnabled,
-      searchDepth: undefined,
       thinkingEnabled,
     },
     formHandlers: {

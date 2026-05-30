@@ -1,6 +1,5 @@
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
-import type { SearchDepth } from "@/types/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
@@ -19,7 +18,6 @@ export async function continueIncompleteConversation(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth,
   thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -67,7 +65,6 @@ export async function continueIncompleteConversation(
       session,
       activeTool,
       memoryEnabled,
-      searchDepth,
       thinkingEnabled,
       existingAssistantMessageId,
     },
@@ -94,7 +91,6 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  searchDepth?: SearchDepth,
   thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -232,7 +228,6 @@ export async function handleSendMessage(
         session,
         activeTool,
         memoryEnabled,
-        searchDepth,
         thinkingEnabled,
         existingAssistantMessageId: placeholderAssistantId,
       },

@@ -15,7 +15,6 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import type { SearchDepth } from "@/types/chat";
 import { getMemoryEnabled } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
@@ -115,7 +114,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, _searchDepth?: SearchDepth, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }

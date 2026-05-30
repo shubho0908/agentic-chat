@@ -16,7 +16,6 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import type { SearchDepth } from "@/types/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
 import { getMemoryEnabled, getThinkingEnabled } from "@/lib/storage";
 
@@ -83,7 +82,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     toggleSharing({ id, isPublic: nextIsPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, searchDepth?: SearchDepth, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }

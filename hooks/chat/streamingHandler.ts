@@ -1,6 +1,6 @@
 import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
-import type { MemoryStatus, SearchDepth } from "@/types/chat";
+import type { MemoryStatus } from "@/types/chat";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
@@ -21,7 +21,6 @@ interface StreamingContext {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
   existingAssistantMessageId?: string;
 }
@@ -114,7 +113,6 @@ export async function handleStreamingResponse(
     session,
     activeTool,
     memoryEnabled = true,
-    searchDepth,
     thinkingEnabled = false,
     existingAssistantMessageId,
   } = context;

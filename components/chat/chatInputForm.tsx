@@ -6,7 +6,6 @@ import { ToolsMenu } from "./toolsMenu";
 import { FilePreview } from "./filePreview";
 import { DropZone } from "./dropZone";
 import type { ToolId } from "@/lib/tools/config";
-import type { SearchDepth } from "@/types/chat";
 import type { DragState } from "@/hooks/useDragAndDrop";
 
 interface FormState {
@@ -18,7 +17,6 @@ interface FormState {
   disabled: boolean;
   activeTool: ToolId | null;
   memoryEnabled: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled: boolean;
 }
 
