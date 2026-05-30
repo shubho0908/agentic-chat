@@ -24,8 +24,6 @@ import { createRequestId, logError, logWarn } from '@/lib/observability';
 import { validateRequestedModel, getChatReasoningEffort } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
-import { parseToolId } from '@/lib/tools/config';
-import { searchDepthEnum, type SearchDepth } from '@/lib/schemas/webSearchTools';
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
 export const dynamic = 'force-dynamic';
@@ -84,23 +82,9 @@ export async function POST(request: NextRequest) {
         : typeof body.conversationId === 'string'
           ? body.conversationId.trim() || undefined
           : null;
-    const activeTool =
-      body.activeTool === undefined || body.activeTool === null
-        ? null
-        : typeof body.activeTool === 'string'
-          ? body.activeTool
-          : null;
 
     if (conversationId === null) {
       return errorResponse('conversationId must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-
-    if (
-      body.activeTool !== undefined &&
-      body.activeTool !== null &&
-      typeof body.activeTool !== 'string'
-    ) {
-      return errorResponse('activeTool must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const streamResult = parseOptionalBoolean(body.stream, 'stream', true);
@@ -114,22 +98,7 @@ export async function POST(request: NextRequest) {
       return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    if (!stream && activeTool) {
-      return errorResponse(
-        'Non-stream responses do not support tool execution. Retry with streaming enabled.',
-        undefined,
-        HTTP_STATUS.BAD_REQUEST
-      );
-    }
-
-    const parsedSearchDepth = searchDepthEnum.safeParse(body.searchDepth ?? 'basic');
-    if (!parsedSearchDepth.success) {
-      return errorResponse('searchDepth must be either "basic" or "advanced".', undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-
     const memoryEnabled = memoryEnabledResult.value;
-    const searchDepth: SearchDepth = parsedSearchDepth.data;
-    const sanitizedActiveTool = activeTool ? parseToolId(activeTool) : null;
 
     const thinkingEnabledResult = parseOptionalBoolean(body.thinkingEnabled, 'thinkingEnabled', false);
     if (!thinkingEnabledResult.success) {
@@ -137,15 +106,6 @@ export async function POST(request: NextRequest) {
     }
     const thinkingEnabled = thinkingEnabledResult.value;
 
-    if (activeTool && !sanitizedActiveTool) {
-      logWarn({
-        event: 'chat_invalid_active_tool_ignored',
-        requestId,
-        conversationId,
-        requestedTool: activeTool,
-      });
-    }
-    
     if (typeof model !== 'string' || !model.trim()) {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
@@ -180,7 +140,6 @@ export async function POST(request: NextRequest) {
       
       const streamHandler = createChatStreamHandler({
         messages: validatedMessages,
-        sanitizedActiveTool,
         memoryStatusInfo: baseMemoryStatusInfo,
         model: validatedModel,
         openai,
@@ -189,7 +148,6 @@ export async function POST(request: NextRequest) {
         abortSignal: abortController.signal,
         userId: authUser.id,
         conversationId,
-        searchDepth,
         requestId,
         thinkingEnabled,
       });
@@ -227,7 +185,7 @@ export async function POST(request: NextRequest) {
               authUser.id,
               validatedMessages.slice(0, -1),
               conversationId,
-              sanitizedActiveTool,
+              null,
               memoryEnabled,
               { apiKey }
             );
@@ -235,7 +193,6 @@ export async function POST(request: NextRequest) {
           {
             userId: authUser.id,
             conversationId,
-            activeTool: sanitizedActiveTool,
             memoryEnabled,
             model: validatedModel,
           }

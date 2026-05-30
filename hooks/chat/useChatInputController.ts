@@ -6,20 +6,13 @@ import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
-import { TOOL_IDS, type ToolId } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
 import {
-  getActiveTool as getStoredActiveTool,
-  setActiveTool as storeActiveTool,
-  removeActiveTool,
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
-  getSearchDepth as getStoredSearchDepth,
-  setSearchDepth as storeSearchDepth,
   getThinkingEnabled as getStoredThinkingEnabled,
   setThinkingEnabled as storeThinkingEnabled,
 } from "@/lib/storage";
@@ -40,9 +33,7 @@ interface UseChatInputControllerProps {
 
 interface ChatInputUiState {
   isSending: boolean;
-  activeTool: ToolId | null;
   memoryEnabled: boolean;
-  searchDepth: SearchDepth;
   thinkingEnabled: boolean;
 }
 
@@ -51,15 +42,11 @@ type ChatInputUiAction =
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
   | { type: "set-memory"; enabled: boolean }
-  | { type: "set-thinking"; enabled: boolean }
-  | { type: "activate-tool"; toolId: ToolId; searchDepth?: SearchDepth }
-  | { type: "deactivate-tool" };
+  | { type: "set-thinking"; enabled: boolean };
 
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
-  activeTool: null,
   memoryEnabled: false,
-  searchDepth: "basic",
   thinkingEnabled: false,
 };
 
@@ -70,39 +57,15 @@ function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction):
     case "reset-session":
       return {
         ...state,
-        activeTool: null,
         memoryEnabled: false,
         thinkingEnabled: false,
       };
     case "set-sending":
-      return {
-        ...state,
-        isSending: action.isSending,
-      };
+      return { ...state, isSending: action.isSending };
     case "set-memory":
-      return {
-        ...state,
-        memoryEnabled: action.enabled,
-      };
+      return { ...state, memoryEnabled: action.enabled };
     case "set-thinking":
-      return {
-        ...state,
-        thinkingEnabled: action.enabled,
-      };
-    case "activate-tool":
-      return {
-        ...state,
-        activeTool: action.toolId,
-        searchDepth:
-          action.toolId === TOOL_IDS.WEB_SEARCH && action.searchDepth
-            ? action.searchDepth
-            : state.searchDepth,
-      };
-    case "deactivate-tool":
-      return {
-        ...state,
-        activeTool: null,
-      };
+      return { ...state, thinkingEnabled: action.enabled };
     default:
       return state;
   }
@@ -119,7 +82,7 @@ export function useChatInputController({
   tokenUsage,
 }: UseChatInputControllerProps) {
   const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
-  const { isSending, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = uiState;
+  const { isSending, memoryEnabled, thinkingEnabled } = uiState;
 
   const { data: session, isPending } = useSession();
 
@@ -144,13 +107,10 @@ export function useChatInputController({
   useEffect(() => {
     if (!isPending) {
       if (session) {
-        const stored = getStoredActiveTool();
         dispatchUi({
           type: "hydrate",
           payload: {
-            activeTool: stored,
             memoryEnabled: getStoredMemoryEnabled(),
-            searchDepth: getStoredSearchDepth(),
             thinkingEnabled: getStoredThinkingEnabled(),
           },
         });
@@ -162,37 +122,6 @@ export function useChatInputController({
 
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
   const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
-
-  function activateTool(toolId: ToolId, selectedDepth?: SearchDepth) {
-    if (!session) {
-      onAuthRequired?.();
-      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.TOOLS.AUTH_REQUIRED_DESCRIPTION,
-        duration: 3000,
-      });
-      return false;
-    }
-
-    dispatchUi({ type: "activate-tool", toolId, searchDepth: selectedDepth });
-    storeActiveTool(toolId);
-
-    if (toolId === TOOL_IDS.WEB_SEARCH && selectedDepth) {
-      storeSearchDepth(selectedDepth);
-    }
-
-    const toolName = toolId === TOOL_IDS.WEB_SEARCH ? "Web Search" : (toolId as string).replace("_", " ");
-    const currentDepth = selectedDepth || searchDepth;
-    const searchModeText = toolId === TOOL_IDS.WEB_SEARCH
-      ? ` (${currentDepth === "advanced" ? "Advanced" : "Basic"})`
-      : "";
-
-    toast.success(TOAST_ERROR_MESSAGES.TOOLS.ACTIVATED, {
-      description: `${toolName}${searchModeText} is now enabled for your next query`,
-      duration: 2500,
-    });
-
-    return true;
-  }
 
   const handleFilesSelectedWithAuth = (files: File[]) => {
     if (!session) {
@@ -247,9 +176,9 @@ export function useChatInputController({
       const result = await onSend(
         messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-        activeTool,
+        null,
         !!session && memoryEnabled,
-        searchDepth,
+        undefined,
         thinkingEnabled
       );
 
@@ -286,24 +215,6 @@ export function useChatInputController({
       }
       handleFilesSelected(files);
     }
-  }
-
-  function handleToolSelected(toolId: ToolId, selectedDepth?: SearchDepth) {
-    if (activeTool === toolId) {
-      handleToolDeactivated();
-      return;
-    }
-
-    activateTool(toolId, selectedDepth);
-  }
-
-  function handleToolDeactivated() {
-    dispatchUi({ type: "deactivate-tool" });
-    removeActiveTool();
-
-    toast.info(TOAST_INFO_MESSAGES.TOOL_DEACTIVATED, {
-      duration: 2000,
-    });
   }
 
   function handleMemoryToggle(enabled: boolean) {
@@ -345,9 +256,9 @@ export function useChatInputController({
       isUploading,
       isSending,
       disabled: disabled || !!isContextBlocked,
-      activeTool,
+      activeTool: null,
       memoryEnabled,
-      searchDepth,
+      searchDepth: undefined,
       thinkingEnabled,
     },
     formHandlers: {
@@ -360,7 +271,7 @@ export function useChatInputController({
       onInput: handleInput,
       onPaste: handlePaste,
       onRemoveFile: handleRemoveFile,
-      onToolSelected: handleToolSelected,
+      onToolSelected: () => {},
       onMemoryToggle: handleMemoryToggle,
       onThinkingToggle: handleThinkingToggle,
       onFilesSelected: handleFilesSelectedWithAuth,

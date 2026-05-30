@@ -1,6 +1,6 @@
 import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
 import { toast } from "sonner";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import type { SearchDepth } from "@/types/chat";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -221,9 +221,7 @@ export async function handleEditMessage(
           }
         }
       },
-      activeTool,
       memoryEnabled: memoryEnabled ?? true,
-      searchDepth: searchDepth ?? 'basic',
       thinkingEnabled,
       onThinking: (thinking) => {
         onMessagesUpdate((prev) =>

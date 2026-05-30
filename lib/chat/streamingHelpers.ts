@@ -1,4 +1,4 @@
-import { RoutingDecision, type MemoryStatus } from '@/types/chat';
+import { type MemoryStatus } from '@/types/chat';
 
 const encoder = new TextEncoder();
 
@@ -8,7 +8,6 @@ function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
 
 export function encodeMemoryStatus(
   memoryStatusInfo: MemoryStatus,
-  activeTool?: string | null
 ): Uint8Array {
   return encodeSSEMessage({
     type: 'memory_status',
@@ -23,9 +22,7 @@ export function encodeMemoryStatus(
     urlCount: memoryStatusInfo.urlCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
-    activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly
-      ? (memoryStatusInfo.activeToolName || activeTool)
-      : undefined,
+    activeToolName: memoryStatusInfo.activeToolName,
     tokenUsage: memoryStatusInfo.tokenUsage
   });
 }

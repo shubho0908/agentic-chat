@@ -16,9 +16,9 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import type { SearchDepth } from "@/types/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
-import { getActiveTool, getMemoryEnabled, getSearchDepth, getThinkingEnabled } from "@/lib/storage";
+import { getMemoryEnabled, getThinkingEnabled } from "@/lib/storage";
 
 interface ChatPageClientProps {
   conversationId: string;
@@ -51,9 +51,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     conversationId,
     autoContinue: session ? {
       session: session as { user: { id: string } },
-      activeTool: getActiveTool(),
       memoryEnabled: getMemoryEnabled(),
-      searchDepth: getSearchDepth(),
       thinkingEnabled: getThinkingEnabled(),
     } : null,
   });
@@ -70,19 +68,15 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
   const conversationNotFound = !!conversationError;
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const searchDepth = getSearchDepth();
     const thinkingEnabled = getThinkingEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, searchDepth, thinkingEnabled });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled, thinkingEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const searchDepth = getSearchDepth();
     const thinkingEnabled = getThinkingEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, searchDepth, thinkingEnabled });
+    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled, thinkingEnabled });
   };
 
   const handleToggleSharing = (id: string, nextIsPublic: boolean) => {
@@ -108,24 +102,19 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    const resolvedSearchDepth = searchDepth ?? getSearchDepth();
-    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, searchDepth: resolvedSearchDepth, thinkingEnabled });
+    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const searchDepth = getSearchDepth();
     const thinkingEnabled = getThinkingEnabled();
     await sendMessage({
       content: question,
       session,
-      activeTool,
       memoryEnabled,
-      searchDepth,
       thinkingEnabled
     });
   };

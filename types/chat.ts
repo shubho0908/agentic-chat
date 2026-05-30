@@ -1,10 +1,11 @@
 import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
 import type {
   WebSearchImage,
-  WebSearchProgressDetails,
   WebSearchSource,
 } from './tools';
-import type { SearchDepth } from '@/lib/schemas/webSearchTools';
+
+/** @deprecated Will be removed once LangGraph orchestrator handles search autonomously */
+export type SearchDepth = 'basic' | 'advanced';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -63,17 +64,6 @@ export interface MemoryStatus {
       sources?: WebSearchSource[];
       images?: WebSearchImage[];
       imageCount?: number;
-      currentSource?: WebSearchSource;
-      processedCount?: number;
-      searchDepth?: SearchDepth;
-      phase?: number;
-      totalPhases?: number;
-      intelligent?: boolean;
-      searchIndex?: number;
-      total?: number;
-      completedSearches?: number;
-      searchPlan?: WebSearchProgressDetails['searchPlan'];
-      usedConversationContext?: boolean;
 
       operation?: string;
       tool?: string;
@@ -231,8 +221,6 @@ export interface StreamConfig {
   onToolProgress?: (progress: ToolProgressEvent) => void;
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   onThinking?: (thinking: string) => void;
-  activeTool?: string | null;
   memoryEnabled?: boolean;
-  searchDepth?: SearchDepth;
   thinkingEnabled?: boolean;
 }

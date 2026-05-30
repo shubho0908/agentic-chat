@@ -15,8 +15,8 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
-import { getActiveTool, getMemoryEnabled, getSearchDepth } from "@/lib/storage";
+import type { SearchDepth } from "@/types/chat";
+import { getMemoryEnabled } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -106,18 +106,16 @@ export function HomeContent({ currentYear }: HomeContentProps) {
   }
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled });
+    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, searchDepth?: SearchDepth, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, _searchDepth?: SearchDepth, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -137,23 +135,18 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    const resolvedSearchDepth = searchDepth ?? getSearchDepth();
-    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, searchDepth: resolvedSearchDepth, thinkingEnabled });
+    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const searchDepth = getSearchDepth();
     await sendMessage({
       content: question,
       session,
-      activeTool,
       memoryEnabled,
-      searchDepth
     });
   };
 

@@ -2,7 +2,6 @@
 
 import { useState, useRef } from "react";
 import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,14 +9,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
+import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -33,14 +31,13 @@ const ACCEPTED_FILE_TYPES = [
 ].join(',');
 
 interface ToolsMenuProps {
-  onToolSelected?: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
+  onToolSelected?: (toolId: ToolId) => void;
   disabled?: boolean;
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
   thinkingEnabled?: boolean;
   onThinkingToggle?: (enabled: boolean) => void;
-  searchDepth?: SearchDepth;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
   onAuthRequired?: () => void;
@@ -54,7 +51,6 @@ export function ToolsMenu({
   onMemoryToggle,
   thinkingEnabled = false,
   onThinkingToggle,
-  searchDepth = 'basic',
   onFilesSelected,
   fileCount = 0,
   onAuthRequired,
@@ -64,14 +60,14 @@ export function ToolsMenu({
   const { data: session } = useSession();
   const isMobile = useIsMobile();
 
-  const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
+  const handleToolSelect = (toolId: ToolId) => {
     if (!session) {
       onAuthRequired?.();
       setIsOpen(false);
       return;
     }
 
-    onToolSelected?.(toolId, selectedDepth);
+    onToolSelected?.(toolId);
     setIsOpen(false);
   };
 
@@ -98,14 +94,8 @@ export function ToolsMenu({
     }
   };
 
-  const commonToolProps = {
-    session,
-    searchDepth,
-    onToolSelect: handleToolSelect,
-  };
-
   if (showToolIcon) {
-    const toolConfig = activeTool ? AVAILABLE_TOOLS[activeTool] : null;
+    const toolConfig = activeTool ? (AVAILABLE_TOOLS as Record<string, ToolConfig>)[activeTool] : null;
     if (!toolConfig) return null;
     const ActiveToolIcon = toolConfig.icon;
 
@@ -139,12 +129,7 @@ export function ToolsMenu({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
-            <p>
-              {toolConfig.name}
-              {activeTool === TOOL_IDS.WEB_SEARCH && (
-                <span className="text-muted-foreground"> ({searchDepth === 'advanced' ? 'Advanced' : 'Basic'})</span>
-              )}
-            </p>
+            <p>{toolConfig.name}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -178,7 +163,8 @@ export function ToolsMenu({
           onThinkingToggle={onThinkingToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
-          {...commonToolProps}
+          session={session}
+          onToolSelect={handleToolSelect}
         />
       ) : (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -228,9 +214,6 @@ export function ToolsMenu({
             {onFilesSelected && (
               <>
                 <div className="md:hidden">
-                  <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                    Attachments
-                  </DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => fileInputRef.current?.click()}
                     disabled={disabled}
@@ -263,7 +246,7 @@ export function ToolsMenu({
                 <div className="flex flex-col gap-0.5 flex-1">
                   <span className="font-medium">Connectors</span>
                   <span className="text-xs text-muted-foreground">
-                    {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
+                    {activeTool ? `${(AVAILABLE_TOOLS as Record<string, ToolConfig>)[activeTool]?.name || ''} active` : 'Connect tools to empower'}
                   </span>
                 </div>
               </DropdownMenuSubTrigger>
@@ -281,7 +264,7 @@ export function ToolsMenu({
                         tool={tool}
                         isActive={activeTool === tool.id}
                         isAuthenticated={!!session}
-                        {...commonToolProps}
+                        onToolSelect={handleToolSelect}
                       />
                     </div>
                   ))}

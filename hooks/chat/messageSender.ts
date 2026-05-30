@@ -1,6 +1,6 @@
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import type { SearchDepth } from "@/types/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";

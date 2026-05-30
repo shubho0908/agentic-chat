@@ -5,7 +5,6 @@ import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
 import { isSupportedDocumentExtension } from './fileValidation';
-import { parseToolId, TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { extractTextFromMessage } from './chat/messageContent';
 import { mediateMemoryIntent } from './chat/requestMediator';
@@ -265,7 +264,7 @@ export async function routeContext(
   userId: string,
   messages: Message[],
   conversationId?: string,
-  activeTool?: string | null,
+  _activeTool?: string | null,
   memoryEnabled: boolean = false,
   options?: {
     apiKey?: string;
@@ -276,7 +275,6 @@ export async function routeContext(
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(textQuery);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
-  const sanitizedActiveTool = parseToolId(activeTool);
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
@@ -298,36 +296,6 @@ export async function routeContext(
       { source, reason },
     ];
   };
-
-  if (activeTool && !sanitizedActiveTool) {
-    addDegradedContext('tool_validation', `Ignored invalid active tool: ${activeTool}`);
-    logWarn({
-      event: 'context_router_invalid_active_tool_ignored',
-      conversationId,
-      userId,
-      requestedTool: activeTool,
-    });
-  }
-
-  if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = sanitizedActiveTool;
-
-    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
-
-    return {
-      context: urlContext,
-      metadata,
-    };
-  }
-
-  if (sanitizedActiveTool) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = sanitizedActiveTool;
-    return { context: '', metadata };
-  }
 
   const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
 

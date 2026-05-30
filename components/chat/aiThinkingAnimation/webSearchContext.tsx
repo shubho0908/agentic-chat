@@ -6,9 +6,10 @@ import type { MemoryStatusProps } from "./types";
 import { UrlContentContext } from "./urlContentContext";
 
 export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
-  const isAdvancedSearch = memoryStatus.toolProgress?.details?.searchDepth === 'advanced';
-  const phase = memoryStatus.toolProgress?.details?.phase;
-  const totalPhaseCount = memoryStatus.toolProgress?.details?.totalPhases;
+  const details = memoryStatus.toolProgress?.details as Record<string, unknown> | undefined;
+  const isAdvancedSearch = details?.searchDepth === 'advanced';
+  const phase = details?.phase;
+  const totalPhaseCount = details?.totalPhases;
   const currentPhase = typeof phase === "number" ? phase : undefined;
   const totalPhases = typeof totalPhaseCount === "number" ? totalPhaseCount : undefined;
 
@@ -148,7 +149,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
               ? `Found ${memoryStatus.toolProgress.details?.resultsCount || 0} sources`
               : memoryStatus.toolProgress?.status ===
                 ToolProgressStatus.ProcessingSources
-                ? `Processing ${memoryStatus.toolProgress.details?.processedCount || 0}/${memoryStatus.toolProgress.details?.resultsCount || 0}`
+                ? `Processing ${(details as Record<string, unknown>)?.processedCount || 0}/${memoryStatus.toolProgress.details?.resultsCount || 0}`
                 : memoryStatus.toolProgress?.status === ToolProgressStatus.Completed
                   ? `${memoryStatus.toolProgress.details?.resultsCount || 0} sources analyzed`
                   : "Web search"

@@ -1,6 +1,6 @@
 "use client";
 
-import { TOOL_IDS, type ToolConfig } from "@/lib/tools/config";
+import type { ToolConfig } from "@/lib/tools/config";
 
 interface UseToolMenuItemStateArgs {
   tool: ToolConfig;
@@ -12,7 +12,6 @@ export function useToolMenuItemState({
   isAuthenticated,
 }: UseToolMenuItemStateArgs) {
   const ToolIcon = tool.icon;
-  const isWebSearch = tool.id === TOOL_IDS.WEB_SEARCH;
   const isDisabled = !isAuthenticated;
   const toolDescription = !isAuthenticated
     ? "Login required to access this tool"
@@ -21,7 +20,6 @@ export function useToolMenuItemState({
   return {
     ToolIcon,
     isDisabled,
-    isWebSearch,
     toolDescription,
   };
 }

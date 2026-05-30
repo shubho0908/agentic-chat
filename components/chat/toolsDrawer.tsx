@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import type { Session } from "@/lib/auth";
 import { ToolMenuItemDrawer } from "./toolMenuItemDrawer";
 import { MemoryToggle } from "./memoryToggle";
@@ -34,8 +33,7 @@ interface ToolsDrawerProps {
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   session: Session | null;
-  searchDepth?: SearchDepth;
-  onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
+  onToolSelect: (toolId: ToolId) => void;
 }
 
 export function ToolsDrawer({
@@ -52,7 +50,6 @@ export function ToolsDrawer({
   onFilesSelected,
   fileInputRef,
   session,
-  searchDepth = 'basic',
   onToolSelect,
 }: ToolsDrawerProps) {
   const triggerButton = (
@@ -70,8 +67,7 @@ export function ToolsDrawer({
       aria-label="Tools"
     >
       <Settings2
-        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''
-          }`}
+        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''}`}
         style={{
           transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
         }}
@@ -161,7 +157,6 @@ export function ToolsDrawer({
                       tool={tool}
                       isActive={activeTool === tool.id}
                       isAuthenticated={!!session}
-                      searchDepth={searchDepth}
                       onToolSelect={onToolSelect}
                     />
                   ))}

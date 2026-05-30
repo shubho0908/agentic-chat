@@ -1,8 +1,6 @@
 import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
-import type { MemoryStatus } from "@/types/chat";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
-import type { WebSearchProgressDetails } from "@/types/tools";
+import type { MemoryStatus, SearchDepth } from "@/types/chat";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
@@ -49,7 +47,7 @@ function toJsonValue(value: unknown): JsonValue | undefined {
 }
 
 function extractMetadataFromProgress(
-  progress: { details?: WebSearchProgressDetails | Record<string, unknown> },
+  progress: { details?: Record<string, unknown> },
   currentMetadata?: MessageMetadata
 ): MessageMetadata | undefined {
   if (!progress.details) return currentMetadata;
@@ -307,9 +305,7 @@ export async function handleStreamingResponse(
           messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
-      activeTool,
       memoryEnabled,
-      searchDepth,
       thinkingEnabled,
       onThinking: (thinking) => {
         if (!thinkingStartTime) thinkingStartTime = Date.now();

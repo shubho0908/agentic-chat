@@ -1,6 +1,4 @@
 import { RoutingDecision } from "@/types/chat";
-import { TOOL_IDS } from "@/lib/tools/config";
-import { isToolActive } from "./utils";
 import { WebSearchContext } from "./webSearchContext";
 import { VisionOnlyContext } from "./visionOnlyContext";
 import { ToolOnlyDefaultContext } from "./toolOnlyDefaultContext";
@@ -10,7 +8,7 @@ import { UrlContentContext } from "./urlContentContext";
 import type { ContextDetailsProps } from "./types";
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
-  const isWebSearch = isToolActive(memoryStatus, TOOL_IDS.WEB_SEARCH);
+  const isWebSearch = memoryStatus.activeToolName === 'web_search';
 
   if (memoryStatus.routingDecision === RoutingDecision.UrlContent) {
     return <UrlContentContext memoryStatus={memoryStatus} />;

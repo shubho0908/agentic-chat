@@ -76,7 +76,6 @@
     "remark-math": "^6.0.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
-    "tavily": "^1.0.2",
     "tiktoken": "^1.0.22",
     "undici": "8.3.0",
     "uploadthing": "^7.7.4",

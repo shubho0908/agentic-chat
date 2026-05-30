@@ -6,7 +6,7 @@ import { ToolsMenu } from "./toolsMenu";
 import { FilePreview } from "./filePreview";
 import { DropZone } from "./dropZone";
 import type { ToolId } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import type { SearchDepth } from "@/types/chat";
 import type { DragState } from "@/hooks/useDragAndDrop";
 
 interface FormState {
@@ -18,7 +18,7 @@ interface FormState {
   disabled: boolean;
   activeTool: ToolId | null;
   memoryEnabled: boolean;
-  searchDepth: SearchDepth;
+  searchDepth?: SearchDepth;
   thinkingEnabled: boolean;
 }
 
@@ -29,7 +29,7 @@ interface FormHandlers {
   onInput: (e: React.FormEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (index: number) => void;
-  onToolSelected: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
+  onToolSelected: (toolId: ToolId) => void;
   onMemoryToggle: (enabled: boolean) => void;
   onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected: (files: File[]) => void;
@@ -65,7 +65,7 @@ export function ChatInputForm({
   maxFilesReached,
   centered = false,
 }: ChatInputFormProps) {
-  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, searchDepth, thinkingEnabled } = state;
+  const { input, selectedFiles, isLoading, isUploading, isSending, disabled, activeTool, memoryEnabled, thinkingEnabled } = state;
   const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onThinkingToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
 
   const textareaClassName = centered
@@ -115,7 +115,6 @@ export function ChatInputForm({
                 onMemoryToggle={onMemoryToggle}
                 thinkingEnabled={thinkingEnabled}
                 onThinkingToggle={onThinkingToggle}
-                searchDepth={searchDepth}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
                 onAuthRequired={onAuthRequired}

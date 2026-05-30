@@ -9,14 +9,10 @@ import type {
 } from 'openai/resources/responses/responses';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
-import type { SearchDepth } from '@/lib/schemas/webSearchTools';
-import type { ToolId } from '@/lib/tools/config';
 import { routeContext } from '@/lib/contextRouter';
-import { TOOL_IDS } from '@/lib/tools/config';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { injectContextToMessages } from '@/lib/chat/messageHelpers';
 import { extractTextFromMessage } from './messageContent';
-import { executeWebSearchTool } from './toolExecutors';
 import {
   encodeMemoryStatus,
   encodeChatChunk,
@@ -34,7 +30,6 @@ import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
   memoryStatusInfo: MemoryStatus;
   messages: Message[];
-  sanitizedActiveTool?: ToolId | null;
   model: string;
   openai: OpenAI;
   apiKey: string;
@@ -42,7 +37,6 @@ interface StreamHandlerOptions {
   abortSignal?: AbortSignal;
   userId?: string;
   conversationId?: string;
-  searchDepth?: SearchDepth;
   requestId?: string;
   thinkingEnabled?: boolean;
 }
@@ -117,8 +111,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     messages,
     model,
     openai,
-    sanitizedActiveTool,
-    searchDepth = 'basic',
     userId,
     thinkingEnabled = false,
   } = options;
@@ -142,7 +134,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
       const emitMemoryStatus = async () => {
         try {
-          controller.enqueue(encodeMemoryStatus(memoryStatusInfo, sanitizedActiveTool));
+          controller.enqueue(encodeMemoryStatus(memoryStatusInfo));
           await new Promise((resolve) => setImmediate(resolve));
         } catch (error) {
           logStreamWriteFailure('send memory status', error);
@@ -190,7 +182,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               userId,
               messages.slice(0, -1),
               conversationId,
-              sanitizedActiveTool,
+              null,
               memoryEnabled,
               { apiKey }
             );
@@ -229,24 +221,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
         if (!(await ensurePromptBudget())) {
           return;
-        }
-
-        const textQuery = extractTextFromMessage(lastUserMessage);
-        
-        if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
-          enhancedMessages = await executeWebSearchTool(
-            textQuery,
-            controller,
-            enhancedMessages,
-            apiKey,
-            model,
-            abortSignal,
-            searchDepth,
-            messages
-          );
-          if (!(await ensurePromptBudget())) {
-            return;
-          }
         }
 
         if (abortSignal?.aborted) {
