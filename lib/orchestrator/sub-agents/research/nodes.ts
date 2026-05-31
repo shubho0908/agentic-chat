@@ -178,7 +178,7 @@ export function searchNode() {
 
       for (const item of result.value) {
         if (!item.url || !item.text) continue;
-        newSources.push({
+        const source: ResearchSource = {
           title: item.title,
           url: item.url,
           snippet: item.text.slice(0, Limit.MAX_SNIPPET_LEN),
@@ -187,7 +187,9 @@ export function searchNode() {
           queryOrigin: query,
           publishedDate: item.publishedDate,
           image: item.image,
-        });
+        };
+        source.qualityScore = scoreSource(source);
+        newSources.push(source);
       }
     }
 
@@ -266,6 +268,7 @@ export function evaluateNode(apiKey: string, model: string) {
     return {
       searchQueries: evaluation.followUpQueries.slice(0, Limit.MAX_FOLLOW_UP_QUERIES),
       gaps: evaluation.gaps ?? [],
+      searchRound: state.searchRound + 1,
     };
   };
 }

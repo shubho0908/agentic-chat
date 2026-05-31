@@ -7,7 +7,7 @@ interface LogoProps {
 }
 
 export default function Logo({ size = 100, className, style }: LogoProps) {
-  const uid = useId().replace(/:/g, "");
+  const uid = useId().replace(/[^A-Za-z0-9_-]/g, "");
   const g1 = `${uid}_g1`;
   const g2 = `${uid}_g2`;
   const g3 = `${uid}_g3`;

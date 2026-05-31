@@ -11,7 +11,7 @@ const HIGH_AUTHORITY_DOMAINS = new Set([
 ]);
 
 const MEDIUM_AUTHORITY_PATTERNS = [
-  /\.gov$/, /\.edu$/, /\.ac\./,
+  /\.gov$/, /\.ac\./,
   /medium\.com/, /dev\.to/, /hashnode\./,
   /blog\..+\.(com|io|dev)$/,
 ];
@@ -26,8 +26,8 @@ export function extractDomain(url: string): string {
 
 function scoreDomainAuthority(domain: string): number {
   if (HIGH_AUTHORITY_DOMAINS.has(domain)) return DomainScore.HIGH;
-  if (MEDIUM_AUTHORITY_PATTERNS.some((p) => p.test(domain))) return DomainScore.MEDIUM;
   if (domain.endsWith(".org") || domain.endsWith(".edu")) return DomainScore.ORG_EDU;
+  if (MEDIUM_AUTHORITY_PATTERNS.some((p) => p.test(domain))) return DomainScore.MEDIUM;
   return DomainScore.DEFAULT;
 }
 

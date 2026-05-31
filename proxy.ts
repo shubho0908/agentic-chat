@@ -57,7 +57,7 @@ function pageToMarkdown(pathname: string): string {
   ].join("\n");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isPublicPage(pathname)) {

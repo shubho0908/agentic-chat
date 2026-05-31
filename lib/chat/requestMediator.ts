@@ -3,7 +3,7 @@ import { wrapOpenAIWithLangSmith } from "@/lib/langsmithConfig";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
 
 import { logger } from "@/lib/logger";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
+const CLASSIFIER_MODEL = "gpt-5-nano";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_SIZE = 500;
 
@@ -233,9 +233,9 @@ async function runAIMediator({
   const openai = wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 
   try {
-    const temperature = getSupportedTemperature(DEFAULT_MODEL, 0);
+    const temperature = getSupportedTemperature(CLASSIFIER_MODEL, 0);
     const completion = await openai.chat.completions.create({
-      model: DEFAULT_MODEL,
+      model: CLASSIFIER_MODEL,
       ...(temperature !== undefined ? { temperature } : {}),
       response_format: { type: "json_object" },
       messages: [
