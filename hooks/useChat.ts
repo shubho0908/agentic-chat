@@ -266,6 +266,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       };
       let resumedContent = "";
       const previousContent = typeof pendingMessage.content === "string" ? pendingMessage.content : "";
+      const previousMetadata = pendingMessage.metadata;
       if (previousContent && previousContent !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT) {
         resumedContent = previousContent;
       }
@@ -281,7 +282,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current = new AbortController();
       setIsLoading(true);
       startStreaming(conversationId, abortControllerRef.current);
-      updateLocalAssistantMessage({ metadata: messageMetadata });
+      updateLocalAssistantMessage({ content: "", metadata: messageMetadata });
 
       try {
         const responseContent = await streamChatApproval({
@@ -381,6 +382,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
         queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
       } catch (error) {
+        updateLocalAssistantMessage({
+          content: previousContent,
+          metadata: previousMetadata,
+        });
         if (!isAbortError(error)) {
           toast.error(toUserFriendlyError(error, "Failed to process your response. Please try again."));
         }

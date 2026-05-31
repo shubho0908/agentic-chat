@@ -54,7 +54,7 @@ async function fetchToolkitSlugs(
   apiKey: string,
 ): Promise<Set<string>> {
   const response = await fetch(
-    `https://backend.composio.dev/api/v3/tools?toolkit_slug=${toolkit}&limit=500`,
+    `https://backend.composio.dev/api/v3.1/tools?toolkit_slug=${toolkit}&limit=500`,
     { headers: { "x-api-key": apiKey } },
   );
   if (!response.ok) {

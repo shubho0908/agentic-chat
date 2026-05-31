@@ -81,10 +81,10 @@ test("essential connector tools cover discovery and read paths across supported 
     googlecalendar: ["GOOGLECALENDAR_LIST_CALENDARS", "GOOGLECALENDAR_EVENTS_LIST"],
     googledrive: ["GOOGLEDRIVE_FIND_FOLDER", "GOOGLEDRIVE_GET_FILE_METADATA"],
     googledocs: ["GOOGLEDOCS_SEARCH_DOCUMENTS", "GOOGLEDOCS_GET_DOCUMENT_BY_ID"],
-    googlesheets: ["GOOGLESHEETS_GET_TABLE_SCHEMA", "GOOGLESHEETS_QUERY_TABLE"],
-    slack: ["SLACK_LIST_CONVERSATIONS", "SLACK_FETCH_TEAM_INFO"],
+    googlesheets: ["GOOGLESHEETS_SEARCH_SPREADSHEETS", "GOOGLESHEETS_GET_TABLE_SCHEMA", "GOOGLESHEETS_QUERY_TABLE"],
+    slack: ["SLACK_LIST_CONVERSATIONS", "SLACK_FIND_CHANNELS", "SLACK_FIND_USERS", "SLACK_FETCH_TEAM_INFO"],
     notion: ["NOTION_FETCH_DATA", "NOTION_FETCH_DATABASE"],
-    github: ["GITHUB_GET_THE_AUTHENTICATED_USER", "GITHUB_LIST_FOLLOWERS_OF_THE_AUTHENTICATED_USER"],
+    github: ["GITHUB_FIND_REPOSITORIES", "GITHUB_GET_A_REPOSITORY", "GITHUB_LIST_COMMITS"],
     linear: ["LINEAR_GET_CURRENT_USER", "LINEAR_LIST_LINEAR_PROJECTS"],
   };
 
@@ -147,6 +147,88 @@ test("connector tool auth failures normalize per toolkit", async () => {
   }));
 
   assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
+});
+
+test("successful connector payloads with auth-like substrings are not rewritten as disconnected", async () => {
+  const successEnvelope = JSON.stringify({
+    data: { login: "octocat", two_factor_authentication: true, plan: { permissions: {} } },
+    error: null,
+    successful: true,
+  });
+  const node = createToolNode([
+    new DynamicStructuredTool({
+      name: "GITHUB_GET_THE_AUTHENTICATED_USER",
+      description: "test GitHub tool",
+      schema: z.object({}),
+      func: async () => successEnvelope,
+    }),
+  ]);
+
+  const result = await node(createAgentState({
+    messages: [
+      new AIMessage({
+        content: "",
+        tool_calls: [{ id: "call-1", name: "GITHUB_GET_THE_AUTHENTICATED_USER", args: {} }],
+      }),
+    ],
+  }));
+
+  assert.equal(result.messages[0].content, successEnvelope);
+  assert.notEqual(result.messages[0].content, notConnectedMessage("github"));
+});
+
+test("failed connector envelope with an auth error normalizes to a not-connected message", async () => {
+  const node = createToolNode([
+    new DynamicStructuredTool({
+      name: "GITHUB_GET_THE_AUTHENTICATED_USER",
+      description: "test GitHub tool",
+      schema: z.object({}),
+      func: async () =>
+        JSON.stringify({
+          data: {},
+          error: "Could not find a connected account: no connected account found",
+          successful: false,
+        }),
+    }),
+  ]);
+
+  const result = await node(createAgentState({
+    messages: [
+      new AIMessage({
+        content: "",
+        tool_calls: [{ id: "call-1", name: "GITHUB_GET_THE_AUTHENTICATED_USER", args: {} }],
+      }),
+    ],
+  }));
+
+  assert.equal(result.messages[0].content, notConnectedMessage("github"));
+});
+
+test("failed connector envelope with a non-auth error is passed through verbatim", async () => {
+  const errorEnvelope = JSON.stringify({
+    data: {},
+    error: "Repository not found",
+    successful: false,
+  });
+  const node = createToolNode([
+    new DynamicStructuredTool({
+      name: "GITHUB_GET_A_REPOSITORY",
+      description: "test GitHub tool",
+      schema: z.object({}),
+      func: async () => errorEnvelope,
+    }),
+  ]);
+
+  const result = await node(createAgentState({
+    messages: [
+      new AIMessage({
+        content: "",
+        tool_calls: [{ id: "call-1", name: "GITHUB_GET_A_REPOSITORY", args: {} }],
+      }),
+    ],
+  }));
+
+  assert.equal(result.messages[0].content, errorEnvelope);
 });
 
 test("agent step tool selection includes essentials of the mentioned connector", () => {
@@ -332,7 +414,7 @@ test("SSE tool result encoding handles non-JSON-safe payloads", () => {
   assert.match(encoded, /"self":"\[Circular\]"/);
 });
 
-test("reconcile synthesizes a tool output for a dangling tool_call", () => {
+test("reconcile strips dangling tool_calls from the AI message", () => {
   const messages = [
     new HumanMessage("do it"),
     new AIMessage({ content: "", tool_calls: [{ id: "call_x", name: "test_tool", args: {} }] }),
@@ -340,14 +422,12 @@ test("reconcile synthesizes a tool output for a dangling tool_call", () => {
 
   const reconciled = reconcileDanglingToolCalls(messages);
 
-  assert.equal(reconciled.length, 3);
-  const synthesized = reconciled[2] as ToolMessage;
-  assert.ok(synthesized instanceof ToolMessage);
-  assert.equal(synthesized.tool_call_id, "call_x");
-  assert.equal(synthesized.status, "error");
+  assert.equal(reconciled.length, 2);
+  const aiMsg = reconciled[1] as AIMessage;
+  assert.equal((aiMsg.tool_calls ?? []).length, 0);
 });
 
-test("reconcile covers function_call items hidden in v0 response_metadata.output", () => {
+test("reconcile strips metadata-only function_call items from response_metadata.output without synthesizing", () => {
   const ai = new AIMessage({ content: "" });
   ai.response_metadata = {
     output: [
@@ -360,7 +440,10 @@ test("reconcile covers function_call items hidden in v0 response_metadata.output
   const synthesized = reconciled.find(
     (m): m is ToolMessage => m instanceof ToolMessage && m.tool_call_id === "call_meta"
   );
-  assert.ok(synthesized, "expected a synthesized output for the metadata function_call");
+  assert.ok(!synthesized, "should NOT synthesize a ToolMessage for metadata-only function_call");
+  const sanitizedAi = reconciled.find((m) => m instanceof AIMessage) as AIMessage;
+  const output = sanitizedAi.response_metadata?.output as Array<{ type: string }> | undefined;
+  assert.ok(!output || !output.find((i) => (i as { call_id?: string }).call_id === "call_meta"), "function_call should be stripped from metadata");
 });
 
 test("reconcile leaves already-satisfied tool calls untouched", () => {
@@ -375,7 +458,7 @@ test("reconcile leaves already-satisfied tool calls untouched", () => {
   assert.equal(reconciled.filter((m) => m instanceof ToolMessage).length, 1);
 });
 
-test("reconcile inserts the synthesized output directly after its owning message", () => {
+test("reconcile strips dangling tool_calls and preserves other messages", () => {
   const messages = [
     new AIMessage({ content: "", tool_calls: [{ id: "call_a", name: "test_tool", args: {} }] }),
     new HumanMessage("follow up"),
@@ -383,7 +466,79 @@ test("reconcile inserts the synthesized output directly after its owning message
 
   const reconciled = reconcileDanglingToolCalls(messages);
 
-  assert.ok(reconciled[1] instanceof ToolMessage);
-  assert.equal((reconciled[1] as ToolMessage).tool_call_id, "call_a");
-  assert.ok(reconciled[2] instanceof HumanMessage);
+  assert.equal(reconciled.length, 2);
+  const aiMsg = reconciled[0] as AIMessage;
+  assert.equal((aiMsg.tool_calls ?? []).length, 0);
+  assert.ok(reconciled[1] instanceof HumanMessage);
+});
+
+test("reconcile strips dangling invalid_tool_calls", () => {
+  const ai = new AIMessage({ content: "" });
+  (ai as unknown as { invalid_tool_calls: Array<{ id: string; name: string; args: string; type: string }> }).invalid_tool_calls = [
+    { id: "call_invalid_1", name: "broken_tool", args: "{bad json", type: "invalid_tool_call" },
+  ];
+
+  const reconciled = reconcileDanglingToolCalls([new HumanMessage("hi"), ai]);
+
+  const synthesized = reconciled.find(
+    (m): m is ToolMessage => m instanceof ToolMessage && m.tool_call_id === "call_invalid_1"
+  );
+  assert.ok(!synthesized, "should NOT synthesize a ToolMessage for dangling invalid_tool_call");
+  const sanitizedAi = reconciled.find((m) => m instanceof AIMessage) as AIMessage;
+  assert.equal((sanitizedAi as unknown as { invalid_tool_calls?: unknown[] }).invalid_tool_calls?.length ?? 0, 0);
+});
+
+test("reconcile strips dangling additional_kwargs.tool_calls without synthesizing", () => {
+  const ai = new AIMessage({ content: "" });
+  ai.additional_kwargs = {
+    tool_calls: [
+      { id: "call_kwargs_1", type: "function", function: { name: "some_tool", arguments: "{}" } },
+    ],
+  };
+
+  const reconciled = reconcileDanglingToolCalls([new HumanMessage("hi"), ai]);
+
+  const synthesized = reconciled.find(
+    (m): m is ToolMessage => m instanceof ToolMessage && m.tool_call_id === "call_kwargs_1"
+  );
+  assert.ok(!synthesized, "should NOT synthesize a ToolMessage for additional_kwargs-only tool_call");
+  const sanitizedAi = reconciled.find((m) => m instanceof AIMessage) as AIMessage;
+  assert.ok(!sanitizedAi.additional_kwargs?.tool_calls || (sanitizedAi.additional_kwargs.tool_calls as unknown[]).length === 0, "tool_calls should be stripped from additional_kwargs");
+});
+
+test("reconcile strips dangling function_call items from response_metadata.output", () => {
+  const ai = new AIMessage({ content: "" });
+  ai.response_metadata = {
+    output: [
+      { type: "reasoning", id: "rs_1", summary: [] },
+      { type: "function_call", call_id: "call_satisfied", name: "tool_a", arguments: "{}" },
+      { type: "function_call", call_id: "call_dangling", name: "tool_b", arguments: "{}" },
+    ],
+  };
+
+  const messages = [
+    new HumanMessage("hi"),
+    ai,
+    new ToolMessage({ content: "ok", tool_call_id: "call_satisfied" }),
+  ];
+
+  const reconciled = reconcileDanglingToolCalls(messages);
+  const sanitizedAi = reconciled.find((m) => m instanceof AIMessage) as AIMessage;
+  const output = sanitizedAi.response_metadata?.output as Array<{ type: string; call_id?: string }>;
+
+  assert.equal(output.length, 2, "reasoning + satisfied function_call should remain");
+  assert.ok(output.find((i) => i.type === "reasoning"), "reasoning should be preserved");
+  assert.ok(
+    output.find((i) => i.type === "function_call" && i.call_id === "call_satisfied"),
+    "satisfied function_call should be preserved",
+  );
+  assert.ok(
+    !output.find((i) => i.type === "function_call" && i.call_id === "call_dangling"),
+    "dangling function_call should be stripped",
+  );
+
+  const synthesized = reconciled.find(
+    (m): m is ToolMessage => m instanceof ToolMessage && m.tool_call_id === "call_dangling",
+  );
+  assert.ok(!synthesized, "should NOT synthesize output for metadata-only dangling call");
 });

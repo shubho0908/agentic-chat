@@ -19,6 +19,7 @@ import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
+import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT } from "@/hooks/chat/conversationManager";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -167,7 +168,7 @@ function MessageContentSurface({
 
       {!hideHumanInTheLoopPlaceholder && textContent ? (
         isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
-      ) : !hideHumanInTheLoopPlaceholder && message.content ? (
+      ) : !hideHumanInTheLoopPlaceholder && message.content && message.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
         isUser ? (typeof message.content === 'string' ? renderUserTextContent(message.content) : '') : <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
         <AIThinkingAnimation
@@ -199,7 +200,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
   const modelName = "AI Assistant"
 
-  const textContent = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
+  const textContent = useMemo(() => {
+    const text = extractTextFromContent(displayedContent);
+    return text === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? "" : text;
+  }, [displayedContent]);
 
   const handleEditStart = useCallback(() => {
     setEditText(textContent);

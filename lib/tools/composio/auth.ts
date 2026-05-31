@@ -1,6 +1,7 @@
 import { getComposioClient } from "./index";
 import { type ComposioToolkit, COMPOSIO_TOOLKITS } from "./config";
 import { logger } from "@/lib/logger";
+import { withRetry } from "@/lib/retry";
 
 export interface ConnectedService {
   id: string;
@@ -17,16 +18,29 @@ export async function initiateConnection(
   if (!client) return null;
 
   try {
-    const authConfigs = await client.authConfigs.list({ toolkit });
+    const authConfigs = await withRetry(
+      () => client.authConfigs.list({ toolkit }),
+      { retries: 2, initialDelayMs: 300, timeoutMs: 10_000 }
+    );
     const authConfig = authConfigs.items[0];
     if (!authConfig) {
       logger.error(`[Composio] No auth config found for toolkit: ${toolkit}`);
       return null;
     }
 
-    const connectionRequest = await client.connectedAccounts.link(userId, authConfig.id, {
-      callbackUrl,
-    });
+    const connectionRequest = await withRetry(
+      () => client.connectedAccounts.link(userId, authConfig.id, { callbackUrl }),
+      {
+        retries: 1,
+        initialDelayMs: 500,
+        timeoutMs: 15_000,
+        shouldRetry: (error) => {
+          const e = error as Error & { status?: number };
+          if (e.status === 409 || /multiple.*connected|already.*active/i.test(e.message ?? "")) return false;
+          return true;
+        },
+      }
+    );
 
     if (!connectionRequest.redirectUrl) {
       logger.error(`[Composio] No redirect URL returned for toolkit: ${toolkit}`);
@@ -48,10 +62,10 @@ export async function getConnectedServices(userId: string): Promise<ConnectedSer
   if (!client) return [];
 
   try {
-    const response = await client.connectedAccounts.list({
-      userIds: [userId],
-      statuses: ["ACTIVE"],
-    });
+    const response = await withRetry(
+      () => client.connectedAccounts.list({ userIds: [userId], statuses: ["ACTIVE"] }),
+      { retries: 2, initialDelayMs: 300, timeoutMs: 10_000 }
+    );
 
     return response.items.map((account) => ({
       id: account.id,
@@ -76,16 +90,20 @@ export async function disconnectService(userId: string, connectedAccountId: stri
   if (!client) return false;
 
   try {
-    const response = await client.connectedAccounts.list({
-      userIds: [userId],
-    });
+    const response = await withRetry(
+      () => client.connectedAccounts.list({ userIds: [userId] }),
+      { retries: 1, initialDelayMs: 300, timeoutMs: 10_000 }
+    );
     const ownsAccount = response.items.some((a) => a.id === connectedAccountId);
     if (!ownsAccount) {
       logger.error(`[Composio] User ${userId} does not own account ${connectedAccountId}`);
       return false;
     }
 
-    await client.connectedAccounts.delete(connectedAccountId);
+    await withRetry(
+      () => client.connectedAccounts.delete(connectedAccountId),
+      { retries: 2, initialDelayMs: 300, timeoutMs: 10_000 }
+    );
     return true;
   } catch (error) {
     logger.error("[Composio] Failed to disconnect service:", error);

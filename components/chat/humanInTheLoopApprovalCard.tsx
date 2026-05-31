@@ -112,10 +112,10 @@ function ToolCallCard({ toolCall }: { toolCall: HumanInTheLoopToolCall }) {
   const argEntries = Object.entries(args).filter(([, v]) => v !== undefined && v !== null && v !== "");
 
   return (
-    <div className="rounded-lg border border-border/50 bg-gradient-to-b from-card/90 to-muted/50 shadow-[0_1px_3px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.06)] overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 py-2">
+    <div className="rounded-lg border border-border/50 bg-gradient-to-b from-card/90 to-muted/50 shadow-[0_1px_3px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.06)] overflow-hidden max-w-full">
+      <div className="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 py-2 min-w-0">
         <ShieldAlert className="size-3.5 text-amber-500 shrink-0" />
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
           {toolkit && (
             <span className="text-[11px] font-medium text-muted-foreground bg-muted rounded px-1.5 py-0.5 shrink-0">
               {toolkit}
@@ -128,11 +128,11 @@ function ToolCallCard({ toolCall }: { toolCall: HumanInTheLoopToolCall }) {
       {argEntries.length > 0 && (
         <div className="divide-y divide-border/30">
           {argEntries.map(([key, value]) => (
-            <div key={key} className="px-3 py-2">
+            <div key={key} className="px-3 py-2 min-w-0 overflow-hidden">
               <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
                 {formatArgKey(key)}
               </div>
-              <div className="text-sm text-foreground">
+              <div className="text-sm text-foreground break-words overflow-hidden">
                 <ArgValue value={value} />
               </div>
             </div>
@@ -191,26 +191,26 @@ function DecisionCard({
   })();
 
   return (
-    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-gradient-to-r from-amber-500/[0.06] to-transparent">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center size-7 rounded-lg bg-amber-500/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">
-            <GitFork className="size-4 text-amber-500" />
+    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden max-w-full">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 sm:px-4 sm:py-3 border-b border-border/40 bg-gradient-to-r from-amber-500/[0.06] to-transparent">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+          <div className="flex items-center justify-center size-6 sm:size-7 rounded-lg bg-amber-500/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] shrink-0">
+            <GitFork className="size-3.5 sm:size-4 text-amber-500" />
           </div>
-          <span className="text-sm font-semibold text-foreground">{title}</span>
+          <span className="text-xs sm:text-sm font-semibold text-foreground truncate">{title}</span>
         </div>
-        <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full px-2.5 py-0.5 bg-amber-500/[0.06]">
+        <span className="text-[10px] sm:text-[11px] font-medium text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full px-2 sm:px-2.5 py-0.5 bg-amber-500/[0.06] shrink-0">
           Decision needed
         </span>
       </div>
 
       {context && (
-        <div className="px-4 py-3 text-sm text-muted-foreground leading-relaxed border-b border-border/30">
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-muted-foreground leading-relaxed border-b border-border/30">
           {context}
         </div>
       )}
 
-      <div className="p-3 space-y-2">
+      <div className="p-2.5 sm:p-3 space-y-2">
         {options.map((option, i) => {
           const isRecommended = i === recommendedIndex;
           const isSelected = selected === i;
@@ -222,7 +222,7 @@ function DecisionCard({
               disabled={!pending || isLoading}
               onClick={() => setSelected(i)}
               className={cn(
-                "w-full text-left rounded-lg border p-3 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.06)]",
+                "w-full text-left rounded-lg border p-2.5 sm:p-3 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.06)]",
                 isSelected
                   ? "border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/30 shadow-[0_0_0_1px_rgba(59,130,246,0.2),inset_0_1px_0_rgba(255,255,255,0.08)]"
                   : isRecommended && selected === null
@@ -231,9 +231,9 @@ function DecisionCard({
                 (!pending || isLoading) && "opacity-60 cursor-not-allowed"
               )}
             >
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-2 sm:gap-2.5">
                 <span className={cn(
-                  "flex items-center justify-center size-6 rounded-md text-xs font-bold shrink-0 mt-0.5",
+                  "flex items-center justify-center size-5 sm:size-6 rounded-md text-[10px] sm:text-xs font-bold shrink-0 mt-0.5",
                   isSelected
                     ? "bg-blue-500 text-white"
                     : "bg-muted text-muted-foreground"
@@ -241,13 +241,13 @@ function DecisionCard({
                   {OPTION_LETTERS[i]}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-foreground">{option.label}</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <span className="text-xs sm:text-sm font-medium text-foreground">{option.label}</span>
                     {isRecommended && (
-                      <Check className="size-3.5 text-blue-500" />
+                      <Check className="size-3 sm:size-3.5 text-blue-500 shrink-0" />
                     )}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 leading-relaxed">
                     {option.description}
                   </div>
                 </div>
@@ -258,16 +258,16 @@ function DecisionCard({
       </div>
 
       {recommendation && (
-        <div className="flex items-start gap-2 px-4 py-2.5 border-t border-border/30 bg-muted/20">
+        <div className="flex items-start gap-2 px-3 py-2 sm:px-4 sm:py-2.5 border-t border-border/30 bg-muted/20">
           <Info className="size-3.5 text-muted-foreground mt-0.5 shrink-0" />
-          <span className="text-xs text-muted-foreground leading-relaxed">
+          <span className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
             Recommended: {recommendation}
           </span>
         </div>
       )}
 
       {pending && onDecision && (
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-border/40">
+        <div className="flex items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 border-t border-border/40">
           <Button
             type="button"
             size="sm"
@@ -308,23 +308,23 @@ function AskUserCard({
   const [answer, setAnswer] = useState("");
 
   return (
-    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 p-4 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]">
-      <div className="flex items-start gap-2.5">
+    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 p-3 sm:p-4 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] max-w-full">
+      <div className="flex items-start gap-2 sm:gap-2.5">
         <div className="flex items-center justify-center size-6 rounded-md bg-blue-500/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] mt-0.5 shrink-0">
           <MessageCircleQuestion className="size-3.5 text-blue-500" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-foreground">
+          <div className="text-xs sm:text-sm font-semibold text-foreground">
             {title || "Clarification needed"}
           </div>
           {context && (
-            <div className="mt-1 text-sm text-muted-foreground leading-relaxed">{context}</div>
+            <div className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">{context}</div>
           )}
-          <div className={cn("text-sm text-muted-foreground leading-relaxed", context ? "mt-1.5" : "mt-1")}>
+          <div className={cn("text-xs sm:text-sm text-muted-foreground leading-relaxed break-words", context ? "mt-1.5" : "mt-1")}>
             {question || "Can you clarify how to proceed?"}
           </div>
           {reason && (
-            <div className="mt-1.5 text-xs text-muted-foreground/70 italic">{reason}</div>
+            <div className="mt-1.5 text-[11px] sm:text-xs text-muted-foreground/70 italic break-words">{reason}</div>
           )}
         </div>
       </div>
@@ -338,7 +338,7 @@ function AskUserCard({
             }}
             disabled={isLoading}
             aria-label="Clarification answer"
-            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 sm:px-3 py-2 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-ring/50 transition-shadow"
             placeholder="Type your answer..."
           />
           <Button
@@ -372,16 +372,16 @@ function ApprovalCard({
   onDecision?: (approved: boolean, response?: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/40 bg-gradient-to-r from-amber-500/[0.06] to-transparent">
+    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/40 shadow-[0_2px_6px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)] overflow-hidden max-w-full">
+      <div className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 border-b border-border/40 bg-gradient-to-r from-amber-500/[0.06] to-transparent">
         <div className="flex items-center justify-center size-6 rounded-md bg-amber-500/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] shrink-0">
           <ShieldAlert className="size-3.5 text-amber-500" />
         </div>
-        <span className="text-sm font-semibold text-foreground">Action requires approval</span>
+        <span className="text-xs sm:text-sm font-semibold text-foreground">Action requires approval</span>
       </div>
 
       {toolCalls && toolCalls.length > 0 && (
-        <div className="p-3 space-y-2">
+        <div className="p-2.5 sm:p-3 space-y-2">
           {toolCalls.map((tc, i) => (
             <ToolCallCard key={tc.id ?? i} toolCall={tc} />
           ))}
@@ -389,19 +389,19 @@ function ApprovalCard({
       )}
 
       {!toolCalls?.length && (question || reason) && (
-        <div className="px-4 py-3 text-sm text-muted-foreground">
+        <div className="px-3 py-2.5 sm:px-4 sm:py-3 text-xs sm:text-sm text-muted-foreground break-words">
           {question || reason}
         </div>
       )}
 
       {pending && onDecision && (
-        <div className={cn("flex items-center gap-2 px-4 py-3", toolCalls?.length && "border-t border-border/40")}>
+        <div className={cn("flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3", toolCalls?.length && "border-t border-border/40")}>
           <Button
             type="button"
             size="sm"
             onClick={() => onDecision(true)}
             disabled={isLoading}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="gap-1.5"
           >
             <Check className="size-3.5" />
             Approve

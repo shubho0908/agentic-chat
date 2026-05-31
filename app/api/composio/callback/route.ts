@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/appUrl";
 import { logger } from "@/lib/logger";
+import { getComposioClient } from "@/lib/tools/composio";
+import { clearToolCache } from "@/lib/tools/composio";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -21,7 +23,27 @@ export async function GET(request: NextRequest) {
 
   const hasPositiveEvidence = explicitSuccess || Boolean(code) || Boolean(connectionId);
 
-  const isSuccess = !explicitFailure && hasPositiveEvidence;
+  let isSuccess = !explicitFailure && hasPositiveEvidence;
+
+  if (isSuccess && connectionId) {
+    try {
+      const client = getComposioClient();
+      if (client) {
+        const account = await client.connectedAccounts.get(connectionId);
+        if (account.status !== "ACTIVE") {
+          isSuccess = false;
+          logger.warn("[Composio Callback] Connection not ACTIVE after OAuth", {
+            connectionId,
+            actualStatus: account.status,
+          });
+        }
+        clearToolCache();
+      }
+    } catch (error) {
+      logger.warn("[Composio Callback] Could not verify connection status:", error);
+      clearToolCache();
+    }
+  }
 
   if (!isSuccess) {
     logger.warn("[Composio Callback] OAuth flow did not complete successfully", {
