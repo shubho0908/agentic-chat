@@ -71,9 +71,3 @@
 ## Getting Started
 
 See the [Setup Guide](./SETUP.md) for installation, environment configuration, and database setup.
-
----
-
-## License
-
-Private repository. All rights reserved.
