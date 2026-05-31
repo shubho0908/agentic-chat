@@ -30,10 +30,10 @@ import { ModelSelector } from "./modelSelector";
 import { isValidApiKey } from "../utils/byokUtils";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
-interface BYOKProps {
+interface ByokProps {
   autoOpen?: boolean;
-  onConfigured?: (configured: boolean) => void;
   triggerRef?: RefObject<HTMLButtonElement | null>;
   hiddenTrigger?: boolean;
 }
@@ -42,7 +42,7 @@ function getInitialModelSelection() {
   return getModel() ?? DEFAULT_MODEL;
 }
 
-interface BYOKContentProps {
+interface ByokContentProps {
   isConfigured: boolean;
   maskedKey?: string | null;
   updatedAt?: string | null;
@@ -57,7 +57,7 @@ interface BYOKContentProps {
   onClose: () => void;
 }
 
-function BYOKFields({
+function ByokFields({
   isConfigured,
   maskedKey,
   updatedAt,
@@ -66,7 +66,7 @@ function BYOKFields({
   onApiKeyChange,
   onModelSelect,
 }: Pick<
-  BYOKContentProps,
+  ByokContentProps,
   | "isConfigured"
   | "maskedKey"
   | "updatedAt"
@@ -112,7 +112,7 @@ function BYOKFields({
   );
 }
 
-function BYOKActions({
+function ByokActions({
   isConfigured,
   hasAnyChange,
   apiKey,
@@ -121,7 +121,7 @@ function BYOKActions({
   onSave,
   onClear,
 }: Pick<
-  BYOKContentProps,
+  ByokContentProps,
   | "isConfigured"
   | "hasAnyChange"
   | "apiKey"
@@ -158,12 +158,11 @@ function BYOKActions({
   );
 }
 
-export function BYOK({
+export function Byok({
   autoOpen = false,
-  onConfigured,
   triggerRef,
   hiddenTrigger = false,
-}: BYOKProps = {}) {
+}: ByokProps = {}) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -179,17 +178,13 @@ export function BYOK({
   const hasAnyChange = hasApiKeyChange || hasModelChange;
 
   useEffect(() => {
-    if (!isLoading) {
-      onConfigured?.(isConfigured);
-
-      if (!isConfigured && autoOpen) {
-        const timer = setTimeout(() => {
-          setOpen(true);
-        }, 200);
-        return () => clearTimeout(timer);
-      }
+    if (!isConfigured && autoOpen && !isLoading) {
+      const timer = setTimeout(() => {
+        setOpen(true);
+      }, 200);
+      return () => clearTimeout(timer);
     }
-  }, [isConfigured, isLoading, autoOpen, onConfigured]);
+  }, [isConfigured, autoOpen, isLoading]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -235,7 +230,7 @@ export function BYOK({
       }
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_SAVE, {
-        description: error instanceof Error ? error.message : "Please try again",
+        description: toUserFriendlyError(error, "Please try again"),
       });
     }
   };
@@ -250,7 +245,7 @@ export function BYOK({
       toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_CLEARED);
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_CLEAR, {
-        description: error instanceof Error ? error.message : "Please try again",
+        description: toUserFriendlyError(error, "Please try again"),
       });
     }
   };
@@ -289,7 +284,7 @@ export function BYOK({
     </Button>
   );
 
-  const contentProps: BYOKContentProps = {
+  const contentProps: ByokContentProps = {
     isConfigured,
     maskedKey: apiKeyData?.maskedKey,
     updatedAt: apiKeyData?.updatedAt,
@@ -327,12 +322,12 @@ export function BYOK({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <BYOKFields {...contentProps} />
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <ByokFields {...contentProps} />
             </div>
 
-            <div className="border-t bg-background px-4 py-4 [padding-bottom:calc(1rem+env(safe-area-inset-bottom))]">
-              <BYOKActions {...contentProps} />
+            <div className="border-t bg-background p-4 [padding-bottom:calc(1rem+env(safe-area-inset-bottom))]">
+              <ByokActions {...contentProps} />
             </div>
           </div>
         </DrawerContent>
@@ -343,8 +338,8 @@ export function BYOK({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] w-[min(calc(100vw-1rem),500px)] overflow-hidden p-0 sm:w-full sm:max-w-[500px] focus-visible:outline-none">
-        <DialogHeader className="border-b px-4 py-4 pr-12 sm:px-6 sm:py-5">
+      <DialogContent className="max-h-[90dvh] w-[min(calc(100vw-1rem),500px)] gap-0 overflow-hidden p-0 sm:w-full sm:max-w-[500px] sm:p-0 focus-visible:outline-none">
+        <DialogHeader className="border-b p-4 pr-12 sm:px-5 sm:py-5">
           <DialogTitle className="text-lg leading-tight sm:text-xl">OpenAI API Configuration</DialogTitle>
           <DialogDescription className="text-[13px] leading-5 sm:text-sm">
             Configure your OpenAI API key and select a model. Your credentials
@@ -352,12 +347,12 @@ export function BYOK({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-          <BYOKFields {...contentProps} />
+        <div className="min-h-0 overflow-y-auto p-4 sm:px-5 sm:py-5">
+          <ByokFields {...contentProps} />
         </div>
 
-        <div className="border-t px-4 py-4 sm:px-6 sm:py-5">
-          <BYOKActions {...contentProps} />
+        <div className="border-t p-4 sm:px-5 sm:py-5">
+          <ByokActions {...contentProps} />
         </div>
       </DialogContent>
     </Dialog>

@@ -1,12 +1,10 @@
-import type { Attachment, Message, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from '@/lib/orchestrator/constants';
+import type { HumanInTheLoopRequestKindValue } from '@/lib/tools/constants';
 import type {
   WebSearchImage,
-  WebSearchProgressDetails,
   WebSearchSource,
-  ResearchTask,
 } from './tools';
-import type { GateDecision, EvaluationResult, Citation } from './deepResearch';
-import type { SearchDepth } from '@/lib/schemas/webSearchTools';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -57,8 +55,8 @@ export interface MemoryStatus {
   toolProgress?: {
     status: ToolProgressStatus | string;
     message: string;
+    toolName?: string;
     details?: {
-      // Web search fields
       originalQuery?: string;
       query?: string;
       resultsCount?: number;
@@ -66,43 +64,14 @@ export interface MemoryStatus {
       sources?: WebSearchSource[];
       images?: WebSearchImage[];
       imageCount?: number;
-      currentSource?: WebSearchSource;
-      processedCount?: number;
-      searchDepth?: SearchDepth;
-      phase?: number;
-      totalPhases?: number;
-      intelligent?: boolean;
-      searchIndex?: number;
-      total?: number;
-      completedSearches?: number;
-      searchPlan?: WebSearchProgressDetails['searchPlan'];
-      usedConversationContext?: boolean;
 
-      // Google Suite fields
       operation?: string;
       tool?: string;
       error?: string;
 
-      // Deep research fields
-      status?: string; // Deep research status
-      gateDecision?: GateDecision;
+      citations?: MessageMetadata['citations'];
       skipped?: boolean;
-      researchPlan?: ResearchTask[];
-      currentTaskIndex?: number;
-      totalTasks?: number;
-      completedTasks?: ResearchTask[];
-      evaluationResult?: EvaluationResult;
-      currentAttempt?: number;
-      maxAttempts?: number;
-      strictnessLevel?: 0 | 1 | 2;
-      citations?: Citation[];
-      followUpQuestions?: string[];
-      wordCount?: number;
-      toolProgress?: {
-        toolName: string;
-        status: string;
-        message: string;
-      };
+      status?: string;
     };
   };
 }
@@ -120,6 +89,12 @@ export interface VersionData {
 export interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
+  autoContinue?: {
+    session?: { user: { id: string } };
+    activeTool?: string | null;
+    memoryEnabled?: boolean;
+    thinkingEnabled?: boolean;
+  } | null;
 }
 
 export interface SendMessageOptions {
@@ -128,11 +103,10 @@ export interface SendMessageOptions {
   attachments?: Attachment[];
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
-export interface MessageSendResult {
+interface MessageSendResult {
   success: boolean;
   error?: string;
 }
@@ -142,8 +116,7 @@ export type MessageSendHandler = (
   attachments?: Attachment[],
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
-  searchDepth?: SearchDepth
+  thinkingEnabled?: boolean
 ) => Promise<MessageSendResult> | MessageSendResult;
 
 export interface EditMessageOptions {
@@ -153,8 +126,7 @@ export interface EditMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface RegenerateMessageOptions {
@@ -162,8 +134,7 @@ export interface RegenerateMessageOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface ContinueConversationOptions {
@@ -171,8 +142,7 @@ export interface ContinueConversationOptions {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
 }
 
 export interface UseChatReturn {
@@ -182,6 +152,7 @@ export interface UseChatReturn {
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
   continueConversation: (options: ContinueConversationOptions) => Promise<void>;
+  respondToHumanInTheLoop: (approved: boolean, response?: string) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
   memoryStatus?: MemoryStatus;
@@ -214,23 +185,44 @@ export interface CacheCheckResult {
   response?: string;
 }
 
-export interface ToolCallEvent {
+interface ToolCallEvent {
   toolName: string;
   toolCallId: string;
   args: ToolArgs;
 }
 
-export interface ToolResultEvent {
+interface ToolResultEvent {
   toolName: string;
   toolCallId: string;
   result: string | Record<string, unknown> | unknown[];
 }
 
-export interface ToolProgressEvent {
+interface ToolProgressEvent {
   toolName: string;
   status: ToolProgressStatus | string;
   message: string;
   details?: Record<string, unknown>;
+}
+
+interface HumanInTheLoopToolCall {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+}
+
+export interface HumanInTheLoopRequestEvent {
+  type?: typeof HUMAN_IN_THE_LOOP_REQUEST_TYPE;
+  requestKind?: HumanInTheLoopRequestKindValue;
+  requestId?: string;
+  threadId?: string;
+  toolCallId?: string;
+  question?: string;
+  reason?: string;
+  title?: string;
+  context?: string;
+  options?: { label: string; description: string }[];
+  recommendation?: string;
+  toolCalls?: HumanInTheLoopToolCall[];
 }
 
 export interface StreamConfig {
@@ -243,9 +235,24 @@ export interface StreamConfig {
   onToolCall?: (toolCall: ToolCallEvent) => void;
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
+  onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
-  activeTool?: string | null;
+  onThinking?: (thinking: string) => void;
   memoryEnabled?: boolean;
-  deepResearchEnabled?: boolean;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
+}
+
+export interface ApprovalStreamConfig {
+  conversationId: string;
+  threadId?: string;
+  model: string;
+  approved?: boolean;
+  response?: string;
+  signal: AbortSignal;
+  onChunk: (fullContent: string) => void;
+  onToolCall?: (toolCall: ToolCallEvent) => void;
+  onToolResult?: (toolResult: ToolResultEvent) => void;
+  onToolProgress?: (progress: ToolProgressEvent) => void;
+  onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
+  onThinking?: (thinking: string) => void;
 }

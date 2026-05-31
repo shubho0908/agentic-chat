@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type RefObject } from "react";
-import { LogOut, Moon, Settings2, SlidersHorizontal, Sun } from "lucide-react";
+import { LogOut, Moon, SlidersHorizontal, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 
@@ -26,14 +26,14 @@ interface UserMenuProps {
 export function UserMenu({ byokTriggerRef }: UserMenuProps) {
   const { data: session } = useSession();
   const { theme, mounted, toggleTheme } = useThemeToggle();
-  const router = useRouter();
+  const { push } = useRouter();
   const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
       clearUserStorage();
       await signOut();
-      router.push("/");
+      push("/");
       toast.success(TOAST_SUCCESS_MESSAGES.LOGGED_OUT);
     } catch (error) {
       logger.error("Logout error:", error);
@@ -86,7 +86,7 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
             </div>
           </div>
 
-          <div className="px-2 py-2">
+          <div className="p-2">
             <Button
               variant="ghost"
               size="sm"
@@ -95,18 +95,6 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
             >
               <SlidersHorizontal className="size-4" />
               <span className="flex-1 text-left">API Settings</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setOpen(false);
-                router.push("/settings/google-workspace");
-              }}
-              className="h-9 w-full justify-start gap-2.5 rounded-lg px-2.5 text-sm hover:bg-accent"
-            >
-              <Settings2 className="size-4" />
-              <span className="flex-1 text-left">Google Workspace</span>
             </Button>
             <Button
               variant="ghost"
@@ -140,7 +128,7 @@ export function UserMenu({ byokTriggerRef }: UserMenuProps) {
 
           <Separator />
 
-          <div className="px-2 py-2">
+          <div className="p-2">
             <Button
               variant="ghost"
               size="sm"

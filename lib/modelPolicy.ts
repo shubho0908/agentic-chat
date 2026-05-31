@@ -1,31 +1,7 @@
-import { DEFAULT_MODEL, OPENAI_MODELS } from "@/constants/openai-models";
-
-type ModelStage =
-  | "chat"
-  | "vision"
-  | "tool_planner"
-  | "research_gate"
-  | "research_planner"
-  | "research_worker"
-  | "research_aggregator"
-  | "research_evaluator"
-  | "research_formatter"
-  | "workspace_agent";
+import type { ReasoningEffort } from "openai/resources/shared";
+import { OPENAI_MODELS } from "@/constants/openai-models";
 
 const ALLOWED_MODELS = new Map(OPENAI_MODELS.map((model) => [model.id, model]));
-
-const STAGE_MODEL_FALLBACKS: Record<ModelStage, string> = {
-  chat: DEFAULT_MODEL,
-  vision: "gpt-5.4-mini",
-  tool_planner: "gpt-5.4-nano",
-  research_gate: "gpt-5.4-nano",
-  research_planner: "gpt-5.4-nano",
-  research_worker: "gpt-5.4-mini",
-  research_aggregator: "gpt-5.4-mini",
-  research_evaluator: "gpt-5.4-nano",
-  research_formatter: "gpt-5.4-mini",
-  workspace_agent: "gpt-5.4-mini",
-};
 
 function isAllowedModel(model: string): boolean {
   return ALLOWED_MODELS.has(model);
@@ -39,26 +15,22 @@ export function validateRequestedModel(model: string): string | null {
   return model;
 }
 
-export function getStageModel(
-  requestedModel: string,
-  stage: ModelStage,
-): string {
-  const validatedRequestedModel = validateRequestedModel(requestedModel);
-  if (stage === "chat") {
-    return validatedRequestedModel ?? DEFAULT_MODEL;
-  }
-
-  const fallbackModel = STAGE_MODEL_FALLBACKS[stage];
-  return (
-    validateRequestedModel(fallbackModel) ??
-    validatedRequestedModel ??
-    DEFAULT_MODEL
-  );
-}
-
 function supportsCustomTemperature(model: string): boolean {
   const m = model.trim().toLowerCase();
   return !m.startsWith("gpt-5");
+}
+
+function getReasoningSeriesMinorVersion(model: string): number | null {
+  const match = model.trim().toLowerCase().match(/^gpt-5(?:\.(\d+))?(?:\b|-|$)/);
+  if (!match) return null;
+  return match[1] ? Number(match[1]) : 0;
+}
+
+export function getChatReasoningEffort(model: string, thinkingEnabled?: boolean): ReasoningEffort | undefined {
+  const minorVersion = getReasoningSeriesMinorVersion(model);
+  if (minorVersion === null) return undefined;
+  if (thinkingEnabled) return "high";
+  return minorVersion >= 1 ? "none" : "minimal";
 }
 
 export function getSupportedTemperature(

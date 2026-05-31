@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { NotFoundClient } from "@/components/notFoundContent";
 import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
+import { apiRoutes, appRoutes } from "@/lib/routes";
 
 export const metadata: Metadata = {
   title: "404 - Page Not Found",
@@ -9,11 +10,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: "404 - Page Not Found | Agentic Chat",
     description: "The page you're looking for doesn't exist or has been moved. Return to Agentic Chat to continue your intelligent conversations.",
-    url: "/not-found",
+    url: appRoutes.notFound,
     siteName: "Agentic Chat",
     images: [
       {
-        url: absoluteUrl("/api/og?title=404%20-%20Page%20Not%20Found"),
+        url: absoluteUrl(`${apiRoutes.og}?title=404%20-%20Page%20Not%20Found`),
         width: 1200,
         height: 630,
         alt: "404 - Page Not Found",
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "404 - Page Not Found | Agentic Chat",
     description: "The page you're looking for doesn't exist or has been moved.",
-    images: [absoluteUrl("/api/og?title=404%20-%20Page%20Not%20Found")],
+    images: [absoluteUrl(`${apiRoutes.og}?title=404%20-%20Page%20Not%20Found`)],
   },
 };
 

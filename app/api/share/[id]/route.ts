@@ -41,6 +41,7 @@ export async function GET(
             siblingIndex: true,
             versions: {
               where: {
+                conversationId,
                 isDeleted: false,
               },
               orderBy: { siblingIndex: 'asc' },

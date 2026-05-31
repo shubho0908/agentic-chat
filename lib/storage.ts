@@ -1,16 +1,10 @@
-import type { SearchDepth } from './schemas/webSearchTools';
 import { DEFAULT_MODEL, OPENAI_MODELS } from '@/constants/openai-models';
-import { parseToolId, type ToolId } from '@/lib/tools/config';
-
 
 import { logger } from "@/lib/logger";
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
-  ACTIVE_TOOL: 'agentic-chat-active-tool',
   MEMORY_ENABLED: 'agentic-chat-memory-enabled',
-  DEEP_RESEARCH_ENABLED: 'agentic-chat-deep-research-enabled',
-  SEARCH_DEPTH: 'agentic-chat-search-depth',
-  PENDING_GOOGLE_WORKSPACE_QUERY: 'agentic-chat-pending-google-workspace-query',
+  THINKING_ENABLED: 'agentic-chat-thinking-enabled',
 } as const;
 
 const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
@@ -93,125 +87,32 @@ export function setMemoryEnabled(enabled: boolean): boolean {
   }
 }
 
-export function getActiveTool(): ToolId | null {
-  if (!isLocalStorageAvailable()) return null;
-  try {
-    const storedTool = localStorage.getItem(STORAGE_KEYS.ACTIVE_TOOL);
-    const parsedTool = parseToolId(storedTool);
-
-    if (storedTool && parsedTool) {
-      return parsedTool;
-    }
-
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function setActiveTool(toolId: ToolId): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    const parsedTool = parseToolId(toolId);
-
-    if (!parsedTool) {
-      localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
-      return false;
-    }
-
-    localStorage.setItem(STORAGE_KEYS.ACTIVE_TOOL, parsedTool);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function removeActiveTool(): void {
-  if (!isLocalStorageAvailable()) return;
-  try {
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
-  } catch (error) {
-    logStorageError('remove active tool', error);
-  }
-}
-
-export function getDeepResearchEnabled(): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    return localStorage.getItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-export function setDeepResearchEnabled(enabled: boolean): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    localStorage.setItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED, String(enabled));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function getSearchDepth(): SearchDepth {
-  if (!isLocalStorageAvailable()) return 'basic';
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.SEARCH_DEPTH);
-    return stored === 'advanced' ? 'advanced' : 'basic';
-  } catch {
-    return 'basic';
-  }
-}
-
-export function setSearchDepth(depth: SearchDepth): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    localStorage.setItem(STORAGE_KEYS.SEARCH_DEPTH, depth);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function clearUserStorage(): void {
   if (!isLocalStorageAvailable()) return;
   try {
     localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
-    localStorage.removeItem(STORAGE_KEYS.ACTIVE_TOOL);
-    localStorage.removeItem(STORAGE_KEYS.DEEP_RESEARCH_ENABLED);
-    localStorage.removeItem(STORAGE_KEYS.SEARCH_DEPTH);
-    localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
+    localStorage.removeItem(STORAGE_KEYS.THINKING_ENABLED);
   } catch (error) {
     logger.error('Error clearing user storage:', error);
   }
 }
 
-export function getPendingGoogleWorkspaceQuery(): string | null {
-  if (!isLocalStorageAvailable()) return null;
-  try {
-    return localStorage.getItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
-  } catch {
-    return null;
-  }
-}
-
-export function setPendingGoogleWorkspaceQuery(query: string): boolean {
+export function getThinkingEnabled(): boolean {
   if (!isLocalStorageAvailable()) return false;
   try {
-    localStorage.setItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY, query);
-    return true;
+    const stored = localStorage.getItem(STORAGE_KEYS.THINKING_ENABLED);
+    return stored === 'true';
   } catch {
     return false;
   }
 }
 
-export function clearPendingGoogleWorkspaceQuery(): void {
-  if (!isLocalStorageAvailable()) return;
+export function setThinkingEnabled(enabled: boolean): boolean {
+  if (!isLocalStorageAvailable()) return false;
   try {
-    localStorage.removeItem(STORAGE_KEYS.PENDING_GOOGLE_WORKSPACE_QUERY);
-  } catch (error) {
-    logStorageError('clear pending Google Workspace query', error);
+    localStorage.setItem(STORAGE_KEYS.THINKING_ENABLED, String(enabled));
+    return true;
+  } catch {
+    return false;
   }
 }

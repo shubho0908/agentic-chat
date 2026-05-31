@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { saveToSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
-
+import { queryKeys } from "@/lib/queryKeys";
+import { logger } from "@/lib/logger";
 
 interface CacheSavePayload {
   query: string;
@@ -23,7 +24,7 @@ export function useSaveToCache() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["agentic-chat-cache", variables.query],
+        queryKey: queryKeys.semanticCache(variables.query),
       });
     },
     onError: (error) => {
@@ -31,5 +32,3 @@ export function useSaveToCache() {
     },
   });
 }
-
-import { logger } from "@/lib/logger";

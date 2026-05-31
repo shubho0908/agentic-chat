@@ -1,4 +1,4 @@
-import { useRef, useState, type SetStateAction } from "react";
+import { useMemo, useRef, useState, type SetStateAction } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
 import {
@@ -32,6 +32,16 @@ export function useChatFileUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const selectedFilesRef = useRef<File[]>([]);
   const fileIdMapRef = useRef(new WeakMap<File, string>());
+  const publicUploadedAttachments = useMemo<Attachment[]>(
+    () => uploadedAttachments.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({
+      id,
+      fileUrl,
+      fileName,
+      fileType,
+      fileSize,
+    })),
+    [uploadedAttachments]
+  );
 
   function setSelectedFiles(value: SetStateAction<File[]>) {
     setSelectedFilesState((prev) => {
@@ -170,7 +180,7 @@ export function useChatFileUpload() {
 
   return {
     selectedFiles: selectedFilesState,
-    uploadedAttachments: uploadedAttachments as Attachment[],
+    uploadedAttachments: publicUploadedAttachments,
     isUploading,
     handleFilesSelected,
     handleRemoveFile,

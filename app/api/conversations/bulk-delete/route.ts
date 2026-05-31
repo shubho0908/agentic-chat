@@ -4,10 +4,7 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
-
-interface BulkDeleteRequest {
-  ids: string[];
-}
+import { isRecord } from '@/lib/typeGuards';
 
 interface BulkDeleteResponse {
   deleted: number;
@@ -19,7 +16,17 @@ export async function POST(request: NextRequest) {
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 
-    const body: BulkDeleteRequest = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (!isRecord(body)) {
+      return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     const { ids } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {

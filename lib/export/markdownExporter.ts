@@ -1,5 +1,9 @@
 import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
-
+import { logger } from "@/lib/logger";
+import {
+  downloadTextFile,
+  getConversationExportFileName,
+} from '@/lib/export/downloadFile';
 
 function exportToMarkdown(
   conversation: ExportConversation,
@@ -101,32 +105,7 @@ function formatDate(dateString: string | undefined | null): string {
 
 export function downloadMarkdown(conversation: ExportConversation, options?: ExportOptions): void {
   const markdownContent = exportToMarkdown(conversation, options);
-  const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const fileName = `${sanitizeFileName(conversation.title || 'conversation')}_${new Date().toISOString().split('T')[0]}.md`;
-  
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 100);
-}
+  const fileName = getConversationExportFileName(conversation.title, 'md');
 
-function sanitizeFileName(name: string): string {
-  const sanitized = name
-    .replace(/[^a-z0-9]/gi, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase()
-    .slice(0, 50)
-    .replace(/_+$/g, '');
-  
-  return sanitized || 'conversation';
+  downloadTextFile(markdownContent, fileName, 'text/markdown;charset=utf-8');
 }
-
-import { logger } from "@/lib/logger";

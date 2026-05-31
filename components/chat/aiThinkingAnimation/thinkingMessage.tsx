@@ -9,7 +9,7 @@ export function ThinkingMessage({ message }: ThinkingMessageProps) {
     <LazyMotion features={domAnimation}>
       <div className="flex items-center gap-2.5">
         <m.div
-          className="w-1.5 h-1.5 rounded-full bg-primary/60"
+          className="size-1.5 rounded-full bg-primary/60"
           animate={{ scale: [1, 1.2, 1], opacity: [0.6, 1, 0.6] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
         />

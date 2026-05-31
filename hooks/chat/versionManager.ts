@@ -1,6 +1,6 @@
 import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
 import type { VersionData } from "@/types/chat";
-
+import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 export function createNewVersion(
@@ -77,7 +77,7 @@ export async function fetchMessageVersions(
 ): Promise<Message[]> {
   try {
     const versionsResponse = await fetch(
-      `/api/conversations/${conversationId}/messages/${parentMessageId}/versions`
+      apiRoutes.conversationMessageVersions(conversationId, parentMessageId)
     );
     
     if (!versionsResponse.ok) {
@@ -122,7 +122,7 @@ export function updateMessageWithVersions(
     return { ...message, id: newMessageId };
   }
 
-  const sortedVersions = [...versions].sort((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
+  const sortedVersions = versions.toSorted((a, b) => (b.siblingIndex ?? 0) - (a.siblingIndex ?? 0));
   
   const currentVersion = sortedVersions.find(v => v.id === newMessageId) || sortedVersions[0];
   const olderVersions = sortedVersions.filter(v => v.id !== currentVersion.id);

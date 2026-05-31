@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
+import { apiRoutes, appRoutes } from "@/lib/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -12,18 +13,19 @@ export async function generateMetadata({
   const title = "Private Conversation";
   const description = "Sign in to view your conversation in Agentic Chat.";
   const fullTitle = `${title} | ${siteConfig.name}`;
-  const ogImageUrl = absoluteUrl(`/api/og?title=${encodeURIComponent(title)}`);
+  const route = appRoutes.conversation(id);
+  const ogImageUrl = absoluteUrl(`${apiRoutes.og}?title=${encodeURIComponent(title)}`);
 
   return {
     title,
     description,
     alternates: {
-      canonical: `/c/${id}`,
+      canonical: route,
     },
     openGraph: {
       title: fullTitle,
       description,
-      url: `/c/${id}`,
+      url: route,
       siteName: siteConfig.name,
       images: [
         {

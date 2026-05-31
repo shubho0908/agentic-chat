@@ -1,9 +1,8 @@
-import { type JsonValue, type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
@@ -12,24 +11,18 @@ import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
-
+import { queryKeys } from "@/lib/queryKeys";
+import { toUserFriendlyError } from "@/lib/errorMessages";
+import { toJsonValue } from "@/lib/json";
 
 import { logger } from "@/lib/logger";
-function toJsonValue(value: unknown): JsonValue | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
-}
 
 export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
-  searchDepth?: SearchDepth
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -83,11 +76,10 @@ export async function handleRegenerateResponse(
     const useCaching = shouldUseSemanticCache(
       messagesUpToAssistant,
       previousUserMessage.attachments,
-      activeTool,
-      deepResearchEnabled
+      activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -199,14 +191,22 @@ export async function handleRegenerateResponse(
           }
         }
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deepResearchUsage'] });
-      },
-      activeTool,
       memoryEnabled: memoryEnabled ?? true,
-      deepResearchEnabled: deepResearchEnabled ?? false,
-      searchDepth: searchDepth ?? 'basic',
+      thinkingEnabled,
+      onThinking: (thinking) => {
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, thinking }
+              : msg
+          )
+        );
+      },
     });
+
+    if (toolActivities.length > 0) {
+      messageMetadata = { ...(messageMetadata || {}), toolActivities };
+    }
 
     onMessagesUpdate((prev) =>
       prev.map((msg) =>
@@ -255,8 +255,8 @@ export async function handleRegenerateResponse(
           )
         );
         
-        queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
       persistConversationMemoryIfEligible({
@@ -265,7 +265,6 @@ export async function handleRegenerateResponse(
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,
-        deepResearchEnabled: deepResearchEnabled ?? false,
         userAttachments: previousUserMessage.attachments,
         memoryStatus: currentMemoryStatus,
         flow: "regenerate",
@@ -279,7 +278,7 @@ export async function handleRegenerateResponse(
       return { success: false, error: "aborted" };
     }
     
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });

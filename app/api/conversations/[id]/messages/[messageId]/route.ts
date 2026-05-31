@@ -9,7 +9,6 @@ import { messageMetadataSchema } from '@/lib/schemas/chat';
 import { isSupportedForRAG } from '@/lib/rag/utils';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 
-
 import { logger } from "@/lib/logger";
 function getRagAttachmentIds(
   attachments?: Array<{ id: string; fileType: string }>
@@ -19,8 +18,7 @@ function getRagAttachmentIds(
   }
 
   return attachments
-    .filter((attachment) => isSupportedForRAG(attachment.fileType))
-    .map((attachment) => attachment.id);
+    .flatMap((attachment) => isSupportedForRAG(attachment.fileType) ? [attachment.id] : []);
 }
 
 function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
@@ -65,6 +63,12 @@ async function getNextSiblingIndex(
   tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
   parentId: string
 ) {
+  // Acquire a transaction-scoped advisory lock keyed on the parent.
+  // Concurrent transactions assigning siblings under the same parent will block here
+  // and resume one-at-a-time, eliminating the read-then-write race on siblingIndex.
+  // The lock auto-releases when the surrounding transaction commits or aborts.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${parentId})::bigint)`;
+
   const maxSibling = await tx.message.aggregate({
     where: {
       OR: [
@@ -77,6 +81,8 @@ async function getNextSiblingIndex(
 
   return (maxSibling._max.siblingIndex ?? -1) + 1;
 }
+
+const TRANSACTION_TIMEOUT_MS = 15_000;
 
 async function softDeleteDownstreamBranch(
   tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
@@ -213,9 +219,60 @@ export async function PATCH(
     const parentId = existingMessage.parentMessageId || messageId;
     const now = new Date();
 
+    if (body.inPlace === true) {
+      if (existingMessage.role !== 'ASSISTANT') {
+        return errorResponse('In-place updates are only allowed for assistant messages', undefined, HTTP_STATUS.BAD_REQUEST);
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const updatedMessage = await tx.message.update({
+          where: { id: messageId },
+          data: {
+            content,
+            ...(metadata !== undefined && { metadata: metadata ?? undefined }),
+          },
+          include: { attachments: true },
+        });
+
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: now },
+        });
+
+        return updatedMessage;
+      }, { timeout: TRANSACTION_TIMEOUT_MS });
+
+      return jsonResponse(updated, HTTP_STATUS.OK);
+    }
+
     if (existingMessage.role === 'USER' && assistantContent) {
       const result = await prisma.$transaction(async (tx) => {
-        const siblingIndex = await getNextSiblingIndex(tx, parentId);
+        // Parallelize independent reads inside the transaction for atomicity
+        const [siblingIndex, existingAssistantMessage] = await Promise.all([
+          getNextSiblingIndex(tx, parentId),
+          hasAssistantMessageId
+            ? tx.message.findFirst({
+                where: {
+                  id: assistantMessageId,
+                  conversationId,
+                  role: 'ASSISTANT',
+                  isDeleted: false,
+                },
+                select: {
+                  id: true,
+                  parentMessageId: true,
+                  siblingIndex: true,
+                },
+              })
+            : Promise.resolve(null),
+        ]);
+
+        const assistantParentId = existingAssistantMessage
+          ? existingAssistantMessage.parentMessageId || existingAssistantMessage.id
+          : null;
+        const assistantSiblingIndex = assistantParentId
+          ? await getNextSiblingIndex(tx, assistantParentId)
+          : 0;
 
         await softDeleteDownstreamBranch(
           tx,
@@ -241,89 +298,41 @@ export async function PATCH(
           },
         });
 
-        let assistantMessage;
-
-        if (hasAssistantMessageId) {
-          try {
-            const existingAssistantMessage = await tx.message.findFirst({
-              where: {
-                id: assistantMessageId,
-                conversationId,
-                role: 'ASSISTANT',
-                isDeleted: false,
-              },
-              select: {
-                id: true,
-                parentMessageId: true,
-                siblingIndex: true,
-              },
-            });
-
-            if (!existingAssistantMessage) {
-              throw new MessageVersionRouteError(
-                'Assistant message not found or already deleted',
-                HTTP_STATUS.NOT_FOUND
-              );
-            }
-
-            const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
-            const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
-
-            await softDeleteDownstreamBranch(
-              tx,
-              conversationId,
-              existingAssistantMessage.id,
-              existingAssistantMessage.parentMessageId,
-              existingAssistantMessage.siblingIndex,
-              now
-            );
-
-            assistantMessage = await tx.message.create({
-              data: {
-                conversationId,
-                role: 'ASSISTANT',
-                content: assistantContent,
-                parentMessageId: assistantParentId,
-                siblingIndex: assistantSiblingIndex,
-                ...(assistantMetadata && { metadata: assistantMetadata }),
-              },
-              include: {
-                attachments: true,
-              },
-            });
-          } catch (assistantVersionError) {
-            logger.warn('[Message Version Route] Assistant version-link failed:', {
-              assistantMessageId,
-              error: assistantVersionError instanceof Error ? assistantVersionError.message : String(assistantVersionError),
-            });
-            throw assistantVersionError;
-          }
+        if (existingAssistantMessage) {
+          await softDeleteDownstreamBranch(
+            tx,
+            conversationId,
+            existingAssistantMessage.id,
+            existingAssistantMessage.parentMessageId,
+            existingAssistantMessage.siblingIndex,
+            now
+          );
         }
 
-        if (!hasAssistantMessageId && !assistantMessage) {
-          assistantMessage = await tx.message.create({
-            data: {
-              conversationId,
-              role: 'ASSISTANT',
-              content: assistantContent,
-              ...(assistantMetadata && { metadata: assistantMetadata }),
-            },
-            include: {
-              attachments: true,
-            },
-          });
-        }
+        const assistantMessage = await tx.message.create({
+          data: {
+            conversationId,
+            role: 'ASSISTANT',
+            content: assistantContent,
+            parentMessageId: assistantParentId ?? updatedMessage.id,
+            siblingIndex: assistantSiblingIndex,
+            ...(assistantMetadata && { metadata: assistantMetadata }),
+          },
+          include: {
+            attachments: true,
+          },
+        });
 
         await tx.conversation.update({
           where: { id: conversationId },
-          data: { updatedAt: new Date() },
+          data: { updatedAt: now },
         });
 
         return {
           updatedMessage,
           assistantMessage,
         };
-      });
+      }, { timeout: TRANSACTION_TIMEOUT_MS });
 
       scheduleDocumentProcessing(getRagAttachmentIds(result.updatedMessage.attachments), user.id);
 
@@ -331,7 +340,7 @@ export async function PATCH(
     }
 
     const newVersion = await prisma.$transaction(async (tx) => {
-      const siblingIndex = await getNextSiblingIndex(tx, parentId);
+      const siblingIndexForVersion = await getNextSiblingIndex(tx, parentId);
 
       await softDeleteDownstreamBranch(
         tx,
@@ -348,7 +357,7 @@ export async function PATCH(
           role: existingMessage.role,
           content,
           parentMessageId: parentId,
-          siblingIndex,
+          siblingIndex: siblingIndexForVersion,
           ...(metadata && { metadata }),
           attachments: buildAttachmentCreateInput(validatedAttachments),
         },
@@ -363,7 +372,7 @@ export async function PATCH(
       });
 
       return createdVersion;
-    });
+    }, { timeout: TRANSACTION_TIMEOUT_MS });
 
     scheduleDocumentProcessing(getRagAttachmentIds(newVersion.attachments), user.id);
 

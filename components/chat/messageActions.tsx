@@ -10,27 +10,28 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-interface MessageActionsProps {
+interface MessageContext {
   isUser: boolean;
   isEditing: boolean;
-  textContent: string;
-  onEditStart: () => void;
   canEdit: boolean;
-  onRegenerate?: () => void;
   isThinking?: boolean;
   isLoading?: boolean;
 }
 
+interface MessageActionsProps {
+  context: MessageContext;
+  textContent: string;
+  onEditStart: () => void;
+  onRegenerate?: () => void;
+}
+
 export function MessageActions({
-  isUser,
-  isEditing,
+  context,
   textContent,
   onEditStart,
-  canEdit,
   onRegenerate,
-  isThinking = false,
-  isLoading = false,
 }: MessageActionsProps) {
+  const { isUser, isEditing, canEdit, isThinking = false, isLoading = false } = context;
   const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 

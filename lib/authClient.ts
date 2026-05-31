@@ -1,7 +1,6 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
-import { ALL_GOOGLE_SUITE_SCOPES } from "./tools/google-suite/scopes";
 
 const clientBaseUrl =
   typeof window !== "undefined"
@@ -30,17 +29,4 @@ export async function signInWithGoogle(callbackURL: string) {
   });
 }
 
-export async function authorizeGoogleWorkspace(callbackURL: string, scopes: string[] = ALL_GOOGLE_SUITE_SCOPES) {
-  if (typeof window === "undefined") {
-    return;
-  }
 
-  const url = new URL("/api/google-suite/auth/connect", window.location.origin);
-  url.searchParams.set("returnTo", callbackURL);
-
-  for (const scope of scopes) {
-    url.searchParams.append("scope", scope);
-  }
-
-  window.location.assign(url.toString());
-}

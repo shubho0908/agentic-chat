@@ -9,6 +9,8 @@ import { ChatContainer } from "@/components/chat/chatContainer";
 import { type Message, type Attachment } from "@/lib/schemas/chat";
 import { useLayout } from "@/components/providers/layoutProvider";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 interface SharedMessage {
   id: string;
@@ -30,7 +32,7 @@ interface SharedConversation {
 }
 
 async function fetchSharedConversation(conversationId: string): Promise<SharedConversation> {
-  const response = await fetch(`/api/share/${conversationId}`);
+  const response = await fetch(apiRoutes.share(conversationId));
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -59,7 +61,7 @@ export default function SharedConversationClient({
   }, [setShowSidebar]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["shared-conversation", id],
+    queryKey: queryKeys.sharedConversation(id),
     queryFn: () => fetchSharedConversation(id),
     retry: false,
   });
@@ -76,7 +78,7 @@ export default function SharedConversationClient({
       <div className="flex h-screen items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader className="size-5 animate-spin" />
-          <span>Loading conversation...</span>
+          <span>Loading conversation…</span>
         </div>
       </div>
     );
@@ -86,7 +88,7 @@ export default function SharedConversationClient({
     const errorMessage = error instanceof Error ? error.message : "FAILED_TO_FETCH";
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-md px-6">
+        <div className="flex flex-col items-center justify-center gap-y-8 text-center max-w-md px-6">
           <div className="relative">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 blur-3xl rounded-full" />
             <div className="relative bg-muted/50 p-8 rounded-3xl border border-border/40">

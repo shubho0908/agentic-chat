@@ -107,7 +107,8 @@ export async function chunkDocuments(
         },
       };
 
-      charPosition += contentLength;
+      const overlapChars = index > 0 ? Math.floor(chunkOverlap * 4) : 0; // ~4 chars per token
+      charPosition += Math.max(1, contentLength - overlapChars);
       totalTokens += tokenCount;
 
       return chunk;

@@ -1,10 +1,9 @@
-import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
+import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
 import { toast } from "sonner";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
@@ -14,14 +13,9 @@ import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { logger } from "@/lib/logger";
-
-function toJsonValue(value: unknown): JsonValue | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
-}
+import { toUserFriendlyError } from "@/lib/errorMessages";
+import { queryKeys } from "@/lib/queryKeys";
+import { toJsonValue } from "@/lib/json";
 
 export async function handleEditMessage(
   messageId: string,
@@ -30,8 +24,7 @@ export async function handleEditMessage(
   context: EditMessageContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
-  searchDepth?: SearchDepth
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -65,6 +58,10 @@ export async function handleEditMessage(
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
+  const persistedNextAssistantId =
+    nextAssistantMessage?.id && !nextAssistantMessage.id.startsWith("assistant-pending-")
+      ? nextAssistantMessage.id
+      : undefined;
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
   
   const newEditedVersion = createNewVersion(
@@ -105,11 +102,10 @@ export async function handleEditMessage(
     const useCaching = shouldUseSemanticCache(
       messagesUpToEdit,
       attachments,
-      activeTool,
-      deepResearchEnabled
+      activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -221,14 +217,22 @@ export async function handleEditMessage(
           }
         }
       },
-      onUsageUpdated: () => {
-        queryClient.invalidateQueries({ queryKey: ['deepResearchUsage'] });
-      },
-      activeTool,
       memoryEnabled: memoryEnabled ?? true,
-      deepResearchEnabled: deepResearchEnabled ?? false,
-      searchDepth: searchDepth ?? 'basic',
+      thinkingEnabled,
+      onThinking: (thinking) => {
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === placeholderAssistantId
+              ? { ...msg, thinking }
+              : msg
+          )
+        );
+      },
     });
+
+    if (toolActivities.length > 0) {
+      messageMetadata = { ...messageMetadata, toolActivities };
+    }
 
     onMessagesUpdate((prev) =>
       prev.map((msg) =>
@@ -253,7 +257,7 @@ export async function handleEditMessage(
           messageToEdit.id,
           messageContent,
           responseContent,
-          nextAssistantMessage?.id,
+          persistedNextAssistantId,
           attachments,
           messageMetadata,
           abortSignal
@@ -280,7 +284,7 @@ export async function handleEditMessage(
               assistantParentId,
               assistantMessageId: finalizedEdit.assistantMessage.id,
             });
-            queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
           }
         } catch (assistantVersionsError) {
           shouldUseAssistantFallback = true;
@@ -292,7 +296,7 @@ export async function handleEditMessage(
               ? assistantVersionsError.message
               : String(assistantVersionsError),
           });
-          queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
         }
 
         onMessagesUpdate((prev) =>
@@ -327,8 +331,8 @@ export async function handleEditMessage(
           })
         );
         
-        queryClient.invalidateQueries({ queryKey: ['conversation', conversationIdStr] });
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
       persistConversationMemoryIfEligible({
@@ -337,7 +341,6 @@ export async function handleEditMessage(
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,
-        deepResearchEnabled: deepResearchEnabled ?? false,
         userAttachments: attachments,
         memoryStatus: currentMemoryStatus,
         flow: "edit",
@@ -351,7 +354,7 @@ export async function handleEditMessage(
       return { success: false, error: "aborted" };
     }
     
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });

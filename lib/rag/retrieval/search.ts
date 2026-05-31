@@ -1,14 +1,11 @@
-'use server';
-
 import { PGVectorStore } from '@langchain/community/vectorstores/pgvector';
 import { OpenAIEmbeddings } from '@langchain/openai';
-import { ensurePgVectorTables } from '../storage/pgvectorInit';
 import { RAG_CONFIG } from '../config';
 import { getUserApiKey } from '@/lib/apiUtils';
 import { rerankDocuments } from './reranker';
 import { getPgPool } from '../storage/pgvectorClient';
+import { prisma } from '@/lib/prisma';
 import {
-
   computeAdaptiveSimilarityThreshold,
   countUniqueAttachments,
   dedupeCandidates,
@@ -16,8 +13,9 @@ import {
   extractQueryTerms,
   type RetrievalCandidate,
 } from './hybrid';
+import { logger } from '@/lib/logger';
+import { withRetry } from '@/lib/retry';
 
-import { logger } from "@/lib/logger";
 async function getEmbeddings(userId: string) {
   const apiKey = await getUserApiKey(userId);
   return new OpenAIEmbeddings({
@@ -27,16 +25,8 @@ async function getEmbeddings(userId: string) {
 }
 
 function getVectorStoreConfig() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is required');
-  }
-  
   return {
-    postgresConnectionOptions: {
-      type: 'pg' as const,
-      connectionString,
-    },
+    pool: getPgPool(),
     tableName: 'document_chunk',
     columns: {
       idColumnName: 'id',
@@ -48,6 +38,19 @@ function getVectorStoreConfig() {
   };
 }
 
+function getMetadataString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function getMetadataPage(metadata: Record<string, unknown>): number | undefined {
+  const loc = metadata.loc;
+  if (loc && typeof loc === 'object' && 'pageNumber' in loc && typeof loc.pageNumber === 'number') {
+    return loc.pageNumber;
+  }
+
+  return typeof metadata.page === 'number' ? metadata.page : undefined;
+}
+
 export async function searchDocumentChunks(
   query: string,
   userId: string,
@@ -57,41 +60,37 @@ export async function searchDocumentChunks(
     attachmentIds?: string[];
     conversationId?: string;
     useReranking?: boolean;
+    fileType?: string;
   } = {}
 ) {
-  await ensurePgVectorTables();
-
-  const { 
-    limit = RAG_CONFIG.search.defaultLimit, 
-    scoreThreshold = RAG_CONFIG.search.scoreThreshold, 
-    attachmentIds, 
+  const {
+    limit = RAG_CONFIG.search.defaultLimit,
+    scoreThreshold = RAG_CONFIG.search.scoreThreshold,
+    attachmentIds,
     conversationId,
     useReranking = true,
+    fileType,
   } = options;
 
   if (!conversationId && !attachmentIds) {
-    logger.warn('[RAG Search] ⚠️ Neither conversationId nor attachmentIds provided. This may return documents from ALL user conversations!');
+    logger.warn('[RAG Search] Neither conversationId nor attachmentIds provided.');
   }
 
   const embeddings = await getEmbeddings(userId);
-  const config = getVectorStoreConfig();
-  const vectorStore = new PGVectorStore(
-    embeddings,
-    config
-  );
-  
-  await vectorStore.ensureTableInDatabase();
+  const vectorStore = new PGVectorStore(embeddings, getVectorStoreConfig());
 
-  const filter: Record<string, string | { $in: string[] }> = {
-    userId,
-  };
+  const filter: Record<string, string | { in: string[] }> = { userId };
 
   if (conversationId) {
     filter.conversationId = conversationId;
   }
 
   if (attachmentIds && attachmentIds.length > 0) {
-    filter.attachmentId = { $in: attachmentIds };
+    filter.attachmentId = { in: attachmentIds };
+  }
+
+  if (fileType) {
+    filter.fileType = fileType;
   }
 
   const enableReranking = useReranking && RAG_CONFIG.rerank.enabled;
@@ -100,19 +99,18 @@ export async function searchDocumentChunks(
     limit,
     limit * RAG_CONFIG.search.semanticCandidateMultiplier
   );
-  const semanticResults = await vectorStore.similaritySearchWithScore(
-    query,
-    semanticCandidateLimit,
-    filter
+  const semanticResults = await withRetry(
+    () => vectorStore.similaritySearchWithScore(query, semanticCandidateLimit, filter),
+    { retries: 2, initialDelayMs: 500 }
   );
 
   const semanticCandidatesRaw: RetrievalCandidate[] = semanticResults.map(([doc, distance]) => ({
     content: doc.pageContent,
     score: Math.max(0, Math.min(1, 1 - distance)),
     metadata: {
-      attachmentId: doc.metadata.attachmentId as string,
-      fileName: doc.metadata.fileName as string,
-      page: doc.metadata.loc?.pageNumber || doc.metadata.page,
+      attachmentId: getMetadataString(doc.metadata.attachmentId),
+      fileName: getMetadataString(doc.metadata.fileName),
+      page: getMetadataPage(doc.metadata),
     },
     source: 'semantic',
   }));
@@ -152,13 +150,17 @@ export async function searchDocumentChunks(
         userId,
         conversationId,
         attachmentIds,
+        fileType,
         limit: RAG_CONFIG.search.lexicalFallbackLimit,
       })
     : [];
 
   const mergedCandidates = dedupeCandidates([
     ...semanticCandidates,
-    ...lexicalCandidates,
+    ...lexicalCandidates.map(c => ({
+      ...c,
+      score: Math.max(0, Math.min(1, (c.score - 0.35) / (0.92 - 0.35))),
+    })),
   ]);
 
   if (mergedCandidates.length === 0) {
@@ -211,6 +213,7 @@ async function searchLexicalFallback(params: {
   userId: string;
   conversationId?: string;
   attachmentIds?: string[];
+  fileType?: string;
   limit: number;
 }): Promise<RetrievalCandidate[]> {
   const searchQuery = params.queryTerms.join(' ');
@@ -218,49 +221,42 @@ async function searchLexicalFallback(params: {
     return [];
   }
 
-  const pool = getPgPool();
-
   try {
-    const result = await pool.query<{
+    const rows = await prisma.$queryRaw<Array<{
       content: string;
       attachment_id: string;
       file_name: string;
       page: number | null;
       lexical_rank: number;
-    }>(
-      `
-        SELECT
-          content,
-          metadata->>'attachmentId' AS attachment_id,
-          metadata->>'fileName' AS file_name,
-          NULLIF(metadata->>'page', '')::int AS page,
-          ts_rank_cd(
-            to_tsvector('simple', content),
-            websearch_to_tsquery('simple', $2)
-          ) AS lexical_rank
-        FROM document_chunk
-        WHERE metadata->>'userId' = $1
-          AND ($3::text IS NULL OR metadata->>'conversationId' = $3)
-          AND ($4::text[] IS NULL OR metadata->>'attachmentId' = ANY($4::text[]))
-          AND to_tsvector('simple', content) @@ websearch_to_tsquery('simple', $2)
-        ORDER BY lexical_rank DESC
-        LIMIT $5
-      `,
-      [
-        params.userId,
-        searchQuery,
-        params.conversationId ?? null,
-        params.attachmentIds?.length ? params.attachmentIds : null,
-        params.limit,
-      ]
-    );
+    }>>`
+      SELECT
+        content,
+        metadata->>'attachmentId' AS attachment_id,
+        metadata->>'fileName' AS file_name,
+        CASE
+          WHEN metadata->>'page' ~ '^[0-9]+$'
+            THEN (metadata->>'page')::int
+          ELSE NULL
+        END AS page,
+        ts_rank_cd(
+          to_tsvector('english', content),
+          websearch_to_tsquery('english', ${searchQuery})
+        ) AS lexical_rank
+      FROM document_chunk
+      WHERE metadata->>'userId' = ${params.userId}
+        AND (${params.conversationId ?? null}::text IS NULL OR metadata->>'conversationId' = ${params.conversationId ?? null})
+        AND (${params.attachmentIds?.length ? params.attachmentIds : null}::text[] IS NULL OR metadata->>'attachmentId' = ANY(${params.attachmentIds?.length ? params.attachmentIds : null}::text[]))
+        AND (${params.fileType ?? null}::text IS NULL OR metadata->>'fileType' = ${params.fileType ?? null})
+        AND to_tsvector('english', content) @@ websearch_to_tsquery('english', ${searchQuery})
+      ORDER BY lexical_rank DESC
+      LIMIT ${params.limit}`;
 
     const maxRank = Math.max(
-      ...result.rows.map((row) => row.lexical_rank || 0),
+      ...rows.map((row) => row.lexical_rank || 0),
       0.00001
     );
 
-    return result.rows.map((row, index) => {
+    return rows.map((row, index) => {
       const normalizedRank = (row.lexical_rank || 0) / maxRank;
       const positionalBoost = Math.max(0.1, 1 - index * 0.04);
       const blendedScore = Math.max(

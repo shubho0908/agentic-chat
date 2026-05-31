@@ -1,13 +1,11 @@
 import {
   LOOP_DURATION,
-  RESEARCH_STEPS,
   SCENE_DURATIONS,
   SCENE_ORDER,
   SCENE_TOTALS,
 } from "@/components/landing/interaction-showcase/constants";
 import type {
   DeviceKind,
-  ProcessState,
   SceneKind,
   TimelinePosition,
 } from "@/components/landing/interaction-showcase/types";
@@ -168,28 +166,6 @@ export function getDeviceKind(
   return "phone";
 }
 
-export function getSceneTitle(scene: SceneKind) {
-  if (scene === "research") {
-    return "Deep research";
-  }
-
-  if (scene === "workspace") {
-    return "Google Workspace";
-  }
-
+export function getSceneTitle() {
   return "Web search";
-}
-
-export function getResearchStepState(step: number, index: number): ProcessState {
-  const stagePointer = step - 1;
-
-  if (stagePointer < index) {
-    return "pending";
-  }
-
-  if (stagePointer === index && step < RESEARCH_STEPS.length + 1) {
-    return "current";
-  }
-
-  return "completed";
 }

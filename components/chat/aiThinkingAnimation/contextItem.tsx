@@ -11,6 +11,12 @@ interface ContextItemProps {
   skipped?: boolean;
 }
 
+function truncateLabel(text: string, maxWords: number = 6) {
+  const words = text.split(' ');
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+}
+
 export function ContextItem({
   icon: Icon,
   label,
@@ -20,19 +26,13 @@ export function ContextItem({
   labelClassName,
   skipped = false,
 }: ContextItemProps) {
-  const truncateLabel = (text: string, maxWords: number = 6) => {
-    const words = text.split(' ');
-    if (words.length <= maxWords) return text;
-    return words.slice(0, maxWords).join(' ') + '...';
-  };
-
   return (
     <div className="flex items-center gap-2">
       <span className="text-foreground/40 font-mono text-[10px] select-none">
         {treeSymbol}
       </span>
       <Icon
-        className={`w-3.5 h-3.5 flex-shrink-0 ${
+        className={`size-3.5 flex-shrink-0 ${
           skipped ? "" : "animate-pulse"
         } ${iconClassName}`}
         suppressHydrationWarning

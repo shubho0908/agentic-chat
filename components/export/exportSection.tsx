@@ -10,7 +10,8 @@ import { downloadJSON } from "@/lib/export/jsonExporter";
 import { downloadMarkdown } from "@/lib/export/markdownExporter";
 import { downloadPDF } from "@/lib/export/pdfExporter";
 import { cn } from "@/lib/utils";
-
+import { apiRoutes } from "@/lib/routes";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
 interface ExportSectionProps {
   conversationId: string;
@@ -46,7 +47,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
     setIsExporting(true);
 
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/export`);
+      const response = await fetch(apiRoutes.conversationExport(conversationId));
       
       if (!response.ok) {
         let errorMessage = 'Failed to fetch conversation data';
@@ -79,7 +80,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
           break;
         case 'pdf':
           {
-            const { createConversationPDFDocument } = await import("./conversationPdf");
+            const { createConversationPDFDocument } = await import("./createConversationPDFDocument");
             await downloadPDF(
               conversationData,
               await createConversationPDFDocument(conversationData, true)
@@ -90,7 +91,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
       }
     } catch (error) {
       logger.error('Export error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to export conversation');
+      toast.error(toUserFriendlyError(error, "Failed to export conversation"));
     } finally {
       setIsExporting(false);
     }
@@ -162,7 +163,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
         {isExporting ? (
           <>
             <Loader className="size-4 animate-spin mr-2" />
-            Exporting...
+            Exporting…
           </>
         ) : (
           <>

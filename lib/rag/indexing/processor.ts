@@ -1,5 +1,3 @@
-'use server';
-
 import { prisma } from '@/lib/prisma';
 import { loadDocument } from './loader';
 import { isSupportedForRAG } from '../utils';
@@ -149,8 +147,24 @@ export async function processDocument(
       attachmentId,
       userId,
       attachment.fileName,
-      conversationId
+      conversationId,
+      attachment.fileType
     );
+
+    try {
+      await prisma.$executeRaw`
+        DELETE FROM semantic_cache WHERE user_id = ${userId} AND conversation_id = ${conversationId}`;
+    } catch (cacheInvalidationError) {
+      logError({
+        event: 'document_processing_cache_invalidation_failed',
+        attachmentId,
+        userId,
+        conversationId,
+        error: cacheInvalidationError instanceof Error
+          ? cacheInvalidationError.message
+          : String(cacheInvalidationError),
+      });
+    }
 
     await prisma.attachment.update({
       where: { id: attachmentId },

@@ -5,6 +5,8 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { HOOK_ERROR_MESSAGES, TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 interface Conversation {
   id: string;
@@ -23,8 +25,10 @@ interface UseConversationsOptions {
   enabled?: boolean;
 }
 
+const FIRST_CONVERSATIONS_CURSOR: string | undefined = undefined;
+
 async function fetchConversations({ cursor }: { cursor?: string }): Promise<ConversationsResponse> {
-  const url = new URL("/api/conversations", window.location.origin);
+  const url = new URL(apiRoutes.conversations, window.location.origin);
   url.searchParams.set("limit", "20");
   if (cursor) {
     url.searchParams.set("cursor", cursor);
@@ -38,7 +42,7 @@ async function fetchConversations({ cursor }: { cursor?: string }): Promise<Conv
 }
 
 async function createConversation(): Promise<Conversation> {
-  const response = await fetch("/api/conversations", {
+  const response = await fetch(apiRoutes.conversations, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -52,7 +56,7 @@ async function createConversation(): Promise<Conversation> {
 }
 
 async function deleteConversation(id: string): Promise<void> {
-  const response = await fetch(`/api/conversations/${id}`, {
+  const response = await fetch(apiRoutes.conversation(id), {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -61,7 +65,7 @@ async function deleteConversation(id: string): Promise<void> {
 }
 
 async function bulkDeleteConversations(ids: string[]): Promise<{ deleted: number; failed: string[] }> {
-  const response = await fetch("/api/conversations/bulk-delete", {
+  const response = await fetch(apiRoutes.conversationsBulkDelete, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -75,7 +79,7 @@ async function bulkDeleteConversations(ids: string[]): Promise<{ deleted: number
 }
 
 async function renameConversation(id: string, title: string): Promise<Conversation> {
-  const response = await fetch(`/api/conversations/${id}`, {
+  const response = await fetch(apiRoutes.conversation(id), {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -89,7 +93,7 @@ async function renameConversation(id: string, title: string): Promise<Conversati
 }
 
 async function toggleConversationSharing(id: string, isPublic: boolean): Promise<Conversation> {
-  const response = await fetch(`/api/conversations/${id}`, {
+  const response = await fetch(apiRoutes.conversation(id), {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -113,11 +117,11 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
     isLoading,
     error,
   } = useInfiniteQuery({
-    queryKey: ["conversations"],
+    queryKey: queryKeys.conversations,
     queryFn: ({ pageParam }) => fetchConversations({ cursor: pageParam }),
     enabled,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: FIRST_CONVERSATIONS_CURSOR,
     staleTime: 30000,
   });
 
@@ -129,7 +133,7 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
   const createMutation = useMutation({
     mutationFn: createConversation,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATION_CREATED);
     },
     onError: () => {
@@ -140,14 +144,14 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
   const deleteMutation = useMutation({
     mutationFn: deleteConversation,
     onMutate: async (deletedId) => {
-      await queryClient.cancelQueries({ queryKey: ["conversations"] });
+      await queryClient.cancelQueries({ queryKey: queryKeys.conversations });
 
-      const previousData = queryClient.getQueryData(["conversations"]);
+      const previousData = queryClient.getQueryData(queryKeys.conversations);
 
       queryClient.setQueryData<{
         pages: ConversationsResponse[];
         pageParams: (string | undefined)[];
-      }>(["conversations"], (old) => {
+      }>(queryKeys.conversations, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -165,12 +169,12 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
     },
     onError: (_error, _deletedId, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(["conversations"], context.previousData);
+        queryClient.setQueryData(queryKeys.conversations, context.previousData);
       }
       toast.error(TOAST_ERROR_MESSAGES.CONVERSATION.FAILED_DELETE);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     },
   });
 
@@ -180,7 +184,7 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
       queryClient.setQueryData<{
         pages: ConversationsResponse[];
         pageParams: (string | undefined)[];
-      }>(["conversations"], (old) => {
+      }>(queryKeys.conversations, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -205,7 +209,7 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
       queryClient.setQueryData<{
         pages: ConversationsResponse[];
         pageParams: (string | undefined)[];
-      }>(["conversations"], (old) => {
+      }>(queryKeys.conversations, (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -231,14 +235,14 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
   const bulkDeleteMutation = useMutation({
     mutationFn: bulkDeleteConversations,
     onMutate: async (deletedIds) => {
-      await queryClient.cancelQueries({ queryKey: ["conversations"] });
+      await queryClient.cancelQueries({ queryKey: queryKeys.conversations });
 
-      const previousData = queryClient.getQueryData(["conversations"]);
+      const previousData = queryClient.getQueryData(queryKeys.conversations);
 
       queryClient.setQueryData<{
         pages: ConversationsResponse[];
         pageParams: (string | undefined)[];
-      }>(["conversations"], (old) => {
+      }>(queryKeys.conversations, (old) => {
         if (!old) return old;
         const deletedIdSet = new Set(deletedIds);
         return {
@@ -262,12 +266,12 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
     },
     onError: (_error, _deletedIds, context) => {
       if (context?.previousData) {
-        queryClient.setQueryData(["conversations"], context.previousData);
+        queryClient.setQueryData(queryKeys.conversations, context.previousData);
       }
       toast.error(TOAST_ERROR_MESSAGES.CONVERSATION.FAILED_DELETE_MULTIPLE);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     },
   });
 

@@ -2,6 +2,7 @@ import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
+import { ThinkingAccordion } from "./thinkingAccordion";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import { MessageHeader } from "./messageHeader";
@@ -12,7 +13,12 @@ import { MessageActions } from "./messageActions";
 import { FollowUpQuestions } from "./followUpQuestions";
 import { SearchImages } from "./searchImages";
 import { RichLink } from "../ai-elements/richLink";
+import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
 import type { MemoryStatus } from "@/types/chat";
+import { ToolName } from "@/lib/tools/constants";
+import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
+import { PlanningStep } from "./aiThinkingAnimation/planningStep";
+import { CustomEventName } from "@/lib/orchestrator/constants";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -70,19 +76,116 @@ interface ChatMessageProps {
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
+  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   isSharePage?: boolean;
   isLastMessage?: boolean;
   isLoading?: boolean;
   memoryStatus?: MemoryStatus;
 }
 
-function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+interface MessageContentSurfaceProps {
+  variant: "user" | "assistant";
+  message: Message;
+  displayedMessage: Message;
+  textContent: string;
+  renderState: {
+    isLoading: boolean;
+    isLastMessage: boolean;
+    humanInTheLoopPending: boolean;
+    hideHumanInTheLoopPlaceholder: boolean;
+  };
+  memoryStatus?: MemoryStatus;
+  humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
+  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
+  renderUserTextContent: (text: string) => ReactNode;
+}
+
+function MessageContentSurface({
+  variant,
+  message,
+  displayedMessage,
+  textContent,
+  renderState,
+  memoryStatus,
+  humanInTheLoopRequest,
+  onHumanInTheLoopDecision,
+  renderUserTextContent,
+}: MessageContentSurfaceProps) {
+  const isUser = variant === "user";
+  const {
+    isLoading,
+    isLastMessage,
+    humanInTheLoopPending,
+    hideHumanInTheLoopPlaceholder,
+  } = renderState;
+
+  return (
+    <div className={cn(
+      "text-[15px] leading-relaxed",
+      isUser
+        ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
+        : "w-full min-w-0 text-foreground ml-1"
+    )}>
+      {!isUser && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
+        <div className="mb-2.5">
+          <PlanningStep
+            message={memoryStatus.toolProgress.message || "Planning approach..."}
+            plan={(memoryStatus.toolProgress.details as { plan?: string } | undefined)?.plan}
+          />
+        </div>
+      )}
+
+      {!isUser && displayedMessage.thinking && (
+        <ThinkingAccordion
+          thinking={displayedMessage.thinking}
+          isLoading={isLoading}
+          durationMs={displayedMessage.metadata?.thinkingDurationMs}
+        />
+      )}
+
+      {!isUser && displayedMessage.toolActivities && displayedMessage.toolActivities.length > 0 && (
+        <div className="mb-2 rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <ToolActivityDisplay toolActivities={displayedMessage.toolActivities.filter((a) => a.toolName !== ToolName.ASK_USER)} />
+        </div>
+      )}
+
+      {!isUser && humanInTheLoopRequest && (
+        <HumanInTheLoopApprovalCard
+          requestKind={humanInTheLoopRequest.requestKind}
+          question={humanInTheLoopRequest.question}
+          reason={humanInTheLoopRequest.reason}
+          title={humanInTheLoopRequest.title}
+          context={humanInTheLoopRequest.context}
+          options={humanInTheLoopRequest.options}
+          recommendation={humanInTheLoopRequest.recommendation}
+          toolCalls={humanInTheLoopRequest.toolCalls}
+          pending={humanInTheLoopPending}
+          isLoading={isLoading}
+          onDecision={onHumanInTheLoopDecision}
+        />
+      )}
+
+      {!hideHumanInTheLoopPlaceholder && textContent ? (
+        isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
+      ) : !hideHumanInTheLoopPlaceholder && message.content ? (
+        isUser ? (typeof message.content === 'string' ? renderUserTextContent(message.content) : '') : <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
+      ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
+        <AIThinkingAnimation
+          memoryStatus={memoryStatus}
+          isLoading={isLoading}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === "user";
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
 
-  const versions = useMemo(() => (message.versions || []) as Message[], [message.versions]);
+  const versions = useMemo(() => message.versions ?? [], [message.versions]);
   const totalVersions = versions.length + 1;
   const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
 
@@ -211,6 +314,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     return extractUserUrls(textContent);
   }, [isUser, textContent]);
 
+  const humanInTheLoopRequest = !isUser ? displayedMessage.metadata?.humanInTheLoopRequest : undefined;
+  const humanInTheLoopPending = displayedMessage.metadata?.humanInTheLoopStatus === "pending" && !!humanInTheLoopRequest;
+  const hideHumanInTheLoopPlaceholder = humanInTheLoopPending;
+
   const renderUserTextContent = useCallback((text: string) => {
     if (!text) return null;
 
@@ -264,7 +371,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     >
       <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
         <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
-          <div className={cn("flex min-w-0 flex-col gap-1", isUser ? "items-end" : "w-full items-start")}>
+          <div className={cn("flex min-w-0 flex-col", isUser ? "gap-1 items-end" : "gap-2 w-full items-start")}>
             {!isUser && (
               <MessageHeader
                 isUser={false}
@@ -293,23 +400,22 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
               />
             ) : (
               <>
-                <div className={cn(
-                  "text-[15px] leading-relaxed",
-                  isUser 
-                    ? "border border-chat-user-bubble-border bg-chat-user-bubble text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words" 
-                    : "max-w-none min-w-0 text-foreground ml-1"
-                )}>
-                  {textContent ? (
-                    isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
-                  ) : message.content ? (
-                    isUser ? (typeof message.content === 'string' ? renderUserTextContent(message.content) : '') : <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
-                  ) : (
-                     <AIThinkingAnimation
-                      memoryStatus={memoryStatus}
-                      isLoading={isLoading}
-                    />
-                  )}
-                </div>
+                <MessageContentSurface
+                  variant={isUser ? "user" : "assistant"}
+                  message={message}
+                  displayedMessage={displayedMessage}
+                  textContent={textContent}
+                  renderState={{
+                    isLoading,
+                    isLastMessage,
+                    humanInTheLoopPending,
+                    hideHumanInTheLoopPlaceholder,
+                  }}
+                  memoryStatus={memoryStatus}
+                  humanInTheLoopRequest={humanInTheLoopRequest}
+                  onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+                  renderUserTextContent={renderUserTextContent}
+                />
 
                 {isUser && userUrls.length > 0 && (
                   <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
@@ -346,14 +452,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     isUser ? "pr-2" : "pl-1"
                   )}>
                     <MessageActions
-                      isUser={isUser}
-                      isEditing={isEditing}
+                      context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
                       textContent={textContent}
                       onEditStart={handleEditStart}
-                      canEdit={!!onEditMessage}
                       onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
-                      isThinking={isThinking}
-                      isLoading={isLoading}
                     />
                   </div>
                 )}
@@ -370,9 +472,24 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   if (
     prevProps.message.id !== nextProps.message.id ||
     prevProps.message.content !== nextProps.message.content ||
+    prevProps.message.thinking !== nextProps.message.thinking ||
+    prevProps.message.attachments !== nextProps.message.attachments ||
+    prevProps.message.metadata !== nextProps.message.metadata ||
+    prevProps.message.toolActivities !== nextProps.message.toolActivities ||
+    prevProps.message.versions !== nextProps.message.versions ||
     prevProps.isLastMessage !== nextProps.isLastMessage ||
     prevProps.isLoading !== nextProps.isLoading
   ) {
+    return false;
+  }
+
+  if (prevProps.message.toolActivities?.length !== nextProps.message.toolActivities?.length) {
+    return false;
+  }
+
+  const prevLastActivity = prevProps.message.toolActivities?.[prevProps.message.toolActivities.length - 1];
+  const nextLastActivity = nextProps.message.toolActivities?.[nextProps.message.toolActivities.length - 1];
+  if (prevLastActivity?.status !== nextLastActivity?.status) {
     return false;
   }
 
@@ -409,9 +526,6 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     if (prevProgress?.status !== nextProgress?.status ||
       prevProgress?.message !== nextProgress?.message ||
       prevProgress?.details?.status !== nextProgress?.details?.status ||
-      prevProgress?.details?.currentTaskIndex !== nextProgress?.details?.currentTaskIndex ||
-      prevProgress?.details?.researchPlan?.length !== nextProgress?.details?.researchPlan?.length ||
-      prevProgress?.details?.completedTasks?.length !== nextProgress?.details?.completedTasks?.length ||
       prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
       return false;
     }

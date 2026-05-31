@@ -1,18 +1,7 @@
 import { Brain, Eye, Zap, Focus, LucideIcon, Atom, Globe } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
-import { TOOL_IDS } from "@/lib/tools/config";
 import { AI_THINKING_MESSAGES } from "./types";
-
-export function isToolActive(
-  memoryStatus: MemoryStatus | undefined,
-  toolId: typeof TOOL_IDS[keyof typeof TOOL_IDS]
-): boolean {
-  return (
-    memoryStatus?.routingDecision === RoutingDecision.ToolOnly &&
-    memoryStatus?.activeToolName === toolId
-  );
-}
 
 export function getContextualMessage(
   memoryStatus: MemoryStatus | undefined,

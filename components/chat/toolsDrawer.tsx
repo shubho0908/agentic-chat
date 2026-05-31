@@ -1,7 +1,8 @@
 "use client";
 
 import { Paperclip, Settings2 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/lib/buttonVariants";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -12,11 +13,9 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
-import type { Session } from "@/lib/auth";
-import { ToolMenuItemDrawer } from "./toolMenuItemDrawer";
 import { MemoryToggle } from "./memoryToggle";
+import { ThinkingToggle } from "./thinkingToggle";
+import { ConnectorsDrawerContent } from "./connectorsDrawerContent";
 
 interface ToolsDrawerProps {
   isOpen: boolean;
@@ -24,26 +23,12 @@ interface ToolsDrawerProps {
   disabled?: boolean;
   hasActiveTool: boolean;
   fileCount?: number;
-  activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
+  thinkingEnabled?: boolean;
+  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
-  session: Session | null;
-  searchDepth?: SearchDepth;
-  deepResearchUsage?: {
-    remaining: number;
-    limit: number;
-    loading: boolean;
-  };
-  googleSuiteStatus?: {
-    authorized: boolean;
-    loading: boolean;
-    workspaceConnected: boolean;
-    hasWorkspaceAccess: boolean;
-    grantedScopes: string[];
-  };
-  onToolSelect: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
 }
 
 export function ToolsDrawer({
@@ -52,16 +37,12 @@ export function ToolsDrawer({
   disabled,
   hasActiveTool,
   fileCount = 0,
-  activeTool,
   memoryEnabled = true,
   onMemoryToggle,
+  thinkingEnabled = false,
+  onThinkingToggle,
   onFilesSelected,
   fileInputRef,
-  session,
-  searchDepth = 'basic',
-  deepResearchUsage,
-  googleSuiteStatus,
-  onToolSelect,
 }: ToolsDrawerProps) {
   const triggerButton = (
     <Button
@@ -78,8 +59,7 @@ export function ToolsDrawer({
       aria-label="Tools"
     >
       <Settings2
-        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''
-          }`}
+        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''}`}
         style={{
           transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
         }}
@@ -130,7 +110,8 @@ export function ToolsDrawer({
                       onOpenChange(false);
                     }}
                     disabled={disabled}
-                    className="w-full flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
+                    type="button"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
                   >
                     <Paperclip className="size-4 text-muted-foreground" />
                     <div className="flex flex-col gap-0.5 text-left">
@@ -149,27 +130,18 @@ export function ToolsDrawer({
               <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
             </div>
 
+            <div className="px-2 mt-2">
+              <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
+            </div>
+
             <div className="h-px bg-border my-3" />
 
             <div className="px-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 Integrated Apps
               </p>
-              <div className="space-y-1">
-                {Object.values(AVAILABLE_TOOLS)
-                  .filter((tool): tool is ToolConfig => tool !== undefined)
-                  .map((tool) => (
-                    <ToolMenuItemDrawer
-                      key={tool.id}
-                      tool={tool}
-                      isActive={activeTool === tool.id}
-                      isAuthenticated={!!session}
-                      searchDepth={searchDepth}
-                      deepResearchUsage={deepResearchUsage}
-                      googleSuiteStatus={googleSuiteStatus}
-                      onToolSelect={onToolSelect}
-                    />
-                  ))}
+              <div className="max-h-72 overflow-y-auto rounded-lg -mx-0.5 px-0.5">
+                <ConnectorsDrawerContent />
               </div>
             </div>
           </div>

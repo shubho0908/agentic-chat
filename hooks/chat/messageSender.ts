@@ -1,6 +1,5 @@
 import type { Message, Attachment } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
@@ -10,6 +9,9 @@ import { handleConversationSaving } from "./conversationManager";
 import type { SendMessageContext, BaseChatContext } from "@/types/chatHooks";
 import { handleStreamingResponse } from "./streamingHandler";
 import { getResumeConversationState } from "./resumeState";
+import { queryKeys } from "@/lib/queryKeys";
+import { appRoutes } from "@/lib/routes";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -17,8 +19,7 @@ export async function continueIncompleteConversation(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
-  searchDepth?: SearchDepth
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -65,8 +66,7 @@ export async function continueIncompleteConversation(
       session,
       activeTool,
       memoryEnabled,
-      deepResearchEnabled,
-      searchDepth,
+      thinkingEnabled,
       existingAssistantMessageId,
     },
     {
@@ -78,7 +78,7 @@ export async function continueIncompleteConversation(
 
   if (!result.success && result.error && result.error !== "aborted") {
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
-      description: result.error,
+      description: toUserFriendlyError(result.error),
     });
   }
 
@@ -92,8 +92,7 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  deepResearchEnabled?: boolean,
-  searchDepth?: SearchDepth
+  thinkingEnabled?: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -164,23 +163,24 @@ export async function handleSendMessage(
             )
           );
           userMessageWasPersisted = true;
-          onConversationIdUpdate(data.conversationId);
-          queryClient.invalidateQueries({ queryKey: ["conversations"] });
-          onNavigate(`/c/${data.conversationId}`);
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+          onNavigate(appRoutes.conversation(data.conversationId));
         },
         attachments,
         true,
         abortSignal,
-        undefined
+        undefined,
+        (conversationId: string) => {
+          currentConversationId = conversationId;
+          onConversationIdUpdate(conversationId);
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+        }
       );
 
       if (!currentConversationId) {
         throw new Error("Failed to create conversation");
       }
 
-      // New chats navigate to /c/:id immediately after the user message is saved.
-      // Let the destination page resume generation once, instead of starting a
-      // stream here that will be aborted during route teardown and retried there.
       shouldResumeOnConversationPage = true;
     } else {
       if (!currentConversationId) {
@@ -229,8 +229,7 @@ export async function handleSendMessage(
         session,
         activeTool,
         memoryEnabled,
-        deepResearchEnabled,
-        searchDepth,
+        thinkingEnabled,
         existingAssistantMessageId: placeholderAssistantId,
       },
       {
@@ -242,7 +241,7 @@ export async function handleSendMessage(
 
     if (!result.success && result.error && result.error !== "aborted") {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
-        description: result.error,
+        description: toUserFriendlyError(result.error),
       });
     }
 

@@ -1,48 +1,98 @@
 "use client";
 
-import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
+
+const isDocumentFile = (file: File): boolean => {
+  return isSupportedDocumentExtension(file.name);
+};
+
+const isImageFile = (file: File): boolean => {
+  return isSupportedImageExtension(file.name);
+};
+
+const getFileIcon = (file: File) => {
+  if (isDocumentFile(file)) {
+    if (file.name.endsWith(".pdf")) {
+      return <FileText className="size-4" />;
+    }
+    if (file.name.match(/\.(xlsx?|csv)$/)) {
+      return <FileSpreadsheet className="size-4" />;
+    }
+    return <FileText className="size-4" />;
+  }
+  if (isImageFile(file) || file.type.startsWith("image/")) {
+    return <ImageIcon className="size-4" />;
+  }
+  return <FileText className="size-4" />;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+};
 
 interface FilePreviewProps {
   files: File[];
   onRemove: (index: number) => void;
   disabled?: boolean;
+  isUploading?: boolean;
 }
 
-export function FilePreview({ files, onRemove, disabled = false }: FilePreviewProps) {
+export function FilePreview({ files, onRemove, disabled = false, isUploading = false }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>();
+  const [canScrollRight, setCanScrollRight] = useState<boolean>();
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+
+  const previewUrls = useMemo(
+    () => files.map((file) => (isImageFile(file) && !isDocumentFile(file) ? URL.createObjectURL(file) : null)),
+    [files]
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => { if (url) URL.revokeObjectURL(url); });
+    };
+  }, [previewUrls]);
+
+  const updateScrollState = useCallback((container: HTMLDivElement | null) => {
+    if (!container) return;
+
+    setCanScrollLeft(container.scrollLeft > 0);
+    setCanScrollRight(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 1
+    );
+  }, []);
+
+  const setScrollContainerRef = useCallback((container: HTMLDivElement | null) => {
+    scrollContainerRef.current = container;
+    updateScrollState(container);
+  }, [updateScrollState]);
 
   useEffect(() => {
     const checkScroll = () => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-
-      setCanScrollLeft(container.scrollLeft > 0);
-      setCanScrollRight(
-        container.scrollLeft < container.scrollWidth - container.clientWidth - 1
-      );
+      updateScrollState(scrollContainerRef.current);
     };
 
     const container = scrollContainerRef.current;
     if (container) {
-      checkScroll();
+      const observer = new ResizeObserver(checkScroll);
+      observer.observe(container);
       container.addEventListener("scroll", checkScroll, { passive: true });
-      window.addEventListener("resize", checkScroll, { passive: true });
 
       return () => {
+        observer.disconnect();
         container.removeEventListener("scroll", checkScroll);
-        window.removeEventListener("resize", checkScroll);
       };
     }
-  }, [files]);
+  }, [updateScrollState]);
 
   const scroll = (direction: "left" | "right") => {
     const container = scrollContainerRef.current;
@@ -57,43 +107,6 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
       left: newScrollLeft,
       behavior: "smooth",
     });
-  };
-
-  const isDocumentFile = (file: File): boolean => {
-    return isSupportedDocumentExtension(file.name);
-  };
-
-  const isImageFile = (file: File): boolean => {
-    return isSupportedImageExtension(file.name);
-  };
-
-  const getFileIcon = (file: File) => {
-    if (isDocumentFile(file)) {
-      if (file.name.endsWith(".pdf")) {
-        return <FileText className="size-4" />;
-      }
-      if (file.name.match(/\.(xlsx?|csv)$/)) {
-        return <FileSpreadsheet className="size-4" />;
-      }
-      return <FileText className="size-4" />;
-    }
-    if (isImageFile(file) || file.type.startsWith("image/")) {
-      return <ImageIcon className="size-4" />;
-    }
-    return <FileText className="size-4" />;
-  };
-
-  const getFilePreview = (file: File) => {
-    if (isImageFile(file) && !isDocumentFile(file)) {
-      return URL.createObjectURL(file);
-    }
-    return null;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
   const handleImageError = (index: number) => {
@@ -130,12 +143,13 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
               </Button>
             )}
             <div
-              ref={scrollContainerRef}
+              key={files.length}
+              ref={setScrollContainerRef}
               className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {files.map((file, index) => {
-                const preview = getFilePreview(file);
+                const preview = previewUrls[index];
                 return (
                   <m.div
                     key={`${file.name}-${file.size}-${file.lastModified}`}
@@ -145,6 +159,11 @@ export function FilePreview({ files, onRemove, disabled = false }: FilePreviewPr
                     transition={{ duration: 0.15 }}
                     className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
                   >
+                    {isUploading && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+                        <Loader className="size-4 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
                     {preview && !imageErrors[index] ? (
                       <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
                         <Image

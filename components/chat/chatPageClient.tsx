@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Loader } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
@@ -12,11 +12,12 @@ import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
 import { AuthModal } from "@/components/authModal";
 import { useSession } from "@/lib/authClient";
+import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
-import { getActiveTool, getMemoryEnabled, getDeepResearchEnabled, getSearchDepth } from "@/lib/storage";
+import { getMemoryEnabled, getThinkingEnabled } from "@/lib/storage";
 
 interface ChatPageClientProps {
   conversationId: string;
@@ -44,79 +45,44 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, continueConversation, stopGeneration, clearChat, memoryStatus } = useChat({
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, respondToHumanInTheLoop, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
+    autoContinue: session ? {
+      session: session as { user: { id: string } },
+      memoryEnabled: getMemoryEnabled(),
+      thinkingEnabled: getThinkingEnabled(),
+    } : null,
   });
   const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({
     memoryStatus,
     conversationTokenUsage: conversationData?.tokenUsage
   });
 
-  const [isConfigured, setIsConfigured] = useState(false);
+  const { data: apiKeyData } = useApiKey();
+  const isConfigured = apiKeyData?.exists ?? false;
   const [showAuthModal, setShowAuthModal] = useState(false);
   const byokTriggerRef = useRef<HTMLButtonElement>(null);
-  const autoTriggerStateRef = useRef<{ conversationId: string | null; triggered: boolean }>({
-    conversationId: null,
-    triggered: false,
-  });
 
   const conversationNotFound = !!conversationError;
 
-  useEffect(() => {
-    if (autoTriggerStateRef.current.conversationId !== conversationId) {
-      autoTriggerStateRef.current = { conversationId, triggered: false };
-    }
-    if (autoTriggerStateRef.current.triggered || messages.length === 0 || isLoading || !session || !isConfigured) {
-      return;
-    }
-
-    const lastMessage = messages[messages.length - 1];
-    const lastUserMessage = messages.findLast(msg => msg.role === "user");
-    const isIncomplete =
-      (lastMessage?.role === "user" && lastMessage.id) ||
-      (lastMessage?.role === "assistant" && !lastMessage.content && lastUserMessage?.id);
-
-    if (isIncomplete && lastUserMessage?.id) {
-      autoTriggerStateRef.current.triggered = true;
-
-      const activeTool = getActiveTool();
-      const memoryEnabled = getMemoryEnabled();
-      const deepResearchEnabled = getDeepResearchEnabled();
-      const searchDepth = getSearchDepth();
-
-      continueConversation({
-        userMessage: lastUserMessage,
-        session,
-        activeTool,
-        memoryEnabled,
-        deepResearchEnabled,
-        searchDepth
-      });
-    }
-  }, [conversationId, messages, isLoading, session, isConfigured, continueConversation]);
-
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    const searchDepth = getSearchDepth();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    const thinkingEnabled = getThinkingEnabled();
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled, thinkingEnabled });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    const searchDepth = getSearchDepth();
-    return regenerateResponse({ messageId, session: session ?? undefined, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    const thinkingEnabled = getThinkingEnabled();
+    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled, thinkingEnabled });
   };
 
   const handleToggleSharing = (id: string, nextIsPublic: boolean) => {
     toggleSharing({ id, isPublic: nextIsPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, deepResearchEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -135,25 +101,20 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    const searchDepth = getSearchDepth();
-    return sendMessage({ content, session, attachments, activeTool, memoryEnabled, deepResearchEnabled, searchDepth });
+    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const activeTool = getActiveTool();
     const memoryEnabled = getMemoryEnabled();
-    const deepResearchEnabled = getDeepResearchEnabled();
-    const searchDepth = getSearchDepth();
+    const thinkingEnabled = getThinkingEnabled();
     await sendMessage({
       content: question,
       session,
-      activeTool,
       memoryEnabled,
-      deepResearchEnabled,
-      searchDepth
+      thinkingEnabled
     });
   };
 
@@ -165,7 +126,6 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     return (
       <>
         <ChatHeader
-          onConfigured={setIsConfigured}
           onNewChat={clearChat}
           byokTriggerRef={byokTriggerRef}
           autoOpenByok={false}
@@ -177,7 +137,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         <div className="flex h-full items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader className="size-5 animate-spin" />
-            <span>Loading conversation...</span>
+            <span>Loading conversation…</span>
           </div>
         </div>
       </>
@@ -187,7 +147,6 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
   return (
     <div className="flex h-screen flex-col">
       <ChatHeader
-        onConfigured={setIsConfigured}
         onNewChat={clearChat}
         byokTriggerRef={byokTriggerRef}
         conversationId={conversationId}
@@ -202,6 +161,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}
+        onHumanInTheLoopDecision={respondToHumanInTheLoop}
         memoryStatus={mergedMemoryStatus}
         hasNextPage={hasNextPage}
         fetchNextPage={fetchNextPage}

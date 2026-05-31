@@ -1,9 +1,11 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, paginateResults, errorResponse, jsonResponse } from '@/lib/apiUtils';
+import { getAuthenticatedUser, paginateResults, errorResponse, jsonResponse, parsePaginationInteger } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { VALIDATION_LIMITS } from '@/constants/validation';
+import { isRecord } from '@/lib/typeGuards';
+import { isValidConversationId } from '@/lib/validation';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,8 +13,12 @@ export async function GET(request: NextRequest) {
     if (error) return error;
 
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = parsePaginationInteger(searchParams.get('limit'), 20);
     const cursor = searchParams.get('cursor');
+
+    if (cursor && !isValidConversationId(cursor)) {
+      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
 
     const conversations = await prisma.conversation.findMany({
       where: { userId: user.id },
@@ -52,11 +58,25 @@ export async function POST(request: NextRequest) {
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (!isRecord(body)) {
+      return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     const { title } = body;
 
-    const conversationTitle = title || 'New Chat';
-    if (typeof conversationTitle === 'string' && conversationTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
+    if (title !== undefined && typeof title !== 'string') {
+      return errorResponse(API_ERROR_MESSAGES.TITLE_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const conversationTitle = title?.trim() || 'New Chat';
+    if (conversationTitle.length > VALIDATION_LIMITS.CONVERSATION_TITLE_MAX_LENGTH) {
       return errorResponse(API_ERROR_MESSAGES.TITLE_TOO_LONG, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 

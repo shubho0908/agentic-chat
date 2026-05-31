@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, use, useMemo, useState, ReactNode } from "react";
 
 interface LayoutContextType {
   showSidebar: boolean;
@@ -12,15 +12,17 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 export function LayoutProvider({ children }: { children: ReactNode }) {
   const [showSidebar, setShowSidebar] = useState(true);
 
+  const value = useMemo(() => ({ showSidebar, setShowSidebar }), [showSidebar]);
+
   return (
-    <LayoutContext.Provider value={{ showSidebar, setShowSidebar }}>
+    <LayoutContext.Provider value={value}>
       {children}
     </LayoutContext.Provider>
   );
 }
 
 export function useLayout() {
-  const context = useContext(LayoutContext);
+  const context = use(LayoutContext);
   if (context === undefined) {
     throw new Error("useLayout must be used within a LayoutProvider");
   }

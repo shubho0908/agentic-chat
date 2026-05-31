@@ -30,7 +30,6 @@ let mermaidModulePromise: Promise<typeof import("mermaid")> | null = null;
 let mermaidInitializedThemeKey: MermaidAppearance["cacheKey"] | null = null;
 let mermaidRenderQueue: Promise<void> = Promise.resolve();
 
-// LRU Cache for Mermaid SVGs to prevent memory leaks
 const MAX_CACHE_SIZE = 50;
 
 function useDomResolvedTheme(): MermaidResolvedTheme | null {
@@ -66,7 +65,6 @@ function createLRUCache<K, V>() {
   function get(key: K): V | undefined {
     const value = cache.get(key);
     if (value !== undefined) {
-      // Move to end (most recently used)
       cache.delete(key);
       cache.set(key, value);
     }
@@ -77,7 +75,6 @@ function createLRUCache<K, V>() {
     if (cache.has(key)) {
       cache.delete(key);
     } else if (cache.size >= MAX_CACHE_SIZE) {
-      // Remove least recently used item (first item)
       const firstKey = cache.keys().next().value;
       if (firstKey !== undefined) {
         cache.delete(firstKey);
@@ -345,8 +342,9 @@ function MermaidSvgCanvas({
     }
     onSvgRenderedRef.current?.(svgElement);
 
+    const onSvgRenderedSnapshot = onSvgRenderedRef.current;
     return () => {
-      onSvgRenderedRef.current?.(null);
+      onSvgRenderedSnapshot?.(null);
       previewElement.replaceChildren();
     };
   }, [svg]);

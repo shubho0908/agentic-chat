@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { SCENE_ORDER } from "@/components/landing/interaction-showcase/constants";
 import {
   getCompletedScenePosition,
@@ -65,26 +65,24 @@ export function useShowcaseWidth(targetRef: RefObject<HTMLDivElement | null>) {
 }
 
 export function useViewportBounds() {
-  const [viewport, setViewport] = useState({ width: 1280, height: 800 });
-
-  useEffect(() => {
-    const updateViewport = () => {
-      setViewport({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    updateViewport();
-    window.addEventListener("resize", updateViewport, { passive: true });
-
-    return () => {
-      window.removeEventListener("resize", updateViewport);
-    };
-  }, []);
-
+  const viewport = useSyncExternalStore(
+    (cb) => {
+      window.addEventListener("resize", cb, { passive: true } as AddEventListenerOptions);
+      return () => window.removeEventListener("resize", cb);
+    },
+    () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      return viewportCache.width === w && viewportCache.height === h
+        ? viewportCache
+        : (viewportCache = { width: w, height: h });
+    },
+    () => ({ width: 1280, height: 800 })
+  );
   return viewport;
 }
+
+let viewportCache = { width: 1280, height: 800 };
 
 export function useInteractionTimeline(prefersReducedMotion: boolean) {
   const elapsed = useAnimationClock(!prefersReducedMotion);

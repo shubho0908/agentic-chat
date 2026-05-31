@@ -4,6 +4,7 @@ import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 
+const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
 interface CacheCheckContext {
   messages: Message[];
@@ -11,14 +12,12 @@ interface CacheCheckContext {
   attachments?: Attachment[];
   abortSignal: AbortSignal;
   activeTool?: string | null;
-  deepResearchEnabled?: boolean;
 }
 
 export function shouldUseSemanticCache(
   messages: Message[],
   attachments?: Attachment[], 
-  activeTool?: string | null,
-  deepResearchEnabled?: boolean
+  activeTool?: string | null
 ): boolean {
   const hasCurrentDocument = attachments?.some((attachment) =>
     isSupportedForRAG(attachment.fileType)
@@ -27,16 +26,11 @@ export function shouldUseSemanticCache(
     message.attachments?.some((attachment) => isSupportedForRAG(attachment.fileType))
   );
 
-  // Document-grounded conversations should always re-run retrieval.
   if (hasCurrentDocument || hasConversationDocuments) {
     return false;
   }
   
   if (activeTool) {
-    return false;
-  }
-  
-  if (deepResearchEnabled) {
     return false;
   }
   
@@ -118,13 +112,17 @@ async function checkCache(
 export async function performCacheCheck(
   context: CacheCheckContext
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
-  const { messages, content, attachments, abortSignal, activeTool, deepResearchEnabled } = context;
+  const { messages, content, attachments, abortSignal, activeTool } = context;
   
-  const useCaching = shouldUseSemanticCache(messages, attachments, activeTool, deepResearchEnabled);
+  const useCaching = shouldUseSemanticCache(messages, attachments, activeTool);
   let cacheQuery = '';
   let cacheData: CacheCheckResult = { cached: false };
 
   if (useCaching) {
+    const rawText = extractTextFromContent(content);
+    if (rawText.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
+      return { cacheQuery: '', cacheData: { cached: false } };
+    }
     cacheQuery = buildCacheQuery(messages, content);
     cacheData = await checkCache(cacheQuery, abortSignal);
   }

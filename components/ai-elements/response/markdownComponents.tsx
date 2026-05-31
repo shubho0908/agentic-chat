@@ -2,7 +2,7 @@ import type { Components } from "react-markdown";
 import { CodeCopyButton } from "./codeCopyButton";
 import { CODE_BLOCK_SHELL_CLASS } from "./constants";
 import { MermaidPreview } from "./mermaidPreview";
-import { getTextFromChildren, normalizeLanguageLabel } from "./plainText";
+import { getTextFromChildren, normalizeLanguageLabel } from "./plainTextUtils";
 import { isMermaidCodeBlock } from "@/lib/markdown/rendering";
 
 export const components: Components = {

@@ -1,6 +1,5 @@
 
 import { logger } from "@/lib/logger";
-/* eslint-disable @next/next/no-img-element */
 
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
@@ -31,7 +30,6 @@ export async function GET(request: NextRequest) {
             fontFamily: 'Helvetica, Arial, sans-serif',
           }}
         >
-          {/* Gradient Background */}
           <div
             style={{
               position: 'absolute',
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
             }}
           />
 
-          {/* Content */}
           <div
             style={{
               display: 'flex',
@@ -54,7 +51,7 @@ export async function GET(request: NextRequest) {
               width: '100%',
             }}
           >
-            {/* Logo/Icon */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- Satori OG renderer requires native <img>, next/image is unsupported */}
             <img
               src={logoUrl}
               alt="Agentic Chat"
@@ -65,7 +62,6 @@ export async function GET(request: NextRequest) {
               }}
             />
 
-            {/* Title */}
             <div
               style={{
                 fontSize: '64px',
@@ -81,7 +77,6 @@ export async function GET(request: NextRequest) {
             </div>
           </div>
 
-          {/* Footer */}
           <div
             style={{
               display: 'flex',

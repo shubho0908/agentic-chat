@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
-import type { SearchDepth } from "@/lib/schemas/webSearchTools";
+import { Settings2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,22 +9,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, TOOL_IDS, type ToolId, type ToolConfig } from "@/lib/tools/config";
+import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
-import { useDeepResearchUsage } from "@/hooks/useDeepResearchUsage";
-import { useGoogleSuiteAuth } from "@/hooks/useGoogleSuiteAuth";
 import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ToolMenuItem } from "./toolMenuItem";
 import { MemoryToggle } from "./memoryToggle";
+import { ThinkingToggle } from "./thinkingToggle";
 import { ToolsDrawer } from "./toolsDrawer";
+import { ConnectorsSubmenuContent } from "./connectorsSubmenu";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -34,12 +28,13 @@ const ACCEPTED_FILE_TYPES = [
 ].join(',');
 
 interface ToolsMenuProps {
-  onToolSelected?: (toolId: ToolId, selectedDepth?: SearchDepth) => void;
+  onToolSelected?: (toolId: ToolId) => void;
   disabled?: boolean;
   activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
-  searchDepth?: SearchDepth;
+  thinkingEnabled?: boolean;
+  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
   onAuthRequired?: () => void;
@@ -51,7 +46,8 @@ export function ToolsMenu({
   activeTool = null,
   memoryEnabled = true,
   onMemoryToggle,
-  searchDepth = 'basic',
+  thinkingEnabled = false,
+  onThinkingToggle,
   onFilesSelected,
   fileCount = 0,
   onAuthRequired,
@@ -59,23 +55,16 @@ export function ToolsMenu({
   const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
-  const { data: usageData, isLoading: usageLoading } = useDeepResearchUsage({ enabled: !!session });
-  const { status: googleSuiteStatus, isLoading: googleSuiteLoading } = useGoogleSuiteAuth({ enabled: !!session });
   const isMobile = useIsMobile();
-  const deepResearchUsage = {
-    remaining: usageData?.remaining ?? 3,
-    limit: usageData?.limit ?? 3,
-    loading: usageLoading,
-  };
 
-  const handleToolSelect = (toolId: ToolId, selectedDepth?: SearchDepth) => {
+  const handleToolSelect = (toolId: ToolId) => {
     if (!session) {
       onAuthRequired?.();
       setIsOpen(false);
       return;
     }
 
-    onToolSelected?.(toolId, selectedDepth);
+    onToolSelected?.(toolId);
     setIsOpen(false);
   };
 
@@ -102,22 +91,8 @@ export function ToolsMenu({
     }
   };
 
-  const commonToolProps = {
-    session,
-    searchDepth,
-    deepResearchUsage,
-    googleSuiteStatus: {
-      authorized: googleSuiteStatus?.authorized ?? false,
-      loading: googleSuiteLoading,
-      workspaceConnected: googleSuiteStatus?.workspaceConnected ?? false,
-      hasWorkspaceAccess: googleSuiteStatus?.hasWorkspaceAccess ?? false,
-      grantedScopes: googleSuiteStatus?.grantedScopes ?? [],
-    },
-    onToolSelect: handleToolSelect,
-  };
-
   if (showToolIcon) {
-    const toolConfig = activeTool ? AVAILABLE_TOOLS[activeTool] : null;
+    const toolConfig = activeTool ? (AVAILABLE_TOOLS as Record<string, ToolConfig>)[activeTool] : null;
     if (!toolConfig) return null;
     const ActiveToolIcon = toolConfig.icon;
 
@@ -151,12 +126,7 @@ export function ToolsMenu({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" align="center">
-            <p>
-              {toolConfig.name}
-              {activeTool === TOOL_IDS.WEB_SEARCH && (
-                <span className="text-muted-foreground"> ({searchDepth === 'advanced' ? 'Advanced' : 'Basic'})</span>
-              )}
-            </p>
+            <p>{toolConfig.name}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -173,6 +143,7 @@ export function ToolsMenu({
         className="hidden"
         accept={ACCEPTED_FILE_TYPES}
         disabled={disabled}
+        aria-label="Upload files"
       />
 
       {isMobile ? (
@@ -182,12 +153,12 @@ export function ToolsMenu({
           disabled={disabled}
           hasActiveTool={hasActiveTool}
           fileCount={fileCount}
-          activeTool={activeTool}
           memoryEnabled={memoryEnabled}
           onMemoryToggle={onMemoryToggle}
+          thinkingEnabled={thinkingEnabled}
+          onThinkingToggle={onThinkingToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
-          {...commonToolProps}
         />
       ) : (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -237,9 +208,6 @@ export function ToolsMenu({
             {onFilesSelected && (
               <>
                 <div className="md:hidden">
-                  <DropdownMenuLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5">
-                    Attachments
-                  </DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => fileInputRef.current?.click()}
                     disabled={disabled}
@@ -260,40 +228,13 @@ export function ToolsMenu({
 
             <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
 
+            <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
+
             <DropdownMenuSeparator />
 
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
-                <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                  <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
-                </div>
-                <div className="flex flex-col gap-0.5 flex-1">
-                  <span className="font-medium">Connectors</span>
-                  <span className="text-xs text-muted-foreground">
-                    {activeTool ? `${AVAILABLE_TOOLS[activeTool as ToolId]?.name || ''} active` : 'Connect tools to empower'}
-                  </span>
-                </div>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1 animate-in zoom-in-95 duration-200">
-                <div className="px-2 py-1.5 mb-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Integrated Apps
-                  </p>
-                </div>
-                {Object.values(AVAILABLE_TOOLS)
-                  .filter((tool): tool is ToolConfig => tool !== undefined)
-                  .map((tool) => (
-                    <div key={tool.id}>
-                      <ToolMenuItem
-                        tool={tool}
-                        isActive={activeTool === tool.id}
-                        isAuthenticated={!!session}
-                        {...commonToolProps}
-                      />
-                    </div>
-                  ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <div className="max-h-[240px] overflow-y-auto">
+              <ConnectorsSubmenuContent onActionComplete={() => setIsOpen(false)} />
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

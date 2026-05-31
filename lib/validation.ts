@@ -1,6 +1,7 @@
 import { VALIDATION_LIMITS } from '@/constants/validation';
 import { isTrustedAttachmentUrl } from '@/lib/network/ssrf';
-import type { AttachmentInput } from '@/lib/schemas/chat';
+import { attachmentInputSchema, messageSchema, type AttachmentInput, type Message } from '@/lib/schemas/chat';
+import { isRecord } from '@/lib/typeGuards';
 
 function isValidCuid(id: string): boolean {
   if (!id || typeof id !== 'string') {
@@ -12,6 +13,14 @@ function isValidCuid(id: string): boolean {
 }
 
 export function isValidConversationId(id: string): boolean {
+  return isValidCuid(id);
+}
+
+export function isValidMessageId(id: string): boolean {
+  return isValidCuid(id);
+}
+
+export function isValidAttachmentId(id: string): boolean {
   return isValidCuid(id);
 }
 
@@ -58,7 +67,11 @@ export function validateMessageData(
   return { valid: true };
 }
 
-function validateChatMessage(message: Record<string, unknown>): ValidationResult {
+function validateChatMessage(message: unknown): ValidationResult {
+  if (!isRecord(message)) {
+    return { valid: false, error: 'Each message must be an object' };
+  }
+
   if (!message.role || !message.content) {
     return { valid: false, error: 'Each message must have role and content' };
   }
@@ -85,22 +98,21 @@ function validateChatMessage(message: Record<string, unknown>): ValidationResult
     }
 
     for (const part of message.content) {
-      if (typeof part !== 'object' || part === null) {
+      if (!isRecord(part)) {
         return { valid: false, error: 'Content parts must be objects' };
       }
 
-      const contentPart = part as Record<string, unknown>;
-      if (!contentPart.type) {
+      if (!part.type) {
         return { valid: false, error: 'Content part must have a type' };
       }
 
-      if (contentPart.type === 'text') {
-        if (typeof contentPart.text !== 'string' || !contentPart.text.trim()) {
+      if (part.type === 'text') {
+        if (typeof part.text !== 'string' || !part.text.trim()) {
           return { valid: false, error: 'Text content part must have non-empty text' };
         }
-      } else if (contentPart.type === 'image_url') {
-        const imageUrl = contentPart.image_url as Record<string, unknown>;
-        if (!imageUrl || typeof imageUrl.url !== 'string' || !imageUrl.url.trim()) {
+      } else if (part.type === 'image_url') {
+        const imageUrl = part.image_url;
+        if (!isRecord(imageUrl) || typeof imageUrl.url !== 'string' || !imageUrl.url.trim()) {
           return { valid: false, error: 'Image content part must have a valid URL' };
         }
       } else {
@@ -114,7 +126,7 @@ function validateChatMessage(message: Record<string, unknown>): ValidationResult
   return { valid: true };
 }
 
-export function validateChatMessages(messages: Array<Record<string, unknown>>): ValidationResult {
+export function validateChatMessages(messages: unknown): { valid: true; messages: Message[] } | { valid: false; error: string } {
   if (!Array.isArray(messages)) {
     return { valid: false, error: 'Messages must be an array' };
   }
@@ -134,59 +146,71 @@ export function validateChatMessages(messages: Array<Record<string, unknown>>): 
     }
   }
 
-  return { valid: true };
+  const parsedMessages = messageSchema.array().safeParse(messages);
+  if (!parsedMessages.success) {
+    return { valid: false, error: 'Messages do not match the chat message contract' };
+  }
+
+  return { valid: true, messages: parsedMessages.data };
 }
 
 function isValidUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
-    // Only allow http and https protocols
     return (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') && !parsedUrl.username && !parsedUrl.password;
   } catch {
     return false;
   }
 }
 
-function validateAttachment(attachment: unknown): ValidationResult {
-  if (!attachment || typeof attachment !== 'object') {
+type AttachmentValidationResult =
+  | { valid: true; attachment: AttachmentInput }
+  | { valid: false; error: string };
+
+function validateAttachment(attachment: unknown): AttachmentValidationResult {
+  if (!isRecord(attachment)) {
     return { valid: false, error: 'Attachment must be an object' };
   }
 
-  const att = attachment as Record<string, unknown>;
-  if (typeof att.fileUrl !== 'string' || !att.fileUrl.trim()) {
+  if (typeof attachment.fileUrl !== 'string' || !attachment.fileUrl.trim()) {
     return { valid: false, error: 'Attachment fileUrl is required and must be a non-empty string' };
   }
-  if (!isValidUrl(att.fileUrl)) {
+  if (!isValidUrl(attachment.fileUrl)) {
     return { valid: false, error: 'Attachment fileUrl must be a valid HTTP/HTTPS URL' };
   }
-  if (!isTrustedAttachmentUrl(att.fileUrl)) {
+  if (!isTrustedAttachmentUrl(attachment.fileUrl)) {
     return { valid: false, error: 'Attachment fileUrl must point to trusted uploaded storage' };
   }
-  if (typeof att.fileName !== 'string' || !att.fileName.trim()) {
+  if (typeof attachment.fileName !== 'string' || !attachment.fileName.trim()) {
     return { valid: false, error: 'Attachment fileName is required and must be a non-empty string' };
   }
 
-  if (att.fileName.length > VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH) {
+  if (attachment.fileName.length > VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH) {
     return { valid: false, error: `Attachment fileName exceeds maximum length of ${VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH}` };
   }
 
-  if (typeof att.fileType !== 'string' || !att.fileType.trim()) {
+  if (typeof attachment.fileType !== 'string' || !attachment.fileType.trim()) {
     return { valid: false, error: 'Attachment fileType is required and must be a non-empty string' };
   }
 
-  if (att.fileType.length > VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH) {
+  if (attachment.fileType.length > VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH) {
     return { valid: false, error: `Attachment fileType exceeds maximum length of ${VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH}` };
   }
 
-  if (typeof att.fileSize !== 'number' || att.fileSize < 0) {
+  if (typeof attachment.fileSize !== 'number' || attachment.fileSize < 0) {
     return { valid: false, error: 'Attachment fileSize must be a non-negative number' };
   }
 
-  if (att.fileSize > VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE) {
+  if (attachment.fileSize > VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE) {
     return { valid: false, error: `Attachment fileSize exceeds maximum of ${VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE} bytes` };
   }
 
-  return { valid: true };
+  const parsedAttachment = attachmentInputSchema.safeParse(attachment);
+  if (!parsedAttachment.success) {
+    return { valid: false, error: 'Attachment shape does not match the attachment input contract' };
+  }
+
+  return { valid: true, attachment: parsedAttachment.data };
 }
 
 export function validateAttachmentInputs(
@@ -212,13 +236,7 @@ export function validateAttachmentInputs(
       return { valid: false, error: `Attachment ${i + 1}: ${result.error}` };
     }
 
-    const typedAttachment = attachment as Record<string, unknown>;
-    validated.push({
-      fileUrl: typedAttachment.fileUrl as string,
-      fileName: typedAttachment.fileName as string,
-      fileType: typedAttachment.fileType as string,
-      fileSize: typedAttachment.fileSize as number,
-    });
+    validated.push(result.attachment);
   }
 
   return { valid: true, attachments: validated };

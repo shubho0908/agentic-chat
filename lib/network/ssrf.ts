@@ -21,11 +21,11 @@ const BLOCKED_IPV4_CIDRS = [
 ] as const;
 
 const BLOCKED_IPV6_PREFIXES = [
+  '::',
   '::1',
   'fc',
   'fd',
   'fe80',
-  '::ffff:127.',
 ] as const;
 
 export interface SafeResolvedUrl {
@@ -47,16 +47,68 @@ function isIpv4InRange(ip: string, range: readonly [string, number]): boolean {
   return (ipv4ToNumber(ip) & mask) === (ipv4ToNumber(baseIp) & mask);
 }
 
-export function isPrivateAddress(address: string): boolean {
-  const ipVersion = net.isIP(address);
+function normalizeIpAddress(address: string): string {
+  const trimmed = address.trim().toLowerCase();
+  return trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1)
+    : trimmed;
+}
+
+function ipv4MappedIpv6ToIpv4(address: string): string | null {
+  const normalized = normalizeIpAddress(address);
+  const prefix = '::ffff:';
+
+  if (!normalized.startsWith(prefix)) {
+    return null;
+  }
+
+  const mapped = normalized.slice(prefix.length);
+  if (net.isIP(mapped) === 4) {
+    return mapped;
+  }
+
+  const parts = mapped.split(':');
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const high = Number.parseInt(parts[0], 16);
+  const low = Number.parseInt(parts[1], 16);
+  if (
+    !Number.isInteger(high) ||
+    !Number.isInteger(low) ||
+    high < 0 ||
+    high > 0xffff ||
+    low < 0 ||
+    low > 0xffff
+  ) {
+    return null;
+  }
+
+  return [
+    (high >> 8) & 0xff,
+    high & 0xff,
+    (low >> 8) & 0xff,
+    low & 0xff,
+  ].join('.');
+}
+
+function isPrivateAddress(address: string): boolean {
+  const normalizedAddress = normalizeIpAddress(address);
+  const mappedIpv4 = ipv4MappedIpv6ToIpv4(normalizedAddress);
+
+  if (mappedIpv4) {
+    return BLOCKED_IPV4_CIDRS.some((range) => isIpv4InRange(mappedIpv4, range));
+  }
+
+  const ipVersion = net.isIP(normalizedAddress);
 
   if (ipVersion === 4) {
-    return BLOCKED_IPV4_CIDRS.some((range) => isIpv4InRange(address, range));
+    return BLOCKED_IPV4_CIDRS.some((range) => isIpv4InRange(normalizedAddress, range));
   }
 
   if (ipVersion === 6) {
-    const normalized = address.toLowerCase();
-    return BLOCKED_IPV6_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+    return BLOCKED_IPV6_PREFIXES.some((prefix) => normalizedAddress.startsWith(prefix));
   }
 
   return false;
@@ -79,20 +131,21 @@ export async function assertSafePublicUrl(
   }
 
   const hostname = url.hostname.toLowerCase();
+  const normalizedHostname = normalizeIpAddress(hostname);
   const allowHosts = new Set((options?.allowHosts ?? []).map((host) => host.toLowerCase()));
 
-  if ((BLOCKED_HOSTNAMES.has(hostname) || hostname.endsWith('.internal')) && !allowHosts.has(hostname)) {
+  if ((BLOCKED_HOSTNAMES.has(normalizedHostname) || normalizedHostname.endsWith('.internal')) && !allowHosts.has(normalizedHostname)) {
     throw new Error('Requests to local or metadata hosts are not allowed');
   }
 
-  if (net.isIP(hostname)) {
-    if (isPrivateAddress(hostname) && !allowHosts.has(hostname)) {
+  if (net.isIP(normalizedHostname)) {
+    if (isPrivateAddress(normalizedHostname) && !allowHosts.has(normalizedHostname)) {
       throw new Error('Requests to private network addresses are not allowed');
     }
     return {
       url,
-      hostname,
-      resolvedAddresses: [{ address: hostname, family: net.isIP(hostname) as 4 | 6 }],
+      hostname: normalizedHostname,
+      resolvedAddresses: [{ address: normalizedHostname, family: net.isIP(normalizedHostname) as 4 | 6 }],
     };
   }
 
@@ -140,8 +193,7 @@ export function isTrustedAttachmentUrl(url: string): boolean {
 
     const extraHosts = (process.env.TRUSTED_ATTACHMENT_HOSTS ?? '')
       .split(',')
-      .map((host) => host.trim())
-      .filter(Boolean);
+      .flatMap((host) => { const h = host.trim(); return h ? [h] : []; });
 
     return [...trustedOrigins, ...extraHosts].some((pattern) =>
       matchesHostPattern(hostname, pattern)

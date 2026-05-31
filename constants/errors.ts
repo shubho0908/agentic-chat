@@ -127,14 +127,6 @@ export const TOAST_ERROR_MESSAGES = {
     DEACTIVATED: "Tool deactivated",
     AUTH_REQUIRED_DESCRIPTION: "Please sign in to use tools",
   },
-  DEEP_RESEARCH_UI: {
-    DEACTIVATED: "Deep Research deactivated",
-    LIMIT_REACHED: "Deep Research limit reached",
-    LIMIT_REACHED_DESCRIPTION: "You have used all your deep research requests for this month. Your message will be sent with standard processing.",
-    UNAVAILABLE: "Deep Research unavailable",
-    MONTHLY_LIMIT_DESCRIPTION: (limit: number, resetDate: string) =>
-      `You have used all ${limit} deep research requests for this month. Resets on ${resetDate}.`,
-  },
   MEMORY_UI: {
     ENABLED: "Memory enabled",
     DISABLED: "Memory disabled",
@@ -168,42 +160,11 @@ export const HOOK_ERROR_MESSAGES = {
 
 export const TOOL_ERROR_MESSAGES = {
   WEB_SEARCH: {
-    NOT_CONFIGURED: 'Web search is not configured. Please set TAVILY_API_KEY environment variable.',
+    NOT_CONFIGURED: 'Web search is not configured. Please set EXA_API_KEY environment variable.',
     NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
     SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
     ABORTED: 'Search was aborted, please try again later.',
     FAILED_FALLBACK: 'Search failed, continuing without web results...',
-  },
-  DEEP_RESEARCH: {
-    ABORTED: 'Research was aborted, please try again later.',
-    FAILED: 'Research failed',
-    FAILED_DETAILED: 'Deep research encountered an error and could not be completed. Please try again or rephrase your query.',
-    FAILED_FALLBACK: 'I encountered an issue while conducting deep research. Let me provide an answer based on my knowledge instead.\n\n',
-    EXECUTION_ERROR: '⚠️ Unable to complete deep research. Let me answer based on my knowledge instead.\n\n',
-    RATE_LIMIT: '⚠️ **Deep Research Limit Reached**\n\nYou have used all your deep research requests for this month.\n\n📅 Your limit will reset at the beginning of next month.\n\nI\'ll answer your question using standard processing instead.\n\n---\n\n',
-    TECHNICAL_ERROR: '⚠️ Unable to perform deep research at this time due to a technical issue. Let me answer based on my knowledge instead.\n\n',
-    AUTH_REQUIRED: '⚠️ Authentication error: Unable to verify your identity for deep research. Please refresh and try again.\n\n',
-  },
-  GOOGLE_SUITE: {
-    ABORTED: 'Google Suite operation was aborted, please try again later.',
-    OPERATION_ABORTED_BY_USER: 'Operation aborted by user',
-    FAILED_FALLBACK: 'Google Suite operation failed, continuing without Gmail data...',
-    AUTH_REQUIRED: '⚠️ Authentication required for Google Suite access.',
-    AUTH_REQUIRED_MENU: 'Google Workspace is not connected. Open Settings > Google Workspace to continue.',
-    AUTH_REVOKED: 'Error: Your Google Workspace authorization has been revoked or expired. Open Settings > Google Workspace to reconnect.',
-    NO_RESPONSE: 'No response from AI',
-    UNKNOWN_TOOL: (toolName: string) => `Unknown tool: ${toolName}`,
-    INVALID_JSON_ARGS: 'Error: Invalid JSON arguments',
-    INVALID_MESSAGE_STRUCTURE: (index: number) => `Invalid message structure: tool message at index ${index} without preceding tool_calls`,
-    MULTIPLE_ERRORS: 'Multiple consecutive errors occurred. Please check your request and try again.',
-    UNEXPECTED_ERROR: 'An unexpected error occurred while accessing Google Workspace.',
-    MAX_ITERATIONS_REACHED: 'Task execution reached maximum iterations. Some steps may be incomplete.',
-    MISSING_OAUTH_CREDENTIALS: 'Missing Google OAuth credentials in environment variables',
-    NOT_AUTHORIZED_MENU: 'Google Workspace access is not configured. Open Settings > Google Workspace to choose permissions.',
-    INVALID_START_TIME: (time: string) => `Invalid startTime format: "${time}". Expected ISO 8601 format (e.g., "2025-01-20T10:00:00Z")`,
-    INVALID_END_TIME: (time: string) => `Invalid endTime format: "${time}". Expected ISO 8601 format (e.g., "2025-01-20T11:00:00Z")`,
-    END_TIME_BEFORE_START: (startTime: string, endTime: string) => `endTime (${endTime}) must be after startTime (${startTime})`,
-    END_TIME_AFTER_START_REQUIRED: 'endTime must be after startTime',
   },
   GENERAL: {
     REQUEST_ABORTED: 'Request was aborted, please try again later.',

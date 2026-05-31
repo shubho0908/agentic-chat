@@ -110,7 +110,7 @@ export function AppSidebar() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="size-8"
                     onClick={handleToggleSelectionMode}
                   >
                     <X className="size-4" />
@@ -126,7 +126,7 @@ export function AppSidebar() {
                     size="icon"
                     onClick={() => dispatchSelection({ type: "set-delete-dialog", open: true })}
                     disabled={isBulkDeleting}
-                    className="h-8 w-8"
+                    className="size-8"
                   >
                     <Trash2 className="size-4" />
                     <span className="sr-only">Delete selected conversations</span>
@@ -143,7 +143,7 @@ export function AppSidebar() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="size-6"
                           onClick={handleToggleSelectionMode}
                         >
                           <ListChecks className="size-4" />
@@ -161,7 +161,7 @@ export function AppSidebar() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="size-6"
                           onClick={handleNewChat}
                         >
                           <Plus className="size-4" />
@@ -232,9 +232,7 @@ export function AppSidebar() {
                             }}
                             conversation={conversation}
                             isActive={currentConversationId === conversation.id}
-                            isDeleting={deletingId === conversation.id}
-                            isRenaming={isRenaming}
-                            isToggling={isToggling}
+                            loading={deletingId === conversation.id ? "deleting" : isRenaming ? "renaming" : isToggling ? "toggling" : null}
                             onDelete={handleDeleteConversation}
                             onRename={renameConversation}
                             onToggleSharing={toggleSharing}
@@ -250,9 +248,7 @@ export function AppSidebar() {
                           key={conversation.id}
                           conversation={conversation}
                           isActive={currentConversationId === conversation.id}
-                          isDeleting={deletingId === conversation.id}
-                          isRenaming={isRenaming}
-                          isToggling={isToggling}
+                          loading={deletingId === conversation.id ? "deleting" : isRenaming ? "renaming" : isToggling ? "toggling" : null}
                           onDelete={handleDeleteConversation}
                           onRename={renameConversation}
                           onToggleSharing={toggleSharing}

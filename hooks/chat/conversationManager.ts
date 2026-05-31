@@ -7,7 +7,8 @@ import { saveUserMessage, saveAssistantMessage } from "./messageApi";
 import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
 import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referentialQuery";
-
+import { queryKeys } from "@/lib/queryKeys";
+import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 function generateTitle(content: string | MessageContentPart[]): string {
@@ -35,6 +36,22 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
 const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
 const APPROX_IMAGE_TOKENS = 850;
+export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
+
+function getPersistableAssistantContent(
+  assistantContent: string,
+  metadata?: MessageMetadata
+): string | null {
+  if (assistantContent.trim()) {
+    return assistantContent;
+  }
+
+  if (metadata?.humanInTheLoopStatus === "pending" && metadata.humanInTheLoopRequest) {
+    return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
+  }
+
+  return null;
+}
 
 function estimateMessageTokens(content: string | MessageContentPart[]): number {
   if (typeof content === 'string') {
@@ -81,12 +98,16 @@ export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
   systemPrompt: string,
-  model: string
+  model: string,
+  currentAttachments?: { fileType: string }[]
 ): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
+  const hasCurrentDocumentAttachment = currentAttachments?.some(att =>
+    !att.fileType.startsWith('image/')
+  ) ?? false;
 
-  if (isReferential && hasAttachmentsInContext) {
+  if ((isReferential && hasAttachmentsInContext) || hasCurrentDocumentAttachment) {
     const recentMessages = messages.slice(-DOCUMENT_CONTEXT_MESSAGES);
     
     return trimMessagesByApproximateTokenBudget([
@@ -94,10 +115,12 @@ export function buildMessagesForAPI(
         role: "system" as const,
         content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
       },
-      ...recentMessages.map(({ role, content }) => ({
-        role: role as "user" | "assistant" | "system",
-        content,
-      })),
+      ...recentMessages
+        .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
+        .map(({ role, content }) => ({
+          role: role as "user" | "assistant" | "system",
+          content,
+        })),
       {
         role: "user" as const,
         content: newContent,
@@ -114,10 +137,12 @@ export function buildMessagesForAPI(
       role: "system" as const,
       content: systemPrompt,
     },
-    ...contextMessages.map(({ role, content }) => ({
-      role: role as "user" | "assistant" | "system",
-      content,
-    })),
+    ...contextMessages
+      .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
+      .map(({ role, content }) => ({
+        role: role as "user" | "assistant" | "system",
+        content,
+      })),
     {
       role: "user" as const,
       content: newContent,
@@ -131,11 +156,12 @@ async function createNewConversation(
   attachments?: Attachment[],
   earlyCreate: boolean = false,
   signal?: AbortSignal,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
+  onConversationIdReady?: (conversationId: string) => void
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
-    const createResponse = await fetch("/api/conversations", {
+    const createResponse = await fetch(apiRoutes.conversations, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
@@ -147,6 +173,8 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
+    onConversationIdReady?.(conversationId);
+
     const userMessageId = await saveUserMessage(conversationId, userContent, attachments, signal);
     
     if (!userMessageId) {
@@ -156,7 +184,13 @@ async function createNewConversation(
     if (earlyCreate) {
       return { conversationId, userMessageId, assistantMessageId: '' };
     }
-    const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent, metadata);
+    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+
+    if (!persistableAssistantContent) {
+      return { conversationId, userMessageId, assistantMessageId: '' };
+    }
+
+    const assistantMessageId = await saveAssistantMessage(conversationId, persistableAssistantContent, metadata);
 
     if (!assistantMessageId) {
       return null;
@@ -200,7 +234,7 @@ function updateQueryCacheWithUserMessage(
     },
   ]);
 
-  queryClient.setQueryData(["conversation", conversationId], {
+  queryClient.setQueryData(queryKeys.conversation(conversationId), {
     pages: [{
       conversation: {
         id: conversationId,
@@ -249,7 +283,7 @@ function updateQueryCache(
     },
   ]);
 
-  queryClient.setQueryData(["conversation", conversationId], {
+  queryClient.setQueryData(queryKeys.conversation(conversationId), {
     pages: [{
       conversation: {
         id: conversationId,
@@ -266,7 +300,7 @@ function updateQueryCache(
     }],
     pageParams: [undefined],
   });
-  queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
 }
 
 export async function handleConversationSaving(
@@ -280,10 +314,11 @@ export async function handleConversationSaving(
   attachments?: Attachment[],
   earlyCreate: boolean = false,
   signal?: AbortSignal,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
+  onConversationIdReady?: (conversationId: string) => void
 ): Promise<void> {
   if (isNewConversation) {
-    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata);
+    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata, onConversationIdReady);
 
     if (result && onConversationCreated) {
       if (earlyCreate) {
@@ -310,11 +345,17 @@ export async function handleConversationSaving(
       }
       onConversationCreated(result);
     }
-  } else if (currentConversationId && assistantContent) {
-    const assistantMessageId = await saveAssistantMessage(currentConversationId, assistantContent, metadata);
+  } else if (currentConversationId) {
+    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+
+    if (!persistableAssistantContent) {
+      return;
+    }
+
+    const assistantMessageId = await saveAssistantMessage(currentConversationId, persistableAssistantContent, metadata);
     if (assistantMessageId) {
-      queryClient.invalidateQueries({ queryKey: ["conversations"] });
-      queryClient.invalidateQueries({ queryKey: ["conversation", currentConversationId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversation(currentConversationId) });
       
       if (onConversationCreated) {
         onConversationCreated({

@@ -11,6 +11,17 @@ interface LandingPageProps {
   currentYear: number;
 }
 
+const container: Variants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.2,
+    },
+  },
+};
+
 const InteractionShowcase = dynamic(
   () =>
     import("@/components/landing/interaction-showcase/interactionShowcase").then(
@@ -37,17 +48,6 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
   const transitionOption = prefersReducedMotion
     ? { duration: 0 }
     : { duration: 1.2, ease: [0.16, 1, 0.3, 1] as const };
-
-  const container: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.15,
-        delayChildren: 0.2,
-      },
-    },
-  };
 
   const item: Variants = {
     hidden: { opacity: 0, y: 30 },

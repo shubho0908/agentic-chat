@@ -1,29 +1,37 @@
 "use client";
 
-import { useState, forwardRef, type MouseEvent, type ReactNode, type ComponentPropsWithoutRef } from "react";
+import { useState, useRef, type MouseEvent, type ReactNode, type ComponentPropsWithoutRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useStreaming } from "@/contexts/streaming-context";
 import { NavigationGuardDialog } from "./navigationGuardDialog";
+import { appRoutes } from "@/lib/routes";
 
 interface ProtectedConversationLinkProps extends Omit<ComponentPropsWithoutRef<typeof Link>, 'href'> {
   conversationId: string;
   conversationTitle: string;
   children: ReactNode;
+  ref?: React.Ref<HTMLAnchorElement>;
 }
 
-export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, ProtectedConversationLinkProps>(
-  ({ conversationId, conversationTitle, children, onClick, ...props }, ref) => {
-  const pathname = usePathname();
-  const router = useRouter();
+export const ProtectedConversationLink = ({
+  conversationId,
+  conversationTitle,
+  children,
+  onClick,
+  ref,
+  ...props
+}: ProtectedConversationLinkProps) => {
+  const { push } = useRouter();
   const { isStreaming, streamingConversationId, stopStreaming } = useStreaming();
   const [showDialog, setShowDialog] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const pendingNavigation = useRef<string | null>(null);
 
-  const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
-    const targetPath = `/c/${conversationId}`;
+  const handleConversationLinkClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    const targetPath = appRoutes.conversation(conversationId);
+    const currentPath = window.location.pathname;
 
-    if (pathname === targetPath) {
+    if (currentPath === targetPath) {
       return;
     }
 
@@ -32,7 +40,7 @@ export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, Protected
 
     if (isStreamingInDifferentConversation) {
       e.preventDefault();
-      setPendingNavigation(targetPath);
+      pendingNavigation.current = targetPath;
       setShowDialog(true);
     } else if (onClick) {
       onClick(e);
@@ -42,9 +50,10 @@ export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, Protected
   const handleConfirm = () => {
     stopStreaming();
 
-    if (pendingNavigation) {
+    if (pendingNavigation.current) {
+      const target = pendingNavigation.current;
       setTimeout(() => {
-        router.push(pendingNavigation);
+        push(target);
       }, 50);
     }
   };
@@ -53,21 +62,20 @@ export const ProtectedConversationLink = forwardRef<HTMLAnchorElement, Protected
       <>
         <Link
           ref={ref}
-          href={`/c/${conversationId}`}
-          onClick={handleClick}
+          href={appRoutes.conversation(conversationId)}
+          onClick={handleConversationLinkClick}
           {...props}
         >
           {children}
         </Link>
-        <NavigationGuardDialog
-          open={showDialog}
-          onOpenChange={setShowDialog}
-          onConfirm={handleConfirm}
-          destinationTitle={conversationTitle}
-        />
-      </>
-    );
-  }
-);
+      <NavigationGuardDialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        onConfirm={handleConfirm}
+        destinationTitle={conversationTitle}
+      />
+    </>
+  );
+};
 
 ProtectedConversationLink.displayName = "ProtectedConversationLink";

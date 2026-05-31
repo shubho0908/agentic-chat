@@ -1,5 +1,6 @@
 import { API_ERROR_MESSAGES } from '@/constants/errors';
 import { logger } from "@/lib/logger";
+import { getConversationExportFileName } from '@/lib/export/downloadFile';
 import type { ExportConversation } from '@/types/export';
 import type { ReactElement } from "react";
 
@@ -7,7 +8,7 @@ export async function downloadPDF(
   conversation: ExportConversation,
   pdfElement: ReactElement
 ): Promise<void> {
-  const fileName = `${sanitizeFileName(conversation.title || 'conversation')}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const fileName = getConversationExportFileName(conversation.title, 'pdf');
 
   try {
     const [{ pdf }, { saveAs }] = await Promise.all([
@@ -30,16 +31,4 @@ export async function downloadPDF(
         : API_ERROR_MESSAGES.PDF_GENERATION_FAILED
     );
   }
-}
-
-function sanitizeFileName(name: string): string {
-  const sanitized = name
-    .replace(/[^a-z0-9]/gi, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase()
-    .slice(0, 50)
-    .replace(/_+$/g, '');
-  
-  return sanitized || 'conversation';
 }

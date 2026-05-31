@@ -6,6 +6,7 @@ import { ChatMessage } from "./chatMessage";
 import { ContextLimitBanner } from "./contextLimitBanner";
 import { ScrollArea } from "@/components/ui/scrollArea";
 import { cn } from "@/lib/utils";
+import { isSharePathname } from "@/lib/routes";
 import type { MemoryStatus } from "@/types/chat";
 import { Button } from "../ui/button";
 
@@ -16,6 +17,7 @@ interface ChatContainerProps {
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
+  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   memoryStatus?: MemoryStatus;
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
@@ -46,6 +48,7 @@ export function ChatContainer({
   onEditMessage,
   onRegenerateMessage,
   onSendMessage,
+  onHumanInTheLoopDecision,
   memoryStatus,
   hasNextPage,
   fetchNextPage,
@@ -56,7 +59,7 @@ export function ChatContainer({
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
   const previousScrollHeightRef = useRef<number>(0);
   const pathname = usePathname();
-  const isSharePage = pathname?.startsWith("/share/") ?? false;
+  const isSharePage = isSharePathname(pathname);
 
   useEffect(() => {
     if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {
@@ -127,7 +130,7 @@ export function ChatContainer({
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading older messages...</span>
+            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
           </div>
         )}
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (
@@ -159,6 +162,7 @@ export function ChatContainer({
                 onEditMessage={isLoading ? undefined : onEditMessage}
                 onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
                 onSendMessage={onSendMessage}
+                onHumanInTheLoopDecision={onHumanInTheLoopDecision}
                 isLastMessage={index === messages.length - 1}
                 isLoading={isLoading}
                 memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}

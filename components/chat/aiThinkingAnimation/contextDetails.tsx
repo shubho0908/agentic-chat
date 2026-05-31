@@ -1,44 +1,15 @@
 import { RoutingDecision } from "@/types/chat";
-import { TOOL_IDS } from "@/lib/tools/config";
-import { isToolActive } from "./utils";
-import { DeepResearchContext } from "./deepResearchContext";
 import { WebSearchContext } from "./webSearchContext";
-import { GoogleSuiteContext } from "./googleSuiteContext";
 import { VisionOnlyContext } from "./visionOnlyContext";
 import { ToolOnlyDefaultContext } from "./toolOnlyDefaultContext";
 import { HybridContext } from "./hybridContext";
 import { DefaultRAGContext } from "./defaultRAGContext";
 import { UrlContentContext } from "./urlContentContext";
 import type { ContextDetailsProps } from "./types";
+import { ToolName } from "@/lib/tools/constants";
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
-  const isWebSearch = isToolActive(memoryStatus, TOOL_IDS.WEB_SEARCH);
-  const isDeepResearch = isToolActive(memoryStatus, TOOL_IDS.DEEP_RESEARCH);
-  const isGoogleSuite = isToolActive(memoryStatus, TOOL_IDS.GOOGLE_SUITE);
-
-  if (isDeepResearch) {
-    const progress = memoryStatus.toolProgress;
-    const status = progress?.details?.status || progress?.status;
-    
-    const docPrepStatuses = ['preparing_documents', 'waiting_documents', 'documents_ready', 'analyzing_documents'];
-    const isPreparingDocs = status && docPrepStatuses.includes(status);
-    const isProcessingImages = status === 'processing_images';
-    
-    const researchHasStarted = status && !['preparing_documents', 'waiting_documents', 'documents_ready', 'processing_images', 'analyzing_documents'].includes(status);
-    
-    if (researchHasStarted) {
-      return <DeepResearchContext memoryStatus={memoryStatus} />;
-    }
-    if (isPreparingDocs && memoryStatus.hasDocuments) {
-      return <DefaultRAGContext memoryStatus={memoryStatus} />;
-    }
-    if (isProcessingImages && memoryStatus.hasImages) {
-      return <VisionOnlyContext imageCount={memoryStatus.imageCount} />;
-    }
-    if (memoryStatus.hasDocuments || memoryStatus.hasImages) {
-      return <DefaultRAGContext memoryStatus={memoryStatus} />;
-    }
-  }
+  const isWebSearch = memoryStatus.activeToolName === ToolName.WEB_SEARCH;
 
   if (memoryStatus.routingDecision === RoutingDecision.UrlContent) {
     return <UrlContentContext memoryStatus={memoryStatus} />;
@@ -54,10 +25,6 @@ export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   if (memoryStatus.routingDecision === RoutingDecision.ToolOnly) {
     if (isWebSearch) {
       return <WebSearchContext memoryStatus={memoryStatus} />;
-    }
-
-    if (isGoogleSuite) {
-      return <GoogleSuiteContext memoryStatus={memoryStatus} />;
     }
 
     return <ToolOnlyDefaultContext memoryStatus={memoryStatus} />;

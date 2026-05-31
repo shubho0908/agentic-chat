@@ -5,9 +5,12 @@ import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/apiUtil
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
+import { isValidAttachmentId } from '@/lib/validation';
 
 const ProcessBatchSchema = z.object({
-  attachmentIds: z.array(z.string().min(1)).min(1).max(5),
+  attachmentIds: z.array(
+    z.string().min(1).refine(isValidAttachmentId, { message: 'Invalid attachment ID' })
+  ).min(1).max(5),
 });
 
 interface BatchResult {
@@ -27,7 +30,16 @@ export async function POST(req: NextRequest) {
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 
-    const requestBody = await req.json();
+    let requestBody: unknown;
+    try {
+      requestBody = await req.json();
+    } catch {
+      return jsonResponse(
+        { error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY },
+        HTTP_STATUS.BAD_REQUEST
+      );
+    }
+
     const parsedBody = ProcessBatchSchema.safeParse(requestBody);
 
     if (!parsedBody.success) {
@@ -37,7 +49,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { attachmentIds } = parsedBody.data;
+    const attachmentIds = Array.from(new Set(parsedBody.data.attachmentIds));
 
     const attachments = await prisma.attachment.findMany({
       where: { id: { in: attachmentIds } },
@@ -55,6 +67,15 @@ export async function POST(req: NextRequest) {
     if (attachments.length === 0) {
       return jsonResponse(
         { error: 'No attachments found' },
+        HTTP_STATUS.NOT_FOUND
+      );
+    }
+
+    const foundIds = new Set(attachments.map((attachment) => attachment.id));
+    const missingAttachmentIds = attachmentIds.filter((attachmentId) => !foundIds.has(attachmentId));
+    if (missingAttachmentIds.length > 0) {
+      return jsonResponse(
+        { error: 'Some attachments were not found', missingAttachmentIds },
         HTTP_STATUS.NOT_FOUND
       );
     }

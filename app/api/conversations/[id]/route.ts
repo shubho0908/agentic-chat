@@ -1,15 +1,17 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse } from '@/lib/apiUtils';
+import { getAuthenticatedUser, verifyConversationOwnership, paginateResults, errorResponse, jsonResponse, parsePaginationInteger } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId } from '@/lib/validation';
+import { isValidConversationId, isValidMessageId } from '@/lib/validation';
 import { VALIDATION_LIMITS } from '@/constants/validation';
 import { calculateTokenUsage } from '@/lib/utils/tokenCounter';
+import { DEFAULT_MODEL } from '@/constants/openai-models';
 import type { TokenUsage } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
-
+import { logger } from "@/lib/logger";
+import { isRecord } from '@/lib/typeGuards';
 
 interface MessageAttachment {
   id: string;
@@ -37,7 +39,20 @@ interface MessageWithAttachments extends BaseMessage {
 
 type VersionMessage = BaseMessage;
 
-import { logger } from "@/lib/logger";
+function toChatMessageForTokenUsage(message: { role: string; content: string; attachments?: MessageAttachment[] }): Message {
+  const normalizedRole = message.role.toLowerCase();
+  const role: Message['role'] =
+    normalizedRole === 'user' || normalizedRole === 'assistant' || normalizedRole === 'system'
+      ? normalizedRole
+      : 'assistant';
+
+  return {
+    role,
+    content: message.content,
+    attachments: message.attachments,
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -52,8 +67,12 @@ export async function GET(
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parsePaginationInteger(searchParams.get('limit'), 50);
     const cursor = searchParams.get('cursor');
+
+    if (cursor && !isValidMessageId(cursor)) {
+      return errorResponse('Invalid cursor', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
 
     const { conversation, error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;
@@ -98,6 +117,7 @@ export async function GET(
     const versionCounts = messageIds.length > 0 ? await prisma.message.groupBy({
       by: ['parentMessageId'],
       where: {
+        conversationId,
         parentMessageId: { in: messageIds },
         isDeleted: false
       },
@@ -113,6 +133,7 @@ export async function GET(
     if (includeVersions && messageIds.length > 0) {
       const versions = await prisma.message.findMany({
         where: {
+          conversationId,
           parentMessageId: { in: messageIds },
           isDeleted: false
         },
@@ -172,11 +193,10 @@ export async function GET(
 
     let tokenUsage: TokenUsage | undefined;
     try {
-      const model = searchParams.get('model') as string;
-      tokenUsage = calculateTokenUsage(transformedMessages as Message[], model);
+      const model = searchParams.get('model') ?? DEFAULT_MODEL;
+      tokenUsage = calculateTokenUsage(transformedMessages.map(toChatMessageForTokenUsage), model);
     } catch (error) {
       logger.error('[Token Calculation Error]', error);
-      // Continue without token usage if calculation fails
     }
 
     return jsonResponse({
@@ -212,7 +232,17 @@ export async function PATCH(
     if (!isValidConversationId(conversationId)) {
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (!isRecord(body)) {
+      return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     const { title, isPublic } = body;
 
     if (title === undefined && isPublic === undefined) {

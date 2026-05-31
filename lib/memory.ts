@@ -1,5 +1,7 @@
 'use server';
 
+import { headers } from 'next/headers';
+import { auth } from '@/lib/auth';
 import {
   addMemories,
   retrieveMemories,
@@ -8,6 +10,7 @@ import {
 } from '@mem0/vercel-ai-provider';
 import { buildMemoryLookupQueries } from '@/lib/chat/requestMediator';
 import { logError, logWarn } from '@/lib/observability';
+import { isRecord } from '@/lib/typeGuards';
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 
@@ -53,13 +56,12 @@ function extractMemorySearchRecords(value: unknown): MemorySearchRecord[] {
       : [];
 
   return rawItems
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-    .map((item) => ({
-      id: typeof item.id === 'string' ? item.id : undefined,
-      memory: typeof item.memory === 'string' ? normalizeMemoryText(item.memory) : undefined,
-      score: typeof item.score === 'number' ? item.score : undefined,
-    }))
-    .filter((item) => Boolean(item.memory));
+    .flatMap((item): Array<{ id: string | undefined; memory: string | undefined; score: number | undefined }> => {
+      if (!isRecord(item)) return [];
+      const memory = typeof item.memory === 'string' ? normalizeMemoryText(item.memory) : undefined;
+      if (!memory) return [];
+      return [{ id: typeof item.id === 'string' ? item.id : undefined, memory, score: typeof item.score === 'number' ? item.score : undefined }];
+    });
 }
 
 function dedupeMemorySearchRecords(records: MemorySearchRecord[]): MemorySearchRecord[] {
@@ -91,6 +93,11 @@ export async function storeConversationMemory(
   assistantMessage: string,
   userId: string
 ): Promise<void> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user || session.user.id !== userId) {
+    return;
+  }
+
   if (!MEM0_API_KEY) {
     return;
   }
@@ -124,6 +131,11 @@ export async function getMemoryContextResult(
   userId: string,
   options?: MemoryLookupOptions
 ): Promise<MemoryContextResult> {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user || session.user.id !== userId) {
+    return { context: '', failed: false };
+  }
+
   if (!MEM0_API_KEY) {
     return { context: '', failed: false };
   }

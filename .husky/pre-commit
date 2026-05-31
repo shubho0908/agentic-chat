@@ -1,0 +1,54 @@
+#!/usr/bin/env sh
+set -euo pipefail
+
+BOLD='\033[1m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+step() {
+  echo ""
+  echo "${BOLD}$1${NC}"
+}
+
+error() {
+  echo "${RED}✖ $1${NC}"
+  exit 1
+}
+
+success() {
+  echo "${GREEN}✔ $1${NC}"
+}
+
+step "[1/6] Running linter..."
+bun run lint || error "Lint failed"
+success "Lint passed"
+
+step "[2/6] Validating Prisma schema..."
+bun run prisma:validate || error "Prisma validation failed"
+success "Prisma schema validated"
+
+step "[3/6] Running TypeScript type-check..."
+bun run typecheck || error "TypeScript type-check failed"
+success "TypeScript type-check passed"
+
+step "[4/6] Running tests..."
+bun run test || error "Tests failed"
+success "Tests passed"
+
+step "[5/6] Running build..."
+bun run build || error "Build failed"
+success "Build passed"
+
+step "[6/6] Running React Doctor health check..."
+SCORE=$(bun react-doctor --score --no-share 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -E '^[0-9]+$' | tail -1)
+if [ -z "$SCORE" ]; then
+  error "React Doctor failed to produce a score"
+fi
+if [ "$SCORE" -lt 95 ]; then
+  error "React Doctor score ${SCORE}/100 is below the required threshold of 95"
+fi
+success "React Doctor score ${SCORE}/100 (≥ 95)"
+
+echo ""
+echo "${GREEN}${BOLD}All checks passed. Commit allowed.${NC}"

@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { decryptApiKey } from '@/lib/encryption';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+export { parsePaginationInteger } from '@/lib/pagination';
 
 export async function getAuthenticatedUser(headers: Headers) {
   const session = await auth.api.getSession({ headers });

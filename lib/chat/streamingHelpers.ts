@@ -1,14 +1,14 @@
-import { RoutingDecision, type MemoryStatus } from '@/types/chat';
+import { type MemoryStatus } from '@/types/chat';
+import { toJsonValue } from '@/lib/json';
 
 const encoder = new TextEncoder();
 
 function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+  return encoder.encode(`data: ${JSON.stringify(toJsonValue(data) ?? {})}\n\n`);
 }
 
 export function encodeMemoryStatus(
   memoryStatusInfo: MemoryStatus,
-  activeTool?: string | null
 ): Uint8Array {
   return encodeSSEMessage({
     type: 'memory_status',
@@ -23,9 +23,7 @@ export function encodeMemoryStatus(
     urlCount: memoryStatusInfo.urlCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
-    activeToolName: memoryStatusInfo.routingDecision === RoutingDecision.ToolOnly
-      ? (memoryStatusInfo.activeToolName || activeTool)
-      : undefined,
+    activeToolName: memoryStatusInfo.activeToolName,
     tokenUsage: memoryStatusInfo.tokenUsage
   });
 }
@@ -73,6 +71,10 @@ export function encodeToolProgress(
 
 export function encodeChatChunk(content: string): Uint8Array {
   return encodeSSEMessage({ content });
+}
+
+export function encodeThinkingChunk(content: string): Uint8Array {
+  return encodeSSEMessage({ type: 'thinking', content });
 }
 
 export function encodeError(message: string): Uint8Array {

@@ -35,10 +35,6 @@ function countTokens(text: string, model: string): number {
   return encoder.encode(text).length;
 }
 
-export function countTextTokens(text: string, model: string): number {
-  return countTokens(text, model);
-}
-
 export function truncateTextToTokenLimit(
   text: string,
   model: string,

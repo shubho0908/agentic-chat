@@ -3,7 +3,7 @@ import { parseHTML } from "linkedom";
 import * as cheerio from "cheerio";
 import { safeFetch } from '@/lib/network/safeFetch';
 import { logError, logInfo } from '@/lib/observability';
-
+import { logger } from "@/lib/logger";
 
 interface ScrapedContent {
   url: string;
@@ -17,7 +17,6 @@ interface ScrapedContent {
 }
 
 const MAX_CONTENT_LENGTH = 6000;
-import { logger } from "@/lib/logger";
 const MAX_CONTEXT_LENGTH = 1800;
 const REQUEST_TIMEOUT = 10000;
 const MAX_SCRAPE_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -25,6 +24,18 @@ const MAX_SCRAPE_RESPONSE_BYTES = 5 * 1024 * 1024;
 interface ScrapeRequestOptions {
   timeoutMs?: number;
   retries?: number;
+}
+
+function getPositiveFiniteNumber(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
+}
+
+function getNonNegativeInteger(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : fallback;
 }
 
 export function validateUrl(url: string): { isValid: boolean; url?: URL; error?: string } {
@@ -75,7 +86,6 @@ function extractWithReadability(html: string, url: string): ScrapedContent | nul
 function extractWithCheerio(html: string, url: string): ScrapedContent {
   const $ = cheerio.load(html);
 
-  // Remove script, style, and other non-content elements
   $("script, style, noscript, iframe, nav, footer, header, aside, .ad, .advertisement, .cookie-banner").remove();
 
   const mainSelectors = [
@@ -127,12 +137,8 @@ function extractWithCheerio(html: string, url: string): ScrapedContent {
 
 async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): Promise<ScrapedContent> {
   logInfo({ event: 'url_scrape_start', url });
-  const timeoutMs = Number.isFinite(options.timeoutMs) && (options.timeoutMs as number) > 0
-    ? Number(options.timeoutMs)
-    : REQUEST_TIMEOUT;
-  const retries = Number.isInteger(options.retries) && (options.retries as number) >= 0
-    ? Number(options.retries)
-    : 2;
+  const timeoutMs = getPositiveFiniteNumber(options.timeoutMs, REQUEST_TIMEOUT);
+  const retries = getNonNegativeInteger(options.retries, 2);
 
   try {
     const response = await safeFetch(url, {
@@ -204,14 +210,10 @@ const EXCLUDED_PATTERNS = [
   /\.imgur\./i,
 ];
 
-export function stripUrlsFromText(text: string): string {
-  return text.replace(URL_REGEX, ' ');
-}
-
 export function extractUrlsFromMessage(message: string | Array<{ type: string; text?: string }>): string[] {
   const textContent = typeof message === 'string' 
     ? message 
-    : message.filter(p => p.type === 'text' && p.text).map(p => p.text || '').join(' ');
+    : message.flatMap(p => p.type === 'text' && p.text ? [p.text] : []).join(' ');
 
   const matches = textContent.match(URL_REGEX);
   if (!matches) return [];

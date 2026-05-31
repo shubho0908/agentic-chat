@@ -13,12 +13,12 @@ interface ConversationNotFoundProps {
 }
 
 export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundProps) {
-  const router = useRouter();
+  const { push } = useRouter();
   const { resolvedTheme } = useTheme();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const handleNewChat = () => {
-    router.push("/");
+    push("/");
   };
 
   const handleLogin = () => {
@@ -27,7 +27,7 @@ export function ConversationNotFound({ isAuthenticated }: ConversationNotFoundPr
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center justify-center space-y-8 text-center max-w-md px-6">
+      <div className="flex flex-col items-center justify-center gap-y-8 text-center max-w-md px-6">
         <div className="relative">
           <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/10 blur-3xl rounded-full" />
           <div className="relative flex items-center justify-center">

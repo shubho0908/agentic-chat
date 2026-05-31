@@ -1,5 +1,3 @@
-'use server';
-
 import { getMemoryContextResult } from './memory';
 import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
@@ -7,14 +5,12 @@ import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
 import { isSupportedDocumentExtension } from './fileValidation';
-import { parseToolId, TOOL_IDS } from './tools/config';
 import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { extractTextFromMessage } from './chat/messageContent';
 import { mediateMemoryIntent } from './chat/requestMediator';
 import { estimateMemoryEntryCount } from './chat/memoryPolicy';
 import { extractTextQuery, isReferentialQuery } from './chat/referentialQuery';
 import { logWarn } from './observability';
-
 
 import { logger } from "@/lib/logger";
 interface ContextRoutingMetadata {
@@ -30,6 +26,12 @@ interface ContextRoutingMetadata {
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
+  citations?: Array<{
+    id: string;
+    source: string;
+    relevance: string;
+    page?: number;
+  }>;
   degradedContexts?: Array<{
     source: string;
     reason: string;
@@ -43,7 +45,7 @@ interface ContextRoutingResult {
 
 const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
 const CHAT_URL_CONTEXT_RETRIES = 0;
-const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 5_000;
+const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
 
 async function resolveExplicitUrlContext(
   query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
@@ -157,17 +159,21 @@ async function resolveDocumentContext(
   }));
 
   for (const attempt of attempts) {
-    const result = await getRAGContext(attempt.query, userId, {
-      conversationId: options.conversationId,
-      attachmentIds: options.attachmentIds,
-      limit: attempt.limit,
-      scoreThreshold: attempt.scoreThreshold,
-      waitForProcessing: attempt.waitForProcessing,
-      processingTimeoutMs: options.processingTimeoutMs,
-    });
+    try {
+      const result = await getRAGContext(attempt.query, userId, {
+        conversationId: options.conversationId,
+        attachmentIds: options.attachmentIds,
+        limit: attempt.limit,
+        scoreThreshold: attempt.scoreThreshold,
+        waitForProcessing: attempt.waitForProcessing,
+        processingTimeoutMs: options.processingTimeoutMs,
+      });
 
-    if (result) {
-      return result;
+      if (result) {
+        return result;
+      }
+    } catch (error) {
+      logger.warn('[Context Router] RAG retrieval attempt failed:', error);
     }
   }
 
@@ -178,13 +184,13 @@ function buildMissingDocumentContext(query: string): string {
   const normalizedQuery = query.trim() || 'the attached documents';
 
   return (
-    '\n\nDocuments are attached to this conversation, but no strong supporting passage was retrieved for the current request.' +
-    '\n<document_retrieval_warning>' +
-    `\nCurrent request: ${normalizedQuery}` +
-    '\nDo not answer as though the documents were successfully retrieved.' +
-    '\nExplain that you need a more specific section, page, table, quote, or a clearer question.' +
-    '\nOffer to summarize the attached documents first if that would help.' +
-    '\n</document_retrieval_warning>'
+    '\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed.' +
+    '\n<document_processing_notice>' +
+    `\nUser's request: ${normalizedQuery}` +
+    '\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge.' +
+    '\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again.' +
+    '\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay.' +
+    '\n</document_processing_notice>'
   );
 }
 
@@ -207,7 +213,7 @@ function logMissingDocumentRetrieval(params: {
   });
 }
 
-async function getAttachmentInfo(conversationId: string): Promise<{
+async function getAttachmentInfo(conversationId: string, userId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
   documentCount: number;
@@ -217,6 +223,9 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     const messages = await prisma.message.findMany({
       where: {
         conversationId,
+        conversation: {
+          userId,
+        },
         isDeleted: false,
       },
       select: {
@@ -258,9 +267,8 @@ export async function routeContext(
   userId: string,
   messages: Message[],
   conversationId?: string,
-  activeTool?: string | null,
+  _activeTool?: string | null,
   memoryEnabled: boolean = false,
-  deepResearchEnabled: boolean = false,
   options?: {
     apiKey?: string;
   },
@@ -270,7 +278,6 @@ export async function routeContext(
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(textQuery);
   const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
-  const sanitizedActiveTool = parseToolId(activeTool);
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
@@ -293,61 +300,6 @@ export async function routeContext(
     ];
   };
 
-  if (activeTool && !sanitizedActiveTool) {
-    addDegradedContext('tool_validation', `Ignored invalid active tool: ${activeTool}`);
-    logWarn({
-      event: 'context_router_invalid_active_tool_ignored',
-      conversationId,
-      userId,
-      requestedTool: activeTool,
-    });
-  }
-
-
-  if (deepResearchEnabled) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = TOOL_IDS.DEEP_RESEARCH;
-
-    if (conversationId) {
-      const attachmentInfo = await getAttachmentInfo(conversationId);
-      if (attachmentInfo.hasDocuments) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = attachmentInfo.documentCount;
-      }
-    }
-
-    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
-    if (urlContext) {
-      return {
-        context: urlContext,
-        metadata,
-      };
-    }
-
-    return { context: '', metadata };
-  }
-
-  if (sanitizedActiveTool === TOOL_IDS.WEB_SEARCH) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = sanitizedActiveTool;
-
-    const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
-
-    return {
-      context: urlContext,
-      metadata,
-    };
-  }
-
-  if (sanitizedActiveTool) {
-    metadata.routingDecision = RoutingDecision.ToolOnly;
-    metadata.skippedMemory = true;
-    metadata.activeToolName = sanitizedActiveTool;
-    return { context: '', metadata };
-  }
-
   const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
 
   if (urlContext) {
@@ -368,7 +320,7 @@ export async function routeContext(
   }
 
   const attachmentInfo = conversationId
-    ? await getAttachmentInfo(conversationId)
+    ? await getAttachmentInfo(conversationId, userId)
     : { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {
@@ -386,6 +338,7 @@ export async function routeContext(
       if (ragResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = ragResult.documentCount;
+        metadata.citations = ragResult.citations;
         
         if (hasImages) {
           metadata.routingDecision = RoutingDecision.Hybrid;
@@ -420,7 +373,6 @@ export async function routeContext(
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
-    // If no document context but has images, treat as VisionOnly
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.VisionOnly;
       return { context: '', metadata };
@@ -440,6 +392,7 @@ export async function routeContext(
     if (ragResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = ragResult.documentCount;
+      metadata.citations = ragResult.citations;
       
       if (hasImages) {
         metadata.routingDecision = RoutingDecision.Hybrid;

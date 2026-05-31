@@ -1,17 +1,14 @@
-import { ArrowUp, StopCircle, Loader } from "lucide-react";
+"use client";
+
+import { ArrowUp, Loader, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+type ActionStatus = "idle" | "loading" | "uploading" | "sending";
+
 interface ActionButtonsProps {
-  isLoading: boolean;
-  isUploading: boolean;
-  isSending: boolean;
+  status: ActionStatus;
   disabled: boolean;
   hasInput: boolean;
   onStop?: () => void;
@@ -19,17 +16,16 @@ interface ActionButtonsProps {
 }
 
 export function ActionButtons({
-  isLoading,
-  isUploading,
-  isSending,
+  status,
   disabled,
   hasInput,
   onStop,
   size = "default",
 }: ActionButtonsProps) {
   const isLarge = size === "large";
+  const isBusy = status !== "idle";
 
-  if (isLoading && onStop) {
+  if (status === "loading" && onStop) {
     return (
       <TooltipProvider>
         <Tooltip>
@@ -59,7 +55,7 @@ export function ActionButtons({
   return (
     <Button
       type="submit"
-      disabled={!hasInput || isLoading || disabled || isUploading || isSending}
+      disabled={!hasInput || isBusy || disabled}
       size="icon"
       className={cn(
         "size-8 rounded-full transition-all duration-300 ease-out",
@@ -69,7 +65,7 @@ export function ActionButtons({
           : "bg-black/5 dark:bg-white/5 text-muted-foreground shadow-none"
       )}
     >
-      {isUploading || isSending ? (
+      {status === "uploading" || status === "sending" ? (
         <Loader className={cn("size-4 animate-spin", isLarge && "size-5")} />
       ) : (
         <ArrowUp className={cn("size-4", isLarge && "size-5")} />

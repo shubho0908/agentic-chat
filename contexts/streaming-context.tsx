@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useState, useCallback, useEffect, use, useMemo, type ReactNode } from "react";
 
 interface StreamingState {
   isStreaming: boolean;
@@ -61,24 +61,33 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     [streamingState]
   );
 
+  const value = useMemo(() => ({
+    isStreaming: streamingState.isStreaming,
+    streamingConversationId: streamingState.conversationId,
+    startStreaming,
+    stopStreaming,
+    updateStreamingConversationId,
+    isStreamingInConversation,
+  }), [streamingState, startStreaming, stopStreaming, updateStreamingConversationId, isStreamingInConversation]);
+
+  useEffect(() => {
+    if (!streamingState.isStreaming) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [streamingState.isStreaming]);
+
   return (
-    <StreamingContext.Provider
-      value={{
-        isStreaming: streamingState.isStreaming,
-        streamingConversationId: streamingState.conversationId,
-        startStreaming,
-        stopStreaming,
-        updateStreamingConversationId,
-        isStreamingInConversation,
-      }}
-    >
+    <StreamingContext.Provider value={value}>
       {children}
     </StreamingContext.Provider>
   );
 }
 
 export function useStreaming() {
-  const context = useContext(StreamingContext);
+  const context = use(StreamingContext);
   if (context === undefined) {
     throw new Error("useStreaming must be used within a StreamingProvider");
   }

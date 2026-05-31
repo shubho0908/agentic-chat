@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
-
+import { logger } from '@/lib/logger';
 
 interface CacheCheckResult {
   cached: boolean;
@@ -19,12 +19,11 @@ interface CacheSaveResult {
 
 const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
-import { logger } from "@/lib/logger";
 function shouldUseSemanticCache(query: string): boolean {
   return query.trim().length >= MIN_CACHEABLE_QUERY_LENGTH;
 }
 
-export async function checkSemanticCacheAction(query: string): Promise<CacheCheckResult> {
+export async function checkSemanticCacheAction(query: string, conversationId?: string): Promise<CacheCheckResult> {
   const startTime = Date.now();
 
   try {
@@ -53,7 +52,7 @@ export async function checkSemanticCacheAction(query: string): Promise<CacheChec
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);
-    const cachedResponse = await searchSemanticCache(queryEmbedding, user.id);
+    const cachedResponse = await searchSemanticCache(queryEmbedding, user.id, conversationId);
 
     const latency = Date.now() - startTime;
 
@@ -82,7 +81,8 @@ export async function checkSemanticCacheAction(query: string): Promise<CacheChec
 
 export async function saveToSemanticCacheAction(
   query: string,
-  response: string
+  response: string,
+  conversationId?: string
 ): Promise<CacheSaveResult> {
   try {
     const { user, error } = await getAuthenticatedUser(await headers());
@@ -101,7 +101,7 @@ export async function saveToSemanticCacheAction(
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);
-    await addToSemanticCache(query, response, queryEmbedding, user.id);
+    await addToSemanticCache(query, response, queryEmbedding, user.id, conversationId);
 
     logger.log('[Cache] Saved successfully');
     return { success: true };

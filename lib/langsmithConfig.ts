@@ -3,7 +3,6 @@ import { wrapOpenAI } from 'langsmith/wrappers';
 import { traceable } from 'langsmith/traceable';
 import type OpenAI from 'openai';
 
-
 import { logger } from "@/lib/logger";
 const LANGSMITH_CONFIG = {
   tracing: process.env.LANGSMITH_TRACING !== 'false',
@@ -82,9 +81,7 @@ function configureLangChainTracing(): void {
     process.env.LANGCHAIN_PROJECT = LANGSMITH_CONFIG.project;
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';
-  }
+  process.env.LANGCHAIN_CALLBACKS_BACKGROUND = 'true';
 }
 
 if (typeof window === 'undefined') {

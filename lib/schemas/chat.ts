@@ -1,10 +1,13 @@
 import { z } from "zod";
+import { VALIDATION_LIMITS } from "@/constants/validation";
+import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
+import { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from "../orchestrator/constants";
 
-export const messageRoleSchema = z.enum(["user", "assistant", "system"]);
+const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
-export const toolStatusSchema = z.enum(["calling", "completed", "error"]);
+const toolStatusSchema = z.enum(["calling", "completed", "error"]);
 
-export const attachmentSchema = z.object({
+const attachmentSchema = z.object({
   id: z.string().optional(),
   fileUrl: z.url(),
   fileName: z.string(),
@@ -14,12 +17,12 @@ export const attachmentSchema = z.object({
 
 export const attachmentInputSchema = z.object({
   fileUrl: z.url(),
-  fileName: z.string().min(1).max(255),
-  fileType: z.string().min(1).max(100),
-  fileSize: z.number().int().min(0).max(16 * 1024 * 1024),
+  fileName: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH),
+  fileType: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH),
+  fileSize: z.number().int().min(0).max(VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE),
 });
 
-export const messageContentPartSchema = z.union([
+const messageContentPartSchema = z.union([
   z.object({
     type: z.literal("text"),
     text: z.string(),
@@ -57,7 +60,7 @@ const messageHistoryEntrySchema = z.object({
   editedAt: z.number(),
 });
 
-export const toolActivitySchema = z.object({
+const toolActivitySchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
   status: toolStatusSchema,
@@ -74,6 +77,8 @@ export const toolActivitySchema = z.object({
 });
 
 const messageMetadataBaseSchema = z.object({
+  thinking: z.string().optional(),
+  thinkingDurationMs: z.number().optional(),
   citations: z.array(z.object({
     id: z.string(),
     source: z.string(),
@@ -99,15 +104,30 @@ const messageMetadataBaseSchema = z.object({
     searchIndex: z.number().optional(),
     searchQuery: z.string().optional(),
   })).optional(),
-  researchTask: z.object({
-    gateDecision: z.object({
-      shouldResearch: z.boolean(),
-      reason: z.string(),
-      confidence: z.enum(['low', 'medium', 'high']),
-    }).optional(),
-    totalTasks: z.number().optional(),
-    completedTasks: z.number().optional(),
+  humanInTheLoopRequest: z.object({
+    type: z.literal(HUMAN_IN_THE_LOOP_REQUEST_TYPE).optional(),
+    requestKind: z.enum([HumanInTheLoopRequestKind.APPROVAL, HumanInTheLoopRequestKind.ASK_USER]).optional(),
+    requestId: z.string().optional(),
+    threadId: z.string().optional(),
+    toolCallId: z.string().optional(),
+    question: z.string().optional(),
+    reason: z.string().optional(),
+    title: z.string().optional(),
+    context: z.string().optional(),
+    options: z.array(z.object({
+      label: z.string(),
+      description: z.string(),
+    })).optional(),
+    recommendation: z.string().optional(),
+    toolCalls: z.array(z.object({
+      id: z.string().optional(),
+      name: z.string(),
+      args: z.record(z.string(), jsonValueSchema).optional(),
+    })).optional(),
   }).optional(),
+  humanInTheLoopStatus: z.enum(["pending", "approved", "denied"]).optional(),
+  toolActivities: z.array(toolActivitySchema).optional(),
+
 });
 
 export const messageMetadataSchema = messageMetadataBaseSchema.optional();
@@ -124,6 +144,7 @@ const baseMessageSchema = z.object({
   parentMessageId: z.string().nullable().optional(),
   siblingIndex: z.number().optional(),
   toolActivities: z.array(toolActivitySchema).optional(),
+  thinking: z.string().optional(),
 });
 
 type MessageType = z.infer<typeof baseMessageSchema> & {
@@ -155,5 +176,5 @@ export const ToolStatus = {
   Error: 'error' as const,
 } as const;
 
-export type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
+type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
 export type ToolArgs = Record<string, ToolArgValue>;

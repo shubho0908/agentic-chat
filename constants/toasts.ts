@@ -15,8 +15,6 @@ export const TOAST_SUCCESS_MESSAGES = {
 } as const;
 
 export const TOAST_INFO_MESSAGES = {
-  DEEP_RESEARCH_DEACTIVATED: "Deep Research deactivated",
-  DEEP_RESEARCH_MONTHLY_LIMIT: "You have reached your monthly usage limit.",
   TOOL_DEACTIVATED: "Tool deactivated",
   UPLOAD_IN_PROGRESS: "Uploads in progress",
 } as const;

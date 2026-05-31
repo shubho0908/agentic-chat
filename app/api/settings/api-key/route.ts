@@ -6,6 +6,7 @@ import { headers } from 'next/headers';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { VALIDATION_LIMITS } from '@/constants/validation';
 import { errorResponse, jsonResponse } from '@/lib/apiUtils';
+import { isRecord } from '@/lib/typeGuards';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +16,18 @@ export async function POST(request: NextRequest) {
       return errorResponse(API_ERROR_MESSAGES.UNAUTHORIZED, undefined, HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const { apiKey } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (!isRecord(body)) {
+      return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const { apiKey } = body;
 
     if (!apiKey || typeof apiKey !== 'string') {
       return errorResponse(API_ERROR_MESSAGES.INVALID_API_KEY, undefined, HTTP_STATUS.BAD_REQUEST);

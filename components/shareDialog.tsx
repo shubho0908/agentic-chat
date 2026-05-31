@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { ExportSection } from "@/components/export/exportSection";
 import { cn } from "@/lib/utils";
+import { appRoutes } from "@/lib/routes";
 
 interface ShareDialogProps {
   conversationId: string;
@@ -37,13 +38,14 @@ export function ShareDialog({
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shareUrl = typeof window !== "undefined" 
-    ? `${window.location.origin}/share/${conversationId}`
+    ? new URL(appRoutes.share(conversationId), window.location.origin).toString()
     : "";
 
   useEffect(() => {
+    const timeout = copiedTimeoutRef.current;
     return () => {
-      if (copiedTimeoutRef.current) {
-        clearTimeout(copiedTimeoutRef.current);
+      if (timeout) {
+        clearTimeout(timeout);
       }
     };
   }, []);

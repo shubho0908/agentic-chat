@@ -12,8 +12,16 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scrollArea";
-import type { Citation } from "@/types/deepResearch";
 import Link from "next/link";
+
+interface Citation {
+  id?: string | null;
+  source?: string | null;
+  author?: string | null;
+  year?: string | number | null;
+  url?: string | null;
+  relevance?: string | null;
+}
 
 interface SourcesSheetProps {
   citations: Citation[];
@@ -50,7 +58,7 @@ function SourcesSheetComponent({ citations, trigger }: SourcesSheetProps) {
               <span className="truncate">References & Sources</span>
             </SheetTitle>
             <SheetDescription className="text-xs sm:text-sm pt-1">
-              {citations.length} {citations.length === 1 ? 'citation' : 'citations'} from this research
+              {citations.length} {citations.length === 1 ? 'citation' : 'citations'} from this search
             </SheetDescription>
           </SheetHeader>
           
