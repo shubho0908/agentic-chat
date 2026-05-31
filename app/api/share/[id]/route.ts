@@ -37,8 +37,18 @@ export async function GET(
             id: true,
             role: true,
             content: true,
+            metadata: true,
             createdAt: true,
             siblingIndex: true,
+            attachments: {
+              select: {
+                id: true,
+                fileUrl: true,
+                fileName: true,
+                fileType: true,
+                fileSize: true,
+              }
+            },
             versions: {
               where: {
                 conversationId,
@@ -49,8 +59,18 @@ export async function GET(
                 id: true,
                 role: true,
                 content: true,
+                metadata: true,
                 createdAt: true,
                 siblingIndex: true,
+                attachments: {
+                  select: {
+                    id: true,
+                    fileUrl: true,
+                    fileName: true,
+                    fileType: true,
+                    fileSize: true,
+                  }
+                },
               }
             }
           }

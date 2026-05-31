@@ -19,7 +19,7 @@ export function createDeepResearchTool(apiKey: string, model: string): DynamicSt
   return new DynamicStructuredTool({
     name: ToolName.DEEP_RESEARCH,
     description:
-      "Conduct deep, multi-step research on a complex topic. Use when the user asks to research something thoroughly, compare multiple options, or needs comprehensive analysis with cited sources. This performs multiple web searches, cross-references sources, and synthesizes findings. If it returns CLARIFICATION_NEEDED, use ask_user to get answers, then re-call this tool with the answers in userContext.",
+      "Conduct deep, multi-step research on a complex topic. ONLY use when the user EXPLICITLY asks to 'research', 'investigate thoroughly', or 'deep dive' into a topic requiring synthesis from multiple sources. Do NOT use for simple questions, basic comparisons, 'tell me about X', or anything answerable with a single web search or your knowledge. This is expensive — it performs multiple web searches, cross-references sources, and synthesizes findings.",
     schema: deepResearchSchema,
     func: async ({ query, userContext }, runManager) => {
       try {

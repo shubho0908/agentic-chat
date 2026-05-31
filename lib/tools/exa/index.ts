@@ -9,6 +9,8 @@ import { CustomEventName } from "@/lib/orchestrator/constants";
 
 let exaClient: Exa | null = null;
 
+const EXA_REQUEST_TIMEOUT_MS = 15_000;
+
 function getExaClient(): Exa {
   if (!exaClient) {
     const apiKey = process.env.EXA_API_KEY;
@@ -42,7 +44,7 @@ export async function exaDeepSearch(
           highlights: true,
         },
       }),
-    { retries: 2, initialDelayMs: 300 }
+    { retries: 2, initialDelayMs: 300, timeoutMs: EXA_REQUEST_TIMEOUT_MS }
   );
 
   return response.results.map((r) => ({
@@ -94,7 +96,7 @@ export const exaSearchTool = new DynamicStructuredTool({
               highlights: true,
             },
           }),
-        { retries: 2, initialDelayMs: 300 }
+        { retries: 2, initialDelayMs: 300, timeoutMs: EXA_REQUEST_TIMEOUT_MS }
       );
 
       if (!response.results.length) {

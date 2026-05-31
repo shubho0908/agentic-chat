@@ -4,7 +4,7 @@ import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages"
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentStateType } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { MAX_RESPONSE_TOKENS } from "../constants";
+import { MAX_RESPONSE_TOKENS, PlanComplexity } from "../constants";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import {
   notConnectedMessage,
@@ -19,8 +19,8 @@ const BASE_SYSTEM_PROMPT = `Helpful AI assistant with tool access. Act proactive
 
 Key rules:
 - ABSOLUTE RULE: Service tools are pre-authenticated as the user. NEVER ask for usernames, workspace URLs, account IDs, API keys, or credentials. The tools already know the user's connected account.
-- RESEARCH REQUESTS: When the user says "research X", "research about X", "tell me about X", "deep dive on X", "find everything about X", or asks to compare/analyze a topic thoroughly → call deep_research with the topic as the query. NEVER use web_search for these — deep_research does multi-step search, scraping, and synthesis. NEVER ask which person/entity they mean — research the name as given; if there are multiple matches, deep_research surfaces the most prominent one and notes alternatives.
-- deep_research vs web_search: deep_research for "research/investigate/comprehensive/compare X" (multi-source synthesis). web_search for a single quick fact ("what's the weather", "latest price of X").
+- RESEARCH REQUESTS: ONLY call deep_research when the user EXPLICITLY requests a research investigation — e.g. "research X", "do a deep dive on X", "investigate X thoroughly", "comprehensive research on X". This tool performs expensive multi-step web searches and synthesis. Do NOT use it for: simple questions ("what is X"), basic comparisons ("compare A vs B"), "tell me about X", "explain X", or any query answerable with your knowledge or a single web_search. The bar is HIGH: the user must clearly want a multi-source investigation, not just information. When in doubt, use web_search for a quick lookup or answer from knowledge.
+- deep_research vs web_search: deep_research ONLY for explicit "research/investigate/deep dive" requests requiring multi-source synthesis. web_search for any factual lookup, quick comparison, or current information need.
 - If a tool requires an object identifier (database_id, page_id, repository id/name, thread id), discover it with a search/list/fetch tool first instead of inventing it or asking the user for it. For repos, resolve a name like "deployninja" via the repo search/list tool, then derive owner from the authenticated user; default to the repo's default branch / HEAD instead of asking for a ref.
 - Container queries (databases, repos, channels, projects, etc.): discover containers via search/list, fetch the schema/details for the chosen one, then query with filters that use the exact property/field names and option values from the fetched schema. Never invent property names or option values. Verify returned rows match the intended filter before answering.
 - Mutations (create/update/insert/append/delete/archive/send): pick the matching write tool from the connected service (e.g., NOTION_INSERT_ROW_DATABASE, NOTION_UPDATE_PAGE, GMAIL_SEND_EMAIL, LINEAR_UPDATE_ISSUE, GITHUB_CREATE_AN_ISSUE) and call it directly with arguments derived from the user's request and the fetched schema. NEVER tell the user "I can't edit/create/write" or hand them a curl command — the connector tools have full write capability and will run after the user approves the action via the safety gate.
@@ -330,16 +330,21 @@ export function createAgentNode(
     }
 
     const baseSystemPrompt = buildSystemPrompt(connectedServices);
-    const selectedTools = selectToolsForAgentStep(tools, {
-      latestUserText,
-      plannedTools: state.toolPlan?.tools_needed,
-      connectedServices,
-    });
+    const isDirect = state.toolPlan?.complexity === PlanComplexity.DIRECT;
+    const selectedTools = isDirect
+      ? []
+      : selectToolsForAgentStep(tools, {
+          latestUserText,
+          plannedTools: state.toolPlan?.tools_needed,
+          connectedServices,
+        });
     logger.log(`[Agent] Selected ${selectedTools.length} tools for step: ${selectedTools.map(t => t.name).join(", ")}`);
-    const availableToolsLine = `Available tools for this step: ${selectedTools.map((tool) => tool.name).join(", ") || "none"}`;
+    const availableToolsLine = selectedTools.length > 0
+      ? `Available tools for this step: ${selectedTools.map((tool) => tool.name).join(", ")}`
+      : "";
     const systemPrompt = plannerHints.length > 0
-      ? `${baseSystemPrompt}\n\n${availableToolsLine}\n\nPlanner guidance:\n${plannerHints.join("\n")}`
-      : `${baseSystemPrompt}\n\n${availableToolsLine}`;
+      ? `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}\n\nPlanner guidance:\n${plannerHints.join("\n")}`
+      : `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}`;
     const runnable = selectedTools.length > 0 ? llm.bindTools(selectedTools) : llm;
     const response = await runnable.invoke(
       [new SystemMessage(systemPrompt), ...reconcileDanglingToolCalls(conversationMessages)],

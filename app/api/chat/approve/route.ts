@@ -92,6 +92,15 @@ export async function POST(request: NextRequest) {
         ? HUMAN_IN_THE_LOOP_APPROVED
         : HUMAN_IN_THE_LOOP_DENIED;
 
+    const abortController = new AbortController();
+    request.signal.addEventListener(
+      "abort",
+      () => {
+        abortController.abort();
+      },
+      { once: true }
+    );
+
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
@@ -100,12 +109,23 @@ export async function POST(request: NextRequest) {
             {
               configurable: { thread_id: threadId },
               version: "v2",
+              signal: abortController.signal,
             }
           );
 
           const mapper = createStreamEventMapper();
           for await (const event of eventStream) {
+            if (abortController.signal.aborted) break;
             mapper.map(controller, event as Record<string, unknown>);
+          }
+
+          if (abortController.signal.aborted) {
+            try {
+              controller.enqueue(encodeDone());
+            } finally {
+              controller.close();
+            }
+            return;
           }
 
           const finalState = await graph.getState({ configurable: { thread_id: threadId } });
@@ -129,6 +149,15 @@ export async function POST(request: NextRequest) {
           handleGraphEnd(controller);
           controller.close();
         } catch (err) {
+          if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+            logger.warn("[Approve] Stream aborted by client");
+            try {
+              controller.enqueue(encodeDone());
+            } finally {
+              controller.close();
+            }
+            return;
+          }
           logger.error("[Approve] Error resuming graph:", err);
           try {
             controller.enqueue(encodeError(toUserFriendlyError(err)));
@@ -137,6 +166,9 @@ export async function POST(request: NextRequest) {
             controller.close();
           }
         }
+      },
+      cancel() {
+        abortController.abort();
       },
     });
 

@@ -18,6 +18,9 @@ import { exaDeepSearch } from "@/lib/tools/exa";
 import { scrapeContent } from "@/lib/tools/scrape";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
 
+const SHORT_LLM_TIMEOUT_MS = 30_000;
+const LONG_LLM_TIMEOUT_MS = 60_000;
+
 function parseJsonSafe<T>(text: string, fallback: T): T {
   try {
     return JSON.parse(text.replace(/```json?\n?|\n?```/g, "").trim()) as T;
@@ -71,7 +74,7 @@ function collectImages(sources: ResearchSource[], limit: number): ResearchImage[
 }
 
 export function triageNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 256, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 256, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.userContext) {
@@ -104,7 +107,7 @@ export function triageNode(apiKey: string, model: string) {
 }
 
 export function decomposeNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     await emitProgress(ResearchStep.DECOMPOSING, "Breaking down research question...", config);
@@ -129,42 +132,41 @@ export function decomposeNode(apiKey: string, model: string) {
 }
 
 export function planQueriesNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
-    if (state.searchRound > 0 && state.searchQueries.length > 0) {
-      return { searchRound: state.searchRound + 1 };
-    }
-
-    const allQueries: string[] = [];
-    for (const subQ of state.subQuestions) {
-      const response = await llm.invoke(
-        [new SystemMessage(QUERY_PLANNER_PROMPT), new HumanMessage(subQ)],
-        config
-      );
-      const queries = parseJsonSafe<string[]>(extractLLMText(response.content), [subQ]);
-      allQueries.push(...queries.slice(0, Limit.MAX_QUERIES_PER_SUB));
-    }
+    const queryGroups = await Promise.all(
+      state.subQuestions.map(async (subQ) => {
+        const response = await llm.invoke(
+          [new SystemMessage(QUERY_PLANNER_PROMPT), new HumanMessage(subQ)],
+          config
+        );
+        const queries = parseJsonSafe<string[]>(extractLLMText(response.content), [subQ]);
+        return queries.slice(0, Limit.MAX_QUERIES_PER_SUB);
+      })
+    );
+    const allQueries = queryGroups.flat();
 
     await emitProgress(
       ResearchStep.PLANNING,
       `Generated ${allQueries.length} search queries across ${state.subQuestions.length} angles`,
       config
     );
-    return { searchQueries: allQueries, searchRound: state.searchRound + 1 };
+    return { searchQueries: allQueries };
   };
 }
 
 export function searchNode() {
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const { searchQueries, searchRound } = state;
+    const nextRound = searchRound + 1;
 
     if (!process.env.EXA_API_KEY) {
       await emitProgress(ResearchStep.SEARCHING, "EXA_API_KEY not configured — skipping web search", config);
-      return { sources: [] };
+      return { sources: [], searchRound: nextRound };
     }
 
-    await emitProgress(ResearchStep.SEARCHING, `Executing ${searchQueries.length} searches (round ${searchRound})...`, config);
+    await emitProgress(ResearchStep.SEARCHING, `Executing ${searchQueries.length} searches (round ${nextRound})...`, config);
 
     const results = await Promise.allSettled(
       searchQueries.map((query) => exaDeepSearch(query, { numResults: 8, maxCharacters: 3000 }))
@@ -193,8 +195,8 @@ export function searchNode() {
       }
     }
 
-    await emitProgress(ResearchStep.SEARCHING, `Found ${newSources.length} new sources in round ${searchRound}`, config);
-    return { sources: newSources };
+    await emitProgress(ResearchStep.SEARCHING, `Found ${newSources.length} new sources in round ${nextRound}`, config);
+    return { sources: newSources, searchRound: nextRound };
   };
 }
 
@@ -231,7 +233,7 @@ export function deepScrapeNode() {
 }
 
 export function evaluateNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 768, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 768, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.searchRound >= state.maxRounds || state.sources.length >= Limit.MAX_SOURCES) {
@@ -268,13 +270,12 @@ export function evaluateNode(apiKey: string, model: string) {
     return {
       searchQueries: evaluation.followUpQueries.slice(0, Limit.MAX_FOLLOW_UP_QUERIES),
       gaps: evaluation.gaps ?? [],
-      searchRound: state.searchRound + 1,
     };
   };
 }
 
 export function synthesizeNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0.1), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0.1), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const images = collectImages(state.sources, Limit.MAX_RESEARCH_IMAGES);
@@ -305,7 +306,7 @@ export function synthesizeNode(apiKey: string, model: string) {
 }
 
 export function reflexionNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 1024, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 1024, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     await emitProgress(ResearchStep.VERIFYING, "Fact-checking synthesis against sources...", config);
@@ -340,7 +341,7 @@ export function reflexionNode(apiKey: string, model: string) {
 }
 
 export function correctNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0), streaming: false });
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
 
   return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const topSources = getRankedSources(state.sources, 12);

@@ -67,18 +67,48 @@ const WEB_SEARCH_TERMS = [
   "weather",
 ];
 
-const DEEP_RESEARCH_TERMS = [
+const DEEP_RESEARCH_PHRASES = [
+  "deep research",
+  "research thoroughly",
+  "research about",
+  "research on",
+  "research into",
+  "do research",
+  "conduct research",
+  "in-depth research",
+  "comprehensive research",
+  "deep dive into",
+  "deep dive on",
+  "investigate thoroughly",
+  "thorough investigation",
+  "comprehensive analysis of",
+  "comprehensive comparison",
+  "detailed comparison of",
+  "pros and cons of",
+] as const;
+
+const DEEP_RESEARCH_WEAK_SIGNALS = [
   "research",
-  "thoroughly",
-  "comprehensive",
-  "compare",
-  "analysis",
   "investigate",
-  "deep dive",
-  "in-depth",
-  "detailed",
-  "pros and cons",
-];
+] as const;
+
+const MIN_RESEARCH_QUERY_WORDS = 4;
+
+function qualifiesForDeepResearch(text: string): boolean {
+  const lower = text.toLowerCase();
+  const wordCount = lower.split(/\s+/).filter(Boolean).length;
+
+  if (wordCount < MIN_RESEARCH_QUERY_WORDS) return false;
+
+  if (DEEP_RESEARCH_PHRASES.some((phrase) => lower.includes(phrase))) return true;
+
+  for (const signal of DEEP_RESEARCH_WEAK_SIGNALS) {
+    const pattern = new RegExp(`^(please\\s+|can you\\s+|could you\\s+)?${signal}\\b`, "i");
+    if (pattern.test(lower.trim()) && wordCount >= 5) return true;
+  }
+
+  return false;
+}
 
 const STOPWORDS = new Set([
   "the",
@@ -247,6 +277,8 @@ export function selectToolsForAgentStep(
   const plannedToolSet = new Set(plannedTools);
 
   addToolByName(selected, toolsByName, ToolName.ASK_USER);
+  addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
+  addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
   addToolsByName(selected, toolsByName, plannedTools);
 
   const targetToolkits = new Set<ComposioToolkit>([
@@ -256,13 +288,7 @@ export function selectToolsForAgentStep(
 
   addToolsByName(selected, toolsByName, getEssentialComposioToolSlugs(targetToolkits));
 
-  if (/https?:\/\//i.test(latestUserText)) {
-    addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
-  }
-  if (WEB_SEARCH_TERMS.some((term) => rawText.includes(term))) {
-    addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
-  }
-  if (DEEP_RESEARCH_TERMS.some((term) => rawText.includes(term))) {
+  if (qualifiesForDeepResearch(latestUserText)) {
     addToolByName(selected, toolsByName, ToolName.DEEP_RESEARCH);
   }
 
@@ -293,7 +319,7 @@ export function shouldBypassSemanticCacheForToolIntent(
   return (
     getAnyMentionedToolkits(latestUserText).length > 0 ||
     WEB_SEARCH_TERMS.some((term) => rawText.includes(term)) ||
-    DEEP_RESEARCH_TERMS.some((term) => rawText.includes(term)) ||
+    qualifiesForDeepResearch(latestUserText) ||
     /https?:\/\//i.test(latestUserText)
   );
 }

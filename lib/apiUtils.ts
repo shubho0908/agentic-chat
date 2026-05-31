@@ -64,6 +64,11 @@ export function jsonResponse(data: unknown, status: number = HTTP_STATUS.OK): Ne
   return NextResponse.json(data, { status });
 }
 
+function shouldExposeInternalErrorDetails(): boolean {
+  return process.env.NODE_ENV !== 'production';
+}
+
 export function errorResponse(error: string, message?: string, status: number = HTTP_STATUS.INTERNAL_SERVER_ERROR): NextResponse {
-  return NextResponse.json({ error, ...(message && { message }) }, { status });
+  const exposeMessage = message && shouldExposeInternalErrorDetails() ? message : undefined;
+  return NextResponse.json({ error, ...(exposeMessage ? { message: exposeMessage } : {}) }, { status });
 }
