@@ -7,18 +7,21 @@ import {
   type ComposioToolkit,
 } from "./config";
 import { logger } from "@/lib/logger";
+import { withRetry } from "@/lib/retry";
 
 let composioInstance: Composio<LangchainProvider> | null = null;
+let cachedApiKey: string | undefined;
 
 export function getComposioClient(): Composio<LangchainProvider> | null {
-  if (composioInstance) return composioInstance;
   const apiKey = process.env.COMPOSIO_API_KEY;
   if (!apiKey) return null;
+  if (composioInstance && cachedApiKey === apiKey) return composioInstance;
   composioInstance = new Composio({
     apiKey,
     provider: new LangchainProvider(),
     allowTracking: false,
   });
+  cachedApiKey = apiKey;
   return composioInstance;
 }
 
@@ -38,10 +41,12 @@ export async function getToolsForUser(
   if (cached && cached.expiry > Date.now()) return cached.tools;
 
   try {
-    const importantTools = await client.tools.get(userId, {
-      toolkits: [...toolkits],
-      important: true,
-    });
+    const importantTools = await withRetry(
+      () => client.tools.get(userId, { toolkits: [...toolkits], important: true }),
+      { retries: 2, initialDelayMs: 300, timeoutMs: 15_000 }
+    );
+
+    logger.log(`[Composio] Loaded ${importantTools.length} important tools for toolkits: ${toolkits.join(", ")}`);
 
     const essentialSlugs = getEssentialComposioToolSlugs(toolkits);
     let allTools = importantTools;
@@ -50,8 +55,12 @@ export async function getToolsForUser(
       const existingSlugs = new Set(importantTools.map((t) => t.name));
       const missingSlugs = essentialSlugs.filter((s) => !existingSlugs.has(s));
       if (missingSlugs.length > 0) {
+        logger.log(`[Composio] Fetching ${missingSlugs.length} essential tools not in important set: ${missingSlugs.join(", ")}`);
         try {
-          const extra = await client.tools.get(userId, { tools: missingSlugs });
+          const extra = await withRetry(
+            () => client.tools.get(userId, { tools: missingSlugs }),
+            { retries: 1, initialDelayMs: 300, timeoutMs: 10_000 }
+          );
           allTools = [...importantTools, ...extra];
         } catch (error) {
           logger.warn("[Composio] Failed to load essential supplemental tools; using important tools only:", error);
@@ -59,6 +68,7 @@ export async function getToolsForUser(
       }
     }
 
+    logger.log(`[Composio] Total tools available for user ${userId}: ${allTools.length} (${allTools.map(t => t.name).join(", ")})`);
     toolCache.set(cacheKey, { tools: allTools, expiry: Date.now() + CACHE_TTL_MS });
     return allTools;
   } catch (error) {

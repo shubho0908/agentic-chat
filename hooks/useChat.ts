@@ -281,7 +281,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current = new AbortController();
       setIsLoading(true);
       startStreaming(conversationId, abortControllerRef.current);
-      updateLocalAssistantMessage({ metadata: messageMetadata });
+      updateLocalAssistantMessage({ content: "", metadata: messageMetadata });
 
       try {
         const responseContent = await streamChatApproval({

@@ -401,7 +401,7 @@ function ApprovalCard({
             size="sm"
             onClick={() => onDecision(true)}
             disabled={isLoading}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="gap-1.5"
           >
             <Check className="size-3.5" />
             Approve

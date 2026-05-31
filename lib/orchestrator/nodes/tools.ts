@@ -24,12 +24,32 @@ function getToolCallId(toolCall: ToolCall, index: number): string {
 }
 
 function isAuthFailureText(content: string): boolean {
-  return /(?:not connected|no connected account|connection not found|unauthori[sz]ed|forbidden|invalid auth|authentication|permission denied|\b401\b|\b403\b)/i.test(content);
+  return /(?:not connected|no connected account|connection not found|unauthori[sz]ed|forbidden|invalid auth|authentication failed|permission denied|\b401\b|\b403\b)/i.test(content);
+}
+
+function getConnectorFailureText(content: string): string | null {
+  if (content.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(content) as { successful?: unknown; error?: unknown };
+      if (parsed && typeof parsed === "object" && "successful" in parsed) {
+        if (parsed.successful !== false) return null;
+        return typeof parsed.error === "string" ? parsed.error : null;
+      }
+    } catch {
+      // Not the Composio envelope — fall back to scanning the raw string.
+    }
+  }
+  return content;
 }
 
 function normalizeConnectorToolContent(toolName: string | undefined, content: string): string {
   const toolkit = toolName ? getComposioToolkitForToolName(toolName) : null;
-  if (toolkit && isAuthFailureText(content)) {
+  if (!toolkit) return content;
+  logger.log(`[ToolNode] Composio tool ${toolName} response (first 500 chars): ${content.slice(0, 500)}`);
+
+  const failureText = getConnectorFailureText(content);
+  if (failureText !== null && isAuthFailureText(failureText)) {
+    logger.warn(`[ToolNode] Composio tool ${toolName} auth failure detected: ${failureText.slice(0, 200)}`);
     return notConnectedMessage(toolkit);
   }
 
