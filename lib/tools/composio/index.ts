@@ -1,7 +1,11 @@
 import { Composio } from "@composio/core";
 import { LangchainProvider } from "@composio/langchain";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
-import { COMPOSIO_TOOLKITS, type ComposioToolkit } from "./config";
+import {
+  COMPOSIO_TOOLKITS,
+  getEssentialComposioToolSlugs,
+  type ComposioToolkit,
+} from "./config";
 import { logger } from "@/lib/logger";
 
 let composioInstance: Composio<LangchainProvider> | null = null;
@@ -34,9 +38,29 @@ export async function getToolsForUser(
   if (cached && cached.expiry > Date.now()) return cached.tools;
 
   try {
-    const tools = await client.tools.get(userId, { toolkits });
-    toolCache.set(cacheKey, { tools, expiry: Date.now() + CACHE_TTL_MS });
-    return tools;
+    const importantTools = await client.tools.get(userId, {
+      toolkits: [...toolkits],
+      important: true,
+    });
+
+    const essentialSlugs = getEssentialComposioToolSlugs(toolkits);
+    let allTools = importantTools;
+
+    if (essentialSlugs.length > 0) {
+      const existingSlugs = new Set(importantTools.map((t) => t.name));
+      const missingSlugs = essentialSlugs.filter((s) => !existingSlugs.has(s));
+      if (missingSlugs.length > 0) {
+        try {
+          const extra = await client.tools.get(userId, { tools: missingSlugs });
+          allTools = [...importantTools, ...extra];
+        } catch (error) {
+          logger.warn("[Composio] Failed to load essential supplemental tools; using important tools only:", error);
+        }
+      }
+    }
+
+    toolCache.set(cacheKey, { tools: allTools, expiry: Date.now() + CACHE_TTL_MS });
+    return allTools;
   } catch (error) {
     logger.error("[Composio] Failed to load tools:", error);
     return [];

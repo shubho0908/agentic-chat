@@ -338,7 +338,7 @@ export function Byok({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90dvh] w-[min(calc(100vw-1rem),500px)] overflow-hidden p-0 sm:w-full sm:max-w-[500px] focus-visible:outline-none">
+      <DialogContent className="max-h-[90dvh] w-[min(calc(100vw-1rem),500px)] gap-0 overflow-hidden p-0 sm:w-full sm:max-w-[500px] sm:p-0 focus-visible:outline-none">
         <DialogHeader className="border-b p-4 pr-12 sm:px-5 sm:py-5">
           <DialogTitle className="text-lg leading-tight sm:text-xl">OpenAI API Configuration</DialogTitle>
           <DialogDescription className="text-[13px] leading-5 sm:text-sm">

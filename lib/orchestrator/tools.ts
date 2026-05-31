@@ -4,7 +4,12 @@ import { exaSearchTool } from "@/lib/tools/exa";
 import { webScrapeTool } from "@/lib/tools/scrape";
 import { getToolsForUser } from "@/lib/tools/composio";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
-import type { ComposioToolkit } from "@/lib/tools/composio/config";
+import {
+  COMPOSIO_TOOLKITS,
+  getComposioToolkitForToolName,
+  getEssentialComposioToolSlugs,
+  type ComposioToolkit,
+} from "@/lib/tools/composio/config";
 import { MAX_TOOLS } from "./constants";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
@@ -34,6 +39,247 @@ const askUserTool = new DynamicStructuredTool({
   func: async ({ question }) => `Waiting for the user to answer: ${question}`,
 });
 
+const MAX_AGENT_STEP_TOOLS = 18;
+
+const TOOLKIT_INTENT_TERMS: Record<ComposioToolkit, string[]> = {
+  gmail: ["gmail", "email", "mail", "inbox"],
+  googlecalendar: ["calendar", "meeting", "schedule"],
+  googledrive: ["drive", "folder"],
+  googledocs: ["docs", "google doc"],
+  googlesheets: ["sheets", "spreadsheet"],
+  slack: ["slack", "channel", "dm"],
+  notion: ["notion"],
+  github: ["github", "repo", "repository", "pull request", "branch", "commit"],
+  linear: ["linear", "issue", "ticket", "cycle"],
+};
+
+const WEB_SEARCH_TERMS = [
+  "latest",
+  "today",
+  "news",
+  "current",
+  "recent",
+  "web",
+  "internet",
+  "online",
+  "price",
+  "weather",
+];
+
+const STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "that",
+  "this",
+  "into",
+  "about",
+  "what",
+  "when",
+  "where",
+  "which",
+  "show",
+  "list",
+  "search",
+  "fetch",
+  "get",
+  "find",
+  "give",
+  "need",
+  "want",
+  "using",
+  "please",
+]);
+
+function isComposioToolkit(value: string): value is ComposioToolkit {
+  return COMPOSIO_TOOLKITS.includes(value as ComposioToolkit);
+}
+
+function tokenizeIntent(text: string): string[] {
+  return [...new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/g)
+      .filter((token) => token.length >= 3 && !STOPWORDS.has(token))
+  )];
+}
+
+function getConnectedComposioToolkits(connectedServices: string[] | undefined): ComposioToolkit[] {
+  return (connectedServices ?? []).filter(isComposioToolkit);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function includesIntentTerm(text: string, term: string): boolean {
+  if (term.includes(" ")) {
+    return text.includes(term);
+  }
+  return new RegExp(`\\b${escapeRegExp(term)}\\b`, "i").test(text);
+}
+
+function getMentionedToolkits(text: string, connectedServices: string[] | undefined): ComposioToolkit[] {
+  const lowerText = text.toLowerCase();
+  const connected = getConnectedComposioToolkits(connectedServices);
+  const allowed = connected.length > 0 ? new Set<ComposioToolkit>(connected) : null;
+
+  return COMPOSIO_TOOLKITS.filter((toolkit) => {
+    if (allowed && !allowed.has(toolkit)) return false;
+    return TOOLKIT_INTENT_TERMS[toolkit].some((term) => includesIntentTerm(lowerText, term));
+  });
+}
+
+function getAnyMentionedToolkits(text: string): ComposioToolkit[] {
+  const lowerText = text.toLowerCase();
+  return COMPOSIO_TOOLKITS.filter((toolkit) =>
+    TOOLKIT_INTENT_TERMS[toolkit].some((term) => includesIntentTerm(lowerText, term))
+  );
+}
+
+export function getAnyMentionedComposioToolkits(text: string): ComposioToolkit[] {
+  return getAnyMentionedToolkits(text);
+}
+
+function getToolkitsFromToolNames(toolNames: string[]): ComposioToolkit[] {
+  const toolkits = toolNames
+    .map(getComposioToolkitForToolName)
+    .filter((toolkit): toolkit is ComposioToolkit => toolkit !== null);
+  return [...new Set(toolkits)];
+}
+
+function addToolByName(
+  selected: Map<string, DynamicStructuredTool>,
+  toolsByName: Map<string, DynamicStructuredTool>,
+  name: string,
+): void {
+  const tool = toolsByName.get(name);
+  if (tool && !selected.has(tool.name)) {
+    selected.set(tool.name, tool);
+  }
+}
+
+function addToolsByName(
+  selected: Map<string, DynamicStructuredTool>,
+  toolsByName: Map<string, DynamicStructuredTool>,
+  names: string[],
+): void {
+  for (const name of names) {
+    addToolByName(selected, toolsByName, name);
+  }
+}
+
+function scoreToolForIntent(
+  tool: DynamicStructuredTool,
+  intentTerms: string[],
+  rawText: string,
+  targetToolkits: Set<ComposioToolkit>,
+  plannedTools: Set<string>,
+): number {
+  if (plannedTools.has(tool.name)) return 1_000;
+
+  const toolkit = getComposioToolkitForToolName(tool.name);
+  if (toolkit && targetToolkits.size > 0 && !targetToolkits.has(toolkit)) {
+    return -1;
+  }
+
+  let score = toolkit && targetToolkits.has(toolkit) ? 40 : 0;
+  const name = tool.name.toLowerCase();
+  const description = (tool.description ?? "").toLowerCase();
+  const haystack = `${name} ${description}`;
+
+  for (const term of intentTerms) {
+    if (name.includes(term)) score += 8;
+    else if (description.includes(term)) score += 3;
+  }
+
+  if (tool.name === ToolName.WEB_SEARCH && WEB_SEARCH_TERMS.some((term) => rawText.includes(term))) {
+    score += 35;
+  }
+  if (tool.name === ToolName.WEB_SCRAPE && /https?:\/\//i.test(rawText)) {
+    score += 35;
+  }
+  if (toolkit && !targetToolkits.has(toolkit) && !intentTerms.some((term) => haystack.includes(term))) {
+    score -= 15;
+  }
+
+  return score;
+}
+
+interface ToolSelectionContext {
+  latestUserText?: string;
+  plannedTools?: string[];
+  connectedServices?: string[];
+  maxTools?: number;
+}
+
+export function selectToolsForAgentStep(
+  allTools: DynamicStructuredTool[],
+  context: ToolSelectionContext = {},
+): DynamicStructuredTool[] {
+  const maxTools = Math.max(1, context.maxTools ?? MAX_AGENT_STEP_TOOLS);
+  const toolsByName = new Map(allTools.map((tool) => [tool.name, tool]));
+  const selected = new Map<string, DynamicStructuredTool>();
+  const latestUserText = context.latestUserText ?? "";
+  const rawText = latestUserText.toLowerCase();
+  const mentionedToolkits = getMentionedToolkits(latestUserText, context.connectedServices);
+  const mentionedToolkitSet = new Set(mentionedToolkits);
+  const plannedTools = [...new Set(context.plannedTools ?? [])].filter((toolName) => {
+    const toolkit = getComposioToolkitForToolName(toolName);
+    return !toolkit || mentionedToolkitSet.size === 0 || mentionedToolkitSet.has(toolkit);
+  });
+  const plannedToolSet = new Set(plannedTools);
+
+  addToolByName(selected, toolsByName, ToolName.ASK_USER);
+  addToolsByName(selected, toolsByName, plannedTools);
+
+  const targetToolkits = new Set<ComposioToolkit>([
+    ...mentionedToolkits,
+    ...getToolkitsFromToolNames(plannedTools),
+  ]);
+
+  addToolsByName(selected, toolsByName, getEssentialComposioToolSlugs(targetToolkits));
+
+  if (/https?:\/\//i.test(latestUserText)) {
+    addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
+  }
+  if (WEB_SEARCH_TERMS.some((term) => rawText.includes(term))) {
+    addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
+  }
+
+  const intentTerms = tokenizeIntent(latestUserText);
+  const ranked = allTools
+    .filter((tool) => !selected.has(tool.name))
+    .map((tool) => ({
+      tool,
+      score: scoreToolForIntent(tool, intentTerms, rawText, targetToolkits, plannedToolSet),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
+
+  for (const { tool } of ranked) {
+    if (selected.size >= maxTools) break;
+    selected.set(tool.name, tool);
+  }
+
+  return [...selected.values()].slice(0, maxTools);
+}
+
+export function shouldBypassSemanticCacheForToolIntent(
+  latestUserText: string,
+  _connectedServices?: string[],
+): boolean {
+  void _connectedServices;
+  const rawText = latestUserText.toLowerCase();
+  return (
+    getAnyMentionedToolkits(latestUserText).length > 0 ||
+    WEB_SEARCH_TERMS.some((term) => rawText.includes(term)) ||
+    /https?:\/\//i.test(latestUserText)
+  );
+}
+
 export async function getToolsForRequest(
   userId: string,
   connectedToolkits?: ComposioToolkit[]
@@ -50,9 +296,11 @@ export async function getToolsForRequest(
       const composioTools = await getToolsForUser(userId, toolkits);
       const allTools = [...baseTools, ...composioTools];
       if (allTools.length > MAX_TOOLS) {
-        logger.warn(`[Tools] User ${userId} has ${allTools.length} tools, capping to ${MAX_TOOLS}`);
+        logger.warn(
+          `[Tools] User ${userId} has ${allTools.length} loaded tools; per-step selection will cap model-bound tools to ${MAX_AGENT_STEP_TOOLS}`
+        );
       }
-      return allTools.slice(0, MAX_TOOLS);
+      return allTools;
     }
   } catch (error) {
     logger.error("[Tools] Failed to load Composio tools, using base tools only:", error);
@@ -69,8 +317,11 @@ export function filterToolsForContext(
   const alwaysInclude: string[] = [ToolName.ASK_USER];
 
   if (plannedTools && plannedTools.length > 0) {
+    const plannedToolkits = getToolkitsFromToolNames(plannedTools);
+    const prerequisiteTools = getEssentialComposioToolSlugs(plannedToolkits);
+    const allowedTools = new Set([...alwaysInclude, ...plannedTools, ...prerequisiteTools]);
     return allTools.filter(
-      (t) => alwaysInclude.includes(t.name) || plannedTools.includes(t.name)
+      (t) => allowedTools.has(t.name)
     );
   }
 

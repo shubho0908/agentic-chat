@@ -1,6 +1,7 @@
 "use client";
 
 import { Brain } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Response } from "@/components/ai-elements/response";
 import {
   Accordion,
@@ -15,6 +16,8 @@ interface ThinkingAccordionProps {
   durationMs?: number;
 }
 
+const STICKY_BOTTOM_THRESHOLD_PX = 24;
+
 function formatDuration(ms: number): string {
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
@@ -24,9 +27,34 @@ function formatDuration(ms: number): string {
 }
 
 export function ThinkingAccordion({ thinking, isLoading = false, durationMs }: ThinkingAccordionProps) {
-  const label = isLoading && !thinking
+  const label = isLoading
     ? "Thinking..."
     : `Thought for ${durationMs ? formatDuration(durationMs) : "a few seconds"}`;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stickToBottomRef.current = distanceFromBottom <= STICKY_BOTTOM_THRESHOLD_PX;
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (stickToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [thinking, isLoading]);
 
   return (
     <Accordion type="single" collapsible defaultValue="thinking">
@@ -40,7 +68,10 @@ export function ThinkingAccordion({ thinking, isLoading = false, durationMs }: T
         <AccordionContent className="pb-3 pt-0">
           <div className="relative">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-background to-transparent z-10" />
-            <div className="text-[13px] leading-relaxed max-h-72 overflow-y-auto scrollbar-hide opacity-70 py-2">
+            <div
+              ref={scrollRef}
+              className="text-[13px] leading-relaxed max-h-72 overflow-y-auto scrollbar-hide opacity-70 py-2"
+            >
               {thinking ? <Response>{thinking}</Response> : (isLoading ? "Reasoning..." : "")}
             </div>
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background to-transparent z-10" />

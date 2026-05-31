@@ -6,16 +6,14 @@ import { createToolNode } from "./nodes/tools";
 import { createPlannerNode } from "./nodes/planner";
 import { routeAfterAgent } from "./nodes/reflector";
 import { getCheckpointer } from "./checkpointer";
-import { getToolsForRequest, filterToolsForContext } from "./tools";
+import { getToolsForRequest } from "./tools";
 import { DEFAULT_MODEL } from "@/constants/openai-models";
 import { GraphNode } from "./constants";
 import type { ComposioToolkit } from "@/lib/tools/composio/config";
-import type { RoutingDecision } from "@/types/chat";
 
 interface CreateAgentGraphOptions {
   thinkingEnabled?: boolean;
   connectedToolkits?: ComposioToolkit[];
-  routingDecision?: RoutingDecision;
 }
 
 export async function createAgentGraph(
@@ -24,10 +22,10 @@ export async function createAgentGraph(
   model = DEFAULT_MODEL,
   options: CreateAgentGraphOptions = {}
 ) {
-  const { thinkingEnabled = false, connectedToolkits, routingDecision } = options;
+  const { thinkingEnabled = false, connectedToolkits } = options;
 
   const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits);
-  const tools = filterToolsForContext(allTools, routingDecision);
+  const tools = allTools;
   const checkpointer = await getCheckpointer();
 
   const graph = new StateGraph(AgentState)

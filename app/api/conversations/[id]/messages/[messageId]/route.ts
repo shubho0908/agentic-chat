@@ -60,10 +60,16 @@ function buildAttachmentCreateInput(attachments?: AttachmentInput[] | null) {
 }
 
 async function getNextSiblingIndex(
-  db: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'> | typeof prisma,
+  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
   parentId: string
 ) {
-  const maxSibling = await db.message.aggregate({
+  // Acquire a transaction-scoped advisory lock keyed on the parent.
+  // Concurrent transactions assigning siblings under the same parent will block here
+  // and resume one-at-a-time, eliminating the read-then-write race on siblingIndex.
+  // The lock auto-releases when the surrounding transaction commits or aborts.
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${parentId})::bigint)`;
+
+  const maxSibling = await tx.message.aggregate({
     where: {
       OR: [
         { id: parentId },
@@ -240,36 +246,34 @@ export async function PATCH(
     }
 
     if (existingMessage.role === 'USER' && assistantContent) {
-      const siblingIndex = await getNextSiblingIndex(prisma, parentId);
-
-      let assistantParentId: string | undefined;
-      let assistantSiblingIndex: number | undefined;
-      let existingAssistantMessage: { id: string; parentMessageId: string | null; siblingIndex: number } | null = null;
-
-      if (hasAssistantMessageId) {
-        existingAssistantMessage = await prisma.message.findFirst({
-          where: {
-            id: assistantMessageId,
-            conversationId,
-            role: 'ASSISTANT',
-            isDeleted: false,
-          },
-          select: {
-            id: true,
-            parentMessageId: true,
-            siblingIndex: true,
-          },
-        });
-
-        if (!existingAssistantMessage) {
-          return errorResponse('Assistant message not found or already deleted', undefined, HTTP_STATUS.NOT_FOUND);
-        }
-
-        assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
-        assistantSiblingIndex = await getNextSiblingIndex(prisma, assistantParentId);
-      }
-
       const result = await prisma.$transaction(async (tx) => {
+        // Parallelize independent reads inside the transaction for atomicity
+        const [siblingIndex, existingAssistantMessage] = await Promise.all([
+          getNextSiblingIndex(tx, parentId),
+          hasAssistantMessageId
+            ? tx.message.findFirst({
+                where: {
+                  id: assistantMessageId,
+                  conversationId,
+                  role: 'ASSISTANT',
+                  isDeleted: false,
+                },
+                select: {
+                  id: true,
+                  parentMessageId: true,
+                  siblingIndex: true,
+                },
+              })
+            : Promise.resolve(null),
+        ]);
+
+        const assistantParentId = existingAssistantMessage
+          ? existingAssistantMessage.parentMessageId || existingAssistantMessage.id
+          : null;
+        const assistantSiblingIndex = assistantParentId
+          ? await getNextSiblingIndex(tx, assistantParentId)
+          : 0;
+
         await softDeleteDownstreamBranch(
           tx,
           conversationId,
@@ -294,9 +298,7 @@ export async function PATCH(
           },
         });
 
-        let assistantMessage;
-
-        if (hasAssistantMessageId && existingAssistantMessage) {
+        if (existingAssistantMessage) {
           await softDeleteDownstreamBranch(
             tx,
             conversationId,
@@ -305,39 +307,25 @@ export async function PATCH(
             existingAssistantMessage.siblingIndex,
             now
           );
-
-          assistantMessage = await tx.message.create({
-            data: {
-              conversationId,
-              role: 'ASSISTANT',
-              content: assistantContent,
-              parentMessageId: assistantParentId!,
-              siblingIndex: assistantSiblingIndex!,
-              ...(assistantMetadata && { metadata: assistantMetadata }),
-            },
-            include: {
-              attachments: true,
-            },
-          });
         }
 
-        if (!hasAssistantMessageId && !assistantMessage) {
-          assistantMessage = await tx.message.create({
-            data: {
-              conversationId,
-              role: 'ASSISTANT',
-              content: assistantContent,
-              ...(assistantMetadata && { metadata: assistantMetadata }),
-            },
-            include: {
-              attachments: true,
-            },
-          });
-        }
+        const assistantMessage = await tx.message.create({
+          data: {
+            conversationId,
+            role: 'ASSISTANT',
+            content: assistantContent,
+            parentMessageId: assistantParentId ?? updatedMessage.id,
+            siblingIndex: assistantSiblingIndex,
+            ...(assistantMetadata && { metadata: assistantMetadata }),
+          },
+          include: {
+            attachments: true,
+          },
+        });
 
         await tx.conversation.update({
           where: { id: conversationId },
-          data: { updatedAt: new Date() },
+          data: { updatedAt: now },
         });
 
         return {
@@ -351,9 +339,9 @@ export async function PATCH(
       return jsonResponse(result, HTTP_STATUS.OK);
     }
 
-    const siblingIndexForVersion = await getNextSiblingIndex(prisma, parentId);
-
     const newVersion = await prisma.$transaction(async (tx) => {
+      const siblingIndexForVersion = await getNextSiblingIndex(tx, parentId);
+
       await softDeleteDownstreamBranch(
         tx,
         conversationId,

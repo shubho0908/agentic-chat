@@ -3,7 +3,7 @@
 import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
@@ -45,18 +45,22 @@ interface FilePreviewProps {
   isUploading?: boolean;
 }
 
-function getFilePreview(file: File) {
-  if (isImageFile(file) && !isDocumentFile(file)) {
-    return URL.createObjectURL(file);
-  }
-  return null;
-}
-
 export function FilePreview({ files, onRemove, disabled = false, isUploading = false }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState<boolean>();
   const [canScrollRight, setCanScrollRight] = useState<boolean>();
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+
+  const previewUrls = useMemo(
+    () => files.map((file) => (isImageFile(file) && !isDocumentFile(file) ? URL.createObjectURL(file) : null)),
+    [files]
+  );
+
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => { if (url) URL.revokeObjectURL(url); });
+    };
+  }, [previewUrls]);
 
   const updateScrollState = useCallback((container: HTMLDivElement | null) => {
     if (!container) return;
@@ -145,7 +149,7 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {files.map((file, index) => {
-                const preview = getFilePreview(file);
+                const preview = previewUrls[index];
                 return (
                   <m.div
                     key={`${file.name}-${file.size}-${file.lastModified}`}

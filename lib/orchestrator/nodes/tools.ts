@@ -3,7 +3,11 @@ import { interrupt } from "@langchain/langgraph";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AIMessage } from "@langchain/core/messages";
 import { ToolMessage } from "@langchain/core/messages";
-import { isDangerousAction } from "@/lib/tools/composio/config";
+import {
+  notConnectedMessage,
+  getComposioToolkitForToolName,
+  isDangerousAction,
+} from "@/lib/tools/composio/config";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED, HUMAN_IN_THE_LOOP_REQUEST_TYPE, TOOL_ERROR_STATUS } from "../constants";
 import type { AgentStateType } from "../state";
 import { ASK_USER_TOOL_NAME } from "../tools";
@@ -19,13 +23,29 @@ function getToolCallId(toolCall: ToolCall, index: number): string {
     : `${toolCall.name || "tool"}-${index}`;
 }
 
+function isAuthFailureText(content: string): boolean {
+  return /(?:not connected|no connected account|connection not found|unauthori[sz]ed|forbidden|invalid auth|authentication|permission denied|\b401\b|\b403\b)/i.test(content);
+}
+
+function normalizeConnectorToolContent(toolName: string | undefined, content: string): string {
+  const toolkit = toolName ? getComposioToolkitForToolName(toolName) : null;
+  if (toolkit && isAuthFailureText(content)) {
+    return notConnectedMessage(toolkit);
+  }
+
+  return content;
+}
+
 function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMessage[] {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  const content = sanitizeToolOutput(`Tool execution failed: ${errorMessage}`);
 
   return toolCalls.map(
-    (toolCall, index) =>
-      new ToolMessage({
+    (toolCall, index) => {
+      const content = sanitizeToolOutput(
+        normalizeConnectorToolContent(toolCall.name, `Tool execution failed: ${errorMessage}`)
+      );
+
+      return new ToolMessage({
         tool_call_id: getToolCallId(toolCall, index),
         name: toolCall.name,
         content,
@@ -34,7 +54,8 @@ function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMes
           status: TOOL_ERROR_STATUS,
           error: errorMessage,
         },
-      })
+      });
+    }
   );
 }
 
@@ -43,10 +64,12 @@ function sanitizeToolMessage(message: ToolMessage): ToolMessage {
     return message;
   }
 
+  const content = normalizeConnectorToolContent(message.name, message.content);
+
   return new ToolMessage({
     id: message.id,
     name: message.name,
-    content: sanitizeToolOutput(message.content),
+    content: sanitizeToolOutput(content),
     tool_call_id: message.tool_call_id,
     additional_kwargs: message.additional_kwargs,
     response_metadata: message.response_metadata,
@@ -133,9 +156,31 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
 
     try {
       const result = await toolNode.invoke({ ...state, messages: [...state.messages] }) as { messages: ToolMessage[] };
-      return {
-        messages: result.messages.map(sanitizeToolMessage),
-      };
+      const sanitized = result.messages.map(sanitizeToolMessage);
+
+      const observedCallIds = new Set(
+        sanitized.map((m) => m.tool_call_id).filter((id): id is string => typeof id === "string")
+      );
+      const missing: ToolMessage[] = [];
+      toolCalls.forEach((tc, index) => {
+        const callId = getToolCallId(tc, index);
+        if (observedCallIds.has(callId)) return;
+        logger.warn("[ToolNode] Missing tool output — synthesizing error message", {
+          callId,
+          toolName: tc.name,
+        });
+        missing.push(
+          new ToolMessage({
+            tool_call_id: callId,
+            name: tc.name,
+            content: sanitizeToolOutput("Tool execution did not return a result."),
+            status: TOOL_ERROR_STATUS,
+            additional_kwargs: { status: TOOL_ERROR_STATUS },
+          })
+        );
+      });
+
+      return { messages: [...sanitized, ...missing] };
     } catch (error) {
       logger.error("[ToolNode] Tool execution failed:", error);
       return { messages: createToolErrorMessages(toolCalls, error) };

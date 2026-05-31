@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useState, useCallback, use, useMemo, type ReactNode } from "react";
+import { createContext, useState, useCallback, useEffect, use, useMemo, type ReactNode } from "react";
 
 interface StreamingState {
   isStreaming: boolean;
@@ -69,6 +69,15 @@ export function StreamingProvider({ children }: { children: ReactNode }) {
     updateStreamingConversationId,
     isStreamingInConversation,
   }), [streamingState, startStreaming, stopStreaming, updateStreamingConversationId, isStreamingInConversation]);
+
+  useEffect(() => {
+    if (!streamingState.isStreaming) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [streamingState.isStreaming]);
 
   return (
     <StreamingContext.Provider value={value}>

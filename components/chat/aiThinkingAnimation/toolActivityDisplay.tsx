@@ -13,7 +13,6 @@ import {
   GoogleDriveIcon,
   SlackIcon,
   GitHubIcon,
-  TodoistIcon,
   NotionIcon,
   LinearIcon,
 } from "../connectorIcons";
@@ -37,7 +36,6 @@ function getToolIcon(toolName: string): IconComponent {
   if (upper.startsWith("NOTION")) return NotionIcon;
   if (upper.startsWith("GITHUB")) return GitHubIcon;
   if (upper.startsWith("LINEAR")) return LinearIcon;
-  if (upper.startsWith("TODOIST")) return TodoistIcon;
   if (upper.startsWith("GOOGLESLIDES")) return Presentation;
   return Plug;
 }
@@ -46,50 +44,13 @@ function getActionLabel(toolName: string): string {
   if (toolName === ToolName.WEB_SEARCH) return "Web search";
   if (toolName === ToolName.WEB_SCRAPE) return "Read webpage";
 
-  const upper = toolName.toUpperCase();
-  const actionMap: Record<string, string> = {
-    GMAIL_SEARCH_EMAILS: "Search emails",
-    GMAIL_GET_EMAIL: "Read email",
-    GMAIL_SEND_EMAIL: "Send email",
-    GMAIL_REPLY_TO_THREAD: "Reply to thread",
-    GMAIL_DELETE_EMAIL: "Delete email",
-    GMAIL_MODIFY_LABELS: "Modify labels",
-    GMAIL_GET_ATTACHMENT: "Get attachment",
-    GMAIL_LIST_EMAILS: "List emails",
-    GOOGLECALENDAR_LIST_EVENTS: "List events",
-    GOOGLECALENDAR_CREATE_EVENT: "Create event",
-    GOOGLECALENDAR_UPDATE_EVENT: "Update event",
-    GOOGLECALENDAR_DELETE_EVENT: "Delete event",
-    GOOGLEDRIVE_SEARCH_FILES: "Search files",
-    GOOGLEDRIVE_LIST_FOLDER: "List folder",
-    GOOGLEDRIVE_READ_FILE: "Read file",
-    GOOGLEDRIVE_CREATE_FILE: "Create file",
-    GOOGLEDRIVE_DELETE_FILE: "Delete file",
-    GOOGLEDRIVE_MOVE_FILE: "Move file",
-    GOOGLEDRIVE_COPY_FILE: "Copy file",
-    GOOGLEDRIVE_SHARE_FILE: "Share file",
-    GOOGLEDOCS_CREATE_DOCUMENT: "Create document",
-    GOOGLEDOCS_READ_DOCUMENT: "Read document",
-    GOOGLEDOCS_APPEND_TEXT: "Append text",
-    GOOGLEDOCS_FIND_AND_REPLACE: "Find and replace",
-    GOOGLESHEETS_CREATE_SPREADSHEET: "Create spreadsheet",
-    GOOGLESHEETS_READ_RANGE: "Read range",
-    GOOGLESHEETS_WRITE_TO_SHEET: "Write to sheet",
-    GOOGLESHEETS_APPEND_ROW: "Append row",
-    GOOGLESHEETS_CLEAR_RANGE: "Clear range",
-    SLACK_SEND_MESSAGE: "Send message",
-    NOTION_CREATE_PAGE: "Create page",
-    NOTION_UPDATE_PAGE: "Update page",
-    GITHUB_CREATE_PULL_REQUEST: "Create PR",
-    GITHUB_CREATE_ISSUE: "Create issue",
-    LINEAR_CREATE_ISSUE: "Create issue",
-  };
-
-  if (actionMap[upper]) return actionMap[upper];
-
+  // Derive a human-readable label from the slug itself.
+  // Strip the toolkit prefix (e.g., "GMAIL_FETCH_EMAILS" → "Fetch emails")
+  // so labels stay correct even when Composio renames or adds slugs.
   const parts = toolName.split("_");
   if (parts.length > 1) {
-    return parts.slice(1).join(" ").replace(/^\w/, c => c.toUpperCase());
+    const action = parts.slice(1).join(" ").toLowerCase();
+    return action.charAt(0).toUpperCase() + action.slice(1);
   }
   return toolName.replace(/_/g, " ");
 }
@@ -106,7 +67,6 @@ function getServiceName(toolName: string): string | null {
   if (upper.startsWith("NOTION")) return "Notion";
   if (upper.startsWith("GITHUB")) return "GitHub";
   if (upper.startsWith("LINEAR")) return "Linear";
-  if (upper.startsWith("TODOIST")) return "Todoist";
   return null;
 }
 

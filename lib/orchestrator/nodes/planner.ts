@@ -1,12 +1,13 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
-import type { AgentStateType } from "../state";
+import type { AgentStateType, AgentToolPlan } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { PlanComplexity, CustomEventName } from "../constants";
 import type { PlanComplexityValue } from "../constants";
 import { logger } from "@/lib/logger";
+import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import { z } from "zod";
 
 const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
@@ -23,7 +24,11 @@ Rules:
 - "tool_needed": needs exactly one tool call (single search, single email read)
 - "multi_step": needs multiple tool calls or chained reasoning
 - tools_needed: list tool names that will likely be needed (from available tools)
-- Keep plan under 30 words`;
+- Keep plan under 30 words
+- CRITICAL: All tools are pre-authenticated as the user. NEVER plan to ask for usernames, workspace URLs, account IDs, API keys, or credentials.
+- If a tool needs an object id, plan to discover it via search/list/fetch first.
+- For structured connector data, discover the object first, inspect schema/metadata/options when available, then query using exact field names and exact option values from the tool response.
+- For mutation requests (create/update/insert/append/delete/archive/send), include the matching write tool slug in tools_needed. NEVER plan to "tell the user how to do it manually" — connector write tools work and will run after user approval.`;
 
 const MIN_PLANNABLE_LENGTH = 10;
 
@@ -32,12 +37,6 @@ const plannerResponseSchema = z.object({
   tools_needed: z.array(z.string()).optional(),
   plan: z.string().optional(),
 });
-
-interface PlanResult {
-  complexity: PlanComplexityValue;
-  tools_needed: string[];
-  plan: string;
-}
 
 function isValidComplexity(value: unknown): value is PlanComplexityValue {
   return (
@@ -55,12 +54,17 @@ export function createPlannerNode(
   const toolNames = tools.map((t) => t.name);
   const toolNameSet = new Set(toolNames);
 
+  const reasoningEffort = getChatReasoningEffort(model, false);
+  const supportedTemperature = getSupportedTemperature(model, 0);
+
   const llm = new ChatOpenAI({
     modelName: model,
     apiKey,
-    temperature: 0,
     maxTokens: 150,
-    reasoning: { effort: "none" },
+    ...(supportedTemperature !== undefined ? { temperature: supportedTemperature } : {}),
+    ...(reasoningEffort && reasoningEffort !== "none"
+      ? { reasoning: { effort: reasoningEffort } }
+      : reasoningEffort === "none" ? { reasoningEffort: "none" } : {}),
   });
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
@@ -76,10 +80,15 @@ export function createPlannerNode(
     }
 
     try {
+      const connected = state.connectedServices ?? [];
+      const connectedContext = connected.length > 0
+        ? `\n\nConnected services (pre-authenticated, never ask for credentials): ${connected.join(", ")}`
+        : "";
+
       const response = await llm.invoke(
         [
           new SystemMessage(
-            `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}`
+            `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`
           ),
           new HumanMessage(content),
         ],
@@ -94,7 +103,7 @@ export function createPlannerNode(
         ? parsed.complexity
         : PlanComplexity.DIRECT;
 
-      const plan: PlanResult = {
+      const plan: AgentToolPlan = {
         complexity,
         tools_needed: Array.isArray(parsed.tools_needed)
           ? parsed.tools_needed.filter((t: string) => toolNameSet.has(t))
@@ -106,6 +115,7 @@ export function createPlannerNode(
 
       if (plan.complexity !== PlanComplexity.DIRECT) {
         return {
+          toolPlan: plan,
           messages: [
             new SystemMessage(
               `[PLAN] Complexity: ${plan.complexity}. Tools: ${plan.tools_needed.join(", ") || "none"}. Approach: ${plan.plan}`
@@ -114,7 +124,7 @@ export function createPlannerNode(
         };
       }
 
-      return { messages: [] };
+      return { messages: [], toolPlan: plan };
     } catch (error) {
       logger.warn("[Planner] Failed to produce a valid plan; continuing without planner hint:", error);
       return { messages: [] };

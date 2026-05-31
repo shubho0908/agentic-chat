@@ -6,6 +6,7 @@ import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
+import { shouldBypassSemanticCacheForToolIntent } from "./tools";
 import { createStreamEventMapper, handleGraphInterrupt, handleGraphEnd } from "./streaming";
 import {
   encodeMemoryStatus,
@@ -179,8 +180,14 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           return;
         }
 
+        const connectedToolkits = await getConnectedToolkits(userId);
+
         const queryText = extractTextFromMessage(lastUserMessage);
-        if (queryText && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
+        const bypassSemanticCache = shouldBypassSemanticCacheForToolIntent(
+          queryText,
+          connectedToolkits
+        );
+        if (queryText && !bypassSemanticCache && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId);
             const cached = await searchSemanticCache(embedding, userId, conversationId);
@@ -196,11 +203,9 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           }
         }
 
-        const connectedToolkits = await getConnectedToolkits(userId);
         const graph = await createAgentGraph(userId, apiKey, model, {
           thinkingEnabled,
           connectedToolkits,
-          routingDecision: memoryStatusInfo.routingDecision,
         });
 
         const langChainMessages = convertToLangChainMessages(enhancedMessages);

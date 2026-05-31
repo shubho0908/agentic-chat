@@ -48,11 +48,15 @@ export const RAG_CONFIG = {
   },
   rerank: {
     enabled: !!process.env.COHERE_API_KEY,
-    model: getRerankerModel(),
+    get model() {
+      return getRerankerModel();
+    },
     candidateMultiplier: 4,
   },
   embeddings: {
-    model: getEmbeddingModel(),
+    get model() {
+      return getEmbeddingModel();
+    },
   },
   supportedFileTypes: [
     'application/pdf',

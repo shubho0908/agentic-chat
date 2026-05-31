@@ -112,7 +112,10 @@ export function createStreamEventMapper(): StreamEventMapper {
 
         case StreamEventType.TOOL_END: {
           const name = event.name as string;
-          if (name === ToolName.ASK_USER) break;
+          if (name === ToolName.ASK_USER) {
+            askUserPending = false;
+            break;
+          }
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);

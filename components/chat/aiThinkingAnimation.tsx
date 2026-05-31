@@ -9,9 +9,7 @@ import { RoutingBadge } from "./aiThinkingAnimation/routingBadge";
 import { ContextDetails } from "./aiThinkingAnimation/contextDetails";
 import { ThinkingMessage } from "./aiThinkingAnimation/thinkingMessage";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
-import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { ToolName } from "@/lib/tools/constants";
-import { CustomEventName } from "@/lib/orchestrator/constants";
 
 export function AIThinkingAnimation({ memoryStatus, isLoading, toolActivities }: AIThinkingAnimationProps & { isLoading?: boolean; toolActivities?: ToolActivity[] }) {
   const hasContext =
@@ -38,13 +36,6 @@ export function AIThinkingAnimation({ memoryStatus, isLoading, toolActivities }:
     [hasContext, memoryStatus]
   );
 
-  const planningProgress = memoryStatus?.toolProgress;
-  const isPlanningVisible =
-    planningProgress?.toolName === CustomEventName.PLANNING;
-  const planDetails = isPlanningVisible
-    ? (planningProgress.details as { plan?: string } | undefined)?.plan
-    : undefined;
-
   return (
     <div className="flex flex-col gap-2.5">
       {hasContext && (
@@ -60,13 +51,6 @@ export function AIThinkingAnimation({ memoryStatus, isLoading, toolActivities }:
             <ContextDetails memoryStatus={memoryStatus} isLoading={isLoading} />
           </div>
         </div>
-      )}
-
-      {isPlanningVisible && (
-        <PlanningStep
-          message={planningProgress.message || "Planning approach..."}
-          plan={planDetails}
-        />
       )}
 
       {unrepresentedActivities.length > 0 && (

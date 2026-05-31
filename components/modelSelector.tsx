@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdownMenu";
 import { cn } from "@/lib/utils";
-import { OPENAI_MODELS } from "@/constants/openai-models";
+import { OPENAI_MODELS, getModelCostMultiplier, formatCostMultiplier } from "@/constants/openai-models";
 import { ModelIcon } from "../utils/byokUtils";
 
 interface ModelSelectorProps {
@@ -30,10 +30,49 @@ function formatContext(tokens: number): string {
   return String(tokens);
 }
 
+function getCostTierStyles(multiplier: number): string {
+  if (multiplier >= 30) {
+    return "border-orange-500/30 bg-orange-500/[0.08] text-orange-700 dark:text-orange-400";
+  }
+  if (multiplier >= 10) {
+    return "border-amber-500/25 bg-amber-500/[0.06] text-amber-700 dark:text-amber-400";
+  }
+  if (multiplier >= 3) {
+    return "border-border/50 bg-muted/40 text-foreground/70";
+  }
+  return "border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-700/80 dark:text-emerald-400/85";
+}
+
+interface CostBadgeProps {
+  multiplier: number;
+}
+
+function CostBadge({ multiplier }: CostBadgeProps) {
+  const tierStyles = getCostTierStyles(multiplier);
+  const display = formatCostMultiplier(multiplier);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-baseline gap-[3px] rounded-md border px-2 py-[3px] text-[11px] font-semibold leading-none tabular-nums tracking-tight transition-colors sm:text-[10px]",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
+        tierStyles
+      )}
+      title={`Estimated cost: ${display} the cheapest model (blended input/output, 1:4 ratio)`}
+    >
+      <span>{display}</span>
+      <span className="text-[9px] font-medium uppercase tracking-[0.06em] opacity-70 sm:text-[8px]">usage</span>
+    </span>
+  );
+}
+
 export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorProps) {
   const selectedModelData = useMemo(
     () => OPENAI_MODELS.find((model) => model.id === selectedModel),
     [selectedModel]
+  );
+  const selectedCostMultiplier = useMemo(
+    () => (selectedModelData ? getModelCostMultiplier(selectedModelData) : null),
+    [selectedModelData]
   );
 
   return (
@@ -53,9 +92,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
           >
             {selectedModelData ? (
               <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
-                <div className="flex items-center justify-center size-8 rounded-[8px] bg-background border border-border/40 text-foreground shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                   <ModelIcon />
-                </div>
                 <div className="flex flex-col items-start min-w-0 gap-0.5">
                   <div className="flex items-center gap-1.5 focus:outline-none">
                     <span className="truncate text-[15px] font-medium tracking-tight text-foreground sm:text-[13px]">{selectedModelData.name}</span>
@@ -71,8 +108,13 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
             ) : (
               <span className="text-[15px] text-muted-foreground sm:text-[13px]">Select a model…</span>
             )}
-            <div className="flex items-center justify-center size-6 text-muted-foreground/50 group-hover:text-foreground shrink-0 transition-colors">
-              <ChevronDown className="size-[14px]" />
+            <div className="flex items-center gap-2 shrink-0">
+              {selectedCostMultiplier !== null && (
+                <CostBadge multiplier={selectedCostMultiplier} />
+              )}
+              <div className="flex items-center justify-center size-6 text-muted-foreground/50 group-hover:text-foreground transition-colors">
+                <ChevronDown className="size-[14px]" />
+              </div>
             </div>
           </Button>
         </DropdownMenuTrigger>
@@ -86,6 +128,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
           <div className="max-h-[320px] overflow-y-auto px-0.5">
             {OPENAI_MODELS.map((model) => {
               const isSelected = selectedModel === model.id;
+              const costMultiplier = getModelCostMultiplier(model);
               
               return (
                 <DropdownMenuItem
@@ -100,7 +143,7 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                   )}
                 >
                   <div className={cn(
-                    "flex items-center justify-center size-8 rounded-[8px] shrink-0 border transition-colors",
+                    "flex items-center rounded-full justify-center size-8 shrink-0 border transition-colors p-0",
                     isSelected 
                       ? "bg-background border-border/60 text-foreground shadow-sm" 
                       : "bg-background/50 border-border/20 text-muted-foreground"
@@ -121,11 +164,16 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
                           <div className="size-1.5 rounded-full bg-blue-500 opacity-90" title="Recommended" />
                         )}
                       </div>
-                      {isSelected && (
-                        <div className="flex items-center justify-center size-5 rounded-md bg-background shadow-sm border border-border/40">
-                          <Check className="size-3 text-foreground" strokeWidth={2.5} />
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {costMultiplier !== null && (
+                          <CostBadge multiplier={costMultiplier} />
+                        )}
+                        {isSelected && (
+                          <div className="flex items-center justify-center size-5 rounded-md bg-background shadow-sm border border-border/40">
+                            <Check className="size-3 text-foreground" strokeWidth={2.5} />
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <span className="block max-w-full truncate text-[12px] font-medium leading-relaxed text-muted-foreground/70 sm:text-[11px]">

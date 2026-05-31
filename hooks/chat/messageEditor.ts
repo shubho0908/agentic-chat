@@ -58,6 +58,10 @@ export async function handleEditMessage(
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
+  const persistedNextAssistantId =
+    nextAssistantMessage?.id && !nextAssistantMessage.id.startsWith("assistant-pending-")
+      ? nextAssistantMessage.id
+      : undefined;
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
   
   const newEditedVersion = createNewVersion(
@@ -253,7 +257,7 @@ export async function handleEditMessage(
           messageToEdit.id,
           messageContent,
           responseContent,
-          nextAssistantMessage?.id,
+          persistedNextAssistantId,
           attachments,
           messageMetadata,
           abortSignal

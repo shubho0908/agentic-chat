@@ -1,4 +1,11 @@
 import { Annotation, MessagesAnnotation } from "@langchain/langgraph";
+import type { PlanComplexityValue } from "./constants";
+
+export interface AgentToolPlan {
+  complexity: PlanComplexityValue;
+  tools_needed: string[];
+  plan: string;
+}
 
 export const AgentState = Annotation.Root({
   ...MessagesAnnotation.spec,
@@ -13,6 +20,10 @@ export const AgentState = Annotation.Root({
     default: () => ({}),
   }),
   activeSubAgent: Annotation<string | null>({
+    reducer: (_current, update) => update,
+    default: () => null,
+  }),
+  toolPlan: Annotation<AgentToolPlan | null>({
     reducer: (_current, update) => update,
     default: () => null,
   }),

@@ -296,6 +296,7 @@ async function enrichWithNeighborChunks(
     attachment_id: string;
     file_name: string;
     page: number | null;
+    ord: number;
   }>>`
     WITH requested AS (
       SELECT ord, attachment_id, content
@@ -357,15 +358,17 @@ async function enrichWithNeighborChunks(
         ord
       FROM chunk_candidates
     )
-    SELECT content, attachment_id, file_name, page
+    SELECT content, attachment_id, file_name, page, ord
     FROM ranked
     WHERE row_num <= 3
     ORDER BY ord ASC, row_num ASC`;
 
+  const matchedOrds = new Set<number>();
   for (const row of neighbors) {
     const key = `${row.attachment_id}:${row.content.slice(0, 100)}`;
     if (seenContent.has(key)) continue;
     seenContent.add(key);
+    matchedOrds.add(row.ord);
     enriched.push({
       content: row.content,
       metadata: {
@@ -374,6 +377,18 @@ async function enrichWithNeighborChunks(
         page: row.page ?? undefined,
       },
     });
+  }
+
+  // Preserve original results that had no neighbor matches
+  for (const target of requestedTargets) {
+    if (!matchedOrds.has(target.ord)) {
+      const original = results[target.ord];
+      const key = `${original.metadata.attachmentId}:${original.content.slice(0, 100)}`;
+      if (!seenContent.has(key)) {
+        seenContent.add(key);
+        enriched.push({ content: original.content, metadata: original.metadata });
+      }
+    }
   }
 
   return enriched;

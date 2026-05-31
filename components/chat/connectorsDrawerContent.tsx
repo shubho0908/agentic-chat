@@ -4,6 +4,7 @@ import { Loader } from "lucide-react";
 import { COMPOSIO_TOOLKITS, TOOLKIT_DISPLAY_NAMES, type ComposioToolkit } from "@/lib/tools/composio/config";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useComposioConnectors } from "@/hooks/useComposioConnectors";
 import {
   GmailIcon,
@@ -13,7 +14,6 @@ import {
   GoogleDriveIcon,
   SlackIcon,
   GitHubIcon,
-  TodoistIcon,
   NotionIcon,
   LinearIcon,
 } from "./connectorIcons";
@@ -29,7 +29,6 @@ const TOOLKIT_ICONS: Record<ComposioToolkit, FC<SVGProps<SVGSVGElement>>> = {
   notion: NotionIcon,
   github: GitHubIcon,
   linear: LinearIcon,
-  todoist: TodoistIcon,
 };
 
 const TOOLKIT_DESCRIPTIONS: Record<ComposioToolkit, string> = {
@@ -42,18 +41,17 @@ const TOOLKIT_DESCRIPTIONS: Record<ComposioToolkit, string> = {
   notion: "Notes & Docs",
   github: "Code & PRs",
   linear: "Issues",
-  todoist: "Tasks",
 };
 
 export function ConnectorsDrawerContent() {
-  const { services, connectMutation, disconnectMutation } = useComposioConnectors();
+  const { services, isLoading: isStatusLoading, connectMutation, disconnectMutation } = useComposioConnectors();
 
   return (
     <div className="grid grid-cols-2 gap-2.5">
       {COMPOSIO_TOOLKITS.map((toolkit) => {
         const connection = services.find((s) => s.toolkit === toolkit);
         const isConnected = !!connection;
-        const isLoading = connectMutation.isPending && connectMutation.variables === toolkit;
+        const isMutating = connectMutation.isPending && connectMutation.variables === toolkit;
         const Icon = TOOLKIT_ICONS[toolkit];
 
         return (
@@ -88,33 +86,37 @@ export function ConnectorsDrawerContent() {
               </span>
             </div>
 
-            <Button
-              size="sm"
-              disabled={isLoading}
-              onClick={() =>
-                isConnected
-                  ? disconnectMutation.mutate(connection.id)
-                  : connectMutation.mutate(toolkit)
-              }
-              className={cn(
-                "w-full h-7 text-[11px] font-semibold rounded-lg",
-                "border border-black/10 dark:border-white/10",
-                "shadow-[0_1px_2px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.15)]",
-                "active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] active:translate-y-px",
-                "transition-all duration-100",
-                isConnected
-                  ? "bg-gradient-to-b from-secondary to-secondary/90 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/80"
-                  : "bg-gradient-to-b from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80"
-              )}
-            >
-              {isLoading ? (
-                <Loader className="size-3 animate-spin" />
-              ) : isConnected ? (
-                "Disconnect"
-              ) : (
-                "Connect"
-              )}
-            </Button>
+            {isStatusLoading ? (
+              <Skeleton className="w-full h-7 rounded-lg" />
+            ) : (
+              <Button
+                size="sm"
+                disabled={isMutating}
+                onClick={() =>
+                  isConnected
+                    ? disconnectMutation.mutate(connection.id)
+                    : connectMutation.mutate(toolkit)
+                }
+                className={cn(
+                  "w-full h-7 text-[11px] font-semibold rounded-lg",
+                  "border border-black/10 dark:border-white/10",
+                  "shadow-[0_1px_2px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.15)]",
+                  "active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] active:translate-y-px",
+                  "transition-all duration-100",
+                  isConnected
+                    ? "bg-gradient-to-b from-secondary to-secondary/90 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/80"
+                    : "bg-gradient-to-b from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80"
+                )}
+              >
+                {isMutating ? (
+                  <Loader className="size-3 animate-spin" />
+                ) : isConnected ? (
+                  "Disconnect"
+                ) : (
+                  "Connect"
+                )}
+              </Button>
+            )}
           </div>
         );
       })}

@@ -21,7 +21,7 @@ function supportsCustomTemperature(model: string): boolean {
 }
 
 function getReasoningSeriesMinorVersion(model: string): number | null {
-  const match = model.trim().toLowerCase().match(/^gpt-5(?:\.(\d+))?/);
+  const match = model.trim().toLowerCase().match(/^gpt-5(?:\.(\d+))?(?:\b|-|$)/);
   if (!match) return null;
   return match[1] ? Number(match[1]) : 0;
 }

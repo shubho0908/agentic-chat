@@ -12,7 +12,7 @@ export function PlanningStep({ message, plan }: PlanningStepProps) {
   return (
     <LazyMotion features={domAnimation}>
       <m.div
-        className="flex w-fit max-w-sm items-start gap-2.5 rounded-lg border border-primary/15 bg-primary/[0.03] px-3 py-2 text-xs"
+        className="flex w-fit max-w-sm items-start gap-2.5 rounded-lg border border-primary/15 bg-gradient-to-b from-primary/[0.06] to-primary/[0.02] px-3 py-2 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
         initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}

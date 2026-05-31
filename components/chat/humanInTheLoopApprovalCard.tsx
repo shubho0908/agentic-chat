@@ -33,13 +33,13 @@ interface HumanInTheLoopApprovalCardProps {
 
 function formatToolName(name: string): string {
   return name
-    .replace(/^(GMAIL|GOOGLECALENDAR|GOOGLEDRIVE|GOOGLEDOCS|GOOGLESHEETS|SLACK|NOTION|GITHUB|LINEAR|TODOIST)_/i, "")
+    .replace(/^(GMAIL|GOOGLECALENDAR|GOOGLEDRIVE|GOOGLEDOCS|GOOGLESHEETS|SLACK|NOTION|GITHUB|LINEAR)_/i, "")
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function getToolkitFromName(name: string): string | null {
-  const match = name.match(/^(GMAIL|GOOGLECALENDAR|GOOGLEDRIVE|GOOGLEDOCS|GOOGLESHEETS|SLACK|NOTION|GITHUB|LINEAR|TODOIST)_/i);
+  const match = name.match(/^(GMAIL|GOOGLECALENDAR|GOOGLEDRIVE|GOOGLEDOCS|GOOGLESHEETS|SLACK|NOTION|GITHUB|LINEAR)_/i);
   if (!match) return null;
   const map: Record<string, string> = {
     gmail: "Gmail",
@@ -51,7 +51,6 @@ function getToolkitFromName(name: string): string | null {
     notion: "Notion",
     github: "GitHub",
     linear: "Linear",
-    todoist: "Todoist",
   };
   return map[match[1].toLowerCase()] ?? match[1];
 }

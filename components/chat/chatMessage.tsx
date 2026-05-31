@@ -17,6 +17,8 @@ import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
+import { PlanningStep } from "./aiThinkingAnimation/planningStep";
+import { CustomEventName } from "@/lib/orchestrator/constants";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -122,13 +124,22 @@ function MessageContentSurface({
       "text-[15px] leading-relaxed",
       isUser
         ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
-        : "max-w-none min-w-0 text-foreground ml-1"
+        : "w-full min-w-0 text-foreground ml-1"
     )}>
-      {!isUser && message.thinking && (
+      {!isUser && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
+        <div className="mb-2.5">
+          <PlanningStep
+            message={memoryStatus.toolProgress.message || "Planning approach..."}
+            plan={(memoryStatus.toolProgress.details as { plan?: string } | undefined)?.plan}
+          />
+        </div>
+      )}
+
+      {!isUser && displayedMessage.thinking && (
         <ThinkingAccordion
-          thinking={message.thinking}
+          thinking={displayedMessage.thinking}
           isLoading={isLoading}
-          durationMs={message.metadata?.thinkingDurationMs}
+          durationMs={displayedMessage.metadata?.thinkingDurationMs}
         />
       )}
 

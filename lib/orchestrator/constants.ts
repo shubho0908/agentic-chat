@@ -3,9 +3,9 @@ export const HUMAN_IN_THE_LOOP_DENIED = "denied" as const;
 export const HUMAN_IN_THE_LOOP_REQUEST_TYPE = "hitl_request" as const;
 export const TOOL_ERROR_STATUS = "error" as const;
 
-export const MAX_TOOLS = 30;
-export const RECURSION_LIMIT = 12;
-export const MAX_RESPONSE_TOKENS = 4096;
+export const MAX_TOOLS = 128;
+export const RECURSION_LIMIT = 25;
+export const MAX_RESPONSE_TOKENS = 16384;
 export const MAX_TOOL_ITERATIONS = 6;
 export const MIN_CACHEABLE_QUERY_LENGTH = 80;
 

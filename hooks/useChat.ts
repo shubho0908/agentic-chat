@@ -264,7 +264,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         humanInTheLoopStatus: approved ? "approved" : "denied",
         humanInTheLoopRequest: undefined,
       };
-      let resumedContent = typeof pendingMessage.content === "string" ? pendingMessage.content : "";
+      let resumedContent = "";
+      const previousContent = typeof pendingMessage.content === "string" ? pendingMessage.content : "";
+      if (previousContent && previousContent !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT) {
+        resumedContent = previousContent;
+      }
 
       const updateLocalAssistantMessage = (updates: Partial<Message>, targetMessageId = assistantMessageId) => {
         setMessages((prev) =>
@@ -401,7 +405,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       (lastMessage?.role === "user" && lastMessage.id) ||
       (lastMessage?.role === "assistant" && !lastMessage.content && !lastMessage.metadata?.humanInTheLoopRequest && lastUserMessage?.id);
 
-    if (isIncomplete && lastUserMessage?.id) {
+    if (isIncomplete && lastUserMessage?.id && conversationId) {
       const resumeKey = `${conversationId}:${lastUserMessage.id}`;
       if (autoContinuedRef.current === resumeKey) return;
 

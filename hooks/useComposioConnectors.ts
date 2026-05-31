@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { ComposioToolkit } from "@/lib/tools/composio/config";
 import type { ConnectedService } from "@/lib/tools/composio/auth";
 
-export const CONNECTIONS_KEY = ["composio-connections"] as const;
+const CONNECTIONS_KEY = ["composio-connections"] as const;
 
 export function useComposioConnectors(opts?: { onActionComplete?: () => void }) {
   const queryClient = useQueryClient();

@@ -48,7 +48,12 @@ export function getConversationIdFromPathname(pathname: string | null | undefine
   }
 
   const [conversationId] = pathname.slice(appRoutePrefixes.conversation.length).split("/");
-  return conversationId ? decodeURIComponent(conversationId) : null;
+  if (!conversationId) return null;
+  try {
+    return decodeURIComponent(conversationId);
+  } catch {
+    return null;
+  }
 }
 
 export function isSharePathname(pathname: string | null | undefined): boolean {

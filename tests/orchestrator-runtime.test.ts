@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AIMessage, ToolMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { END } from "@langchain/langgraph";
 import { z } from "zod";
@@ -10,12 +10,25 @@ import { toJsonValue } from "@/lib/json";
 import { parsePaginationInteger } from "@/lib/pagination";
 import { encodeToolResult } from "@/lib/chat/streamingHelpers";
 import { MAX_TOOL_ITERATIONS } from "@/lib/orchestrator/constants";
+import { createAgentNode, reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
+import { createToolNode } from "@/lib/orchestrator/nodes/tools";
 import { routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
-import { ASK_USER_TOOL_NAME, filterToolsForContext } from "@/lib/orchestrator/tools";
+import {
+  ASK_USER_TOOL_NAME,
+  filterToolsForContext,
+  selectToolsForAgentStep,
+  shouldBypassSemanticCacheForToolIntent,
+} from "@/lib/orchestrator/tools";
 import type { AgentStateType } from "@/lib/orchestrator/state";
 import { ToolName } from "@/lib/tools/constants";
 import { RoutingDecision } from "@/types/chat";
-import { isDangerousAction } from "@/lib/tools/composio/config";
+import {
+  COMPOSIO_TOOLKITS,
+  notConnectedMessage,
+  getEssentialComposioToolSlugs,
+  isDangerousAction,
+  type ComposioToolkit,
+} from "@/lib/tools/composio/config";
 
 function createTool(name: string): DynamicStructuredTool {
   return new DynamicStructuredTool({
@@ -31,6 +44,19 @@ function createToolCallingMessage(id: string): AIMessage {
     content: "",
     tool_calls: [{ id, name: "test_tool", args: {} }],
   });
+}
+
+function createAgentState(overrides: Partial<AgentStateType>): AgentStateType {
+  return {
+    messages: [],
+    userId: "test-user",
+    conversationId: undefined,
+    connectedServices: [],
+    toolApprovals: {},
+    activeSubAgent: null,
+    toolPlan: null,
+    ...overrides,
+  } as AgentStateType;
 }
 
 test("URL-content tool filtering keeps web search available under the registered tool name", () => {
@@ -49,9 +75,178 @@ test("URL-content tool filtering keeps web search available under the registered
   );
 });
 
+test("essential connector tools cover discovery and read paths across supported toolkits", () => {
+  const requiredByToolkit: Record<ComposioToolkit, string[]> = {
+    gmail: ["GMAIL_GET_PROFILE", "GMAIL_LIST_THREADS"],
+    googlecalendar: ["GOOGLECALENDAR_LIST_CALENDARS", "GOOGLECALENDAR_EVENTS_LIST"],
+    googledrive: ["GOOGLEDRIVE_FIND_FOLDER", "GOOGLEDRIVE_GET_FILE_METADATA"],
+    googledocs: ["GOOGLEDOCS_SEARCH_DOCUMENTS", "GOOGLEDOCS_GET_DOCUMENT_BY_ID"],
+    googlesheets: ["GOOGLESHEETS_GET_TABLE_SCHEMA", "GOOGLESHEETS_QUERY_TABLE"],
+    slack: ["SLACK_LIST_CONVERSATIONS", "SLACK_FETCH_TEAM_INFO"],
+    notion: ["NOTION_FETCH_DATA", "NOTION_FETCH_DATABASE"],
+    github: ["GITHUB_GET_THE_AUTHENTICATED_USER", "GITHUB_LIST_FOLLOWERS_OF_THE_AUTHENTICATED_USER"],
+    linear: ["LINEAR_GET_CURRENT_USER", "LINEAR_LIST_LINEAR_PROJECTS"],
+  };
+
+  for (const toolkit of COMPOSIO_TOOLKITS) {
+    const essentials = getEssentialComposioToolSlugs([toolkit]);
+    for (const requiredTool of requiredByToolkit[toolkit]) {
+      assert.ok(
+        essentials.includes(requiredTool),
+        `${toolkit} essentials should include ${requiredTool}`
+      );
+    }
+  }
+});
+
+test("connector not-connected messages are generic across toolkits", () => {
+  assert.equal(
+    notConnectedMessage("gmail"),
+    "Gmail is not connected — please enable it in the Tools menu (⚙️)."
+  );
+  assert.equal(
+    notConnectedMessage("notion"),
+    "Notion is not connected — please enable it in the Tools menu (⚙️)."
+  );
+  assert.equal(
+    notConnectedMessage("github"),
+    "GitHub is not connected — please enable it in the Tools menu (⚙️)."
+  );
+});
+
+test("agent returns generic disconnected connector message before calling the model", async () => {
+  const node = createAgentNode([], "test-api-key", "gpt-5-nano");
+
+  const result = await node(createAgentState({
+    messages: [new HumanMessage("Read my Gmail inbox")],
+    connectedServices: [],
+  }));
+
+  assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
+});
+
+test("connector tool auth failures normalize per toolkit", async () => {
+  const node = createToolNode([
+    new DynamicStructuredTool({
+      name: "GMAIL_LIST_THREADS",
+      description: "test Gmail tool",
+      schema: z.object({}),
+      func: async () => {
+        throw new Error("401 unauthorized");
+      },
+    }),
+  ]);
+
+  const result = await node(createAgentState({
+    messages: [
+      new AIMessage({
+        content: "",
+        tool_calls: [{ id: "call-1", name: "GMAIL_LIST_THREADS", args: {} }],
+      }),
+    ],
+  }));
+
+  assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
+});
+
+test("agent step tool selection includes essentials of the mentioned connector", () => {
+  const tools = [
+    createTool(ASK_USER_TOOL_NAME),
+    createTool("NOTION_FETCH_DATA"),
+    createTool("NOTION_FETCH_DATABASE"),
+    createTool("NOTION_QUERY_DATABASE_WITH_FILTER"),
+    createTool("NOTION_QUERY_DATABASE"),
+    createTool("NOTION_SEARCH_NOTION_PAGE"),
+    createTool("NOTION_FETCH_ROW"),
+    createTool("NOTION_RETRIEVE_PAGE"),
+    createTool("GITHUB_FIND_REPOSITORIES"),
+    createTool("GITHUB_CREATE_ISSUE"),
+  ];
+
+  const selected = selectToolsForAgentStep(tools, {
+    latestUserText: "Inspect the Projects database schema from my Notion workspace",
+    connectedServices: ["notion", "github"],
+  }).map((tool) => tool.name);
+
+  assert.ok(selected.includes(ASK_USER_TOOL_NAME));
+  assert.ok(selected.includes("NOTION_FETCH_DATA"));
+  assert.ok(selected.includes("NOTION_FETCH_DATABASE"));
+  assert.ok(selected.includes("NOTION_QUERY_DATABASE_WITH_FILTER"));
+  assert.equal(selected.includes("GITHUB_CREATE_ISSUE"), false);
+});
+
+test("agent step tool selection caps broad connector sets while keeping target essentials", () => {
+  const gmailEssentials = getEssentialComposioToolSlugs(["gmail"]).map(createTool);
+  const otherConnectorTools = [
+    ...getEssentialComposioToolSlugs(["notion", "github", "linear"]).map(createTool),
+    ...Array.from({ length: 40 }, (_, index) => createTool(`GITHUB_FAKE_TOOL_${index}`)),
+  ];
+  const tools = [createTool(ASK_USER_TOOL_NAME), ...gmailEssentials, ...otherConnectorTools];
+
+  const selected = selectToolsForAgentStep(tools, {
+    latestUserText: "Search my Gmail inbox and list recent email threads",
+    connectedServices: ["gmail", "notion", "github", "linear"],
+  }).map((tool) => tool.name);
+
+  assert.ok(selected.length <= 18);
+  assert.ok(selected.includes("GMAIL_GET_PROFILE"));
+  assert.ok(selected.includes("GMAIL_LIST_THREADS"));
+  assert.ok(selected.includes("GMAIL_FETCH_MESSAGE_BY_THREAD_ID"));
+  assert.equal(selected.some((name) => name.startsWith("NOTION_")), false);
+});
+
+test("planned connector query tools keep prerequisite discovery tools available", () => {
+  const tools = [
+    createTool(ASK_USER_TOOL_NAME),
+    createTool("NOTION_FETCH_DATA"),
+    createTool("NOTION_FETCH_DATABASE"),
+    createTool("NOTION_QUERY_DATABASE_WITH_FILTER"),
+    createTool("NOTION_QUERY_DATABASE"),
+    createTool("NOTION_SEARCH_NOTION_PAGE"),
+    createTool("NOTION_FETCH_ROW"),
+    createTool("NOTION_RETRIEVE_PAGE"),
+    createTool("SLACK_SEND_MESSAGE"),
+  ];
+
+  const filtered = filterToolsForContext(
+    tools,
+    undefined,
+    ["NOTION_QUERY_DATABASE_WITH_FILTER"]
+  ).map((tool) => tool.name);
+
+  assert.ok(filtered.includes(ASK_USER_TOOL_NAME));
+  assert.ok(filtered.includes("NOTION_FETCH_DATA"));
+  assert.ok(filtered.includes("NOTION_FETCH_DATABASE"));
+  assert.ok(filtered.includes("NOTION_QUERY_DATABASE_WITH_FILTER"));
+  assert.equal(filtered.includes("SLACK_SEND_MESSAGE"), false);
+});
+
+test("semantic cache is bypassed for connector-backed and fresh web intents", () => {
+  assert.equal(
+    shouldBypassSemanticCacheForToolIntent(
+      "Fetch active in-progress projects from my Notion workspace",
+      ["notion"]
+    ),
+    true
+  );
+  assert.equal(
+    shouldBypassSemanticCacheForToolIntent("Fetch active projects from Notion", ["github"]),
+    true
+  );
+  assert.equal(
+    shouldBypassSemanticCacheForToolIntent("What is the latest OpenAI model news?", []),
+    true
+  );
+  assert.equal(
+    shouldBypassSemanticCacheForToolIntent("Explain what a binary search tree is", []),
+    false
+  );
+});
+
 test("tool routing limits execution rounds, not parallel tool result count", () => {
   const firstRoundCallId = "call-first";
   const messages = [
+    new HumanMessage("do something"),
     createToolCallingMessage(firstRoundCallId),
     ...Array.from({ length: MAX_TOOL_ITERATIONS + 4 }, (_, index) =>
       new ToolMessage({
@@ -66,11 +261,30 @@ test("tool routing limits execution rounds, not parallel tool result count", () 
 });
 
 test("tool routing stops after the configured number of request rounds", () => {
-  const messages = Array.from({ length: MAX_TOOL_ITERATIONS + 1 }, (_, index) =>
-    createToolCallingMessage(`call-${index}`)
-  );
+  const messages = [
+    new HumanMessage("do something"),
+    ...Array.from({ length: MAX_TOOL_ITERATIONS }, (_, index) =>
+      createToolCallingMessage(`call-${index}`)
+    ),
+  ];
 
   assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+});
+
+test("tool routing ignores tool calls from prior turns (before last HumanMessage)", () => {
+  // Simulate checkpointed history: prior turn had many tool calls
+  const priorTurnMessages = Array.from({ length: 10 }, (_, index) =>
+    createToolCallingMessage(`old-call-${index}`)
+  );
+  const messages = [
+    new HumanMessage("old question"),
+    ...priorTurnMessages,
+    new HumanMessage("new question"),
+    createToolCallingMessage("new-call-1"),
+  ];
+
+  // Only 1 tool round in current turn — should continue
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
 });
 
 test("toJsonValue preserves metadata without throwing on circular or non-JSON values", () => {
@@ -116,4 +330,60 @@ test("SSE tool result encoding handles non-JSON-safe payloads", () => {
   assert.match(encoded, /^data: /);
   assert.match(encoded, /"value":"7"/);
   assert.match(encoded, /"self":"\[Circular\]"/);
+});
+
+test("reconcile synthesizes a tool output for a dangling tool_call", () => {
+  const messages = [
+    new HumanMessage("do it"),
+    new AIMessage({ content: "", tool_calls: [{ id: "call_x", name: "test_tool", args: {} }] }),
+  ];
+
+  const reconciled = reconcileDanglingToolCalls(messages);
+
+  assert.equal(reconciled.length, 3);
+  const synthesized = reconciled[2] as ToolMessage;
+  assert.ok(synthesized instanceof ToolMessage);
+  assert.equal(synthesized.tool_call_id, "call_x");
+  assert.equal(synthesized.status, "error");
+});
+
+test("reconcile covers function_call items hidden in v0 response_metadata.output", () => {
+  const ai = new AIMessage({ content: "" });
+  ai.response_metadata = {
+    output: [
+      { type: "reasoning", id: "rs_1", summary: [] },
+      { type: "function_call", call_id: "call_meta", name: "test_tool", arguments: "{}" },
+    ],
+  };
+  const reconciled = reconcileDanglingToolCalls([new HumanMessage("hi"), ai]);
+
+  const synthesized = reconciled.find(
+    (m): m is ToolMessage => m instanceof ToolMessage && m.tool_call_id === "call_meta"
+  );
+  assert.ok(synthesized, "expected a synthesized output for the metadata function_call");
+});
+
+test("reconcile leaves already-satisfied tool calls untouched", () => {
+  const messages = [
+    new AIMessage({ content: "", tool_calls: [{ id: "call_ok", name: "test_tool", args: {} }] }),
+    new ToolMessage({ content: "result", tool_call_id: "call_ok" }),
+  ];
+
+  const reconciled = reconcileDanglingToolCalls(messages);
+
+  assert.equal(reconciled.length, 2);
+  assert.equal(reconciled.filter((m) => m instanceof ToolMessage).length, 1);
+});
+
+test("reconcile inserts the synthesized output directly after its owning message", () => {
+  const messages = [
+    new AIMessage({ content: "", tool_calls: [{ id: "call_a", name: "test_tool", args: {} }] }),
+    new HumanMessage("follow up"),
+  ];
+
+  const reconciled = reconcileDanglingToolCalls(messages);
+
+  assert.ok(reconciled[1] instanceof ToolMessage);
+  assert.equal((reconciled[1] as ToolMessage).tool_call_id, "call_a");
+  assert.ok(reconciled[2] instanceof HumanMessage);
 });

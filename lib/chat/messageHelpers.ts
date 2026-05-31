@@ -13,8 +13,9 @@ function getContextBudgetTokens(messages: Message[], model: string): number {
   const tokenUsage = calculateTokenUsage(messages, model);
   const responseReserve = getResponseTokenReserve(model);
   const available = contextWindow - tokenUsage.used - responseReserve;
+  if (available <= 0) return 0;
   const budget = Math.floor(available * RAG_CONTEXT_RATIO);
-  return Math.max(MIN_RAG_CONTEXT_TOKENS, Math.min(budget, MAX_RAG_CONTEXT_TOKENS));
+  return Math.min(available, Math.min(MAX_RAG_CONTEXT_TOKENS, Math.max(MIN_RAG_CONTEXT_TOKENS, budget)));
 }
 
 export function injectContextToMessages(messages: Message[], context: string, model?: string): Message[] {
@@ -25,11 +26,13 @@ export function injectContextToMessages(messages: Message[], context: string, mo
 
   const isSystemInstruction = trimmedContext.includes('<document_processing_notice>');
 
-  const safeContext = model
-    ? truncateTextToTokenLimit(trimmedContext, model, getContextBudgetTokens(messages, model))
-    : trimmedContext.length > FALLBACK_CONTEXT_CHAR_LIMIT
-      ? `${trimmedContext.substring(0, FALLBACK_CONTEXT_CHAR_LIMIT)}\n\n[Context truncated to fit budget.]`
-      : trimmedContext;
+  const safeContext = isSystemInstruction
+    ? trimmedContext
+    : model
+      ? truncateTextToTokenLimit(trimmedContext, model, getContextBudgetTokens(messages, model))
+      : trimmedContext.length > FALLBACK_CONTEXT_CHAR_LIMIT
+        ? `${trimmedContext.substring(0, FALLBACK_CONTEXT_CHAR_LIMIT)}\n\n[Context truncated to fit budget.]`
+        : trimmedContext;
 
   const contextMessage: Message = isSystemInstruction
     ? {

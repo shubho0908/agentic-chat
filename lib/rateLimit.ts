@@ -20,7 +20,7 @@ function cleanup(windowMs: number) {
   }
 }
 
-export interface RateLimitConfig {
+interface RateLimitConfig {
   windowMs: number;
   maxRequests: number;
 }

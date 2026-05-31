@@ -4,6 +4,7 @@ import { getCacheTtlSeconds, getEmbeddingDimensions } from '@/lib/env';
 import { logger } from '@/lib/logger';
 
 let pool: Pool | null = null;
+let shutdownRegistered = false;
 
 const LANGCHAIN_POOL_MAX = 5;
 
@@ -32,14 +33,17 @@ export function getPgPool(): Pool {
       });
     });
 
-    const shutdown = () => {
-      pool?.end().catch((error) => {
-        logger.warn('[LangChain Pool Shutdown Error]', error);
-      });
-      pool = null;
-    };
-    process.on('SIGTERM', shutdown);
-    process.on('SIGINT', shutdown);
+    if (!shutdownRegistered) {
+      const shutdown = () => {
+        pool?.end().catch((error) => {
+          logger.warn('[LangChain Pool Shutdown Error]', error);
+        });
+        pool = null;
+      };
+      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', shutdown);
+      shutdownRegistered = true;
+    }
   }
 
   return pool;

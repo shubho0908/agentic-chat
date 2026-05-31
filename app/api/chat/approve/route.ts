@@ -4,6 +4,7 @@ import { getAuthenticatedUser, errorResponse, getUserApiKey, verifyConversationO
 import { HTTP_STATUS } from "@/constants/errors";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { Command } from "@langchain/langgraph";
+import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphEnd, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
@@ -69,7 +70,8 @@ export async function POST(request: NextRequest) {
     const threadId = expectedThreadId;
 
     const apiKey = await getUserApiKey(user.id);
-    const graph = await createAgentGraph(user.id, apiKey, model);
+    const connectedToolkits = await getConnectedToolkits(user.id);
+    const graph = await createAgentGraph(user.id, apiKey, model, { thinkingEnabled: true, connectedToolkits });
 
     const existingState = await graph.getState({ configurable: { thread_id: threadId } });
     const hasPendingInterrupt = (existingState.tasks ?? []).some(

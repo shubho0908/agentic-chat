@@ -139,7 +139,7 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
           }
 
           if (parsed.type === 'thinking' && onThinking) {
-            thinkingContent += parsed.content;
+            thinkingContent += parsed.content ?? '';
             onThinking(thinkingContent);
           }
 

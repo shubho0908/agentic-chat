@@ -70,10 +70,6 @@ async function checkCache(
       return { cached: false };
     }
 
-    if (query.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
-      return { cached: false };
-    }
-
     const startTime = Date.now();
     const CACHE_TIMEOUT_MS = 5000;
     
@@ -123,6 +119,10 @@ export async function performCacheCheck(
   let cacheData: CacheCheckResult = { cached: false };
 
   if (useCaching) {
+    const rawText = extractTextFromContent(content);
+    if (rawText.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
+      return { cacheQuery: '', cacheData: { cached: false } };
+    }
     cacheQuery = buildCacheQuery(messages, content);
     cacheData = await checkCache(cacheQuery, abortSignal);
   }
