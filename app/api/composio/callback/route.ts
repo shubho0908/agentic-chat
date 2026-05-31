@@ -36,9 +36,8 @@ export async function GET(request: NextRequest) {
             connectionId,
             actualStatus: account.status,
           });
-        } else {
-          clearToolCache();
         }
+        clearToolCache();
       }
     } catch (error) {
       logger.warn("[Composio Callback] Could not verify connection status:", error);

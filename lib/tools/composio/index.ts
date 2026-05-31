@@ -16,6 +16,9 @@ export function getComposioClient(): Composio<LangchainProvider> | null {
   const apiKey = process.env.COMPOSIO_API_KEY;
   if (!apiKey) return null;
   if (composioInstance && cachedApiKey === apiKey) return composioInstance;
+  if (cachedApiKey && cachedApiKey !== apiKey) {
+    clearToolCache();
+  }
   composioInstance = new Composio({
     apiKey,
     provider: new LangchainProvider(),

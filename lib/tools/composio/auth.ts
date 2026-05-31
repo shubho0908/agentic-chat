@@ -30,7 +30,16 @@ export async function initiateConnection(
 
     const connectionRequest = await withRetry(
       () => client.connectedAccounts.link(userId, authConfig.id, { callbackUrl }),
-      { retries: 1, initialDelayMs: 500, timeoutMs: 15_000 }
+      {
+        retries: 1,
+        initialDelayMs: 500,
+        timeoutMs: 15_000,
+        shouldRetry: (error) => {
+          const e = error as Error & { status?: number };
+          if (e.status === 409 || /multiple.*connected|already.*active/i.test(e.message ?? "")) return false;
+          return true;
+        },
+      }
     );
 
     if (!connectionRequest.redirectUrl) {
