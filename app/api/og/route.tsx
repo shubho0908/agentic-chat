@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
                 gap: '8px',
               }}
             >
-              Search, memory, and tools
+              Your second brain, supercharged
             </div>
           </div>
         </div>

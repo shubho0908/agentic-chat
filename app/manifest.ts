@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Agentic Chat",
     short_name: "Agentic",
-    description: "AI chat app with web search, memory, and tools",
+    description: "AI-powered research, document intelligence, and workflow automation",
     start_url: "/",
     display: "standalone",
     background_color: "#0a0a0a",

@@ -145,7 +145,7 @@ export async function GET() {
                   gap: '12px',
                 }}
               >
-                Search, memory, and tools
+                Your second brain, supercharged
               </div>
             </div>
 
@@ -167,7 +167,7 @@ export async function GET() {
                   fontWeight: '600',
                 }}
               >
-                Web search
+                Research
               </div>
               <div
                 style={{
@@ -180,7 +180,7 @@ export async function GET() {
                   fontWeight: '600',
                 }}
               >
-                Memory
+                Documents
               </div>
               <div
                 style={{
@@ -193,7 +193,7 @@ export async function GET() {
                   fontWeight: '600',
                 }}
               >
-                Workspace
+                Workflows
               </div>
             </div>
           </div>
