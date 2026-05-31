@@ -58,6 +58,16 @@ interface StreamEventMapper {
 export function createStreamEventMapper(): StreamEventMapper {
   let askUserPending = false;
 
+  const getNode = (event: Record<string, unknown>): string | undefined => {
+    const metadata = event.metadata as Record<string, unknown> | undefined;
+    return typeof metadata?.langgraph_node === "string" ? metadata.langgraph_node : undefined;
+  };
+
+  const isNestedToolEvent = (event: Record<string, unknown>, name: string): boolean => {
+    if (name === ToolName.DEEP_RESEARCH) return false;
+    return getNode(event) !== GraphNode.TOOLS;
+  };
+
   return {
     map(controller, event) {
       const eventType = event.event as string;
@@ -65,8 +75,8 @@ export function createStreamEventMapper(): StreamEventMapper {
       switch (eventType) {
         case StreamEventType.CHAT_MODEL_STREAM: {
           if (askUserPending) break;
-          const sourceNode = (event.metadata as Record<string, unknown>)?.langgraph_node;
-          if (sourceNode === GraphNode.PLANNER) break;
+          const sourceNode = getNode(event);
+          if (sourceNode !== GraphNode.AGENT) break;
           const chunk = event.data as {
             chunk?: {
               content?: string | Array<{ type: string; text?: string; reasoning?: string }>;
@@ -102,6 +112,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             askUserPending = true;
             break;
           }
+          if (isNestedToolEvent(event, name)) break;
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { input?: Record<string, unknown> } | undefined;
           const args = extractToolArgs(data?.input ?? {});
@@ -116,6 +127,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             askUserPending = false;
             break;
           }
+          if (isNestedToolEvent(event, name)) break;
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);
@@ -136,6 +148,27 @@ export function createStreamEventMapper(): StreamEventMapper {
             controller.enqueue(
               encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, "Plan ready", planData as Record<string, unknown>)
             );
+          }
+          if (eventName === CustomEventName.RESEARCH_PROGRESS) {
+            const step = (customData?.step as string) ?? "researching";
+            const detail = (customData?.detail as string) ?? "Researching...";
+            const images = Array.isArray(customData?.images) ? customData.images : undefined;
+            controller.enqueue(
+              encodeToolProgress(
+                ToolName.DEEP_RESEARCH,
+                ToolStatus.RUNNING,
+                `[${step}] ${detail}`,
+                images ? { images } : undefined
+              )
+            );
+          }
+          if (eventName === CustomEventName.SEARCH_IMAGES) {
+            const images = Array.isArray(customData?.images) ? customData.images : undefined;
+            if (images) {
+              controller.enqueue(
+                encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images })
+              );
+            }
           }
           break;
         }

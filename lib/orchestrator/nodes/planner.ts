@@ -28,7 +28,8 @@ Rules:
 - CRITICAL: All tools are pre-authenticated as the user. NEVER plan to ask for usernames, workspace URLs, account IDs, API keys, or credentials.
 - If a tool needs an object id, plan to discover it via search/list/fetch first.
 - For structured connector data, discover the object first, inspect schema/metadata/options when available, then query using exact field names and exact option values from the tool response.
-- For mutation requests (create/update/insert/append/delete/archive/send), include the matching write tool slug in tools_needed. NEVER plan to "tell the user how to do it manually" — connector write tools work and will run after user approval.`;
+- For mutation requests (create/update/insert/append/delete/archive/send), include the matching write tool slug in tools_needed. NEVER plan to "tell the user how to do it manually" — connector write tools work and will run after user approval.
+- RESEARCH: For "research X", "tell me about X", "investigate/compare/analyze X thoroughly" requests, set complexity="tool_needed" and tools_needed=["deep_research"]. NEVER plan to clarify which person/entity for a named subject — just research the name. NEVER use web_search for research requests.`;
 
 const MIN_PLANNABLE_LENGTH = 10;
 

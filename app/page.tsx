@@ -36,7 +36,7 @@ const homeStructuredData = [
     name: siteConfig.name,
     url: siteConfig.url,
     email: siteConfig.contactEmail,
-    logo: absoluteUrl("/light.png"),
+    logo: absoluteUrl("/icon"),
     sameAs: [siteConfig.githubUrl],
   },
   {

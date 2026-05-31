@@ -151,7 +151,7 @@ export function WebSearchScene({
                         ? "(max-width: 719px) 100vw, 220px"
                         : "260px"
                   }
-                  quality={68}
+                  quality={70}
                   className="object-cover"
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent" />

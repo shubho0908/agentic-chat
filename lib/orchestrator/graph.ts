@@ -24,7 +24,7 @@ export async function createAgentGraph(
 ) {
   const { thinkingEnabled = false, connectedToolkits } = options;
 
-  const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits);
+  const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits, { apiKey, model });
   const tools = allTools;
   const checkpointer = await getCheckpointer();
 

@@ -1,9 +1,11 @@
 import Exa from "exa-js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { withRetry } from "@/lib/retry";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
+import { CustomEventName } from "@/lib/orchestrator/constants";
 
 let exaClient: Exa | null = null;
 
@@ -16,6 +18,40 @@ function getExaClient(): Exa {
     exaClient = new Exa(apiKey);
   }
   return exaClient;
+}
+
+export interface DeepSearchOptions {
+  numResults?: number;
+  maxCharacters?: number;
+}
+
+export async function exaDeepSearch(
+  query: string,
+  options: DeepSearchOptions = {}
+): Promise<Array<{ title: string; url: string; text: string; publishedDate?: string; image?: string }>> {
+  const { numResults = 8, maxCharacters = 3000 } = options;
+  const exa = getExaClient();
+
+  const response = await withRetry(
+    () =>
+      exa.search(query, {
+        type: "neural",
+        numResults,
+        contents: {
+          text: { maxCharacters },
+          highlights: true,
+        },
+      }),
+    { retries: 2, initialDelayMs: 300 }
+  );
+
+  return response.results.map((r) => ({
+    title: (r as { title?: string | null }).title || "Untitled",
+    url: r.url,
+    text: (r as { text?: string }).text ?? (r as { highlights?: string[] }).highlights?.join("\n") ?? "",
+    publishedDate: r.publishedDate ?? undefined,
+    image: (r as { image?: string }).image ?? undefined,
+  }));
 }
 
 const exaSearchSchema = z.object({
@@ -63,6 +99,18 @@ export const exaSearchTool = new DynamicStructuredTool({
 
       if (!response.results.length) {
         return "No results found for this query.";
+      }
+
+      const seenImages = new Set<string>();
+      const images: Array<{ url: string; description?: string }> = [];
+      for (const r of response.results) {
+        const url = (r as { image?: string }).image;
+        if (typeof url !== "string" || seenImages.has(url)) continue;
+        seenImages.add(url);
+        images.push({ url, description: r.title ?? undefined });
+      }
+      if (images.length > 0) {
+        await dispatchCustomEvent(CustomEventName.SEARCH_IMAGES, { images });
       }
 
       const formatted = response.results

@@ -91,6 +91,8 @@ function ImageCard({
             className={`absolute inset-0 size-full object-cover transition-transform duration-300 group-hover:scale-105 ${contentClassName ?? ""}`}
             sizes={sizes}
             unoptimized
+            loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             onError={handleImageError}
             onLoad={handleImageLoad}

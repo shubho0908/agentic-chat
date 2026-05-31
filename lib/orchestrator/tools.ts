@@ -10,6 +10,7 @@ import {
   getEssentialComposioToolSlugs,
   type ComposioToolkit,
 } from "@/lib/tools/composio/config";
+import { createDeepResearchTool } from "./sub-agents";
 import { MAX_TOOLS } from "./constants";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
@@ -64,6 +65,19 @@ const WEB_SEARCH_TERMS = [
   "online",
   "price",
   "weather",
+];
+
+const DEEP_RESEARCH_TERMS = [
+  "research",
+  "thoroughly",
+  "comprehensive",
+  "compare",
+  "analysis",
+  "investigate",
+  "deep dive",
+  "in-depth",
+  "detailed",
+  "pros and cons",
 ];
 
 const STOPWORDS = new Set([
@@ -248,6 +262,9 @@ export function selectToolsForAgentStep(
   if (WEB_SEARCH_TERMS.some((term) => rawText.includes(term))) {
     addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
   }
+  if (DEEP_RESEARCH_TERMS.some((term) => rawText.includes(term))) {
+    addToolByName(selected, toolsByName, ToolName.DEEP_RESEARCH);
+  }
 
   const intentTerms = tokenizeIntent(latestUserText);
   const ranked = allTools
@@ -276,18 +293,24 @@ export function shouldBypassSemanticCacheForToolIntent(
   return (
     getAnyMentionedToolkits(latestUserText).length > 0 ||
     WEB_SEARCH_TERMS.some((term) => rawText.includes(term)) ||
+    DEEP_RESEARCH_TERMS.some((term) => rawText.includes(term)) ||
     /https?:\/\//i.test(latestUserText)
   );
 }
 
 export async function getToolsForRequest(
   userId: string,
-  connectedToolkits?: ComposioToolkit[]
+  connectedToolkits?: ComposioToolkit[],
+  options?: { apiKey?: string; model?: string }
 ): Promise<DynamicStructuredTool[]> {
   const baseTools: DynamicStructuredTool[] = [askUserTool, webScrapeTool];
 
   if (process.env.EXA_API_KEY) {
     baseTools.push(exaSearchTool);
+  }
+
+  if (options?.apiKey) {
+    baseTools.push(createDeepResearchTool(options.apiKey, options.model ?? "gpt-4o-mini"));
   }
 
   try {

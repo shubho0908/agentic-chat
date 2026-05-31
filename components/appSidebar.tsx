@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Plus, Loader, ListChecks, X, Trash2 } from "lucide-react";
-import Image from "next/image";
+import Logo from "@/components/logo";
 import {
   Sidebar,
   SidebarContent,
@@ -29,27 +28,6 @@ import { Button } from "./ui/button";
 import { NavigationGuardDialog } from "@/components/navigationGuardDialog";
 import { useAppSidebarController } from "@/hooks/useAppSidebarController";
 
-function SidebarBrandLogo({ src }: { src: string }) {
-  const [imageLoaded, setImageLoaded] = useState(false);
-
-  return (
-    <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg">
-      {!imageLoaded && (
-        <div className="absolute inset-0 animate-pulse bg-linear-to-br from-primary/20 to-primary/10" />
-      )}
-      <Image
-        src={src}
-        alt="Agentic chat logo"
-        width={32}
-        height={32}
-        className="object-contain"
-        onLoad={() => setImageLoaded(true)}
-        priority
-      />
-    </div>
-  );
-}
-
 export function AppSidebar() {
   const {
     conversations,
@@ -70,7 +48,6 @@ export function AppSidebar() {
     isRenaming,
     isToggling,
     loaderRef,
-    logoSrc,
     openMobile,
     parentRef,
     renameConversation,
@@ -95,7 +72,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
-                <SidebarBrandLogo key={logoSrc} src={logoSrc} />
+                <Logo size={32} className="!size-8 shrink-0" />
                 <div className="flex flex-col gap-0.5 leading-none pl-1">
                   <span className="font-medium text-sm">Agentic</span>
                   <span className="text-[11px] text-muted-foreground">Chat History</span>

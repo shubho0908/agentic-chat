@@ -1,7 +1,6 @@
 "use client";
 
-import { LazyMotion, m, domAnimation } from "framer-motion";
-import { Route } from "lucide-react";
+import { Route, Loader } from "lucide-react";
 
 interface PlanningStepProps {
   message: string;
@@ -10,21 +9,21 @@ interface PlanningStepProps {
 
 export function PlanningStep({ message, plan }: PlanningStepProps) {
   return (
-    <LazyMotion features={domAnimation}>
-      <m.div
-        className="flex w-fit max-w-sm items-start gap-2.5 rounded-lg border border-primary/15 bg-gradient-to-b from-primary/[0.06] to-primary/[0.02] px-3 py-2 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-      >
-        <Route className="mt-0.5 size-3.5 shrink-0 text-primary/70" />
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="font-medium text-foreground/80">{message}</span>
-          {plan && (
-            <span className="text-muted-foreground/70 truncate">{plan}</span>
-          )}
-        </div>
-      </m.div>
-    </LazyMotion>
+    <div className="rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <div className="flex items-center gap-2 min-w-0">
+        <Route className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-[12px] font-medium text-foreground/80 truncate">
+          {message}
+        </span>
+        {plan && (
+          <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+            {plan}
+          </span>
+        )}
+        <span className="ml-auto shrink-0">
+          <Loader className="size-3 animate-spin text-muted-foreground" />
+        </span>
+      </div>
+    </div>
   );
 }

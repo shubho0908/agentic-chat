@@ -9,7 +9,6 @@ import { z } from "zod";
 import { toJsonValue } from "@/lib/json";
 import { parsePaginationInteger } from "@/lib/pagination";
 import { encodeToolResult } from "@/lib/chat/streamingHelpers";
-import { MAX_TOOL_ITERATIONS } from "@/lib/orchestrator/constants";
 import { createAgentNode, reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
 import { createToolNode } from "@/lib/orchestrator/nodes/tools";
 import { routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
@@ -330,7 +329,7 @@ test("tool routing limits execution rounds, not parallel tool result count", () 
   const messages = [
     new HumanMessage("do something"),
     createToolCallingMessage(firstRoundCallId),
-    ...Array.from({ length: MAX_TOOL_ITERATIONS + 4 }, (_, index) =>
+    ...Array.from({ length: 20 }, (_, index) =>
       new ToolMessage({
         content: "ok",
         tool_call_id: `${firstRoundCallId}-${index}`,
@@ -345,9 +344,10 @@ test("tool routing limits execution rounds, not parallel tool result count", () 
 test("tool routing stops after the configured number of request rounds", () => {
   const messages = [
     new HumanMessage("do something"),
-    ...Array.from({ length: MAX_TOOL_ITERATIONS }, (_, index) =>
+    ...Array.from({ length: 15 }, (_, index) =>
       createToolCallingMessage(`call-${index}`)
     ),
+    createToolCallingMessage("call-final"),
   ];
 
   assert.equal(routeAfterAgent({ messages } as AgentStateType), END);

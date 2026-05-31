@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import { Loader } from "lucide-react";
-import { useTheme } from "next-themes";
-import Image from "next/image";
+import Logo from "@/components/logo";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +26,6 @@ interface AuthModalProps {
 
 export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { resolvedTheme } = useTheme();
 
   const handleGoogleSignIn = async () => {
     try {
@@ -69,14 +67,7 @@ export function AuthModal({ children, open, onOpenChange, callbackURL }: AuthMod
 
             <div className="p-8">
               <div className="flex flex-col items-center text-center gap-y-6">
-                <Image
-                  src={resolvedTheme === "light" ? "/light.png" : "/dark.png"}
-                  alt="Agentic Chat"
-                  width={80}
-                  height={80}
-                  className="object-contain"
-                  priority
-                />
+                <Logo size={80} />
 
               <div className="space-y-2">
                 <DialogTitle className="text-2xl font-semibold tracking-tight">
