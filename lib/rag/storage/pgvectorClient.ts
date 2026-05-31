@@ -33,7 +33,9 @@ export function getPgPool(): Pool {
     });
 
     const shutdown = () => {
-      pool?.end().catch(() => {});
+      pool?.end().catch((error) => {
+        logger.warn('[LangChain Pool Shutdown Error]', error);
+      });
       pool = null;
     };
     process.on('SIGTERM', shutdown);

@@ -1,9 +1,9 @@
-import { type Attachment, type JsonValue, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
+import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
@@ -13,15 +13,9 @@ import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { logger } from "@/lib/logger";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 import { queryKeys } from "@/lib/queryKeys";
-
-function toJsonValue(value: unknown): JsonValue | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
-}
+import { toJsonValue } from "@/lib/json";
 
 export async function handleEditMessage(
   messageId: string,
@@ -232,6 +226,10 @@ export async function handleEditMessage(
       },
     });
 
+    if (toolActivities.length > 0) {
+      messageMetadata = { ...messageMetadata, toolActivities };
+    }
+
     onMessagesUpdate((prev) =>
       prev.map((msg) =>
         msg.id === placeholderAssistantId
@@ -352,7 +350,7 @@ export async function handleEditMessage(
       return { success: false, error: "aborted" };
     }
     
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });

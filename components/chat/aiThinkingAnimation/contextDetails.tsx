@@ -6,9 +6,10 @@ import { HybridContext } from "./hybridContext";
 import { DefaultRAGContext } from "./defaultRAGContext";
 import { UrlContentContext } from "./urlContentContext";
 import type { ContextDetailsProps } from "./types";
+import { ToolName } from "@/lib/tools/constants";
 
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
-  const isWebSearch = memoryStatus.activeToolName === 'web_search';
+  const isWebSearch = memoryStatus.activeToolName === ToolName.WEB_SEARCH;
 
   if (memoryStatus.routingDecision === RoutingDecision.UrlContent) {
     return <UrlContentContext memoryStatus={memoryStatus} />;

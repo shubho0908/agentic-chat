@@ -3,6 +3,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
 import { logger } from "@/lib/logger";
+import { ToolName } from "@/lib/tools/constants";
 
 let exaClient: Exa | null = null;
 
@@ -37,7 +38,7 @@ const exaSearchSchema = z.object({
 });
 
 export const exaSearchTool = new DynamicStructuredTool({
-  name: "web_search",
+  name: ToolName.WEB_SEARCH,
   description:
     "Search the web for current information, news, research, documentation, etc. Use when you need up-to-date information not in your training data.",
   schema: exaSearchSchema,

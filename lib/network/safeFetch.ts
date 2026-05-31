@@ -1,6 +1,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 import { assertSafePublicUrl, type SafeResolvedUrl } from './ssrf';
 import { withRetry } from '@/lib/retry';
+import { logger } from '@/lib/logger';
 
 interface SafeFetchOptions extends RequestInit {
   timeoutMs?: number;
@@ -22,6 +23,13 @@ function cloneSafeResolvedUrl(target: SafeResolvedUrl): SafeResolvedUrl {
   };
 }
 
+function normalizeLookupHostname(hostname: string): string {
+  const trimmed = hostname.toLowerCase();
+  return trimmed.startsWith('[') && trimmed.endsWith(']')
+    ? trimmed.slice(1, -1)
+    : trimmed;
+}
+
 function selectResolvedAddress(
   addresses: SafeResolvedUrl['resolvedAddresses'],
   family?: number | string
@@ -36,7 +44,7 @@ function createPinnedDispatcher(target: SafeResolvedUrl): Agent {
   return new Agent({
     connect: {
       lookup(hostname, options, callback) {
-        if (hostname.toLowerCase() !== target.hostname) {
+        if (normalizeLookupHostname(hostname) !== target.hostname) {
           callback(new Error(`Unexpected lookup hostname: ${hostname}`), '' as never, 0 as never);
           return;
         }
@@ -161,7 +169,11 @@ export async function safeFetch(
           }
 
           redirectCount += 1;
-          await response.body?.cancel().catch(() => undefined);
+          try {
+            await response.body?.cancel();
+          } catch (cancelError) {
+            logger.warn('[safeFetch] Failed to cancel redirect response body:', cancelError);
+          }
           currentTarget = await assertSafePublicUrl(new URL(location, currentTarget.url), { allowHosts });
           continue;
         }

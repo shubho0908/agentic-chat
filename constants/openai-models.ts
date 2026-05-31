@@ -11,6 +11,17 @@ interface OpenAIModel {
 
 export const OPENAI_MODELS: OpenAIModel[] = [
   {
+    id: "gpt-5.5",
+    name: "GPT-5.5",
+    description:
+      "Most capable model for complex reasoning, coding, and professional tasks",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    recommended: true,
+  },
+  {
     id: "gpt-5.4",
     name: "GPT-5.4",
     description:
@@ -19,7 +30,6 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    recommended: true,
   },
   {
     id: "gpt-5.4-mini",
@@ -91,4 +101,4 @@ export const OPENAI_MODELS: OpenAIModel[] = [
   },
 ];
 
-export const DEFAULT_MODEL = "gpt-5.4";
+export const DEFAULT_MODEL = OPENAI_MODELS.find((m) => m.recommended)?.id ?? OPENAI_MODELS[0].id;

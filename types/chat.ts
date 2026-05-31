@@ -1,4 +1,6 @@
 import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from '@/lib/orchestrator/constants';
+import type { HumanInTheLoopRequestKindValue } from '@/lib/tools/constants';
 import type {
   WebSearchImage,
   WebSearchSource,
@@ -53,6 +55,7 @@ export interface MemoryStatus {
   toolProgress?: {
     status: ToolProgressStatus | string;
     message: string;
+    toolName?: string;
     details?: {
       originalQuery?: string;
       query?: string;
@@ -149,6 +152,7 @@ export interface UseChatReturn {
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
   continueConversation: (options: ContinueConversationOptions) => Promise<void>;
+  respondToHumanInTheLoop: (approved: boolean, response?: string) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
   memoryStatus?: MemoryStatus;
@@ -200,6 +204,27 @@ interface ToolProgressEvent {
   details?: Record<string, unknown>;
 }
 
+interface HumanInTheLoopToolCall {
+  id?: string;
+  name: string;
+  args?: Record<string, unknown>;
+}
+
+export interface HumanInTheLoopRequestEvent {
+  type?: typeof HUMAN_IN_THE_LOOP_REQUEST_TYPE;
+  requestKind?: HumanInTheLoopRequestKindValue;
+  requestId?: string;
+  threadId?: string;
+  toolCallId?: string;
+  question?: string;
+  reason?: string;
+  title?: string;
+  context?: string;
+  options?: { label: string; description: string }[];
+  recommendation?: string;
+  toolCalls?: HumanInTheLoopToolCall[];
+}
+
 export interface StreamConfig {
   messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>;
   model: string;
@@ -210,8 +235,24 @@ export interface StreamConfig {
   onToolCall?: (toolCall: ToolCallEvent) => void;
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
+  onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   onThinking?: (thinking: string) => void;
   memoryEnabled?: boolean;
   thinkingEnabled?: boolean;
+}
+
+export interface ApprovalStreamConfig {
+  conversationId: string;
+  threadId?: string;
+  model: string;
+  approved?: boolean;
+  response?: string;
+  signal: AbortSignal;
+  onChunk: (fullContent: string) => void;
+  onToolCall?: (toolCall: ToolCallEvent) => void;
+  onToolResult?: (toolResult: ToolResultEvent) => void;
+  onToolProgress?: (progress: ToolProgressEvent) => void;
+  onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
+  onThinking?: (thinking: string) => void;
 }

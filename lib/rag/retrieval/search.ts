@@ -233,7 +233,11 @@ async function searchLexicalFallback(params: {
         content,
         metadata->>'attachmentId' AS attachment_id,
         metadata->>'fileName' AS file_name,
-        NULLIF(metadata->>'page', '')::int AS page,
+        CASE
+          WHEN metadata->>'page' ~ '^[0-9]+$'
+            THEN (metadata->>'page')::int
+          ELSE NULL
+        END AS page,
         ts_rank_cd(
           to_tsvector('english', content),
           websearch_to_tsquery('english', ${searchQuery})

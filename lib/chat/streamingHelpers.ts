@@ -1,9 +1,10 @@
 import { type MemoryStatus } from '@/types/chat';
+import { toJsonValue } from '@/lib/json';
 
 const encoder = new TextEncoder();
 
 function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
-  return encoder.encode(`data: ${JSON.stringify(data)}\n\n`);
+  return encoder.encode(`data: ${JSON.stringify(toJsonValue(data) ?? {})}\n\n`);
 }
 
 export function encodeMemoryStatus(

@@ -1,21 +1,41 @@
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, errorResponse } from '@/lib/apiUtils';
+import { createHash } from 'node:crypto';
+import { getAuthenticatedUser, errorResponse, verifyConversationOwnership } from '@/lib/apiUtils';
 import { prisma } from '@/lib/prisma';
 import { decryptApiKey } from '@/lib/encryption';
 import OpenAI from 'openai';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
 
+const OPENAI_CLIENT_CACHE_MAX = 32;
 const openaiClientCache = new Map<string, OpenAI>();
+
+function hashApiKey(apiKey: string): string {
+  return createHash("sha256").update(apiKey).digest("hex");
+}
+
 function getOpenAIClient(apiKey: string): OpenAI {
-  let client = openaiClientCache.get(apiKey);
-  if (!client) {
-    client = new OpenAI({ apiKey });
-    openaiClientCache.set(apiKey, client);
+  const cacheKey = hashApiKey(apiKey);
+  const existing = openaiClientCache.get(cacheKey);
+  if (existing) {
+    openaiClientCache.delete(cacheKey);
+    openaiClientCache.set(cacheKey, existing);
+    return existing;
   }
+
+  const client = new OpenAI({ apiKey });
+  openaiClientCache.set(cacheKey, client);
+
+  while (openaiClientCache.size > OPENAI_CLIENT_CACHE_MAX) {
+    const oldestKey = openaiClientCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    openaiClientCache.delete(oldestKey);
+  }
+
   return client;
 }
-import { validateChatMessages } from '@/lib/validation';
+import { isValidConversationId, validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import type { MemoryStatus } from '@/types/chat';
 import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
@@ -52,6 +72,10 @@ export async function POST(request: NextRequest) {
     if (error) {
       return error;
     }
+
+    const rateLimited = checkRateLimit(authUser.id, "chat", RATE_LIMITS.chat);
+    if (rateLimited) return rateLimited;
+
     const user = await prisma.user.findUnique({
       where: { id: authUser.id },
       select: { encryptedApiKey: true },
@@ -85,6 +109,15 @@ export async function POST(request: NextRequest) {
 
     if (conversationId === null) {
       return errorResponse('conversationId must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (conversationId) {
+      if (!isValidConversationId(conversationId)) {
+        return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+      }
+
+      const { error: ownershipError } = await verifyConversationOwnership(conversationId, authUser.id);
+      if (ownershipError) return ownershipError;
     }
 
     const streamResult = parseOptionalBoolean(body.stream, 'stream', true);
@@ -137,20 +170,33 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const abortController = new AbortController();
-      
-      const streamHandler = createChatStreamHandler({
-        messages: validatedMessages,
-        memoryStatusInfo: baseMemoryStatusInfo,
-        model: validatedModel,
-        openai,
-        apiKey,
-        memoryEnabled,
-        abortSignal: abortController.signal,
-        userId: authUser.id,
-        conversationId,
-        requestId,
-        thinkingEnabled,
-      });
+      const useOrchestrator = body.useOrchestrator === true;
+
+      const streamHandler = useOrchestrator
+        ? (await import('@/lib/orchestrator/handler')).createOrchestratorStreamHandler({
+            messages: validatedMessages,
+            model: validatedModel,
+            apiKey,
+            userId: authUser.id,
+            conversationId,
+            memoryEnabled,
+            thinkingEnabled,
+            abortSignal: abortController.signal,
+          })
+        : createChatStreamHandler({
+            messages: validatedMessages,
+            memoryStatusInfo: baseMemoryStatusInfo,
+            model: validatedModel,
+            openai,
+            apiKey,
+            memoryEnabled,
+            abortSignal: abortController.signal,
+            userId: authUser.id,
+            conversationId,
+            requestId,
+            thinkingEnabled,
+          });
+
       const readableStream = new ReadableStream({
         ...streamHandler,
         cancel() {

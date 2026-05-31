@@ -21,27 +21,27 @@ success() {
 }
 
 step "[1/6] Running linter..."
-pnpm run lint || error "Lint failed"
+bun run lint || error "Lint failed"
 success "Lint passed"
 
 step "[2/6] Validating Prisma schema..."
-pnpm run prisma:validate || error "Prisma validation failed"
+bun run prisma:validate || error "Prisma validation failed"
 success "Prisma schema validated"
 
 step "[3/6] Running TypeScript type-check..."
-pnpm run typecheck || error "TypeScript type-check failed"
+bun run typecheck || error "TypeScript type-check failed"
 success "TypeScript type-check passed"
 
 step "[4/6] Running tests..."
-pnpm run test || error "Tests failed"
+bun run test || error "Tests failed"
 success "Tests passed"
 
 step "[5/6] Running build..."
-pnpm run build || error "Build failed"
+bun run build || error "Build failed"
 success "Build passed"
 
 step "[6/6] Running React Doctor health check..."
-SCORE=$(pnpm react-doctor --score --no-share 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -E '^[0-9]+$' | tail -1)
+SCORE=$(bun react-doctor --score --no-share 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -E '^[0-9]+$' | tail -1)
 if [ -z "$SCORE" ]; then
   error "React Doctor failed to produce a score"
 fi

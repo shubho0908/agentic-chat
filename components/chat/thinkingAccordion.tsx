@@ -38,8 +38,12 @@ export function ThinkingAccordion({ thinking, isLoading = false, durationMs }: T
           </span>
         </AccordionTrigger>
         <AccordionContent className="pb-3 pt-0">
-          <div className="text-[13px] leading-relaxed max-h-72 overflow-y-auto opacity-70">
-            {thinking ? <Response>{thinking}</Response> : (isLoading ? "Reasoning..." : "")}
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-background to-transparent z-10" />
+            <div className="text-[13px] leading-relaxed max-h-72 overflow-y-auto scrollbar-hide opacity-70 py-2">
+              {thinking ? <Response>{thinking}</Response> : (isLoading ? "Reasoning..." : "")}
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-background to-transparent z-10" />
           </div>
         </AccordionContent>
       </AccordionItem>

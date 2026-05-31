@@ -60,10 +60,10 @@ function buildAttachmentCreateInput(attachments?: AttachmentInput[] | null) {
 }
 
 async function getNextSiblingIndex(
-  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  db: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'> | typeof prisma,
   parentId: string
 ) {
-  const maxSibling = await tx.message.aggregate({
+  const maxSibling = await db.message.aggregate({
     where: {
       OR: [
         { id: parentId },
@@ -75,6 +75,8 @@ async function getNextSiblingIndex(
 
   return (maxSibling._max.siblingIndex ?? -1) + 1;
 }
+
+const TRANSACTION_TIMEOUT_MS = 15_000;
 
 async function softDeleteDownstreamBranch(
   tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
@@ -211,10 +213,63 @@ export async function PATCH(
     const parentId = existingMessage.parentMessageId || messageId;
     const now = new Date();
 
-    if (existingMessage.role === 'USER' && assistantContent) {
-      const result = await prisma.$transaction(async (tx) => {
-        const siblingIndex = await getNextSiblingIndex(tx, parentId);
+    if (body.inPlace === true) {
+      if (existingMessage.role !== 'ASSISTANT') {
+        return errorResponse('In-place updates are only allowed for assistant messages', undefined, HTTP_STATUS.BAD_REQUEST);
+      }
 
+      const updated = await prisma.$transaction(async (tx) => {
+        const updatedMessage = await tx.message.update({
+          where: { id: messageId },
+          data: {
+            content,
+            ...(metadata !== undefined && { metadata: metadata ?? undefined }),
+          },
+          include: { attachments: true },
+        });
+
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: now },
+        });
+
+        return updatedMessage;
+      }, { timeout: TRANSACTION_TIMEOUT_MS });
+
+      return jsonResponse(updated, HTTP_STATUS.OK);
+    }
+
+    if (existingMessage.role === 'USER' && assistantContent) {
+      const siblingIndex = await getNextSiblingIndex(prisma, parentId);
+
+      let assistantParentId: string | undefined;
+      let assistantSiblingIndex: number | undefined;
+      let existingAssistantMessage: { id: string; parentMessageId: string | null; siblingIndex: number } | null = null;
+
+      if (hasAssistantMessageId) {
+        existingAssistantMessage = await prisma.message.findFirst({
+          where: {
+            id: assistantMessageId,
+            conversationId,
+            role: 'ASSISTANT',
+            isDeleted: false,
+          },
+          select: {
+            id: true,
+            parentMessageId: true,
+            siblingIndex: true,
+          },
+        });
+
+        if (!existingAssistantMessage) {
+          return errorResponse('Assistant message not found or already deleted', undefined, HTTP_STATUS.NOT_FOUND);
+        }
+
+        assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
+        assistantSiblingIndex = await getNextSiblingIndex(prisma, assistantParentId);
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
         await softDeleteDownstreamBranch(
           tx,
           conversationId,
@@ -241,61 +296,29 @@ export async function PATCH(
 
         let assistantMessage;
 
-        if (hasAssistantMessageId) {
-          try {
-            const existingAssistantMessage = await tx.message.findFirst({
-              where: {
-                id: assistantMessageId,
-                conversationId,
-                role: 'ASSISTANT',
-                isDeleted: false,
-              },
-              select: {
-                id: true,
-                parentMessageId: true,
-                siblingIndex: true,
-              },
-            });
+        if (hasAssistantMessageId && existingAssistantMessage) {
+          await softDeleteDownstreamBranch(
+            tx,
+            conversationId,
+            existingAssistantMessage.id,
+            existingAssistantMessage.parentMessageId,
+            existingAssistantMessage.siblingIndex,
+            now
+          );
 
-            if (!existingAssistantMessage) {
-              throw new MessageVersionRouteError(
-                'Assistant message not found or already deleted',
-                HTTP_STATUS.NOT_FOUND
-              );
-            }
-
-            const assistantParentId = existingAssistantMessage.parentMessageId || existingAssistantMessage.id;
-            const assistantSiblingIndex = await getNextSiblingIndex(tx, assistantParentId);
-
-            await softDeleteDownstreamBranch(
-              tx,
+          assistantMessage = await tx.message.create({
+            data: {
               conversationId,
-              existingAssistantMessage.id,
-              existingAssistantMessage.parentMessageId,
-              existingAssistantMessage.siblingIndex,
-              now
-            );
-
-            assistantMessage = await tx.message.create({
-              data: {
-                conversationId,
-                role: 'ASSISTANT',
-                content: assistantContent,
-                parentMessageId: assistantParentId,
-                siblingIndex: assistantSiblingIndex,
-                ...(assistantMetadata && { metadata: assistantMetadata }),
-              },
-              include: {
-                attachments: true,
-              },
-            });
-          } catch (assistantVersionError) {
-            logger.warn('[Message Version Route] Assistant version-link failed:', {
-              assistantMessageId,
-              error: assistantVersionError instanceof Error ? assistantVersionError.message : String(assistantVersionError),
-            });
-            throw assistantVersionError;
-          }
+              role: 'ASSISTANT',
+              content: assistantContent,
+              parentMessageId: assistantParentId!,
+              siblingIndex: assistantSiblingIndex!,
+              ...(assistantMetadata && { metadata: assistantMetadata }),
+            },
+            include: {
+              attachments: true,
+            },
+          });
         }
 
         if (!hasAssistantMessageId && !assistantMessage) {
@@ -321,16 +344,16 @@ export async function PATCH(
           updatedMessage,
           assistantMessage,
         };
-      });
+      }, { timeout: TRANSACTION_TIMEOUT_MS });
 
       scheduleDocumentProcessing(getRagAttachmentIds(result.updatedMessage.attachments), user.id);
 
       return jsonResponse(result, HTTP_STATUS.OK);
     }
 
-    const newVersion = await prisma.$transaction(async (tx) => {
-      const siblingIndex = await getNextSiblingIndex(tx, parentId);
+    const siblingIndexForVersion = await getNextSiblingIndex(prisma, parentId);
 
+    const newVersion = await prisma.$transaction(async (tx) => {
       await softDeleteDownstreamBranch(
         tx,
         conversationId,
@@ -346,7 +369,7 @@ export async function PATCH(
           role: existingMessage.role,
           content,
           parentMessageId: parentId,
-          siblingIndex,
+          siblingIndex: siblingIndexForVersion,
           ...(metadata && { metadata }),
           attachments: buildAttachmentCreateInput(validatedAttachments),
         },
@@ -361,7 +384,7 @@ export async function PATCH(
       });
 
       return createdVersion;
-    });
+    }, { timeout: TRANSACTION_TIMEOUT_MS });
 
     scheduleDocumentProcessing(getRagAttachmentIds(newVersion.attachments), user.id);
 

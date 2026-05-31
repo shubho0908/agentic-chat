@@ -132,7 +132,7 @@ export async function getMemoryContextResult(
   options?: MemoryLookupOptions
 ): Promise<MemoryContextResult> {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) {
+  if (!session?.user || session.user.id !== userId) {
     return { context: '', failed: false };
   }
 

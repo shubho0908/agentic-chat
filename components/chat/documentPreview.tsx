@@ -32,6 +32,62 @@ function getOccurrenceKey(value: string, counts: Map<string, number>): string {
   return nextCount === 0 ? value || "empty" : `${value || "empty"}-${nextCount}`;
 }
 
+function renderCSV(content: string) {
+  const rows = content.split("\n").map((row) => row.split(","));
+  const headers = rows[0] || [];
+  const dataRows = rows.slice(1);
+  const headerKeys = new Map<string, number>();
+  const rowKeys = new Map<string, number>();
+
+  return (
+    <ScrollArea className="h-[70vh]">
+      <div className="p-4">
+        <table className="min-w-full border-collapse">
+          <thead className="sticky top-0 bg-background border-b-2">
+            <tr>
+              {headers.map((header) => (
+                <th
+                  key={getOccurrenceKey(header, headerKeys)}
+                  className="px-4 py-2 text-left text-sm font-semibold border"
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataRows.map((row) => {
+              const rowKey = getOccurrenceKey(row.join("\u001f"), rowKeys);
+              const cellKeys = new Map<string, number>();
+
+              return (
+                <tr key={rowKey} className="border-b hover:bg-muted/30">
+                  {row.map((cell) => (
+                    <td
+                      key={`${rowKey}-${getOccurrenceKey(cell, cellKeys)}`}
+                      className="px-4 py-2 text-sm border"
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </ScrollArea>
+  );
+}
+
+function renderStatus(message: string) {
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <p className="text-muted-foreground">{message}</p>
+    </div>
+  );
+}
+
 export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: DocumentPreviewProps) {
   const isMobile = useIsMobile();
 
@@ -54,60 +110,6 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
 
   const textFileContent = fetchedContent ?? null;
   const errorMessage = error instanceof Error ? error.message : "Failed to load file";
-
-  const renderCSV = (content: string) => {
-    const rows = content.split("\n").map((row) => row.split(","));
-    const headers = rows[0] || [];
-    const dataRows = rows.slice(1);
-    const headerKeys = new Map<string, number>();
-    const rowKeys = new Map<string, number>();
-
-    return (
-      <ScrollArea className="h-[70vh]">
-        <div className="p-4">
-          <table className="min-w-full border-collapse">
-            <thead className="sticky top-0 bg-background border-b-2">
-              <tr>
-                {headers.map((header) => (
-                  <th
-                    key={getOccurrenceKey(header, headerKeys)}
-                    className="px-4 py-2 text-left text-sm font-semibold border"
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {dataRows.map((row) => {
-                const rowKey = getOccurrenceKey(row.join("\u001f"), rowKeys);
-                const cellKeys = new Map<string, number>();
-
-                return (
-                  <tr key={rowKey} className="border-b hover:bg-muted/30">
-                    {row.map((cell) => (
-                      <td
-                        key={`${rowKey}-${getOccurrenceKey(cell, cellKeys)}`}
-                        className="px-4 py-2 text-sm border"
-                      >
-                        {cell}
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </ScrollArea>
-    );
-  };
-
-  const renderStatus = (message: string) => (
-    <div className="flex h-full items-center justify-center p-6">
-      <p className="text-muted-foreground">{message}</p>
-    </div>
-  );
 
   const getViewerUrl = () => {
     if (isOfficeDoc) {

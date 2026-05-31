@@ -210,10 +210,6 @@ const EXCLUDED_PATTERNS = [
   /\.imgur\./i,
 ];
 
-export function stripUrlsFromText(text: string): string {
-  return text.replace(URL_REGEX, ' ');
-}
-
 export function extractUrlsFromMessage(message: string | Array<{ type: string; text?: string }>): string[] {
   const textContent = typeof message === 'string' 
     ? message 

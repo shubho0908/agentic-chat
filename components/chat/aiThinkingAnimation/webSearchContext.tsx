@@ -5,6 +5,49 @@ import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
 import { UrlContentContext } from "./urlContentContext";
 
+const phases = [
+  {
+    number: 1,
+    icon: Target,
+    label: 'Query Analysis',
+    description: 'Analyzing query for comprehensive search',
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-500/10',
+  },
+  {
+    number: 2,
+    icon: Network,
+    label: 'Web Crawling',
+    description: 'Searching 10-15 comprehensive web sources',
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-500/10',
+  },
+  {
+    number: 3,
+    icon: ShieldCheck,
+    label: 'Cross-Verification',
+    description: 'Comparing and verifying information across sources',
+    color: 'text-cyan-600 dark:text-cyan-400',
+    bgColor: 'bg-cyan-500/10',
+  },
+  {
+    number: 4,
+    icon: Boxes,
+    label: 'Synthesis',
+    description: 'Synthesizing comprehensive analysis',
+    color: 'text-amber-600 dark:text-amber-400',
+    bgColor: 'bg-amber-500/10',
+  },
+  {
+    number: 5,
+    icon: BadgeCheck,
+    label: 'Validation',
+    description: 'Final quality check and polish',
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-500/10',
+  },
+];
+
 export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
   const details = memoryStatus.toolProgress?.details as Record<string, unknown> | undefined;
   const isAdvancedSearch = details?.searchDepth === 'advanced';
@@ -14,49 +57,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
   const totalPhases = typeof totalPhaseCount === "number" ? totalPhaseCount : undefined;
 
   if (isAdvancedSearch && currentPhase) {
-    const phases = [
-      {
-        number: 1,
-        icon: Target,
-        label: 'Query Analysis',
-        description: 'Analyzing query for comprehensive search',
-        color: 'text-purple-600 dark:text-purple-400',
-        bgColor: 'bg-purple-500/10',
-      },
-      {
-        number: 2,
-        icon: Network,
-        label: 'Web Crawling',
-        description: 'Searching 10-15 comprehensive web sources',
-        color: 'text-blue-600 dark:text-blue-400',
-        bgColor: 'bg-blue-500/10',
-      },
-      {
-        number: 3,
-        icon: ShieldCheck,
-        label: 'Cross-Verification',
-        description: 'Comparing and verifying information across sources',
-        color: 'text-cyan-600 dark:text-cyan-400',
-        bgColor: 'bg-cyan-500/10',
-      },
-      {
-        number: 4,
-        icon: Boxes,
-        label: 'Synthesis',
-        description: 'Synthesizing comprehensive analysis',
-        color: 'text-amber-600 dark:text-amber-400',
-        bgColor: 'bg-amber-500/10',
-      },
-      {
-        number: 5,
-        icon: BadgeCheck,
-        label: 'Validation',
-        description: 'Final quality check and polish',
-        color: 'text-green-600 dark:text-green-400',
-        bgColor: 'bg-green-500/10',
-      },
-    ];
-
     const currentPhaseData = phases[currentPhase - 1];
 
     return (

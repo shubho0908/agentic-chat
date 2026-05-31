@@ -1,8 +1,8 @@
-import { type JsonValue, type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
-import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
+import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
@@ -12,15 +12,10 @@ import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
 import { queryKeys } from "@/lib/queryKeys";
+import { toUserFriendlyError } from "@/lib/errorMessages";
+import { toJsonValue } from "@/lib/json";
 
 import { logger } from "@/lib/logger";
-function toJsonValue(value: unknown): JsonValue | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
-}
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -209,6 +204,10 @@ export async function handleRegenerateResponse(
       },
     });
 
+    if (toolActivities.length > 0) {
+      messageMetadata = { ...(messageMetadata || {}), toolActivities };
+    }
+
     onMessagesUpdate((prev) =>
       prev.map((msg) =>
         msg.id === assistantMessage.id
@@ -279,7 +278,7 @@ export async function handleRegenerateResponse(
       return { success: false, error: "aborted" };
     }
     
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });

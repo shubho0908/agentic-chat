@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId } from '@/lib/validation';
+import { isValidConversationId, isValidMessageId } from '@/lib/validation';
 import { deleteMessagesAfter } from '@/lib/messageVersioning';
 
 export async function POST(
@@ -33,10 +33,13 @@ export async function POST(
     
     let { messageId } = body;
 
-    if (!messageId || typeof messageId !== 'string' || messageId.trim().length === 0) {
+    if (typeof messageId !== 'string') {
       return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     messageId = messageId.trim();
+    if (!isValidMessageId(messageId)) {
+      return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
 
     const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
     if (convError) return convError;

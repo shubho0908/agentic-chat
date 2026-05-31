@@ -5,9 +5,12 @@ import { getAuthenticatedUser, jsonResponse, errorResponse } from '@/lib/apiUtil
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { prisma } from '@/lib/prisma';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
+import { isValidAttachmentId } from '@/lib/validation';
 
 const ProcessDocumentSchema = z.object({
-  attachmentId: z.string().min(1, 'Attachment ID is required'),
+  attachmentId: z.string().min(1, 'Attachment ID is required').refine(isValidAttachmentId, {
+    message: 'Invalid attachment ID',
+  }),
 });
 
 export async function POST(req: NextRequest) {
@@ -15,7 +18,16 @@ export async function POST(req: NextRequest) {
     const { user, error } = await getAuthenticatedUser(await headers());
     if (error) return error;
 
-    const requestBody = await req.json();
+    let requestBody: unknown;
+    try {
+      requestBody = await req.json();
+    } catch {
+      return jsonResponse(
+        { error: API_ERROR_MESSAGES.INVALID_REQUEST_BODY },
+        HTTP_STATUS.BAD_REQUEST
+      );
+    }
+
     const parsedBody = ProcessDocumentSchema.safeParse(requestBody);
 
     if (!parsedBody.success) {

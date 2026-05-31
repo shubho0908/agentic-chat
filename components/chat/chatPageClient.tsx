@@ -45,7 +45,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
 
   const isPublic = conversationData?.conversation.isPublic ?? false;
 
-  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, stopGeneration, clearChat, memoryStatus } = useChat({
+  const { messages, isLoading, sendMessage, editMessage, regenerateResponse, respondToHumanInTheLoop, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
     autoContinue: session ? {
@@ -82,7 +82,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     toggleSharing({ id, isPublic: nextIsPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -161,6 +161,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}
+        onHumanInTheLoopDecision={respondToHumanInTheLoop}
         memoryStatus={mergedMemoryStatus}
         hasNextPage={hasNextPage}
         fetchNextPage={fetchNextPage}

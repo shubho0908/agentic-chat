@@ -13,13 +13,13 @@ interface ContextLimitBannerProps {
   onNewChat: () => void;
 }
 
-export function ContextLimitBanner({ tokenUsage, onNewChat }: ContextLimitBannerProps) {
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
+const formatNumber = (num: number) => {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num.toString();
+};
 
+export function ContextLimitBanner({ tokenUsage, onNewChat }: ContextLimitBannerProps) {
   return (
     <div className="mx-auto max-w-3xl px-4 pb-6 pt-4">
       <div className="rounded-lg border border-border bg-muted/50 p-5">

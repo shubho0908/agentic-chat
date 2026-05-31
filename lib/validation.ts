@@ -16,6 +16,14 @@ export function isValidConversationId(id: string): boolean {
   return isValidCuid(id);
 }
 
+export function isValidMessageId(id: string): boolean {
+  return isValidCuid(id);
+}
+
+export function isValidAttachmentId(id: string): boolean {
+  return isValidCuid(id);
+}
+
 interface ValidationResult {
   valid: boolean;
   error?: string;

@@ -204,7 +204,8 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   'Retrieved relevant document passages',
                   { citations: contextResult.metadata.citations }
                 ));
-              } catch {
+              } catch (error) {
+                logStreamWriteFailure('send document retrieval progress', error);
               }
             }
           }
@@ -232,10 +233,6 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           safeClose();
           return;
         }
-
-        if (!(await ensurePromptBudget())) {
-          return;
-        }
         
         const reasoningEffort = getChatReasoningEffort(model, thinkingEnabled);
 
@@ -258,14 +255,14 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
               try {
                 controller.enqueue(encodeThinkingChunk(event.delta));
-              } catch {
-                logger.error('[Stream Handler] Could not enqueue thinking chunk (controller closed)');
+              } catch (error) {
+                logStreamWriteFailure('send thinking chunk', error);
               }
             } else if (event.type === 'response.output_text.delta') {
               try {
                 controller.enqueue(encodeChatChunk(event.delta));
-              } catch {
-                logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
+              } catch (error) {
+                logStreamWriteFailure('send response chunk', error);
                 break;
               }
             }
@@ -292,8 +289,8 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             if (text) {
               try {
                 controller.enqueue(encodeChatChunk(text));
-              } catch {
-                logger.error('[Stream Handler] Could not enqueue chunk (controller closed)');
+              } catch (error) {
+                logStreamWriteFailure('send chat chunk', error);
                 break;
               }
             }
@@ -302,13 +299,13 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         try {
           controller.enqueue(encodeDone());
-        } catch {
-          logger.error('[Stream Handler] Could not enqueue done (controller closed)');
+        } catch (error) {
+          logStreamWriteFailure('send done marker', error);
         }
         safeClose();
       } catch (error) {
         if (error instanceof Error && (error.message.includes('aborted by user') || abortSignal?.aborted)) {
-          logger.error('🛑 [Stream Handler] Request aborted, closing stream cleanly');
+          logger.warn('[Stream Handler] Request aborted, closing stream cleanly');
           try {
             controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
           } catch (error) {

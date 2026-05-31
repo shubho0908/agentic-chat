@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Paperclip, UnplugIcon } from "lucide-react";
+import { Settings2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,19 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
-import { ToolMenuItem } from "./toolMenuItem";
 import { MemoryToggle } from "./memoryToggle";
 import { ThinkingToggle } from "./thinkingToggle";
 import { ToolsDrawer } from "./toolsDrawer";
+import { ConnectorsSubmenuContent } from "./connectorsSubmenu";
 
 const ACCEPTED_FILE_TYPES = [
   'image/*',
@@ -156,15 +153,12 @@ export function ToolsMenu({
           disabled={disabled}
           hasActiveTool={hasActiveTool}
           fileCount={fileCount}
-          activeTool={activeTool}
           memoryEnabled={memoryEnabled}
           onMemoryToggle={onMemoryToggle}
           thinkingEnabled={thinkingEnabled}
           onThinkingToggle={onThinkingToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
-          session={session}
-          onToolSelect={handleToolSelect}
         />
       ) : (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -238,38 +232,9 @@ export function ToolsMenu({
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-3 py-2.5 cursor-pointer group">
-                <div className="relative flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-purple-500/10 via-blue-500/10 to-cyan-500/10 group-hover:from-purple-500/20 group-hover:via-blue-500/20 group-hover:to-cyan-500/20 transition-colors">
-                  <UnplugIcon className="size-4 text-purple-400 dark:text-purple-300" />
-                </div>
-                <div className="flex flex-col gap-0.5 flex-1">
-                  <span className="font-medium">Connectors</span>
-                  <span className="text-xs text-muted-foreground">
-                    {activeTool ? `${(AVAILABLE_TOOLS as Record<string, ToolConfig>)[activeTool]?.name || ''} active` : 'Connect tools to empower'}
-                  </span>
-                </div>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent sideOffset={8} className="w-72 p-2 space-y-1 animate-in zoom-in-95 duration-200">
-                <div className="px-2 py-1.5 mb-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Integrated Apps
-                  </p>
-                </div>
-                {Object.values(AVAILABLE_TOOLS)
-                  .filter((tool): tool is ToolConfig => tool !== undefined)
-                  .map((tool) => (
-                    <div key={tool.id}>
-                      <ToolMenuItem
-                        tool={tool}
-                        isActive={activeTool === tool.id}
-                        isAuthenticated={!!session}
-                        onToolSelect={handleToolSelect}
-                      />
-                    </div>
-                  ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+            <div className="max-h-[240px] overflow-y-auto">
+              <ConnectorsSubmenuContent onActionComplete={() => setIsOpen(false)} />
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       )}

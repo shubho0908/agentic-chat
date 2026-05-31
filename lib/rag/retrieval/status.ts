@@ -5,11 +5,19 @@ import { partitionByStatus, extractIds } from './statusHelpers';
 import { logWarn } from '@/lib/observability';
 
 export async function getAttachmentStatuses(
-  attachmentIds: string[]
+  attachmentIds: string[],
+  userId?: string
 ): Promise<AttachmentStatus[]> {
   return await prisma.attachment.findMany({
     where: {
       id: { in: attachmentIds },
+      ...(userId && {
+        message: {
+          conversation: {
+            userId,
+          },
+        },
+      }),
     },
     select: {
       id: true,
@@ -25,6 +33,7 @@ export async function waitForDocumentProcessing(
     pollInterval?: number;
     useExponentialBackoff?: boolean;
     timeoutMs?: number;
+    userId?: string;
   } = {}
 ): Promise<string[]> {
   const {
@@ -38,7 +47,7 @@ export async function waitForDocumentProcessing(
   const startedAt = Date.now();
 
   while (true) {
-    const statuses = await getAttachmentStatuses(attachmentIds);
+    const statuses = await getAttachmentStatuses(attachmentIds, options.userId);
     const partitioned = partitionByStatus(statuses);
     
     const completedIds = extractIds(partitioned.completed);
@@ -77,12 +86,20 @@ export async function waitForDocumentProcessing(
 }
 
 export async function getCompletedAttachmentIds(
-  attachmentIds: string[]
+  attachmentIds: string[],
+  userId?: string
 ): Promise<string[]> {
   const completedAttachments = await prisma.attachment.findMany({
     where: {
       id: { in: attachmentIds },
       processingStatus: 'COMPLETED',
+      ...(userId && {
+        message: {
+          conversation: {
+            userId,
+          },
+        },
+      }),
     },
     select: {
       id: true,

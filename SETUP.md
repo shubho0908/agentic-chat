@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+ and pnpm
+- Node.js 18+ and bun
 - PostgreSQL database with pgvector extension
 - Google OAuth credentials
 - OpenAI API key (users provide their own via BYOK)
@@ -13,7 +13,7 @@
 ```bash
 git clone https://github.com/shubho0908/agentic-chat.git
 cd agentic-chat
-pnpm install
+bun install
 ```
 
 2. **Setup environment variables**
@@ -55,7 +55,7 @@ UPLOADTHING_TOKEN=your-token
 
 4. **Setup database**
 ```bash
-pnpm db:push
+bun db:push
 ```
 
 ## Optional Services
@@ -69,18 +69,18 @@ Configure these in `.env` for additional features:
 
 **Development**
 ```bash
-pnpm dev
+bun dev
 ```
 
 **Production**
 ```bash
-pnpm build
-pnpm start
+bun run build
+bun start
 ```
 
 **Database Studio**
 ```bash
-pnpm db:studio
+bun db:studio
 ```
 
 ## Google OAuth Setup

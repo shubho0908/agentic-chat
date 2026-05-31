@@ -3,16 +3,6 @@ import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
 import { AI_THINKING_MESSAGES } from "./types";
 
-export function isToolActive(
-  memoryStatus: MemoryStatus | undefined,
-  toolId: string
-): boolean {
-  return (
-    memoryStatus?.routingDecision === RoutingDecision.ToolOnly &&
-    memoryStatus?.activeToolName === toolId
-  );
-}
-
 export function getContextualMessage(
   memoryStatus: MemoryStatus | undefined,
   hasContext: boolean

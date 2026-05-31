@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { VALIDATION_LIMITS } from "@/constants/validation";
+import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
+import { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from "../orchestrator/constants";
 
 const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
@@ -102,6 +104,29 @@ const messageMetadataBaseSchema = z.object({
     searchIndex: z.number().optional(),
     searchQuery: z.string().optional(),
   })).optional(),
+  humanInTheLoopRequest: z.object({
+    type: z.literal(HUMAN_IN_THE_LOOP_REQUEST_TYPE).optional(),
+    requestKind: z.enum([HumanInTheLoopRequestKind.APPROVAL, HumanInTheLoopRequestKind.ASK_USER]).optional(),
+    requestId: z.string().optional(),
+    threadId: z.string().optional(),
+    toolCallId: z.string().optional(),
+    question: z.string().optional(),
+    reason: z.string().optional(),
+    title: z.string().optional(),
+    context: z.string().optional(),
+    options: z.array(z.object({
+      label: z.string(),
+      description: z.string(),
+    })).optional(),
+    recommendation: z.string().optional(),
+    toolCalls: z.array(z.object({
+      id: z.string().optional(),
+      name: z.string(),
+      args: z.record(z.string(), jsonValueSchema).optional(),
+    })).optional(),
+  }).optional(),
+  humanInTheLoopStatus: z.enum(["pending", "approved", "denied"]).optional(),
+  toolActivities: z.array(toolActivitySchema).optional(),
 
 });
 

@@ -36,6 +36,22 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
 const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
 const APPROX_IMAGE_TOKENS = 850;
+export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
+
+function getPersistableAssistantContent(
+  assistantContent: string,
+  metadata?: MessageMetadata
+): string | null {
+  if (assistantContent.trim()) {
+    return assistantContent;
+  }
+
+  if (metadata?.humanInTheLoopStatus === "pending" && metadata.humanInTheLoopRequest) {
+    return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
+  }
+
+  return null;
+}
 
 function estimateMessageTokens(content: string | MessageContentPart[]): number {
   if (typeof content === 'string') {
@@ -99,10 +115,12 @@ export function buildMessagesForAPI(
         role: "system" as const,
         content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
       },
-      ...recentMessages.map(({ role, content }) => ({
-        role: role as "user" | "assistant" | "system",
-        content,
-      })),
+      ...recentMessages
+        .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
+        .map(({ role, content }) => ({
+          role: role as "user" | "assistant" | "system",
+          content,
+        })),
       {
         role: "user" as const,
         content: newContent,
@@ -119,10 +137,12 @@ export function buildMessagesForAPI(
       role: "system" as const,
       content: systemPrompt,
     },
-    ...contextMessages.map(({ role, content }) => ({
-      role: role as "user" | "assistant" | "system",
-      content,
-    })),
+    ...contextMessages
+      .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
+      .map(({ role, content }) => ({
+        role: role as "user" | "assistant" | "system",
+        content,
+      })),
     {
       role: "user" as const,
       content: newContent,
@@ -164,7 +184,13 @@ async function createNewConversation(
     if (earlyCreate) {
       return { conversationId, userMessageId, assistantMessageId: '' };
     }
-    const assistantMessageId = await saveAssistantMessage(conversationId, assistantContent, metadata);
+    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+
+    if (!persistableAssistantContent) {
+      return { conversationId, userMessageId, assistantMessageId: '' };
+    }
+
+    const assistantMessageId = await saveAssistantMessage(conversationId, persistableAssistantContent, metadata);
 
     if (!assistantMessageId) {
       return null;
@@ -319,8 +345,14 @@ export async function handleConversationSaving(
       }
       onConversationCreated(result);
     }
-  } else if (currentConversationId && assistantContent) {
-    const assistantMessageId = await saveAssistantMessage(currentConversationId, assistantContent, metadata);
+  } else if (currentConversationId) {
+    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+
+    if (!persistableAssistantContent) {
+      return;
+    }
+
+    const assistantMessageId = await saveAssistantMessage(currentConversationId, persistableAssistantContent, metadata);
     if (assistantMessageId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       queryClient.invalidateQueries({ queryKey: queryKeys.conversation(currentConversationId) });

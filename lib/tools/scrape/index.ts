@@ -3,6 +3,7 @@ import { z } from "zod";
 import Firecrawl from "@mendable/firecrawl-js";
 import { scrapeUrl, validateUrl } from "@/lib/url-scraper/scraper";
 import { logger } from "@/lib/logger";
+import { ToolName } from "@/lib/tools/constants";
 
 const MAX_CONTENT_LENGTH = 3000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -98,7 +99,7 @@ const webScrapeSchema = z.object({
 });
 
 export const webScrapeTool = new DynamicStructuredTool({
-  name: "web_scrape",
+  name: ToolName.WEB_SCRAPE,
   description:
     "Extract content from a specific URL. Use when you need to read a webpage's full content.",
   schema: webScrapeSchema,

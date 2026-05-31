@@ -17,6 +17,7 @@ interface ChatContainerProps {
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
+  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   memoryStatus?: MemoryStatus;
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
@@ -47,6 +48,7 @@ export function ChatContainer({
   onEditMessage,
   onRegenerateMessage,
   onSendMessage,
+  onHumanInTheLoopDecision,
   memoryStatus,
   hasNextPage,
   fetchNextPage,
@@ -160,6 +162,7 @@ export function ChatContainer({
                 onEditMessage={isLoading ? undefined : onEditMessage}
                 onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
                 onSendMessage={onSendMessage}
+                onHumanInTheLoopDecision={onHumanInTheLoopDecision}
                 isLastMessage={index === messages.length - 1}
                 isLoading={isLoading}
                 memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}

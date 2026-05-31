@@ -13,11 +13,9 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
-import type { Session } from "@/lib/auth";
-import { ToolMenuItemDrawer } from "./toolMenuItemDrawer";
 import { MemoryToggle } from "./memoryToggle";
 import { ThinkingToggle } from "./thinkingToggle";
+import { ConnectorsDrawerContent } from "./connectorsDrawerContent";
 
 interface ToolsDrawerProps {
   isOpen: boolean;
@@ -25,15 +23,12 @@ interface ToolsDrawerProps {
   disabled?: boolean;
   hasActiveTool: boolean;
   fileCount?: number;
-  activeTool?: ToolId | null;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
   thinkingEnabled?: boolean;
   onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
-  session: Session | null;
-  onToolSelect: (toolId: ToolId) => void;
 }
 
 export function ToolsDrawer({
@@ -42,15 +37,12 @@ export function ToolsDrawer({
   disabled,
   hasActiveTool,
   fileCount = 0,
-  activeTool,
   memoryEnabled = true,
   onMemoryToggle,
   thinkingEnabled = false,
   onThinkingToggle,
   onFilesSelected,
   fileInputRef,
-  session,
-  onToolSelect,
 }: ToolsDrawerProps) {
   const triggerButton = (
     <Button
@@ -148,18 +140,8 @@ export function ToolsDrawer({
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 Integrated Apps
               </p>
-              <div className="space-y-1">
-                {Object.values(AVAILABLE_TOOLS)
-                  .filter((tool): tool is ToolConfig => tool !== undefined)
-                  .map((tool) => (
-                    <ToolMenuItemDrawer
-                      key={tool.id}
-                      tool={tool}
-                      isActive={activeTool === tool.id}
-                      isAuthenticated={!!session}
-                      onToolSelect={onToolSelect}
-                    />
-                  ))}
+              <div className="max-h-72 overflow-y-auto rounded-lg -mx-0.5 px-0.5">
+                <ConnectorsDrawerContent />
               </div>
             </div>
           </div>

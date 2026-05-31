@@ -95,6 +95,9 @@ async function resolveCompletedAttachmentScope(
     const messages = await prisma.message.findMany({
       where: {
         conversationId,
+        conversation: {
+          userId,
+        },
         isDeleted: false,
       },
       select: {
@@ -130,6 +133,7 @@ async function resolveCompletedAttachmentScope(
 
       const newlyCompleted = await waitForDocumentProcessing(processingIds, {
         timeoutMs: options.processingTimeoutMs,
+        userId,
       });
       attachmentIds = [...completedIds, ...newlyCompleted];
     } else {
@@ -144,7 +148,7 @@ async function resolveCompletedAttachmentScope(
   let completedAttachmentIds = attachmentIds;
 
   if (waitForProcessing) {
-    const statuses = await getAttachmentStatuses(attachmentIds);
+    const statuses = await getAttachmentStatuses(attachmentIds, userId);
     const partitioned = partitionByStatus(statuses);
 
     const needProcessing = extractIds([...partitioned.processing, ...partitioned.pending]);
@@ -162,13 +166,14 @@ async function resolveCompletedAttachmentScope(
 
       const newlyCompleted = await waitForDocumentProcessing(needProcessing, {
         timeoutMs: options.processingTimeoutMs,
+        userId,
       });
       completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
     } else {
       completedAttachmentIds = alreadyCompleted;
     }
   } else {
-    completedAttachmentIds = await getCompletedAttachmentIds(attachmentIds);
+    completedAttachmentIds = await getCompletedAttachmentIds(attachmentIds, userId);
   }
 
   if (completedAttachmentIds.length === 0) {
@@ -205,7 +210,11 @@ export async function getDocumentOverviewContext(
             content,
             metadata->>'attachmentId' AS attachment_id,
             metadata->>'fileName' AS file_name,
-            NULLIF(metadata->>'page', '')::int AS page,
+            CASE
+              WHEN metadata->>'page' ~ '^[0-9]+$'
+                THEN (metadata->>'page')::int
+              ELSE NULL
+            END AS page,
             created_at::text AS created_at
           FROM document_chunk
           WHERE metadata->>'userId' = ${userId}
@@ -270,45 +279,101 @@ async function enrichWithNeighborChunks(
 
   const enriched: Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }> = [];
   const seenContent = new Set<string>();
+  const requestedTargets = results
+    .filter((result) => result.metadata.attachmentId && result.content)
+    .map((result, index) => ({
+      ord: index,
+      attachment_id: result.metadata.attachmentId,
+      content: result.content,
+    }));
 
-  for (const result of results) {
-    const neighbors = await prisma.$queryRaw<Array<{
-      content: string;
-      attachment_id: string;
-      file_name: string;
-      page: number | null;
-    }>>`
-      WITH target AS (
-        SELECT (metadata->>'charStart')::int AS char_start
-        FROM document_chunk
-        WHERE metadata->>'attachmentId' = ${result.metadata.attachmentId}
-          AND metadata->>'userId' = ${userId}
-          AND content = ${result.content}
-        LIMIT 1
-      )
-      SELECT content,
-             metadata->>'attachmentId' AS attachment_id,
-             metadata->>'fileName' AS file_name,
-             NULLIF(metadata->>'page', '')::int AS page
-      FROM document_chunk, target
-      WHERE metadata->>'attachmentId' = ${result.metadata.attachmentId}
-        AND metadata->>'userId' = ${userId}
-      ORDER BY ABS((metadata->>'charStart')::int - target.char_start)
-      LIMIT 3`;
+  if (requestedTargets.length === 0) {
+    return [];
+  }
 
-    for (const row of neighbors) {
-      const key = `${row.attachment_id}:${row.content.slice(0, 100)}`;
-      if (seenContent.has(key)) continue;
-      seenContent.add(key);
-      enriched.push({
-        content: row.content,
-        metadata: {
-          attachmentId: row.attachment_id,
-          fileName: row.file_name,
-          page: row.page ?? undefined,
-        },
-      });
-    }
+  const neighbors = await prisma.$queryRaw<Array<{
+    content: string;
+    attachment_id: string;
+    file_name: string;
+    page: number | null;
+  }>>`
+    WITH requested AS (
+      SELECT ord, attachment_id, content
+      FROM jsonb_to_recordset(${JSON.stringify(requestedTargets)}::jsonb)
+        AS requested(ord int, attachment_id text, content text)
+    ),
+    target AS (
+      SELECT DISTINCT ON (requested.ord)
+        requested.ord,
+        requested.attachment_id,
+        CASE
+          WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$'
+            THEN (chunk.metadata->>'charStart')::int
+          ELSE NULL
+        END AS target_char_start
+      FROM requested
+      JOIN document_chunk chunk
+        ON chunk.metadata->>'attachmentId' = requested.attachment_id
+       AND chunk.metadata->>'userId' = ${userId}
+       AND chunk.content = requested.content
+      ORDER BY requested.ord, chunk.created_at ASC
+    ),
+    chunk_candidates AS (
+      SELECT
+        target.ord,
+        target.target_char_start,
+        chunk.content,
+        chunk.metadata->>'attachmentId' AS attachment_id,
+        chunk.metadata->>'fileName' AS file_name,
+        CASE
+          WHEN chunk.metadata->>'page' ~ '^[0-9]+$'
+            THEN (chunk.metadata->>'page')::int
+          ELSE NULL
+        END AS page,
+        CASE
+          WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$'
+            THEN (chunk.metadata->>'charStart')::int
+          ELSE NULL
+        END AS char_start,
+        chunk.created_at
+      FROM target
+      JOIN document_chunk chunk
+        ON chunk.metadata->>'attachmentId' = target.attachment_id
+       AND chunk.metadata->>'userId' = ${userId}
+    ),
+    ranked AS (
+      SELECT
+        content,
+        attachment_id,
+        file_name,
+        page,
+        ROW_NUMBER() OVER (
+          PARTITION BY ord
+          ORDER BY
+            CASE WHEN target_char_start IS NULL OR char_start IS NULL THEN 1 ELSE 0 END ASC,
+            ABS(char_start - target_char_start) ASC NULLS LAST,
+            created_at ASC
+        ) AS row_num,
+        ord
+      FROM chunk_candidates
+    )
+    SELECT content, attachment_id, file_name, page
+    FROM ranked
+    WHERE row_num <= 3
+    ORDER BY ord ASC, row_num ASC`;
+
+  for (const row of neighbors) {
+    const key = `${row.attachment_id}:${row.content.slice(0, 100)}`;
+    if (seenContent.has(key)) continue;
+    seenContent.add(key);
+    enriched.push({
+      content: row.content,
+      metadata: {
+        attachmentId: row.attachment_id,
+        fileName: row.file_name,
+        page: row.page ?? undefined,
+      },
+    });
   }
 
   return enriched;

@@ -51,7 +51,7 @@ export function parseOpenAIError(error: unknown): ParsedError {
   }
 
   return {
-    message: error.message,
+    message: API_ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
     statusCode: HTTP_STATUS.INTERNAL_SERVER_ERROR,
   };
 }

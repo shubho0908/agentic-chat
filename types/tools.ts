@@ -15,9 +15,3 @@ export interface WebSearchSource {
   searchIndex?: number;
   searchQuery?: string;
 }
-
-export interface SearchResultWithSources {
-  output: string;
-  sources: WebSearchSource[];
-  images?: WebSearchImage[];
-}

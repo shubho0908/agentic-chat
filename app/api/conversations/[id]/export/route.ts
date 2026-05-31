@@ -64,6 +64,7 @@ export async function GET(
             },
             versions: {
               where: {
+                conversationId,
                 isDeleted: false,
               },
               orderBy: { siblingIndex: 'asc' },

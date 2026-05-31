@@ -11,6 +11,7 @@ import { handleStreamingResponse } from "./streamingHandler";
 import { getResumeConversationState } from "./resumeState";
 import { queryKeys } from "@/lib/queryKeys";
 import { appRoutes } from "@/lib/routes";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -77,7 +78,7 @@ export async function continueIncompleteConversation(
 
   if (!result.success && result.error && result.error !== "aborted") {
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
-      description: result.error,
+      description: toUserFriendlyError(result.error),
     });
   }
 
@@ -240,7 +241,7 @@ export async function handleSendMessage(
 
     if (!result.success && result.error && result.error !== "aborted") {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
-        description: result.error,
+        description: toUserFriendlyError(result.error),
       });
     }
 

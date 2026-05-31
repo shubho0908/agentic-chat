@@ -17,6 +17,8 @@ import {
 } from "@/components/landing/interaction-showcase/constants";
 import type { DeviceKind } from "@/components/landing/interaction-showcase/types";
 
+const omnibarIcon = <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />;
+
 function ChromeUtilityRail({
   onPreviousScene,
   onNextScene,
@@ -79,7 +81,6 @@ function ContentChrome({
         : "h-9 max-w-[350px] rounded-full px-4";
   const omnibarSurfaceClass =
     "border border-black/[0.08] bg-[linear-gradient(180deg,rgba(241,243,248,0.98),rgba(232,235,241,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/[0.08] dark:bg-[linear-gradient(180deg,rgba(33,36,44,0.98),rgba(24,27,33,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
-  const omnibarIcon = <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />;
 
   return (
     <div

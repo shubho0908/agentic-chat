@@ -1,13 +1,33 @@
 import { prisma } from './prisma';
+import { VALIDATION_LIMITS } from '@/constants/validation';
+
+function normalizeTake(limit: number | undefined): number | undefined {
+  if (typeof limit !== 'number' || !Number.isSafeInteger(limit) || limit <= 0) {
+    return undefined;
+  }
+
+  return Math.min(limit, VALIDATION_LIMITS.PAGINATION_MAX_LIMIT);
+}
+
+function normalizeSkip(offset: number | undefined): number | undefined {
+  if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset <= 0) {
+    return undefined;
+  }
+
+  return offset;
+}
 
 export async function getMessageVersions(
+  conversationId: string,
   messageId: string,
   options?: { includeAttachments?: boolean; limit?: number; offset?: number }
 ) {
   const { includeAttachments = false, limit, offset = 0 } = options || {};
+  const take = normalizeTake(limit);
+  const skip = normalizeSkip(offset);
 
   const message = await prisma.message.findFirst({
-    where: { id: messageId, isDeleted: false },
+    where: { id: messageId, conversationId, isDeleted: false },
     select: { parentMessageId: true }
   });
 
@@ -17,6 +37,7 @@ export async function getMessageVersions(
 
   return prisma.message.findMany({
     where: {
+      conversationId,
       OR: [
         { id: parentId },
         { parentMessageId: parentId }
@@ -27,8 +48,8 @@ export async function getMessageVersions(
       attachments: true
     } : undefined,
     orderBy: { siblingIndex: 'asc' },
-    ...(limit && { take: limit }),
-    ...(offset && { skip: offset })
+    ...(take && { take }),
+    ...(skip && { skip })
   });
 }
 
@@ -69,9 +90,9 @@ export async function deleteMessagesAfter(conversationId: string, messageId: str
   };
 }
 
-export async function getVersionCount(messageId: string): Promise<number> {
+export async function getVersionCount(conversationId: string, messageId: string): Promise<number> {
   const message = await prisma.message.findFirst({
-    where: { id: messageId, isDeleted: false },
+    where: { id: messageId, conversationId, isDeleted: false },
     select: { parentMessageId: true }
   });
 
@@ -81,6 +102,7 @@ export async function getVersionCount(messageId: string): Promise<number> {
 
   const count = await prisma.message.count({
     where: {
+      conversationId,
       OR: [
         { id: parentId },
         { parentMessageId: parentId }

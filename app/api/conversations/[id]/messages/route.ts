@@ -4,10 +4,14 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId, validateMessageData, validateAttachmentInputs } from '@/lib/validation';
-import type { AttachmentInput } from '@/lib/schemas/chat';
+import { messageMetadataSchema, type AttachmentInput, type MessageMetadata } from '@/lib/schemas/chat';
 import { isSupportedForRAG } from '@/lib/rag/utils';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 import { logger } from "@/lib/logger";
+import { isRecord } from '@/lib/typeGuards';
+import type { MessageRole, Prisma } from '@prisma/client';
+
+type MessageWithAttachments = Prisma.MessageGetPayload<{ include: { attachments: true } }>;
 
 function getRagAttachmentIds(
   attachments?: Array<{ id: string; fileType: string }>
@@ -56,18 +60,37 @@ export async function POST(
     if (!isValidConversationId(conversationId)) {
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
     
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    if (!isRecord(body)) {
       return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
     }
     
     const { role, content, attachments, metadata } = body;
     let validatedAttachments: AttachmentInput[] | undefined;
+    let validatedMetadata: MessageMetadata | undefined;
+    const roleValue = typeof role === 'string' ? role : undefined;
+    const contentValue = typeof content === 'string' ? content : undefined;
 
-    const validation = validateMessageData(role, content);
+    const validation = validateMessageData(roleValue, contentValue);
     if (!validation.valid) {
       return errorResponse(validation.error || 'Invalid message data', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    const validatedRole = roleValue as MessageRole;
+    const validatedContent = contentValue as string;
+
+    if (metadata !== undefined && metadata !== null) {
+      const metadataValidation = messageMetadataSchema.safeParse(metadata);
+      if (!metadataValidation.success) {
+        return errorResponse('Invalid metadata structure', metadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+      }
+      validatedMetadata = metadataValidation.data;
     }
 
     if (attachments !== undefined && attachments !== null) {
@@ -79,20 +102,21 @@ export async function POST(
       validatedAttachments = attachmentValidation.attachments;
     }
 
-    let message: Awaited<ReturnType<typeof prisma.message.create>> & { attachments: { id: string; fileType: string }[] };
+    let message: MessageWithAttachments;
     try {
-      const [, created] = await prisma.$transaction([
-        prisma.conversation.update({
+      message = await prisma.$transaction(async (tx) => {
+        await tx.conversation.update({
           where: { id: conversationId, userId: user.id },
           data: { updatedAt: new Date() },
           select: { id: true },
-        }),
-        prisma.message.create({
+        });
+
+        return tx.message.create({
           data: {
             conversationId,
-            role,
-            content,
-            ...(metadata && { metadata }),
+            role: validatedRole,
+            content: validatedContent,
+            ...(validatedMetadata && { metadata: validatedMetadata }),
             attachments: validatedAttachments && validatedAttachments.length > 0 ? {
               create: validatedAttachments.map(att => ({
                 fileUrl: att.fileUrl,
@@ -103,9 +127,8 @@ export async function POST(
             } : undefined,
           },
           include: { attachments: true },
-        }),
-      ]);
-      message = created;
+        });
+      });
     } catch (txErr) {
       if (txErr && typeof txErr === "object" && "code" in txErr && txErr.code === "P2025") {
         return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);

@@ -154,7 +154,8 @@ export async function finalizeEditedMessage(
       } else if (errorData?.message && typeof errorData.message === "string") {
         errorMessage = errorData.message;
       }
-    } catch {
+    } catch (error) {
+      logger.warn("Failed to parse finalize edited message error response:", error);
     }
     throw new Error(errorMessage);
   }
@@ -177,10 +178,12 @@ export async function updateAssistantMessage(
   conversationId: string,
   messageId: string,
   content: string,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
+  inPlace?: boolean
 ): Promise<UpdateMessageResponse> {
   const body = {
     content,
+    ...(inPlace && { inPlace: true }),
     ...(metadata && { metadata }),
   };
 

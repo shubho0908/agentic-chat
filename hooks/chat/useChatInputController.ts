@@ -173,6 +173,9 @@ export function useChatInputController({
         return;
       }
 
+      clearInput();
+      clearAttachments();
+
       const result = await onSend(
         messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
@@ -181,9 +184,8 @@ export function useChatInputController({
         thinkingEnabled
       );
 
-      if (result.success) {
-        clearInput();
-        clearAttachments();
+      if (!result.success) {
+        setInput(messageText);
       }
     } catch (error) {
       logger.error("Error sending message:", error);

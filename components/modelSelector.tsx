@@ -47,8 +47,8 @@ export function ModelSelector({ selectedModel, onModelSelect }: ModelSelectorPro
             variant="ghost"
             className={cn(
               "group h-auto min-h-14 w-full items-start justify-between px-3.5 py-3 whitespace-normal sm:min-h-[52px] sm:px-3 sm:py-2.5",
-              "bg-muted/30 hover:bg-muted/60 transition-colors duration-200",
-              "border border-border/40 rounded-xl"
+              "bg-gradient-to-b from-muted/40 to-muted/20 hover:from-muted/60 hover:to-muted/30 transition-all duration-200",
+              "border border-border/50 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.06)]"
             )}
           >
             {selectedModelData ? (

@@ -1,20 +1,7 @@
 import type { ReasoningEffort } from "openai/resources/shared";
-import { DEFAULT_MODEL, OPENAI_MODELS } from "@/constants/openai-models";
-
-type ModelStage =
-  | "chat"
-  | "vision"
-  | "tool_planner"
-  | "workspace_agent";
+import { OPENAI_MODELS } from "@/constants/openai-models";
 
 const ALLOWED_MODELS = new Map(OPENAI_MODELS.map((model) => [model.id, model]));
-
-const STAGE_MODEL_FALLBACKS: Record<ModelStage, string> = {
-  chat: DEFAULT_MODEL,
-  vision: "gpt-5.4-mini",
-  tool_planner: "gpt-5.4-nano",
-  workspace_agent: "gpt-5.4-mini",
-};
 
 function isAllowedModel(model: string): boolean {
   return ALLOWED_MODELS.has(model);
@@ -26,23 +13,6 @@ export function validateRequestedModel(model: string): string | null {
   }
 
   return model;
-}
-
-export function getStageModel(
-  requestedModel: string,
-  stage: ModelStage,
-): string {
-  const validatedRequestedModel = validateRequestedModel(requestedModel);
-  if (stage === "chat") {
-    return validatedRequestedModel ?? DEFAULT_MODEL;
-  }
-
-  const fallbackModel = STAGE_MODEL_FALLBACKS[stage];
-  return (
-    validateRequestedModel(fallbackModel) ??
-    validatedRequestedModel ??
-    DEFAULT_MODEL
-  );
 }
 
 function supportsCustomTemperature(model: string): boolean {

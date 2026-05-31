@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
+import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse, parsePaginationInteger } from '@/lib/apiUtils';
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId } from '@/lib/validation';
+import { isValidConversationId, isValidMessageId } from '@/lib/validation';
 import { getMessageVersions, getVersionCount } from '@/lib/messageVersioning';
 
 export async function GET(
@@ -20,7 +20,7 @@ export async function GET(
       return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    if (!messageId || typeof messageId !== 'string') {
+    if (!isValidMessageId(messageId)) {
       return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
@@ -29,12 +29,12 @@ export async function GET(
 
     const searchParams = request.nextUrl.searchParams;
     const includeAttachments = searchParams.get('attachments') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '10');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const limit = parsePaginationInteger(searchParams.get('limit'), 10);
+    const offset = parsePaginationInteger(searchParams.get('offset'), 0, { min: 0 });
 
     const [versions, totalCount] = await Promise.all([
-      getMessageVersions(messageId, { includeAttachments, limit, offset }),
-      getVersionCount(messageId)
+      getMessageVersions(conversationId, messageId, { includeAttachments, limit, offset }),
+      getVersionCount(conversationId, messageId)
     ]);
 
     const transformedVersions = versions.map(v => ({

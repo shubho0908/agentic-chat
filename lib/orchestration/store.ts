@@ -6,6 +6,7 @@ import {
   logOrchestrationJobEnqueue,
   logOrchestrationJobFinish,
   logOrchestrationJobStart,
+  logWarn,
   measureLatencyMs,
 } from '@/lib/observability';
 import {
@@ -14,13 +15,14 @@ import {
   isLeaseExpired,
   shouldRetryJob,
 } from './retryPolicy';
+import { toJsonValue } from '@/lib/json';
 
 type OrchestrationJobType = 'document_process';
 type OrchestrationJobStatus = 'queued' | 'running' | 'completed' | 'failed';
 const DEFAULT_LEASE_MS = 15 * 60 * 1000;
 
 function safeJson(value: unknown): string {
-  return JSON.stringify(value ?? {});
+  return JSON.stringify(toJsonValue(value) ?? {});
 }
 
 function extractAttachmentId(payload: unknown): string | undefined {
@@ -42,6 +44,7 @@ interface OrchestrationJobRow {
   error: string | null;
   attempts: number;
   max_attempts: number;
+  lease_owner?: string | null;
   next_attempt_at?: Date | string | null;
   lease_expires_at?: Date | string | null;
   created_at?: Date | string | null;
@@ -398,6 +401,7 @@ export async function heartbeatOrchestrationJobLease(params: {
 
 export async function resolveOrchestrationJobRun(params: {
   jobId: string;
+  leaseOwner?: string;
   succeeded: boolean;
   result?: unknown;
   error?: string;
@@ -408,13 +412,29 @@ export async function resolveOrchestrationJobRun(params: {
     const rows = await tx.$queryRaw<OrchestrationJobRow[]>`
       SELECT
         id, type, user_id, status, payload, result, error,
-        attempts, max_attempts, next_attempt_at, lease_expires_at, created_at
+        attempts, max_attempts, lease_owner, next_attempt_at, lease_expires_at, created_at
       FROM orchestration_job
       WHERE id = ${params.jobId}
       FOR UPDATE`;
 
     const existing = rows[0];
     if (!existing) {
+      return null;
+    }
+
+    if (
+      existing.status !== 'running' ||
+      (params.leaseOwner && existing.lease_owner !== params.leaseOwner)
+    ) {
+      logWarn({
+        event: 'orchestration_job_stale_resolution_ignored',
+        jobId: existing.id,
+        jobType: existing.type,
+        userId: existing.user_id,
+        status: existing.status,
+        expectedLeaseOwner: params.leaseOwner,
+        actualLeaseOwner: existing.lease_owner,
+      });
       return null;
     }
 

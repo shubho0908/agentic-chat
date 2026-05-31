@@ -3,10 +3,40 @@
 import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import { LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
+
+const isDocumentFile = (file: File): boolean => {
+  return isSupportedDocumentExtension(file.name);
+};
+
+const isImageFile = (file: File): boolean => {
+  return isSupportedImageExtension(file.name);
+};
+
+const getFileIcon = (file: File) => {
+  if (isDocumentFile(file)) {
+    if (file.name.endsWith(".pdf")) {
+      return <FileText className="size-4" />;
+    }
+    if (file.name.match(/\.(xlsx?|csv)$/)) {
+      return <FileSpreadsheet className="size-4" />;
+    }
+    return <FileText className="size-4" />;
+  }
+  if (isImageFile(file) || file.type.startsWith("image/")) {
+    return <ImageIcon className="size-4" />;
+  }
+  return <FileText className="size-4" />;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+};
 
 interface FilePreviewProps {
   files: File[];
@@ -15,35 +45,50 @@ interface FilePreviewProps {
   isUploading?: boolean;
 }
 
+function getFilePreview(file: File) {
+  if (isImageFile(file) && !isDocumentFile(file)) {
+    return URL.createObjectURL(file);
+  }
+  return null;
+}
+
 export function FilePreview({ files, onRemove, disabled = false, isUploading = false }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>();
+  const [canScrollRight, setCanScrollRight] = useState<boolean>();
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+
+  const updateScrollState = useCallback((container: HTMLDivElement | null) => {
+    if (!container) return;
+
+    setCanScrollLeft(container.scrollLeft > 0);
+    setCanScrollRight(
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 1
+    );
+  }, []);
+
+  const setScrollContainerRef = useCallback((container: HTMLDivElement | null) => {
+    scrollContainerRef.current = container;
+    updateScrollState(container);
+  }, [updateScrollState]);
 
   useEffect(() => {
     const checkScroll = () => {
-      const container = scrollContainerRef.current;
-      if (!container) return;
-
-      setCanScrollLeft(container.scrollLeft > 0);
-      setCanScrollRight(
-        container.scrollLeft < container.scrollWidth - container.clientWidth - 1
-      );
+      updateScrollState(scrollContainerRef.current);
     };
 
     const container = scrollContainerRef.current;
     if (container) {
-      checkScroll();
+      const observer = new ResizeObserver(checkScroll);
+      observer.observe(container);
       container.addEventListener("scroll", checkScroll, { passive: true });
-      window.addEventListener("resize", checkScroll, { passive: true });
 
       return () => {
+        observer.disconnect();
         container.removeEventListener("scroll", checkScroll);
-        window.removeEventListener("resize", checkScroll);
       };
     }
-  }, [files]);
+  }, [updateScrollState]);
 
   const scroll = (direction: "left" | "right") => {
     const container = scrollContainerRef.current;
@@ -58,43 +103,6 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
       left: newScrollLeft,
       behavior: "smooth",
     });
-  };
-
-  const isDocumentFile = (file: File): boolean => {
-    return isSupportedDocumentExtension(file.name);
-  };
-
-  const isImageFile = (file: File): boolean => {
-    return isSupportedImageExtension(file.name);
-  };
-
-  const getFileIcon = (file: File) => {
-    if (isDocumentFile(file)) {
-      if (file.name.endsWith(".pdf")) {
-        return <FileText className="size-4" />;
-      }
-      if (file.name.match(/\.(xlsx?|csv)$/)) {
-        return <FileSpreadsheet className="size-4" />;
-      }
-      return <FileText className="size-4" />;
-    }
-    if (isImageFile(file) || file.type.startsWith("image/")) {
-      return <ImageIcon className="size-4" />;
-    }
-    return <FileText className="size-4" />;
-  };
-
-  const getFilePreview = (file: File) => {
-    if (isImageFile(file) && !isDocumentFile(file)) {
-      return URL.createObjectURL(file);
-    }
-    return null;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
   const handleImageError = (index: number) => {
@@ -131,7 +139,8 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
               </Button>
             )}
             <div
-              ref={scrollContainerRef}
+              key={files.length}
+              ref={setScrollContainerRef}
               className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >

@@ -79,6 +79,7 @@ async function runClaimedDocumentJob(
     });
     await resolveOrchestrationJobRun({
       jobId: job.id,
+      leaseOwner,
       succeeded: false,
       error: "Missing attachmentId payload",
       retryable: false,
@@ -95,15 +96,27 @@ async function runClaimedDocumentJob(
       jobId: job.id,
       leaseOwner,
       leaseMs: DOCUMENT_JOB_LEASE_MS,
-    }).catch((error) => {
-      logWarn({
-        event: "document_job_lease_heartbeat_failed",
-        jobId: job.id,
-        userId: job.userId,
-        attachmentId,
-        error: error instanceof Error ? error.message : String(error),
+    })
+      .then((extended) => {
+        if (!extended) {
+          logWarn({
+            event: "document_job_lease_heartbeat_lost",
+            jobId: job.id,
+            userId: job.userId,
+            attachmentId,
+            leaseOwner,
+          });
+        }
+      })
+      .catch((error) => {
+        logWarn({
+          event: "document_job_lease_heartbeat_failed",
+          jobId: job.id,
+          userId: job.userId,
+          attachmentId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   }, DOCUMENT_JOB_HEARTBEAT_MS);
   heartbeat.unref?.();
 
@@ -112,6 +125,7 @@ async function runClaimedDocumentJob(
     const retryable = !result.success && isRetryableDocumentError(result.error);
     const resolution = await resolveOrchestrationJobRun({
       jobId: job.id,
+      leaseOwner,
       succeeded: result.success,
       result,
       error: result.error,
@@ -129,6 +143,14 @@ async function runClaimedDocumentJob(
       retried: resolution?.retried ?? false,
     });
 
+    if (!resolution) {
+      return {
+        success: false,
+        retried: false,
+        error: "Document job lease was no longer owned at resolution time",
+      };
+    }
+
     return {
       success: result.success,
       retried: resolution?.retried ?? false,
@@ -139,6 +161,7 @@ async function runClaimedDocumentJob(
     const errorMessage = error instanceof Error ? error.message : String(error);
     const resolution = await resolveOrchestrationJobRun({
       jobId: job.id,
+      leaseOwner,
       succeeded: false,
       error: errorMessage,
       retryable: isRetryableDocumentError(errorMessage),
@@ -154,6 +177,14 @@ async function runClaimedDocumentJob(
       success: false,
       retried: resolution?.retried ?? false,
     });
+
+    if (!resolution) {
+      return {
+        success: false,
+        retried: false,
+        error: "Document job lease was no longer owned at resolution time",
+      };
+    }
 
     return {
       success: false,

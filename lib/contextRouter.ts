@@ -213,7 +213,7 @@ function logMissingDocumentRetrieval(params: {
   });
 }
 
-async function getAttachmentInfo(conversationId: string): Promise<{
+async function getAttachmentInfo(conversationId: string, userId: string): Promise<{
   hasDocuments: boolean;
   hasAny: boolean;
   documentCount: number;
@@ -223,6 +223,9 @@ async function getAttachmentInfo(conversationId: string): Promise<{
     const messages = await prisma.message.findMany({
       where: {
         conversationId,
+        conversation: {
+          userId,
+        },
         isDeleted: false,
       },
       select: {
@@ -317,7 +320,7 @@ export async function routeContext(
   }
 
   const attachmentInfo = conversationId
-    ? await getAttachmentInfo(conversationId)
+    ? await getAttachmentInfo(conversationId, userId)
     : { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {

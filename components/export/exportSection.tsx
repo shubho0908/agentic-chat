@@ -11,6 +11,7 @@ import { downloadMarkdown } from "@/lib/export/markdownExporter";
 import { downloadPDF } from "@/lib/export/pdfExporter";
 import { cn } from "@/lib/utils";
 import { apiRoutes } from "@/lib/routes";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
 interface ExportSectionProps {
   conversationId: string;
@@ -90,7 +91,7 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
       }
     } catch (error) {
       logger.error('Export error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to export conversation');
+      toast.error(toUserFriendlyError(error, "Failed to export conversation"));
     } finally {
       setIsExporting(false);
     }

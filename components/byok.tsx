@@ -30,6 +30,7 @@ import { ModelSelector } from "./modelSelector";
 import { isValidApiKey } from "../utils/byokUtils";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
+import { toUserFriendlyError } from "@/lib/errorMessages";
 
 interface ByokProps {
   autoOpen?: boolean;
@@ -229,7 +230,7 @@ export function Byok({
       }
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_SAVE, {
-        description: error instanceof Error ? error.message : "Please try again",
+        description: toUserFriendlyError(error, "Please try again"),
       });
     }
   };
@@ -244,7 +245,7 @@ export function Byok({
       toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_CLEARED);
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_CLEAR, {
-        description: error instanceof Error ? error.message : "Please try again",
+        description: toUserFriendlyError(error, "Please try again"),
       });
     }
   };
@@ -338,7 +339,7 @@ export function Byok({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[90dvh] w-[min(calc(100vw-1rem),500px)] overflow-hidden p-0 sm:w-full sm:max-w-[500px] focus-visible:outline-none">
-        <DialogHeader className="border-b p-4 pr-12 sm:px-6 sm:py-5">
+        <DialogHeader className="border-b p-4 pr-12 sm:px-5 sm:py-5">
           <DialogTitle className="text-lg leading-tight sm:text-xl">OpenAI API Configuration</DialogTitle>
           <DialogDescription className="text-[13px] leading-5 sm:text-sm">
             Configure your OpenAI API key and select a model. Your credentials
@@ -346,11 +347,11 @@ export function Byok({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 overflow-y-auto p-4 sm:px-6 sm:py-5">
+        <div className="min-h-0 overflow-y-auto p-4 sm:px-5 sm:py-5">
           <ByokFields {...contentProps} />
         </div>
 
-        <div className="border-t p-4 sm:px-6 sm:py-5">
+        <div className="border-t p-4 sm:px-5 sm:py-5">
           <ByokActions {...contentProps} />
         </div>
       </DialogContent>

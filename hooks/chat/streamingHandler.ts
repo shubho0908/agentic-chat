@@ -1,6 +1,6 @@
-import type { JsonValue, Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
-import type { MemoryStatus } from "@/types/chat";
+import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
@@ -8,6 +8,7 @@ import { handleConversationSaving, buildMessagesForAPI } from "./conversationMan
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
+import { toJsonValue } from "@/lib/json";
 
 interface StreamingContext {
   messages: Message[];
@@ -35,14 +36,6 @@ interface StreamingResult {
   success: boolean;
   error?: string;
   assistantMessageId?: string;
-}
-
-function toJsonValue(value: unknown): JsonValue | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
 function extractMetadataFromProgress(
@@ -83,6 +76,10 @@ function extractMetadataFromProgress(
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
+function toHumanInTheLoopMetadata(request: HumanInTheLoopRequestEvent): MessageMetadata["humanInTheLoopRequest"] {
+  return toJsonValue(request) as MessageMetadata["humanInTheLoopRequest"];
+}
+
 function updateAssistantMessage(
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void,
   assistantMessageId: string,
@@ -118,14 +115,36 @@ export async function handleStreamingResponse(
   } = context;
 
   const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate } = callbacks;
-  const assistantMessageId = existingAssistantMessageId || `assistant-pending-${conversationId}`;
+  let assistantMessageId = existingAssistantMessageId || `assistant-pending-${conversationId}`;
   let assistantContent = "";
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata | undefined;
-  let messageCreated = !!existingAssistantMessageId;
+  let messageCreated = !!existingAssistantMessageId || messages.some((m) => m.id === assistantMessageId);
   let thinkingContent = "";
   let thinkingStartTime = 0;
+  let humanInTheLoopPending = false;
+
+  const upsertAssistantMessage = (prev: Message[], msg: Message): Message[] => {
+    const idx = prev.findIndex((m) => m.id === msg.id);
+    if (idx !== -1) {
+      const updated = [...prev];
+      updated[idx] = msg;
+      return updated;
+    }
+    return [...prev, msg];
+  };
+
+  const replaceAssistantMessageId = (savedAssistantMessageId: string, metadata?: MessageMetadata) => {
+    if (!savedAssistantMessageId) return;
+
+    const previousAssistantMessageId = assistantMessageId;
+    assistantMessageId = savedAssistantMessageId;
+    updateAssistantMessage(onMessagesUpdate, previousAssistantMessageId, {
+      id: savedAssistantMessageId,
+      ...(metadata && { metadata }),
+    });
+  };
 
   try {
     const { cacheQuery, cacheData } = await performCacheCheck({
@@ -144,50 +163,45 @@ export async function handleStreamingResponse(
           content: assistantContent,
         });
       } else {
-        onMessagesUpdate((prev) => [
-          ...prev,
-          {
+        onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
             role: "assistant",
             content: assistantContent,
             id: assistantMessageId,
             timestamp: Date.now(),
             model,
             toolActivities: [],
-          },
-        ]);
+        }));
       }
-	      handleConversationSaving(
-	        false,
-	        conversationId,
+      handleConversationSaving(
+        false,
+        conversationId,
         userMessageContent,
         assistantContent,
         userTimestamp,
         queryClient,
         (data) => {
-          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
-            id: data.assistantMessageId,
-          });
+          replaceAssistantMessageId(data.assistantMessageId);
         },
         undefined,
         false,
         undefined,
-	        undefined 
-	      ).catch((err) => {
-          console.error("[streamingHandler] Background assistant message save (cache) failed:", err);
-        });
+        undefined
+      ).catch((err) => {
+        console.error("[streamingHandler] Background assistant message save (cache) failed:", err);
+      });
 
-        persistConversationMemoryIfEligible({
-          userMessageContent,
-          assistantContent,
-          userId: session?.user?.id,
-          memoryEnabled,
-          activeTool,
-          userAttachments,
-          flow: "send",
-        });
+      persistConversationMemoryIfEligible({
+        userMessageContent,
+        assistantContent,
+        userId: session?.user?.id,
+        memoryEnabled,
+        activeTool,
+        userAttachments,
+        flow: "send",
+      });
 
-	      return { success: true, assistantMessageId };
-	    }
+      return { success: true, assistantMessageId };
+    }
 
     const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments);
 
@@ -198,9 +212,7 @@ export async function handleStreamingResponse(
       onChunk: (fullContent) => {
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => [
-            ...prev,
-            {
+          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: "assistant",
               content: fullContent,
               id: assistantMessageId,
@@ -208,8 +220,7 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-            },
-          ]);
+          }));
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             content: fullContent,
@@ -222,9 +233,7 @@ export async function handleStreamingResponse(
         onMemoryStatusUpdate?.(status);
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => [
-            ...prev,
-            {
+          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: "assistant",
               content: "",
               id: assistantMessageId,
@@ -232,8 +241,7 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-            },
-          ]);
+          }));
         }
       },
       onToolCall: (toolCall) => {
@@ -249,9 +257,7 @@ export async function handleStreamingResponse(
 
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => [
-            ...prev,
-            {
+          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: "assistant",
               content: "",
               id: assistantMessageId,
@@ -259,8 +265,7 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [...toolActivities],
               metadata: messageMetadata,
-            },
-          ]);
+          }));
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             toolActivities: [...toolActivities],
@@ -292,6 +297,7 @@ export async function handleStreamingResponse(
             toolProgress: {
               status: progress.status,
               message: progress.message,
+              toolName: progress.toolName,
               details: {
                 ...(currentMemoryStatus.toolProgress?.details || {}),
                 ...(progress.details || {}),
@@ -305,14 +311,37 @@ export async function handleStreamingResponse(
       },
       memoryEnabled,
       thinkingEnabled,
+      onHumanInTheLoopRequest: (request) => {
+        humanInTheLoopPending = true;
+        messageMetadata = {
+          ...messageMetadata,
+          humanInTheLoopRequest: toHumanInTheLoopMetadata(request),
+          humanInTheLoopStatus: "pending",
+        };
+
+        if (!messageCreated) {
+          messageCreated = true;
+          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+              role: "assistant",
+              content: "",
+              id: assistantMessageId,
+              timestamp: Date.now(),
+              model,
+              toolActivities: [...toolActivities],
+              metadata: messageMetadata,
+          }));
+        } else {
+          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+            metadata: messageMetadata,
+          });
+        }
+      },
       onThinking: (thinking) => {
         if (!thinkingStartTime) thinkingStartTime = Date.now();
         thinkingContent = thinking;
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => [
-            ...prev,
-            {
+          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: "assistant",
               content: "",
               thinking,
@@ -321,8 +350,7 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-            },
-          ]);
+          }));
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             thinking,
@@ -338,6 +366,10 @@ export async function handleStreamingResponse(
       messageMetadata = { ...messageMetadata, thinking: thinkingContent, thinkingDurationMs };
     }
 
+    if (toolActivities.length > 0) {
+      messageMetadata = { ...messageMetadata, toolActivities };
+    }
+
     if (messageMetadata) {
       updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
         metadata: messageMetadata,
@@ -345,14 +377,14 @@ export async function handleStreamingResponse(
     }
 
     if (assistantContent !== undefined && !abortSignal.aborted) {
-      if (cacheQuery) {
+      if (cacheQuery && assistantContent) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
         });
       }
 
-      handleConversationSaving(
+      const savePromise = handleConversationSaving(
         false,
         conversationId,
         userMessageContent,
@@ -360,18 +392,20 @@ export async function handleStreamingResponse(
         userTimestamp,
         queryClient,
         (data) => {
-          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
-            id: data.assistantMessageId,
-            metadata: messageMetadata,
-          });
+          replaceAssistantMessageId(data.assistantMessageId, messageMetadata);
         },
         undefined,
         false,
         undefined,
         messageMetadata
-      ).catch((err) => {
-        console.error("[streamingHandler] Background assistant message save failed:", err);
-      });
+      );
+
+      if (humanInTheLoopPending) {
+        await savePromise;
+      } else {
+        savePromise.catch((err) => {
+          console.error("[streamingHandler] Background assistant message save failed:", err);
+        });
 
         persistConversationMemoryIfEligible({
           userMessageContent,
@@ -383,7 +417,8 @@ export async function handleStreamingResponse(
           memoryStatus: currentMemoryStatus,
           flow: "send",
         });
-	    }
+      }
+    }
 
     return { success: true, assistantMessageId };
   } catch (err) {
