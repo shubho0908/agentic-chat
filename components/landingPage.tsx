@@ -5,6 +5,7 @@ import { LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion";
 import type { Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { LegalLinks } from "@/components/legalLinks";
+import Logo from "@/components/logo";
 
 interface LandingPageProps {
   onAuthRequired: () => void;
@@ -180,7 +181,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
 
         <footer className="px-4 pb-8 pt-6 sm:px-6 sm:pb-12 sm:pt-8 md:px-10 lg:px-12">
           <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 border-t border-border/80 pt-5 sm:flex-row sm:gap-6 sm:pt-8">
-            <div className="text-sm font-medium tracking-tight">Agentic Chat</div>
+            <div className="flex items-center gap-2 text-sm font-medium tracking-tight"><Logo size={20} className="shrink-0" /> Agentic Chat</div>
             <div className="flex flex-col items-center gap-2 text-center sm:items-end sm:text-right">
               <div className="text-xs text-muted-foreground">© {currentYear} All rights reserved.</div>
               <LegalLinks className="text-[11px]" />

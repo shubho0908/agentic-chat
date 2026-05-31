@@ -98,6 +98,26 @@ const webScrapeSchema = z.object({
   url: z.string().url().describe("The URL to scrape content from"),
 });
 
+export async function scrapeContent(url: string): Promise<string> {
+  const validation = validateUrl(url);
+  if (!validation.isValid) return "";
+
+  const tiers = [
+    { name: "fetch+readability", fn: () => tier1Scrape(url) },
+    { name: "firecrawl", fn: () => tier2Scrape(url) },
+    { name: "jina", fn: () => tier3Scrape(url) },
+  ];
+
+  for (const tier of tiers) {
+    try {
+      return truncate(await tier.fn());
+    } catch (error) {
+      logger.warn(`[WebScrape] ${tier.name} failed for ${url}: ${error instanceof Error ? error.message : "unknown"}`);
+    }
+  }
+  return "";
+}
+
 export const webScrapeTool = new DynamicStructuredTool({
   name: ToolName.WEB_SCRAPE,
   description:

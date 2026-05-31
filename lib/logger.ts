@@ -84,7 +84,7 @@ function formatArgs(args: unknown[]): { message: string; details?: string[] } {
 }
 
 function emit(level: "info" | "warn" | "error", args: unknown[]): void {
-  if (!isObservabilityLoggingEnabled()) {
+  if (level === "info" && !isObservabilityLoggingEnabled()) {
     return;
   }
 

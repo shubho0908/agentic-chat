@@ -28,9 +28,11 @@ Rules:
 - CRITICAL: All tools are pre-authenticated as the user. NEVER plan to ask for usernames, workspace URLs, account IDs, API keys, or credentials.
 - If a tool needs an object id, plan to discover it via search/list/fetch first.
 - For structured connector data, discover the object first, inspect schema/metadata/options when available, then query using exact field names and exact option values from the tool response.
-- For mutation requests (create/update/insert/append/delete/archive/send), include the matching write tool slug in tools_needed. NEVER plan to "tell the user how to do it manually" — connector write tools work and will run after user approval.`;
+- For mutation requests (create/update/insert/append/delete/archive/send), include the matching write tool slug in tools_needed. NEVER plan to "tell the user how to do it manually" — connector write tools work and will run after user approval.
+- RESEARCH: ONLY use deep_research for genuinely complex multi-source research requests where the user EXPLICITLY asks to "research X", "do a deep dive on X", "investigate X thoroughly", or asks for a "comprehensive comparison/analysis" that requires synthesizing multiple sources. Simple questions like "tell me about X", "what is X", "compare A vs B" (without explicit research language), or "explain X" are NOT research — answer them directly or use web_search for a quick fact. The bar for deep_research is HIGH: the user must clearly want a multi-step investigation, not just information.`;
 
 const MIN_PLANNABLE_LENGTH = 10;
+const PLANNER_TIMEOUT_MS = 15_000;
 
 const plannerResponseSchema = z.object({
   complexity: z.string().optional(),
@@ -61,6 +63,7 @@ export function createPlannerNode(
     modelName: model,
     apiKey,
     maxTokens: 150,
+    timeout: PLANNER_TIMEOUT_MS,
     ...(supportedTemperature !== undefined ? { temperature: supportedTemperature } : {}),
     ...(reasoningEffort && reasoningEffort !== "none"
       ? { reasoning: { effort: reasoningEffort } }

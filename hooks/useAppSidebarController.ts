@@ -4,7 +4,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useStreaming } from "@/contexts/streaming-context";
 import { useConversations } from "@/hooks/useConversations";
@@ -75,7 +74,6 @@ export function useAppSidebarController() {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const { theme } = useTheme();
   const currentConversationId = getConversationIdFromPathname(pathname);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showGuardDialog, setShowGuardDialog] = useState(false);
@@ -88,7 +86,6 @@ export function useAppSidebarController() {
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
   const { isStreaming, stopStreaming } = useStreaming();
-  const logoSrc = theme === "dark" ? "/dark.png" : "/light.png";
   const { selectionMode, selectedIds, showDeleteDialog } = selectionState;
 
   const conversationsState = useConversations({ enabled: !!session });
@@ -236,7 +233,6 @@ export function useAppSidebarController() {
     handleToggleSelectionMode,
     isMobile,
     loaderRef,
-    logoSrc,
     openMobile,
     parentRef,
     selectedIds,

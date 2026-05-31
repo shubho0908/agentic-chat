@@ -13,10 +13,29 @@ interface LogPayload {
   [key: string]: unknown;
 }
 
+function isVerboseLoggingEnabled(
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): boolean {
+  if (process.env.OBSERVABILITY_VERBOSE === "true") {
+    return true;
+  }
+  return nodeEnv === "development";
+}
+
 export function isObservabilityLoggingEnabled(
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): boolean {
-  return nodeEnv === "development";
+  return isVerboseLoggingEnabled(nodeEnv);
+}
+
+function shouldEmit(
+  level: LogLevel,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): boolean {
+  if (level === "error" || level === "warn") {
+    return true;
+  }
+  return isVerboseLoggingEnabled(nodeEnv);
 }
 
 function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
@@ -52,7 +71,7 @@ function write(
   payload: LogPayload,
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): void {
-  if (!isObservabilityLoggingEnabled(nodeEnv)) {
+  if (!shouldEmit(level, nodeEnv)) {
     return;
   }
 

@@ -127,8 +127,8 @@ function MessageContentSurface({
         ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
         : "w-full min-w-0 text-foreground ml-1"
     )}>
-      {!isUser && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
-        <div className="mb-2.5">
+      {!isUser && isLoading && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
+        <div className="mb-2">
           <PlanningStep
             message={memoryStatus.toolProgress.message || "Planning approach..."}
             plan={(memoryStatus.toolProgress.details as { plan?: string } | undefined)?.plan}

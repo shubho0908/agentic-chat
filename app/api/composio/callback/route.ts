@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { appBaseUrl } from "@/lib/appUrl";
 import { logger } from "@/lib/logger";
 import { getComposioClient } from "@/lib/tools/composio";
-import { clearToolCache } from "@/lib/tools/composio";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -37,11 +36,13 @@ export async function GET(request: NextRequest) {
             actualStatus: account.status,
           });
         }
-        clearToolCache();
+        // Tool cache is per-(user, toolkit) keyed and TTL-bounded. We deliberately
+        // do NOT clear the cache here because this endpoint is unauthenticated;
+        // a global flush would be triggerable by anyone with a callback URL.
+        // The 5-minute TTL handles freshness for the connecting user.
       }
     } catch (error) {
       logger.warn("[Composio Callback] Could not verify connection status:", error);
-      clearToolCache();
     }
   }
 

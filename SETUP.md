@@ -26,7 +26,7 @@ cp .env.example .env
 Edit `.env` and set:
 
 ```bash
-# Encryption (generate with: node -p "require('crypto').randomBytes(32).toString('hex')")
+# Encryption (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
 ENCRYPTION_KEY=your-64-character-hex-key
 
 # Database
@@ -62,8 +62,11 @@ bun db:push
 
 Configure these in `.env` for additional features:
 
-- **COHERE_API_KEY** - Enhanced RAG retrieval with reranking
-- **TAVILY_API_KEY** - Web search capability
+- **EXA_API_KEY** - Web search capability via Exa API
+- **COHERE_API_KEY** - Enhanced RAG retrieval with reranking (rerank-v3.5)
+- **FIRECRAWL_API_KEY** - Tier 2 JS-rendered web scraping for sites that require JavaScript
+- **COMPOSIO_API_KEY** - Third-party integrations (Gmail, Calendar, Drive, Docs, Sheets, Slack, Notion, GitHub, Linear)
+- **CACHE_TTL_SECONDS** - Semantic cache TTL (default: 3600)
 
 ## Running the App
 
@@ -83,6 +86,16 @@ bun start
 bun db:studio
 ```
 
+**Run Tests**
+```bash
+bun test
+```
+
+**Type Check**
+```bash
+bun run typecheck
+```
+
 ## Google OAuth Setup
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
@@ -94,22 +107,20 @@ bun db:studio
    - `openid`
    - `email`
    - `profile`
-5. Google Workspace tools request Gmail, Drive, Calendar, Docs, Sheets, and Slides access later, only when a signed-in user explicitly enables the Google Suite tool
-6. If Google still shows an unverified or restricted-access warning for Workspace permissions:
-   - Add your account under OAuth consent screen test users while the app is in testing
-   - Complete Google app verification before offering sensitive Workspace scopes to all users
+5. Google Workspace tools (Gmail, Drive, Calendar, Docs, Sheets) are accessed via Composio OAuth — not directly through Google APIs. Users connect each service individually through the Tools menu.
 
 ## Database Requirements
 
 Your PostgreSQL database must have:
 - pgvector extension enabled: `CREATE EXTENSION IF NOT EXISTS vector;`
-- pgvector >= 0.7.0 for 3072-dimension embeddings
+- pgcrypto extension enabled: `CREATE EXTENSION IF NOT EXISTS pgcrypto;`
+- pgvector >= 0.7.0 for 3072-dimension embeddings (uses halfvec for >2000 dims)
 - Check version: `SELECT extversion FROM pg_extension WHERE extname = 'vector';`
 
 ## Troubleshooting
 
 **Database connection issues**
-- Ensure pgvector extension is enabled
+- Ensure pgvector and pgcrypto extensions are enabled
 - For Neon: Use pooled URL for DATABASE_URL, direct URL for DIRECT_DATABASE_URL
 
 **OAuth issues**
@@ -118,5 +129,6 @@ Your PostgreSQL database must have:
 - Add yourself as a test user if the OAuth consent screen is still in testing
 
 **Build issues**
-- Clear `.next` folder and rebuild
+- Clear `.next` folder: `bun run clean:next`
 - Ensure all required environment variables are set
+- Check max memory: build uses `--max-old-space-size=4096`

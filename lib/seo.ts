@@ -4,11 +4,11 @@ import { apiRoutes } from "@/lib/routes";
 
 export const siteConfig = {
   name: "Agentic Chat",
-  defaultTitle: "Agentic Chat | AI Chat App with Web Search, Memory, and Tools",
+  defaultTitle: "Agentic Chat — AI-Powered Research, Documents & Workflow Automation",
   description:
-    "Agentic Chat is an AI chat app for web search, document analysis, memory, and Google Workspace workflows.",
+    "Your AI workspace that researches, reads documents, remembers context, and connects to the tools you already use. One chat to rule them all.",
   fullDescription:
-    "Agentic Chat is an AI chat app for web search, document analysis, long-running context, and Google Workspace workflows, with optional bring-your-own-key control.",
+    "Agentic Chat combines intelligent query routing, RAG-powered document analysis, persistent memory, deep research, and native integrations with Gmail, Drive, Slack, Notion, GitHub, and Linear into a single AI workspace.",
   defaultOgImagePath: apiRoutes.ogHome,
   url: appBaseUrl,
   locale: "en_US",
@@ -19,12 +19,15 @@ export const siteConfig = {
   defaultKeywords: [
     "AI chat app",
     "AI assistant",
-    "web search AI",
-    "document chat",
+    "multi-modal AI",
+    "intelligent routing",
+    "RAG document chat",
     "AI with memory",
+    "deep research AI",
+    "web search AI",
     "Google Workspace AI",
-    "bring your own key AI",
-    "knowledge assistant",
+    "third-party integrations",
+    "AI workflow automation",
     "Agentic Chat",
   ],
 } as const;
@@ -34,6 +37,10 @@ export const homepageKeywords = [
   "chat with documents",
   "Gmail Drive Docs Sheets assistant",
   "context-aware AI",
+  "semantic caching",
+  "multi-model AI",
+  "human-in-the-loop AI",
+  "Slack Notion GitHub integration",
 ];
 
 export const indexRobots: NonNullable<Metadata["robots"]> = {

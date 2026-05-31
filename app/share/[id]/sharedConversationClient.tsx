@@ -149,9 +149,9 @@ export default function SharedConversationClient({
               </Link>
             </Button>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[300px] md:max-w-md">
+              <h2 className="text-sm font-semibold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[300px] md:max-w-md">
                 {data.title}
-              </h1>
+              </h2>
               <p className="text-xs text-muted-foreground hidden xs:block">Shared conversation</p>
             </div>
           </div>

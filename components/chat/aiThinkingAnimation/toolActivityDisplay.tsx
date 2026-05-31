@@ -1,10 +1,17 @@
 import { createElement } from "react";
-import { Search, Globe, Presentation, CheckCircle2, Loader2, AlertCircle, Plug } from "lucide-react";
+import { Search, Globe, Presentation, CheckCircle2, Loader, AlertCircle, Plug, ExternalLink } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FC, SVGProps } from "react";
 import type { ToolActivity, JsonValue } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import { ToolName } from "@/lib/tools/constants";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   GmailIcon,
   GoogleCalendarIcon,
@@ -26,6 +33,7 @@ type IconComponent = LucideIcon | FC<SVGProps<SVGSVGElement>>;
 function getToolIcon(toolName: string): IconComponent {
   if (toolName === ToolName.WEB_SEARCH) return Search;
   if (toolName === ToolName.WEB_SCRAPE) return Globe;
+  if (toolName === ToolName.DEEP_RESEARCH) return Search;
   const upper = toolName.toUpperCase();
   if (upper.startsWith("GMAIL")) return GmailIcon;
   if (upper.startsWith("GOOGLECALENDAR")) return GoogleCalendarIcon;
@@ -43,6 +51,7 @@ function getToolIcon(toolName: string): IconComponent {
 function getActionLabel(toolName: string): string {
   if (toolName === ToolName.WEB_SEARCH) return "Web search";
   if (toolName === ToolName.WEB_SCRAPE) return "Read webpage";
+  if (toolName === ToolName.DEEP_RESEARCH) return "Research Agent";
 
   // Derive a human-readable label from the slug itself.
   // Strip the toolkit prefix (e.g., "GMAIL_FETCH_EMAILS" → "Fetch emails")
@@ -116,34 +125,38 @@ function extractResultContent(result: JsonValue): string | null {
 function parseWebSearchResults(result: JsonValue): { count: number; sources: { domain: string; url: string }[] } | null {
   const content = extractResultContent(result);
   if (!content) return null;
-  const matches = content.match(/\[\d+\]\s+.+\nURL:\s+(.+)/g);
-  if (!matches || matches.length === 0) return null;
+
+  // Match structured formats: "URL: https://..." or "[N] ...URL: ..." (exa) and standalone URLs on their own line
+  const structuredMatches = content.match(/(?:URL:\s+|^|\n)(https?:\/\/[^\s)\]"'<>]+)/gm);
+  if (!structuredMatches || structuredMatches.length === 0) return null;
 
   const sources: { domain: string; url: string }[] = [];
   const seen = new Set<string>();
-  for (const match of matches) {
-    const urlMatch = match.match(/URL:\s+(.+)/);
-    if (urlMatch?.[1]) {
-      try {
-        const fullUrl = urlMatch[1].trim();
-        const domain = new URL(fullUrl).hostname.replace("www.", "");
-        if (!seen.has(domain)) {
-          seen.add(domain);
-          sources.push({ domain, url: fullUrl });
-        }
-      } catch { /* noop */ }
-    }
+  for (const raw of structuredMatches) {
+    const urlMatch = raw.match(/https?:\/\/[^\s)\]"'<>]+/);
+    if (!urlMatch) continue;
+    try {
+      const fullUrl = urlMatch[0].replace(/[.,;]+$/, "");
+      if (seen.has(fullUrl)) continue;
+      seen.add(fullUrl);
+      const domain = new URL(fullUrl).hostname.replace(/^www\./, "");
+      sources.push({ domain, url: fullUrl });
+    } catch { /* noop */ }
   }
-  return { count: matches.length, sources: sources.slice(0, 4) };
+  return sources.length > 0 ? { count: sources.length, sources } : null;
+}
+
+function isSearchTool(toolName: string): boolean {
+  return toolName === ToolName.WEB_SEARCH || toolName === ToolName.DEEP_RESEARCH;
 }
 
 function getResultMetadata(activity: ToolActivity): string | null {
   const { toolName, result, status } = activity;
   if (status !== ToolStatus.Completed || !result) return null;
 
-  if (toolName === ToolName.WEB_SEARCH) {
+  if (isSearchTool(toolName)) {
     const parsed = parseWebSearchResults(result);
-    if (parsed) return `${parsed.count} results`;
+    if (parsed) return `${parsed.count} sources`;
     const content = extractResultContent(result);
     if (content && content.includes("No results")) return "No results";
     return null;
@@ -174,14 +187,14 @@ function getResultMetadata(activity: ToolActivity): string | null {
 }
 
 function getWebSearchSources(activity: ToolActivity): { domain: string; url: string }[] {
-  if (activity.toolName !== ToolName.WEB_SEARCH || activity.status !== ToolStatus.Completed || !activity.result) return [];
+  if (!isSearchTool(activity.toolName) || activity.status !== ToolStatus.Completed || !activity.result) return [];
   const parsed = parseWebSearchResults(activity.result);
   return parsed?.sources || [];
 }
 
 function StatusIndicator({ status }: { status: string }) {
   if (status === ToolStatus.Calling) {
-    return <Loader2 className="size-3 animate-spin text-muted-foreground" />;
+    return <Loader className="size-3 animate-spin text-muted-foreground" />;
   }
   if (status === ToolStatus.Completed) {
     return <CheckCircle2 className="size-3 text-muted-foreground/70" />;
@@ -199,6 +212,40 @@ function getKeyArgUrl(activity: ToolActivity): string | null {
   return null;
 }
 
+const INLINE_SOURCE_LIMIT = 4;
+
+function SourcesSheet({ sources }: { sources: { domain: string; url: string }[] }) {
+  return (
+    <Sheet>
+      <SheetTrigger asChild>
+        <button className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
+          +{sources.length - INLINE_SOURCE_LIMIT} more
+        </button>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>{sources.length} sources</SheetTitle>
+        </SheetHeader>
+        <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
+          {sources.map((source, i) => (
+            <a
+              key={`${source.domain}-${i}`}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-sm hover:bg-muted/60 transition-colors group"
+            >
+              <span className="text-muted-foreground shrink-0 tabular-nums text-xs">{i + 1}</span>
+              <span className="flex-1 min-w-0 truncate text-foreground/90">{source.domain}</span>
+              <ExternalLink className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            </a>
+          ))}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function ToolActivityRow({ activity }: { activity: ToolActivity }) {
   const action = getActionLabel(activity.toolName);
   const service = getServiceName(activity.toolName);
@@ -208,6 +255,8 @@ function ToolActivityRow({ activity }: { activity: ToolActivity }) {
   const sources = getWebSearchSources(activity);
   const isDone = activity.status === ToolStatus.Completed;
   const hasError = activity.status === ToolStatus.Error;
+  const inlineSources = sources.slice(0, INLINE_SOURCE_LIMIT);
+  const hasMoreSources = sources.length > INLINE_SOURCE_LIMIT;
 
   return (
     <div className="flex flex-col gap-1">
@@ -236,11 +285,12 @@ function ToolActivityRow({ activity }: { activity: ToolActivity }) {
       </div>
       {isDone && sources.length > 0 && (
         <div className="flex items-center gap-1 ml-5.5 flex-wrap">
-          {sources.map((source, i) => (
+          {inlineSources.map((source, i) => (
             <a key={`${source.domain}-${i}`} href={source.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
               {source.domain}
             </a>
           ))}
+          {hasMoreSources && <SourcesSheet sources={sources} />}
         </div>
       )}
       {hasError && activity.error && (

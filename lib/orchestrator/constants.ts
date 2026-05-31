@@ -4,9 +4,8 @@ export const HUMAN_IN_THE_LOOP_REQUEST_TYPE = "hitl_request" as const;
 export const TOOL_ERROR_STATUS = "error" as const;
 
 export const MAX_TOOLS = 128;
-export const RECURSION_LIMIT = 25;
+export const RECURSION_LIMIT = 40;
 export const MAX_RESPONSE_TOKENS = 16384;
-export const MAX_TOOL_ITERATIONS = 6;
 export const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
 export const GraphNode = {
@@ -25,6 +24,8 @@ export type PlanComplexityValue = (typeof PlanComplexity)[keyof typeof PlanCompl
 export const CustomEventName = {
   THINKING: "thinking",
   PLANNING: "planning",
+  RESEARCH_PROGRESS: "research_progress",
+  SEARCH_IMAGES: "search_images",
 } as const;
 
 export const StreamEventType = {

@@ -30,6 +30,17 @@ export function getComposioClient(): Composio<LangchainProvider> | null {
 
 const toolCache = new Map<string, { tools: DynamicStructuredTool[]; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 64;
+
+function touchToolCache(cacheKey: string, value: { tools: DynamicStructuredTool[]; expiry: number }): void {
+  toolCache.delete(cacheKey);
+  toolCache.set(cacheKey, value);
+  while (toolCache.size > CACHE_MAX_ENTRIES) {
+    const oldestKey = toolCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    toolCache.delete(oldestKey);
+  }
+}
 
 export async function getToolsForUser(
   userId: string,
@@ -41,7 +52,10 @@ export async function getToolsForUser(
   const toolkits = connectedToolkits ?? [...COMPOSIO_TOOLKITS];
   const cacheKey = `${userId}:${[...toolkits].sort().join(",")}`;
   const cached = toolCache.get(cacheKey);
-  if (cached && cached.expiry > Date.now()) return cached.tools;
+  if (cached && cached.expiry > Date.now()) {
+    touchToolCache(cacheKey, cached);
+    return cached.tools;
+  }
 
   try {
     const importantTools = await withRetry(
@@ -72,7 +86,7 @@ export async function getToolsForUser(
     }
 
     logger.log(`[Composio] Total tools available for user ${userId}: ${allTools.length} (${allTools.map(t => t.name).join(", ")})`);
-    toolCache.set(cacheKey, { tools: allTools, expiry: Date.now() + CACHE_TTL_MS });
+    touchToolCache(cacheKey, { tools: allTools, expiry: Date.now() + CACHE_TTL_MS });
     return allTools;
   } catch (error) {
     logger.error("[Composio] Failed to load tools:", error);

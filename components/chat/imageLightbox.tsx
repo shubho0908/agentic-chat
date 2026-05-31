@@ -73,6 +73,7 @@ function LightboxStage({ imageUrl, alt, caption, isMobile, onClose, theme }: Lig
             height={1200}
             unoptimized
             priority
+            decoding="async"
             referrerPolicy="no-referrer"
             className="h-auto w-auto max-w-full rounded-2xl object-contain"
             style={{
