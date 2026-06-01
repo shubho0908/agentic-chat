@@ -25,7 +25,7 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
             : "Web search";
 
   const meta = isAdvancedSearch && currentPhase
-    ? `Phase ${currentPhase}/${totalPhases}`
+    ? typeof totalPhases === "number" ? `Phase ${currentPhase}/${totalPhases}` : `Phase ${currentPhase}`
     : isCompleted && details?.resultsCount
       ? `${details.resultsCount} sources`
       : null;
