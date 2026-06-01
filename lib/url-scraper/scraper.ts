@@ -208,21 +208,22 @@ async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): P
     }
 
     const html = await response.text();
+    const finalUrl = response.finalUrl || url;
 
-    const readabilityResult = extractWithReadability(html, url);
+    const readabilityResult = extractWithReadability(html, finalUrl);
     if (readabilityResult && readabilityResult.textContent.length > 500) {
       logInfo({
         event: 'url_scrape_complete',
-        url,
+        url: finalUrl,
         contentLength: readabilityResult.textContent.length,
       });
       return readabilityResult;
     }
 
-    const cheerioResult = extractWithCheerio(html, url);
+    const cheerioResult = extractWithCheerio(html, finalUrl);
     logInfo({
       event: 'url_scrape_complete',
-      url,
+      url: finalUrl,
       contentLength: cheerioResult.textContent.length,
     });
     return cheerioResult;

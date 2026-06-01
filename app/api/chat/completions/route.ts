@@ -168,7 +168,19 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const abortController = new AbortController();
-      const useOrchestrator = body.useOrchestrator !== false;
+      const useOrchestratorResult = parseOptionalBoolean(
+        body.useOrchestrator,
+        'useOrchestrator',
+        true,
+      );
+      if (!useOrchestratorResult.success) {
+        return errorResponse(
+          useOrchestratorResult.error,
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
+      }
+      const useOrchestrator = useOrchestratorResult.value;
 
       const streamHandler = useOrchestrator
         ? (await import('@/lib/orchestrator/handler')).createOrchestratorStreamHandler({

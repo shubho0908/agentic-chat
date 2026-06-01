@@ -67,7 +67,18 @@ async function tier1Scrape(url: string): Promise<string> {
   const links = result.links?.length
     ? `\n\n## Links found on this page\n${formatLinksAsMarkdown(result.links, 30)}`
     : "";
-  return header + result.textContent + links;
+
+  const TRUNCATION_SUFFIX_MARGIN = 32;
+  const bodyBudget = Math.max(
+    0,
+    MAX_CONTENT_LENGTH - header.length - links.length - TRUNCATION_SUFFIX_MARGIN
+  );
+  const body =
+    result.textContent.length > bodyBudget
+      ? `${result.textContent.slice(0, bodyBudget)}\n\n[Content truncated]`
+      : result.textContent;
+
+  return header + body + links;
 }
 
 async function tier2Scrape(url: string): Promise<string> {
@@ -225,9 +236,17 @@ export const webCrawlTool = new DynamicStructuredTool({
         for (const link of links) {
           const target = link.url.split("#")[0];
           if (seen.has(target)) continue;
-          if (sameOriginOnly && !target.startsWith(origin)) continue;
+
+          let targetUrl: URL;
+          try {
+            targetUrl = new URL(target);
+          } catch {
+            continue;
+          }
+          if (sameOriginOnly && targetUrl.origin !== origin) continue;
+
           seen.add(target);
-          queue.push({ url: target, depth: depth + 1 });
+          queue.push({ url: targetUrl.href, depth: depth + 1 });
         }
       }
     }
