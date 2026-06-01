@@ -19,8 +19,6 @@ export function encodeMemoryStatus(
     documentCount: memoryStatusInfo.documentCount,
     hasImages: memoryStatusInfo.hasImages,
     imageCount: memoryStatusInfo.imageCount,
-    hasUrls: memoryStatusInfo.hasUrls,
-    urlCount: memoryStatusInfo.urlCount,
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
     activeToolName: memoryStatusInfo.activeToolName,

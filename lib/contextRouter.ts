@@ -5,7 +5,6 @@ import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
 import { isSupportedDocumentExtension } from './fileValidation';
-import { extractUrlsFromMessage, scrapeMultipleUrls, formatScrapedContentForContext } from './url-scraper/scraper';
 import { extractTextFromMessage } from './chat/messageContent';
 import { mediateMemoryIntent } from './chat/requestMediator';
 import { estimateMemoryEntryCount } from './chat/memoryPolicy';
@@ -18,11 +17,9 @@ interface ContextRoutingMetadata {
   attemptedMemory: boolean;
   hasDocuments: boolean;
   hasImages: boolean;
-  hasUrls: boolean;
   memoryCount: number;
   documentCount: number;
   imageCount: number;
-  urlCount: number;
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
@@ -43,39 +40,7 @@ interface ContextRoutingResult {
   metadata: ContextRoutingMetadata;
 }
 
-const CHAT_URL_CONTEXT_TIMEOUT_MS = 4_000;
-const CHAT_URL_CONTEXT_RETRIES = 0;
 const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
-
-async function resolveExplicitUrlContext(
-  query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
-  metadata: ContextRoutingMetadata,
-  addDegradedContext: (source: string, reason: string) => void
-): Promise<string> {
-  const detectedUrls = extractUrlsFromMessage(query);
-  if (detectedUrls.length === 0) {
-    return '';
-  }
-
-  try {
-    const scrapedContent = await scrapeMultipleUrls(detectedUrls, {
-      timeoutMs: CHAT_URL_CONTEXT_TIMEOUT_MS,
-      retries: CHAT_URL_CONTEXT_RETRIES,
-    });
-
-    if (scrapedContent.length === 0) {
-      return '';
-    }
-
-    metadata.hasUrls = true;
-    metadata.urlCount = scrapedContent.length;
-    return formatScrapedContentForContext(scrapedContent);
-  } catch (error) {
-    logger.error('[Context Router] URL scraping failed:', error);
-    addDegradedContext('url_scrape', error instanceof Error ? error.message : String(error));
-    return '';
-  }
-}
 
 function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
   if (!Array.isArray(content)) return 0;
@@ -284,11 +249,9 @@ export async function routeContext(
     attemptedMemory: false,
     hasDocuments: false,
     hasImages,
-    hasUrls: false,
     memoryCount: 0,
     documentCount: 0,
     imageCount,
-    urlCount: 0,
     skippedMemory: !memoryEnabled,
     degradedContexts: [],
   };
@@ -299,19 +262,6 @@ export async function routeContext(
       { source, reason },
     ];
   };
-
-  const urlContext = await resolveExplicitUrlContext(query, metadata, addDegradedContext);
-
-  if (urlContext) {
-    metadata.routingDecision = RoutingDecision.UrlContent;
-    metadata.skippedMemory = true;
-
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.Hybrid;
-    }
-
-    return { context: urlContext, metadata };
-  }
 
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;

@@ -16,14 +16,6 @@ const MEDIUM_AUTHORITY_PATTERNS = [
   /blog\..+\.(com|io|dev)$/,
 ];
 
-export function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
 function scoreDomainAuthority(domain: string): number {
   if (HIGH_AUTHORITY_DOMAINS.has(domain)) return DomainScore.HIGH;
   if (domain.endsWith(".org") || domain.endsWith(".edu")) return DomainScore.ORG_EDU;

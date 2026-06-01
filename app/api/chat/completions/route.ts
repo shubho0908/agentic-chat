@@ -161,8 +161,6 @@ export async function POST(request: NextRequest) {
       documentCount: 0,
       hasImages: false,
       imageCount: 0,
-      hasUrls: false,
-      urlCount: 0,
       skippedMemory: false,
     };
 
@@ -170,7 +168,7 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const abortController = new AbortController();
-      const useOrchestrator = body.useOrchestrator === true;
+      const useOrchestrator = body.useOrchestrator !== false;
 
       const streamHandler = useOrchestrator
         ? (await import('@/lib/orchestrator/handler')).createOrchestratorStreamHandler({

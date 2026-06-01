@@ -18,13 +18,11 @@ export function AIThinkingAnimation({ memoryStatus, isLoading, toolActivities }:
       memoryStatus.attemptedMemory ||
       memoryStatus.hasDocuments ||
       memoryStatus.hasImages ||
-      memoryStatus.hasUrls ||
       memoryStatus.routingDecision === RoutingDecision.ToolOnly ||
       memoryStatus.routingDecision === RoutingDecision.MemoryOnly ||
       memoryStatus.routingDecision === RoutingDecision.VisionOnly ||
       memoryStatus.routingDecision === RoutingDecision.DocumentsOnly ||
-      memoryStatus.routingDecision === RoutingDecision.Hybrid ||
-      memoryStatus.routingDecision === RoutingDecision.UrlContent);
+      memoryStatus.routingDecision === RoutingDecision.Hybrid);
 
   const hasToolActivities = toolActivities && toolActivities.length > 0;
   const unrepresentedActivities = hasToolActivities

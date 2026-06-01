@@ -1,7 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { exaSearchTool } from "@/lib/tools/exa";
-import { webScrapeTool } from "@/lib/tools/scrape";
+import { webScrapeTool, webCrawlTool } from "@/lib/tools/scrape";
 import { getToolsForUser } from "@/lib/tools/composio";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import {
@@ -65,6 +65,17 @@ const WEB_SEARCH_TERMS = [
   "online",
   "price",
   "weather",
+];
+
+const CRAWL_INTENT_TERMS = [
+  "scrape",
+  "crawl",
+  "website",
+  "web site",
+  "web page",
+  "webpage",
+  "site",
+  "link",
 ];
 
 const DEEP_RESEARCH_PHRASES = [
@@ -165,6 +176,10 @@ function includesIntentTerm(text: string, term: string): boolean {
   return new RegExp(`\\b${escapeRegExp(term)}\\b`, "i").test(text);
 }
 
+function matchesAnyTerm(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => includesIntentTerm(text, term));
+}
+
 function getMentionedToolkits(text: string, connectedServices: string[] | undefined): ComposioToolkit[] {
   const lowerText = text.toLowerCase();
   const connected = getConnectedComposioToolkits(connectedServices);
@@ -239,10 +254,13 @@ function scoreToolForIntent(
     else if (description.includes(term)) score += 3;
   }
 
-  if (tool.name === ToolName.WEB_SEARCH && WEB_SEARCH_TERMS.some((term) => rawText.includes(term))) {
+  if (tool.name === ToolName.WEB_SEARCH && matchesAnyTerm(rawText, WEB_SEARCH_TERMS)) {
     score += 35;
   }
   if (tool.name === ToolName.WEB_SCRAPE && /https?:\/\//i.test(rawText)) {
+    score += 35;
+  }
+  if (tool.name === ToolName.WEB_CRAWL && (/https?:\/\//i.test(rawText) || matchesAnyTerm(rawText, CRAWL_INTENT_TERMS))) {
     score += 35;
   }
   if (toolkit && !targetToolkits.has(toolkit) && !intentTerms.some((term) => haystack.includes(term))) {
@@ -279,6 +297,7 @@ export function selectToolsForAgentStep(
   addToolByName(selected, toolsByName, ToolName.ASK_USER);
   addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
   addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
+  addToolByName(selected, toolsByName, ToolName.WEB_CRAWL);
   addToolsByName(selected, toolsByName, plannedTools);
 
   const targetToolkits = new Set<ComposioToolkit>([
@@ -310,6 +329,15 @@ export function selectToolsForAgentStep(
   return [...selected.values()].slice(0, maxTools);
 }
 
+export function hasWebActionIntent(latestUserText: string): boolean {
+  const rawText = latestUserText.toLowerCase();
+  return (
+    /https?:\/\//i.test(latestUserText) ||
+    matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
+    matchesAnyTerm(rawText, WEB_SEARCH_TERMS)
+  );
+}
+
 export function shouldBypassSemanticCacheForToolIntent(
   latestUserText: string,
   _connectedServices?: string[],
@@ -318,7 +346,8 @@ export function shouldBypassSemanticCacheForToolIntent(
   const rawText = latestUserText.toLowerCase();
   return (
     getAnyMentionedToolkits(latestUserText).length > 0 ||
-    WEB_SEARCH_TERMS.some((term) => rawText.includes(term)) ||
+    matchesAnyTerm(rawText, WEB_SEARCH_TERMS) ||
+    matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
     qualifiesForDeepResearch(latestUserText) ||
     /https?:\/\//i.test(latestUserText)
   );
@@ -329,7 +358,7 @@ export async function getToolsForRequest(
   connectedToolkits?: ComposioToolkit[],
   options?: { apiKey?: string; model?: string }
 ): Promise<DynamicStructuredTool[]> {
-  const baseTools: DynamicStructuredTool[] = [askUserTool, webScrapeTool];
+  const baseTools: DynamicStructuredTool[] = [askUserTool, webScrapeTool, webCrawlTool];
 
   if (process.env.EXA_API_KEY) {
     baseTools.push(exaSearchTool);
@@ -379,14 +408,6 @@ export function filterToolsForContext(
     case RoutingDecision.DocumentsOnly:
       return allTools.filter(
         (t) => alwaysInclude.includes(t.name) || t.name === ToolName.WEB_SCRAPE
-      );
-
-    case RoutingDecision.UrlContent:
-      return allTools.filter(
-        (t) =>
-          alwaysInclude.includes(t.name) ||
-          t.name === ToolName.WEB_SCRAPE ||
-          t.name === ToolName.WEB_SEARCH
       );
 
     default:

@@ -37,7 +37,6 @@ const GENERIC_QUERY_PATTERNS = [
 const NON_PERSISTED_ROUTING_DECISIONS = new Set<RoutingDecision>([
   RoutingDecision.DocumentsOnly,
   RoutingDecision.VisionOnly,
-  RoutingDecision.UrlContent,
   RoutingDecision.ToolOnly,
   RoutingDecision.Hybrid,
 ]);

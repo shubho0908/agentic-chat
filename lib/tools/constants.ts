@@ -1,6 +1,7 @@
 export const ToolName = {
   WEB_SEARCH: "web_search",
   WEB_SCRAPE: "web_scrape",
+  WEB_CRAWL: "web_crawl",
   ASK_USER: "ask_user",
   DEEP_RESEARCH: "deep_research",
 } as const;

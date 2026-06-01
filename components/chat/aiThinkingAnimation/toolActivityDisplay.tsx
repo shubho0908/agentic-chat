@@ -5,6 +5,7 @@ import type { FC, SVGProps } from "react";
 import type { ToolActivity, JsonValue } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import { ToolName } from "@/lib/tools/constants";
+import { extractDomain } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -139,7 +140,7 @@ function parseWebSearchResults(result: JsonValue): { count: number; sources: { d
       const fullUrl = urlMatch[0].replace(/[.,;]+$/, "");
       if (seen.has(fullUrl)) continue;
       seen.add(fullUrl);
-      const domain = new URL(fullUrl).hostname.replace(/^www\./, "");
+      const domain = extractDomain(fullUrl);
       sources.push({ domain, url: fullUrl });
     } catch { /* noop */ }
   }

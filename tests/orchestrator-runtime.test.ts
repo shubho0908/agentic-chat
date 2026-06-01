@@ -19,8 +19,6 @@ import {
   shouldBypassSemanticCacheForToolIntent,
 } from "@/lib/orchestrator/tools";
 import type { AgentStateType } from "@/lib/orchestrator/state";
-import { ToolName } from "@/lib/tools/constants";
-import { RoutingDecision } from "@/types/chat";
 import {
   COMPOSIO_TOOLKITS,
   notConnectedMessage,
@@ -57,22 +55,6 @@ function createAgentState(overrides: Partial<AgentStateType>): AgentStateType {
     ...overrides,
   } as AgentStateType;
 }
-
-test("URL-content tool filtering keeps web search available under the registered tool name", () => {
-  const tools = [
-    createTool(ASK_USER_TOOL_NAME),
-    createTool(ToolName.WEB_SEARCH),
-    createTool(ToolName.WEB_SCRAPE),
-    createTool("GITHUB_LIST_REPOS"),
-  ];
-
-  const filtered = filterToolsForContext(tools, RoutingDecision.UrlContent);
-
-  assert.deepEqual(
-    filtered.map((tool) => tool.name),
-    [ASK_USER_TOOL_NAME, ToolName.WEB_SEARCH, ToolName.WEB_SCRAPE]
-  );
-});
 
 test("essential connector tools cover discovery and read paths across supported toolkits", () => {
   const requiredByToolkit: Record<ComposioToolkit, string[]> = {

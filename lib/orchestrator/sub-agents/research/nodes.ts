@@ -13,7 +13,8 @@ import {
 } from "./prompts";
 import { ResearchStep, Limit, DomainScore } from "./constants";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { scoreSource, getRankedSources, extractDomain } from "./scoring";
+import { scoreSource, getRankedSources } from "./scoring";
+import { extractDomain } from "@/lib/utils";
 import { exaDeepSearch } from "@/lib/tools/exa";
 import { scrapeContent } from "@/lib/tools/scrape";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
