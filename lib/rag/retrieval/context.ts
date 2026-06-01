@@ -119,13 +119,25 @@ async function resolveCompletedAttachmentScope(
     const partitioned = partitionByStatus(documentAttachments);
 
     const completedIds = extractIds(partitioned.completed);
-    const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
+    const processingIds = extractIds([...partitioned.processing, ...partitioned.pending, ...partitioned.failed]);
 
     if (processingIds.length > 0 && waitForProcessing) {
-      const pendingIds = extractIds(partitioned.pending);
-      if (pendingIds.length > 0) {
+      const retryableIds = extractIds([...partitioned.pending, ...partitioned.failed]);
+      if (retryableIds.length > 0) {
+        const failedIds = extractIds(partitioned.failed);
+        if (failedIds.length > 0) {
+          await prisma.attachment.updateMany({
+            where: { id: { in: failedIds } },
+            data: { processingStatus: 'PENDING', processingError: null },
+          });
+          await prisma.$executeRaw`
+            DELETE FROM orchestration_job
+            WHERE type = 'document_process'
+              AND dedupe_key = ANY(${failedIds}::text[])
+              AND status = 'failed'`;
+        }
         await Promise.allSettled(
-          pendingIds.map((attachmentId) =>
+          retryableIds.map((attachmentId) =>
             runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
               logger.warn('[RAG] Failed to kick off pending document processing:', {
                 attachmentId,
@@ -156,14 +168,26 @@ async function resolveCompletedAttachmentScope(
     const statuses = await getAttachmentStatuses(attachmentIds, userId);
     const partitioned = partitionByStatus(statuses);
 
-    const needProcessing = extractIds([...partitioned.processing, ...partitioned.pending]);
+    const needProcessing = extractIds([...partitioned.processing, ...partitioned.pending, ...partitioned.failed]);
     const alreadyCompleted = extractIds(partitioned.completed);
 
     if (needProcessing.length > 0) {
-      const pendingIds = extractIds(partitioned.pending);
-      if (pendingIds.length > 0) {
+      const retryableIds = extractIds([...partitioned.pending, ...partitioned.failed]);
+      if (retryableIds.length > 0) {
+        const failedIds = extractIds(partitioned.failed);
+        if (failedIds.length > 0) {
+          await prisma.attachment.updateMany({
+            where: { id: { in: failedIds } },
+            data: { processingStatus: 'PENDING', processingError: null },
+          });
+          await prisma.$executeRaw`
+            DELETE FROM orchestration_job
+            WHERE type = 'document_process'
+              AND dedupe_key = ANY(${failedIds}::text[])
+              AND status = 'failed'`;
+        }
         await Promise.allSettled(
-          pendingIds.map((attachmentId) =>
+          retryableIds.map((attachmentId) =>
             runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
               logger.warn('[RAG] Failed to kick off provided document processing:', {
                 attachmentId,
