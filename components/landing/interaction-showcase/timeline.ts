@@ -166,6 +166,10 @@ export function getDeviceKind(
   return "phone";
 }
 
-export function getSceneTitle() {
-  return "Web search";
+export function getSceneTitle(scene: SceneKind): string {
+  switch (scene) {
+    case "orchestration": return "Orchestration";
+    case "deep-research": return "Deep research";
+    default: return "Web search";
+  }
 }

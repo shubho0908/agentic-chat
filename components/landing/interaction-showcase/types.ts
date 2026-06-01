@@ -1,5 +1,5 @@
 export type DeviceKind = "desktop" | "tablet" | "phone";
-export type SceneKind = "web";
+export type SceneKind = "web" | "orchestration" | "deep-research";
 
 export interface TimelinePosition {
   cycle: number;

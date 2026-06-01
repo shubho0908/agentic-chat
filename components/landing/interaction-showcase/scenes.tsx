@@ -3,9 +3,23 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { AnimatePresence, m } from "framer-motion";
-import { Search } from "lucide-react";
+import { Route } from "lucide-react";
 import {
   CHIP_SURFACE_CLASS,
+  DR_SCENE_ACTIVITIES_1_CALLING,
+  DR_SCENE_ACTIVITIES_1_DONE,
+  DR_SCENE_ACTIVITIES_2_CALLING,
+  DR_SCENE_ACTIVITIES_2_DONE,
+  DR_SCENE_ACTIVITIES_3_CALLING,
+  DR_SCENE_ACTIVITIES_3_DONE,
+  DEEP_RESEARCH_RESPONSE,
+  ORCHESTRATION_RESPONSE,
+  ORCH_STEP1_CALLING,
+  ORCH_STEP1_DONE,
+  ORCH_STEP2_CALLING,
+  ORCH_STEP2_DONE,
+  ORCH_STEP3_CALLING,
+  ORCH_STEP3_DONE,
   PANEL_SURFACE_CLASS,
   SCENE_TRANSITION,
   SOFT_BORDER_CLASS,
@@ -13,6 +27,8 @@ import {
   SURFACE_BORDER_CLASS,
   WEB_IMAGE_ITEMS,
   WEB_RESPONSE,
+  WEB_SCENE_ACTIVITIES,
+  WEB_SCENE_ACTIVITIES_DONE,
 } from "@/components/landing/interaction-showcase/constants";
 import {
   AssistantShell,
@@ -27,6 +43,7 @@ import {
   getTypedText,
 } from "@/components/landing/interaction-showcase/timeline";
 import type { DeviceKind } from "@/components/landing/interaction-showcase/types";
+import { ToolActivityDisplay } from "@/components/chat/aiThinkingAnimation/toolActivityDisplay";
 
 function getMotionProps(prefersReducedMotion: boolean) {
   return prefersReducedMotion
@@ -54,11 +71,32 @@ function TimelineItem({
   prefersReducedMotion: boolean;
 }) {
   const motionProps = getMotionProps(prefersReducedMotion);
-
   return (
     <m.div key={itemKey} {...motionProps}>
       {node}
     </m.div>
+  );
+}
+
+const TOOL_CARD_CLASS =
+  "rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]";
+
+function PlanCard({ plan, done }: { plan: string; done: boolean }) {
+  return (
+    <div className={TOOL_CARD_CLASS}>
+      <div className="flex items-center gap-2 min-w-0">
+        <Route className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-[12px] font-medium text-foreground/80 truncate">Planning…</span>
+        <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">{plan}</span>
+        <span className="ml-auto shrink-0">
+          {done ? (
+            <span className="text-[10px] text-emerald-400">✓</span>
+          ) : (
+            <span className="size-3 inline-block animate-spin rounded-full border border-muted-foreground/30 border-t-muted-foreground" />
+          )}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -77,12 +115,7 @@ export function WebSearchScene({
     WEB_RESPONSE,
     sceneElapsed,
     getStepStart("web", 3),
-    getResponsiveTypingSpeed({
-      scene: "web",
-      startStep: 3,
-      target: WEB_RESPONSE,
-      preferredSpeed: 6,
-    }),
+    getResponsiveTypingSpeed({ scene: "web", startStep: 3, target: WEB_RESPONSE, preferredSpeed: 6 }),
   );
   const chipTransition = prefersReducedMotion ? { duration: 0 } : { duration: 0.2 };
   const showSources = device !== "phone";
@@ -90,18 +123,13 @@ export function WebSearchScene({
   const timelineItems: Array<{ key: string; node: ReactNode }> = [];
 
   if (step >= 1) {
+    const activities = step >= 3 ? WEB_SCENE_ACTIVITIES_DONE : WEB_SCENE_ACTIVITIES;
     timelineItems.push({
-      key: "web-searching",
+      key: "web-tool",
       node: (
-        <div className={`rounded-xl px-3 py-2.5 ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-[12px] font-medium text-foreground sm:text-[13px]">
-              <Search className="size-3.5 text-sky-400" />
-              Searching the web
-            </div>
-            <span className="text-[10px] text-muted-foreground dark:text-white/[0.5] sm:text-[11px]">2.0s</span>
-          </div>
-          {showSources && (
+        <div className={TOOL_CARD_CLASS}>
+          <ToolActivityDisplay toolActivities={activities} />
+          {showSources && step < 3 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {SOURCE_ITEMS.map((source) => (
                 <m.span
@@ -125,32 +153,15 @@ export function WebSearchScene({
     timelineItems.push({
       key: "web-images",
       node: (
-        <div
-          className={`grid gap-2 ${
-            device === "desktop"
-              ? "grid-cols-3"
-              : device === "tablet"
-                ? "grid-cols-2"
-                : "grid-cols-1"
-          }`}
-        >
+        <div className={`grid gap-2 ${device === "desktop" ? "grid-cols-3" : device === "tablet" ? "grid-cols-2" : "grid-cols-1"}`}>
           {WEB_IMAGE_ITEMS.map((item) => (
-            <div
-              key={item.key}
-              className={`relative aspect-[16/9] min-w-0 overflow-hidden rounded-xl ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}
-            >
+            <div key={item.key} className={`relative aspect-[16/9] min-w-0 overflow-hidden rounded-xl ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}>
               <div className="absolute inset-0 overflow-hidden bg-muted/30">
                 <Image
                   src={item.src}
                   alt={item.alt}
                   fill
-                  sizes={
-                    device === "desktop"
-                      ? "(max-width: 1023px) 33vw, 200px"
-                      : device === "tablet"
-                        ? "(max-width: 719px) 100vw, 220px"
-                        : "260px"
-                  }
+                  sizes={device === "desktop" ? "(max-width: 1023px) 33vw, 200px" : device === "tablet" ? "(max-width: 719px) 100vw, 220px" : "260px"}
                   quality={70}
                   className="object-cover"
                 />
@@ -172,14 +183,7 @@ export function WebSearchScene({
   if (step >= 3) {
     timelineItems.push({
       key: "web-response",
-      node: (
-        <ResponseBubble
-          text={response}
-          minHeight="min-h-[48px]"
-          showCursor={!prefersReducedMotion}
-          prefersReducedMotion={prefersReducedMotion}
-        />
-      ),
+      node: <ResponseBubble text={response} minHeight="min-h-[48px]" showCursor={!prefersReducedMotion} prefersReducedMotion={prefersReducedMotion} />,
     });
   }
 
@@ -187,17 +191,11 @@ export function WebSearchScene({
     <SceneFrame title="Web search" caption="Searches, verifies, then answers">
       <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
         <UserBubble text="Find the most important product launches in AI search this week and show the strongest visuals too." />
-
         <AssistantShell>
           <AutoScrollStage>
             <AnimatePresence initial={false}>
               {timelineItems.map((item) => (
-                <TimelineItem
-                  key={item.key}
-                  itemKey={item.key}
-                  node={item.node}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
+                <TimelineItem key={item.key} itemKey={item.key} node={item.node} prefersReducedMotion={prefersReducedMotion} />
               ))}
             </AnimatePresence>
           </AutoScrollStage>
@@ -207,4 +205,161 @@ export function WebSearchScene({
   );
 }
 
+export function OrchestrationScene({
+  step,
+  sceneElapsed,
+  prefersReducedMotion,
+}: {
+  step: number;
+  sceneElapsed: number;
+  prefersReducedMotion: boolean;
+}) {
+  const response = getTypedText(
+    ORCHESTRATION_RESPONSE,
+    sceneElapsed,
+    getStepStart("orchestration", 7),
+    getResponsiveTypingSpeed({ scene: "orchestration", startStep: 7, target: ORCHESTRATION_RESPONSE, preferredSpeed: 6 }),
+  );
+  const timelineItems: Array<{ key: string; node: ReactNode }> = [];
+
+  if (step >= 1) {
+    timelineItems.push({
+      key: "orch-planning",
+      node: <PlanCard plan="Search → scrape each → draft comparison → post to Slack" done={step >= 2} />,
+    });
+  }
+
+  if (step >= 2) {
+    const activities = step >= 4 ? ORCH_STEP1_DONE : ORCH_STEP1_CALLING;
+    timelineItems.push({
+      key: "orch-step1",
+      node: (
+        <div className={TOOL_CARD_CLASS}>
+          <ToolActivityDisplay toolActivities={activities} />
+        </div>
+      ),
+    });
+  }
+
+  if (step >= 4) {
+    const activities = step >= 6 ? ORCH_STEP2_DONE : ORCH_STEP2_CALLING;
+    timelineItems.push({
+      key: "orch-step2",
+      node: (
+        <div className={TOOL_CARD_CLASS}>
+          <ToolActivityDisplay toolActivities={activities} />
+        </div>
+      ),
+    });
+  }
+
+  if (step >= 6) {
+    const activities = step >= 7 ? ORCH_STEP3_DONE : ORCH_STEP3_CALLING;
+    timelineItems.push({
+      key: "orch-step3",
+      node: (
+        <div className={TOOL_CARD_CLASS}>
+          <ToolActivityDisplay toolActivities={activities} />
+        </div>
+      ),
+    });
+  }
+
+  if (step >= 7) {
+    timelineItems.push({
+      key: "orch-response",
+      node: <ResponseBubble text={response} minHeight="min-h-[48px]" showCursor={!prefersReducedMotion} prefersReducedMotion={prefersReducedMotion} />,
+    });
+  }
+
+  return (
+    <SceneFrame title="Orchestration" caption="One prompt, executed step by step">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
+        <UserBubble text="Search for the top 3 AI dev tools this week, scrape each homepage, then post a comparison table to Slack." />
+        <AssistantShell>
+          <AutoScrollStage>
+            <AnimatePresence initial={false}>
+              {timelineItems.map((item) => (
+                <TimelineItem key={item.key} itemKey={item.key} node={item.node} prefersReducedMotion={prefersReducedMotion} />
+              ))}
+            </AnimatePresence>
+          </AutoScrollStage>
+        </AssistantShell>
+      </div>
+    </SceneFrame>
+  );
+}
+
+export function DeepResearchScene({
+  step,
+  sceneElapsed,
+  prefersReducedMotion,
+}: {
+  step: number;
+  sceneElapsed: number;
+  prefersReducedMotion: boolean;
+}) {
+  const response = getTypedText(
+    DEEP_RESEARCH_RESPONSE,
+    sceneElapsed,
+    getStepStart("deep-research", 7),
+    getResponsiveTypingSpeed({ scene: "deep-research", startStep: 7, target: DEEP_RESEARCH_RESPONSE, preferredSpeed: 5 }),
+  );
+  const timelineItems: Array<{ key: string; node: ReactNode }> = [];
+
+  if (step >= 1) {
+    timelineItems.push({
+      key: "dr-planning",
+      node: <PlanCard plan="Benchmark accuracy → scale thresholds → self-consistency tradeoffs" done={step >= 2} />,
+    });
+  }
+
+  if (step >= 2) {
+    const activities = step >= 3 ? DR_SCENE_ACTIVITIES_1_DONE : DR_SCENE_ACTIVITIES_1_CALLING;
+    timelineItems.push({
+      key: "dr-r1",
+      node: <div className={TOOL_CARD_CLASS}><ToolActivityDisplay toolActivities={activities} /></div>,
+    });
+  }
+
+  if (step >= 4) {
+    const activities = step >= 5 ? DR_SCENE_ACTIVITIES_2_DONE : DR_SCENE_ACTIVITIES_2_CALLING;
+    timelineItems.push({
+      key: "dr-r2",
+      node: <div className={TOOL_CARD_CLASS}><ToolActivityDisplay toolActivities={activities} /></div>,
+    });
+  }
+
+  if (step >= 6) {
+    const activities = step >= 7 ? DR_SCENE_ACTIVITIES_3_DONE : DR_SCENE_ACTIVITIES_3_CALLING;
+    timelineItems.push({
+      key: "dr-r3",
+      node: <div className={TOOL_CARD_CLASS}><ToolActivityDisplay toolActivities={activities} /></div>,
+    });
+  }
+
+  if (step >= 7) {
+    timelineItems.push({
+      key: "dr-response",
+      node: <ResponseBubble text={response} minHeight="min-h-[48px]" showCursor={!prefersReducedMotion} prefersReducedMotion={prefersReducedMotion} />,
+    });
+  }
+
+  return (
+    <SceneFrame title="Deep research" caption="Plans, sources, synthesizes">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
+        <UserBubble text="Do a deep dive on how chain-of-thought prompting affects LLM reasoning accuracy across benchmarks." />
+        <AssistantShell>
+          <AutoScrollStage>
+            <AnimatePresence initial={false}>
+              {timelineItems.map((item) => (
+                <TimelineItem key={item.key} itemKey={item.key} node={item.node} prefersReducedMotion={prefersReducedMotion} />
+              ))}
+            </AnimatePresence>
+          </AutoScrollStage>
+        </AssistantShell>
+      </div>
+    </SceneFrame>
+  );
+}
 

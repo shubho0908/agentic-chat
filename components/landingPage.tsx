@@ -113,7 +113,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                   variants={item}
                   className="mt-5 max-w-[34rem] text-balance text-[clamp(1rem,2.4vw,1.32rem)] leading-[clamp(1.75rem,3vw,2.15rem)] text-foreground/78 sm:mt-7 lg:mt-8"
                 >
-                  Search the web, reason across documents, and act inside Google Workspace. Agentic Chat keeps the full thread in view and lets you bring your own API key.
+                  Search the web, orchestrate multi-agent tasks, run deep research, and execute tools in parallel. Agentic Chat keeps the full thread in view and lets you bring your own API key.
                 </m.p>
 
                 <m.div variants={item} className="mt-7 flex w-full flex-col items-center gap-3.5 sm:mt-9 sm:w-auto sm:flex-row sm:items-stretch lg:mt-10">
@@ -154,26 +154,26 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
             >
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:p-7 lg:p-10">
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
-                  <span className="text-muted-foreground">Fast recall</span>
+                  <span className="text-muted-foreground">Orchestration</span>
                 </div>
-                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Less repeat work</h3>
-                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">When a question comes back around, it can skip the obvious rework and start from what already matters.</p>
+                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Delegates like a team</h3>
+                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Breaks complex tasks into subtasks, routes each to the right agent, and assembles the result — without you managing the steps.</p>
               </m.div>
 
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:p-7 lg:p-10">
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
-                  <span className="text-muted-foreground">Thread continuity</span>
+                  <span className="text-muted-foreground">Deep research</span>
                 </div>
-                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Picks up where you left off</h3>
-                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Important context stays in reach, so follow-ups feel like one conversation instead of a reset.</p>
+                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Plans before it searches</h3>
+                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Builds a research plan, collects sources across the web, cross-validates claims, then synthesizes a grounded answer.</p>
               </m.div>
 
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:col-span-2 sm:p-7 lg:col-span-1 lg:p-10">
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
-                  <span className="text-muted-foreground">Personal key</span>
+                  <span className="text-muted-foreground">Parallel tools</span>
                 </div>
-                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Keep your own key</h3>
-                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Use your own API key if you want access and billing to stay under your control.</p>
+                <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">All tools at once</h3>
+                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Fires web search, code execution, document reading, and calculations simultaneously — results land together, not one at a time.</p>
               </m.div>
             </m.section>
           </div>

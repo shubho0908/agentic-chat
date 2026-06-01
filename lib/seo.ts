@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { appBaseUrl } from "@/lib/appUrl";
-import { apiRoutes } from "@/lib/routes";
 
 export const siteConfig = {
   name: "Agentic Chat",
@@ -9,7 +8,7 @@ export const siteConfig = {
     "Your AI workspace that researches, reads documents, remembers context, and connects to the tools you already use. One chat to rule them all.",
   fullDescription:
     "Agentic Chat combines intelligent query routing, RAG-powered document analysis, persistent memory, deep research, and native integrations with Gmail, Drive, Slack, Notion, GitHub, and Linear into a single AI workspace.",
-  defaultOgImagePath: apiRoutes.ogHome,
+  defaultOgImagePath: "https://res.cloudinary.com/duhbdm1sx/image/upload/c_fill,w_1200,h_630,g_auto,q_auto,f_jpg/v1777040433/AC_q2skpe.jpg",
   url: appBaseUrl,
   locale: "en_US",
   contactEmail: "dev@shubhojeet.com",

@@ -50,6 +50,7 @@
     "@tanstack/react-query-devtools": "^5.100.14",
     "@tanstack/react-virtual": "^3.13.26",
     "@uploadthing/react": "^7.3.3",
+    "@vercel/analytics": "^2.0.1",
     "better-auth": "^1.6.11",
     "canvas": "^3.2.3",
     "cheerio": "^1.2.0",

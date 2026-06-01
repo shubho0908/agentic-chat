@@ -9,6 +9,7 @@ import { StreamingProvider } from "@/contexts/streaming-context";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ConditionalSidebar } from "@/components/conditionalSidebar";
 import { absoluteUrl, indexRobots, siteConfig } from "@/lib/seo";
+import { Analytics } from "@vercel/analytics/next";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -106,6 +107,7 @@ export default function RootLayout({
             <Toaster position="bottom-right" richColors />
           </ThemeProvider>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );
