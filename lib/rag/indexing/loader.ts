@@ -1,4 +1,5 @@
-import { PDFParse } from 'pdf-parse';
+// @ts-expect-error pdf-parse v1 has no type declarations
+import pdf from 'pdf-parse/lib/pdf-parse.js';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { CSVLoader } from '@langchain/community/document_loaders/fs/csv';
 import type { Document } from '@langchain/core/documents';
@@ -29,33 +30,33 @@ export async function loadDocument(
 
     if (lowerFileType === 'application/pdf' || lowerFileType.includes('pdf')) {
       const arrayBuffer = await fileBlob.arrayBuffer();
-      const pdf = new PDFParse({ data: new Uint8Array(arrayBuffer) });
-      const textResult = await pdf.getText();
+      const buffer = Buffer.from(arrayBuffer);
+      const pdfData = await pdf(buffer);
 
-      documents = textResult.pages
-        .filter((page) => page.text.trim().length > 0)
-        .map((page) => ({
-          pageContent: page.text.trim(),
+      const pageTexts = pdfData.text ? pdfData.text.split(/\f/) : [];
+
+      documents = pageTexts
+        .map((text: string, index: number) => ({
+          pageContent: text.trim(),
           metadata: {
             source: fileName,
-            loc: { pageNumber: page.num },
+            loc: { pageNumber: index + 1 },
           },
-        } as Document));
+        } as Document))
+        .filter((doc: Document) => doc.pageContent.length > 0);
 
-      if (documents.length === 0 && textResult.text?.trim()) {
+      if (documents.length === 0 && pdfData.text?.trim()) {
         documents = [{
-          pageContent: textResult.text.trim(),
+          pageContent: pdfData.text.trim(),
           metadata: { source: fileName, loc: { pageNumber: 1 } },
         } as Document];
       }
-
-      await pdf.destroy();
 
       return {
         success: true,
         documents,
         metadata: {
-          pageCount: textResult.total,
+          pageCount: pdfData.numpages ?? documents.length,
           fileType: 'pdf',
         },
       };
