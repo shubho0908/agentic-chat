@@ -8,8 +8,8 @@ function countToolRoundsSinceLastHuman(messages: BaseMessage[]): number {
   let count = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (msg.getType() === "human") break;
-    if (msg.getType() === "ai" && ((msg as AIMessage).tool_calls?.length ?? 0) > 0) count++;
+    if (msg.type === "human") break;
+    if (msg.type === "ai" && ((msg as AIMessage).tool_calls?.length ?? 0) > 0) count++;
   }
   return count;
 }

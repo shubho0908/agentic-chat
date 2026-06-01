@@ -129,8 +129,6 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
               documentCount: parsed.documentCount || 0,
               hasImages: parsed.hasImages || false,
               imageCount: parsed.imageCount || 0,
-              hasUrls: parsed.hasUrls || false,
-              urlCount: parsed.urlCount || 0,
               routingDecision: parsed.routingDecision,
               skippedMemory: parsed.skippedMemory,
               activeToolName: parsed.activeToolName,

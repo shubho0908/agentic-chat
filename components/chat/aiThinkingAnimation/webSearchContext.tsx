@@ -3,7 +3,6 @@ import { ToolProgressStatus } from "@/types/chat";
 import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
-import { UrlContentContext } from "./urlContentContext";
 
 const phases = [
   {
@@ -61,9 +60,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
 
     return (
       <div className="flex flex-col gap-2">
-        {memoryStatus.hasUrls && (
-          <UrlContentContext memoryStatus={memoryStatus} />
-        )}
         {memoryStatus.hasImages && (
           <VisionContextItem imageCount={memoryStatus.imageCount} />
         )}
@@ -134,9 +130,6 @@ export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      {memoryStatus.hasUrls && (
-        <UrlContentContext memoryStatus={memoryStatus} />
-      )}
       {memoryStatus.hasImages && (
         <VisionContextItem imageCount={memoryStatus.imageCount} />
       )}

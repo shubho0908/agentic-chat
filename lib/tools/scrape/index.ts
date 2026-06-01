@@ -1,7 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import Firecrawl from "@mendable/firecrawl-js";
-import { scrapeUrl, validateUrl } from "@/lib/url-scraper/scraper";
+import { scrapeUrl, validateUrl, formatLinksAsMarkdown } from "@/lib/url-scraper/scraper";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
 
@@ -9,6 +9,9 @@ const MAX_CONTENT_LENGTH = 3000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const FIRECRAWL_TIMEOUT_MS = 15000;
 const JINA_TIMEOUT_MS = 10000;
+const MAX_CRAWL_PAGES = 10;
+const MAX_CRAWL_DEPTH = 3;
+const CRAWL_PAGE_TIMEOUT_MS = 8000;
 
 let firecrawlClient: Firecrawl | null = null;
 
@@ -61,7 +64,21 @@ async function tier1Scrape(url: string): Promise<string> {
     throw new Error("Tier 1: insufficient content extracted");
   }
   const header = result.title ? `# ${result.title}\n\n` : "";
-  return header + result.textContent;
+  const links = result.links?.length
+    ? `\n\n## Links found on this page\n${formatLinksAsMarkdown(result.links, 30)}`
+    : "";
+
+  const TRUNCATION_SUFFIX_MARGIN = 32;
+  const bodyBudget = Math.max(
+    0,
+    MAX_CONTENT_LENGTH - header.length - links.length - TRUNCATION_SUFFIX_MARGIN
+  );
+  const body =
+    result.textContent.length > bodyBudget
+      ? `${result.textContent.slice(0, bodyBudget)}\n\n[Content truncated]`
+      : result.textContent;
+
+  return header + body + links;
 }
 
 async function tier2Scrape(url: string): Promise<string> {
@@ -121,7 +138,7 @@ export async function scrapeContent(url: string): Promise<string> {
 export const webScrapeTool = new DynamicStructuredTool({
   name: ToolName.WEB_SCRAPE,
   description:
-    "Extract content from a specific URL. Use when you need to read a webpage's full content.",
+    "Extract the full content of a SINGLE webpage URL, including a list of hyperlinks found on that page. Use to read one page or to discover links to follow. To explore a whole site across multiple pages, use web_crawl instead.",
   schema: webScrapeSchema,
   func: async ({ url }) => {
     const validation = validateUrl(url);
@@ -147,5 +164,97 @@ export const webScrapeTool = new DynamicStructuredTool({
     }
 
     return `Failed to extract content from ${url}. The page may be heavily protected or unavailable.`;
+  },
+});
+
+const webCrawlSchema = z.object({
+  url: z.url().describe("The starting URL to crawl from"),
+  maxPages: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_CRAWL_PAGES)
+    .optional()
+    .default(5)
+    .describe(`Maximum pages to fetch (1-${MAX_CRAWL_PAGES})`),
+  maxDepth: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_CRAWL_DEPTH)
+    .optional()
+    .default(2)
+    .describe(`How many link-hops deep to follow (1-${MAX_CRAWL_DEPTH})`),
+  sameOriginOnly: z
+    .boolean()
+    .optional()
+    .default(true)
+    .describe("Only follow links on the same origin as the start URL"),
+});
+
+export const webCrawlTool = new DynamicStructuredTool({
+  name: ToolName.WEB_CRAWL,
+  description:
+    "Recursively crawl a website starting from a URL: fetches the page, follows its hyperlinks breadth-first, and returns the content and links of every visited page. Use when the user wants to map out a site, find pages across a domain, or collect links/projects spread over multiple pages — not just read one page.",
+  schema: webCrawlSchema,
+  func: async ({ url, maxPages = 5, maxDepth = 2, sameOriginOnly = true }, _runManager, config) => {
+    const validation = validateUrl(url);
+    if (!validation.isValid || !validation.url) {
+      return `Invalid URL: ${validation.error}`;
+    }
+
+    const signal = config?.signal;
+    const pageCap = Math.min(maxPages, MAX_CRAWL_PAGES);
+    const depthCap = Math.min(maxDepth, MAX_CRAWL_DEPTH);
+    const origin = validation.url.origin;
+    const start = validation.url.href.split("#")[0];
+    const seen = new Set<string>([start]);
+    const queue: Array<{ url: string; depth: number }> = [{ url: start, depth: 0 }];
+    const pages: string[] = [];
+
+    while (queue.length > 0 && pages.length < pageCap) {
+      if (signal?.aborted) break;
+      const { url: current, depth } = queue.shift()!;
+
+      let result;
+      try {
+        result = await scrapeUrl(current, { timeoutMs: CRAWL_PAGE_TIMEOUT_MS, retries: 0 });
+      } catch (error) {
+        logger.warn(`[WebCrawl] Failed ${current}: ${error instanceof Error ? error.message : "unknown"}`);
+        continue;
+      }
+
+      const links = result.links ?? [];
+      const linkList = formatLinksAsMarkdown(links, 20, "  ");
+      pages.push(
+        `### Page ${pages.length + 1}: ${result.title ?? current}\nURL: ${current}\n${result.textContent.slice(0, 1200)}${
+          linkList ? `\nLinks:\n${linkList}` : ""
+        }`
+      );
+
+      if (depth < depthCap) {
+        for (const link of links) {
+          const target = link.url.split("#")[0];
+          if (seen.has(target)) continue;
+
+          let targetUrl: URL;
+          try {
+            targetUrl = new URL(target);
+          } catch {
+            continue;
+          }
+          if (sameOriginOnly && targetUrl.origin !== origin) continue;
+
+          seen.add(target);
+          queue.push({ url: targetUrl.href, depth: depth + 1 });
+        }
+      }
+    }
+
+    if (pages.length === 0) {
+      return `Failed to crawl ${url}. The site may be unreachable or protected.`;
+    }
+
+    return `Crawled ${pages.length} page(s) from ${origin} (depth ≤ ${depthCap}):\n\n${pages.join("\n\n---\n\n")}`;
   },
 });

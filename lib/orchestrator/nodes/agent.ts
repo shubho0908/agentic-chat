@@ -12,7 +12,7 @@ import {
   TOOLKIT_DISPLAY_NAMES,
   type ComposioToolkit,
 } from "@/lib/tools/composio/config";
-import { getAnyMentionedComposioToolkits, selectToolsForAgentStep } from "../tools";
+import { getAnyMentionedComposioToolkits, selectToolsForAgentStep, hasWebActionIntent } from "../tools";
 import { logger } from "@/lib/logger";
 
 const BASE_SYSTEM_PROMPT = `Helpful AI assistant with tool access. Act proactively — call tools immediately when user intent is clear. Only use ask_user when genuinely ambiguous.
@@ -21,6 +21,7 @@ Key rules:
 - ABSOLUTE RULE: Service tools are pre-authenticated as the user. NEVER ask for usernames, workspace URLs, account IDs, API keys, or credentials. The tools already know the user's connected account.
 - RESEARCH REQUESTS: ONLY call deep_research when the user EXPLICITLY requests a research investigation — e.g. "research X", "do a deep dive on X", "investigate X thoroughly", "comprehensive research on X". This tool performs expensive multi-step web searches and synthesis. Do NOT use it for: simple questions ("what is X"), basic comparisons ("compare A vs B"), "tell me about X", "explain X", or any query answerable with your knowledge or a single web_search. The bar is HIGH: the user must clearly want a multi-source investigation, not just information. When in doubt, use web_search for a quick lookup or answer from knowledge.
 - deep_research vs web_search: deep_research ONLY for explicit "research/investigate/deep dive" requests requiring multi-source synthesis. web_search for any factual lookup, quick comparison, or current information need.
+- WEB ACCESS: You CAN access public websites. NEVER say "I can't access or crawl that site" or offer to "provide a plan to scrape it locally". To read one page use web_scrape (it also returns the page's links). To explore a site across multiple pages or collect links/projects spread over a domain, use web_crawl, then follow the returned links with web_scrape/web_crawl as needed. If the user names a site without a URL, use web_search to find the URL first, then scrape/crawl it.
 - If a tool requires an object identifier (database_id, page_id, repository id/name, thread id), discover it with a search/list/fetch tool first instead of inventing it or asking the user for it. For repos, resolve a name like "deployninja" via the repo search/list tool, then derive owner from the authenticated user; default to the repo's default branch / HEAD instead of asking for a ref.
 - Container queries (databases, repos, channels, projects, etc.): discover containers via search/list, fetch the schema/details for the chosen one, then query with filters that use the exact property/field names and option values from the fetched schema. Never invent property names or option values. Verify returned rows match the intended filter before answering.
 - Mutations (create/update/insert/append/delete/archive/send): pick the matching write tool from the connected service (e.g., NOTION_INSERT_ROW_DATABASE, NOTION_UPDATE_PAGE, GMAIL_SEND_EMAIL, LINEAR_UPDATE_ISSUE, GITHUB_CREATE_AN_ISSUE) and call it directly with arguments derived from the user's request and the fetched schema. NEVER tell the user "I can't edit/create/write" or hand them a curl command — the connector tools have full write capability and will run after the user approves the action via the safety gate.
@@ -65,7 +66,7 @@ function getMessageText(message: BaseMessage): string {
 }
 
 function isPlannerHint(message: BaseMessage): boolean {
-  return message.getType() === "system" && getMessageText(message).startsWith("[PLAN]");
+  return message.type === "system" && getMessageText(message).startsWith("[PLAN]");
 }
 
 interface DanglingCall {
@@ -114,7 +115,7 @@ function collectCallIds(message: BaseMessage): DanglingCall[] {
 function isAiMessage(msg: BaseMessage): boolean {
   if (msg instanceof AIMessage) return true;
   try {
-    return msg.getType() === "ai";
+    return msg.type === "ai";
   } catch {
     return false;
   }
@@ -123,7 +124,7 @@ function isAiMessage(msg: BaseMessage): boolean {
 function isToolMessage(msg: BaseMessage): msg is ToolMessage {
   if (msg instanceof ToolMessage) return true;
   try {
-    return msg.getType() === "tool";
+    return msg.type === "tool";
   } catch {
     return false;
   }
@@ -243,7 +244,7 @@ function stripDanglingKwargs(
 function getLatestHumanText(messages: BaseMessage[]): string {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message.getType() === "human") {
+    if (message.type === "human") {
       return getMessageText(message);
     }
   }
@@ -314,7 +315,7 @@ export function createAgentNode(
 
     const conversationMessages = incomingMessages.filter((message, index) => {
       if (isPlannerHint(message)) return false;
-      return !(index === 0 && message.getType() === "system");
+      return !(index === 0 && message.type === "system");
     });
 
     const latestUserText = getLatestHumanText(conversationMessages);
@@ -330,7 +331,9 @@ export function createAgentNode(
     }
 
     const baseSystemPrompt = buildSystemPrompt(connectedServices);
-    const isDirect = state.toolPlan?.complexity === PlanComplexity.DIRECT;
+    const isDirect =
+      state.toolPlan?.complexity === PlanComplexity.DIRECT &&
+      !hasWebActionIntent(latestUserText);
     const selectedTools = isDirect
       ? []
       : selectToolsForAgentStep(tools, {

@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import * as cheerio from "cheerio";
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { validateUrl } from '@/lib/url-scraper/scraper';
+import { extractDomain } from '@/lib/utils';
 import { safeFetch } from '@/lib/network/safeFetch';
 import { logWarn } from '@/lib/observability';
 
@@ -18,14 +19,6 @@ interface LinkMetadata {
   siteName?: string;
   domain: string;
 }
-
-const extractDomain = (url: string): string => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-};
 
 const getMetaContent = ($: cheerio.CheerioAPI, selectors: string[]): string | undefined => {
   for (const selector of selectors) {

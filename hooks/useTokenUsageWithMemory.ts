@@ -24,8 +24,6 @@ export function useTokenUsageWithMemory({
       documentCount: memoryStatus?.documentCount ?? 0,
       hasImages: memoryStatus?.hasImages ?? false,
       imageCount: memoryStatus?.imageCount ?? 0,
-      hasUrls: memoryStatus?.hasUrls ?? false,
-      urlCount: memoryStatus?.urlCount ?? 0,
       routingDecision: memoryStatus?.routingDecision,
       skippedMemory: memoryStatus?.skippedMemory,
       activeToolName: memoryStatus?.activeToolName,

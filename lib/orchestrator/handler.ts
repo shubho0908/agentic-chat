@@ -98,8 +98,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         documentCount: 0,
         hasImages: false,
         imageCount: 0,
-        hasUrls: false,
-        urlCount: 0,
         skippedMemory: false,
       };
 

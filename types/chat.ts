@@ -12,7 +12,6 @@ export enum RoutingDecision {
   MemoryOnly = 'memory-only',
   Hybrid = 'hybrid',
   ToolOnly = 'tool-only',
-  UrlContent = 'url-content',
 }
 
 export enum ToolProgressStatus {
@@ -42,8 +41,6 @@ export interface MemoryStatus {
   documentCount: number;
   hasImages: boolean;
   imageCount: number;
-  hasUrls: boolean;
-  urlCount: number;
   routingDecision?: RoutingDecision;
   skippedMemory?: boolean;
   activeToolName?: string;

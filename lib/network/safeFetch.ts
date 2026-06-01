@@ -11,6 +11,10 @@ interface SafeFetchOptions extends RequestInit {
   maxResponseBytes?: number;
 }
 
+export interface SafeFetchResponse extends Response {
+  readonly finalUrl: string;
+}
+
 function normalizeHeaders(headers?: HeadersInit): Headers {
   return new Headers(headers);
 }
@@ -128,7 +132,7 @@ async function readResponseBody(
 export async function safeFetch(
   input: string | URL,
   options: SafeFetchOptions = {}
-): Promise<Response> {
+): Promise<SafeFetchResponse> {
   const {
     timeoutMs = 10000,
     retries = 2,
@@ -142,7 +146,7 @@ export async function safeFetch(
   const normalizedSignal = signal ?? undefined;
   const initialTarget = await assertSafePublicUrl(input, { allowHosts });
 
-  const execute = async (attemptSignal?: AbortSignal): Promise<Response> => {
+  const execute = async (attemptSignal?: AbortSignal): Promise<SafeFetchResponse> => {
     let redirectCount = 0;
     let currentTarget = cloneSafeResolvedUrl(initialTarget);
 
@@ -179,11 +183,19 @@ export async function safeFetch(
         }
 
         const body = await readResponseBody(response, maxResponseBytes);
-        return new Response(new Blob([Buffer.from(body)]), {
+        const finalUrl = currentTarget.url.toString();
+        const safeResponse = new Response(new Blob([Buffer.from(body)]), {
           status: response.status,
           statusText: response.statusText,
           headers: Object.fromEntries(response.headers.entries()),
+        }) as SafeFetchResponse;
+        Object.defineProperty(safeResponse, 'finalUrl', {
+          value: finalUrl,
+          writable: false,
+          enumerable: true,
+          configurable: false,
         });
+        return safeResponse;
       } finally {
         await dispatcher.close();
       }
