@@ -16,9 +16,6 @@ export function ToolOnlyDefaultContext({ memoryStatus }: MemoryStatusProps) {
             ? `${memoryStatus.activeToolName.replace(/_/g, " ")} tool`
             : "Tool active"
         }
-        treeSymbol="└─"
-        iconClassName="text-blue-600 dark:text-blue-400"
-        labelClassName="text-blue-700 dark:text-blue-300"
       />
     </>
   );

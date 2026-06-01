@@ -90,6 +90,8 @@ export function useChatInputController({
     selectedFiles,
     uploadedAttachments,
     isUploading,
+    uploadPhase,
+    dispatchUpload,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
@@ -161,11 +163,13 @@ export function useChatInputController({
 
     dispatchUi({ type: "set-sending", isSending: true });
 
+    let hasDocuments = false;
     try {
       const messageText = input;
       const attachmentsToSend = uploadedAttachments;
+      hasDocuments = selectedFiles.length > 0;
 
-      if (selectedFiles.length > 0 && attachmentsToSend.length !== selectedFiles.length) {
+      if (hasDocuments && attachmentsToSend.length !== selectedFiles.length) {
         toast.info(TOAST_INFO_MESSAGES.UPLOAD_IN_PROGRESS, {
           description: "Please wait for attachments to finish uploading before sending.",
         });
@@ -174,7 +178,12 @@ export function useChatInputController({
       }
 
       clearInput();
-      clearAttachments();
+
+      if (hasDocuments) {
+        dispatchUpload({ type: "process" });
+      } else {
+        clearAttachments();
+      }
 
       const result = await onSend(
         messageText,
@@ -186,9 +195,18 @@ export function useChatInputController({
 
       if (!result.success) {
         setInput(messageText);
+        if (hasDocuments) {
+          dispatchUpload({ type: "idle" });
+        }
+      } else if (hasDocuments) {
+        clearAttachments();
+        dispatchUpload({ type: "idle" });
       }
     } catch (error) {
       logger.error("Error sending message:", error);
+      if (hasDocuments) {
+        dispatchUpload({ type: "idle" });
+      }
     } finally {
       dispatchUi({ type: "set-sending", isSending: false });
     }
@@ -255,6 +273,7 @@ export function useChatInputController({
       selectedFiles,
       isLoading,
       isUploading,
+      uploadPhase,
       isSending,
       disabled: disabled || !!isContextBlocked,
       activeTool: null,

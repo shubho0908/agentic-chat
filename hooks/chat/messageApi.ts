@@ -22,26 +22,20 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
 
   try {
     if (attachmentIds.length === 1) {
-      fetch(apiRoutes.documentsProcess, {
+      await fetch(apiRoutes.documentsProcess, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentId: attachmentIds[0] }),
-        keepalive: true,
-      }).catch((error) => {
-        logDocumentProcessingDispatchError('dispatch single document processing', error);
       });
     } else {
-      fetch(apiRoutes.documentsProcessBatch, {
+      await fetch(apiRoutes.documentsProcessBatch, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ attachmentIds }),
-        keepalive: true,
-      }).catch((error) => {
-        logDocumentProcessingDispatchError('dispatch batch document processing', error);
       });
     }
   } catch (error) {
-    logDocumentProcessingDispatchError('schedule document processing', error);
+    logDocumentProcessingDispatchError('process documents', error);
   }
 }
 

@@ -13,9 +13,6 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
               ? `${memoryStatus.documentCount} attached ${memoryStatus.documentCount === 1 ? "doc" : "docs"}`
               : "Searching documents"
           }
-          treeSymbol={!memoryStatus.hasMemories ? "└─" : "├─"}
-          iconClassName="text-amber-600 dark:text-amber-400"
-          labelClassName="text-amber-700 dark:text-amber-300"
         />
       )}
 
@@ -24,12 +21,11 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
           icon={Brain}
           label={
             memoryStatus.memoryCount > 0
-              ? `${memoryStatus.memoryCount} ${memoryStatus.memoryCount === 1 ? "memory" : "memories"} (past chats)`
+              ? `${memoryStatus.memoryCount} ${memoryStatus.memoryCount === 1 ? "memory" : "memories"}`
               : "Searching memories"
           }
-          treeSymbol="└─"
-          iconClassName="text-indigo-600 dark:text-indigo-400"
-          labelClassName="text-indigo-700 dark:text-indigo-300"
+          detail="past chats"
+          completed={memoryStatus.memoryCount > 0}
         />
       )}
 
@@ -37,10 +33,8 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
         <ContextItem
           icon={Brain}
           label="Memories checked"
-          treeSymbol="└─"
-          note="(no relevant match found)"
-          iconClassName="text-gray-500 dark:text-gray-400"
-          labelClassName="text-gray-600 dark:text-gray-300"
+          note="no relevant match"
+          completed
         />
       )}
 
@@ -48,10 +42,7 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
         <ContextItem
           icon={Brain}
           label="Memories"
-          treeSymbol="└─"
-          note="(skipped - focused mode)"
-          iconClassName="text-gray-400 dark:text-gray-500"
-          labelClassName="text-gray-500 dark:text-gray-400"
+          note="skipped"
           skipped
         />
       )}

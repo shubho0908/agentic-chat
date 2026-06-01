@@ -7,6 +7,7 @@ import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
+import type { UploadPhase } from "@/hooks/useChatFileUpload";
 
 const isDocumentFile = (file: File): boolean => {
   return isSupportedDocumentExtension(file.name);
@@ -43,9 +44,10 @@ interface FilePreviewProps {
   onRemove: (index: number) => void;
   disabled?: boolean;
   isUploading?: boolean;
+  uploadPhase?: UploadPhase;
 }
 
-export function FilePreview({ files, onRemove, disabled = false, isUploading = false }: FilePreviewProps) {
+export function FilePreview({ files, onRemove, disabled = false, isUploading = false, uploadPhase }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState<boolean>();
   const [canScrollRight, setCanScrollRight] = useState<boolean>();
@@ -162,6 +164,9 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
                     {isUploading && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
                         <Loader className="size-4 animate-spin text-muted-foreground" />
+                        <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
+                          {uploadPhase?.isProcessing ? "Processing" : "Uploading"}
+                        </span>
                       </div>
                     )}
                     {preview && !imageErrors[index] ? (
