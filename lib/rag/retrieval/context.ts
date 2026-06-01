@@ -122,13 +122,18 @@ async function resolveCompletedAttachmentScope(
     const processingIds = extractIds([...partitioned.processing, ...partitioned.pending]);
 
     if (processingIds.length > 0 && waitForProcessing) {
-      for (const attachmentId of extractIds(partitioned.pending)) {
-        void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-          logger.warn('[RAG] Failed to kick off pending document processing:', {
-            attachmentId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
+      const pendingIds = extractIds(partitioned.pending);
+      if (pendingIds.length > 0) {
+        await Promise.allSettled(
+          pendingIds.map((attachmentId) =>
+            runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
+              logger.warn('[RAG] Failed to kick off pending document processing:', {
+                attachmentId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            })
+          )
+        );
       }
 
       const newlyCompleted = await waitForDocumentProcessing(processingIds, {
@@ -155,13 +160,18 @@ async function resolveCompletedAttachmentScope(
     const alreadyCompleted = extractIds(partitioned.completed);
 
     if (needProcessing.length > 0) {
-      for (const attachmentId of extractIds(partitioned.pending)) {
-        void runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-          logger.warn('[RAG] Failed to kick off provided document processing:', {
-            attachmentId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
+      const pendingIds = extractIds(partitioned.pending);
+      if (pendingIds.length > 0) {
+        await Promise.allSettled(
+          pendingIds.map((attachmentId) =>
+            runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
+              logger.warn('[RAG] Failed to kick off provided document processing:', {
+                attachmentId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            })
+          )
+        );
       }
 
       const newlyCompleted = await waitForDocumentProcessing(needProcessing, {

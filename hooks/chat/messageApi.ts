@@ -70,7 +70,7 @@ export async function saveUserMessage(
         .flatMap((att) => isSupportedForRAG(att.fileType) ? [att.id] : []);
       
       if (documentAttachmentIds.length > 0) {
-        processDocumentsAsync(documentAttachmentIds);
+        await processDocumentsAsync(documentAttachmentIds);
       }
     }
     
@@ -161,7 +161,7 @@ export async function finalizeEditedMessage(
       .flatMap((att) => typeof att.id === "string" && isSupportedForRAG(att.fileType) ? [att.id] : []);
 
     if (documentAttachmentIds.length > 0) {
-      processDocumentsAsync(documentAttachmentIds);
+      await processDocumentsAsync(documentAttachmentIds);
     }
   }
 

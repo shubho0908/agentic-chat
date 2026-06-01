@@ -1,4 +1,4 @@
-import { PDFLoader } from '@langchain/community/document_loaders/fs/pdf';
+import { PDFParse } from 'pdf-parse';
 import { DocxLoader } from '@langchain/community/document_loaders/fs/docx';
 import { CSVLoader } from '@langchain/community/document_loaders/fs/csv';
 import type { Document } from '@langchain/core/documents';
@@ -28,16 +28,34 @@ export async function loadDocument(
     const lowerFileName = fileName.toLowerCase();
 
     if (lowerFileType === 'application/pdf' || lowerFileType.includes('pdf')) {
-      loader = new PDFLoader(fileBlob, {
-        splitPages: true,
-      });
-      documents = await loader.load();
+      const arrayBuffer = await fileBlob.arrayBuffer();
+      const pdf = new PDFParse({ data: new Uint8Array(arrayBuffer) });
+      const textResult = await pdf.getText();
+
+      documents = textResult.pages
+        .filter((page) => page.text.trim().length > 0)
+        .map((page) => ({
+          pageContent: page.text.trim(),
+          metadata: {
+            source: fileName,
+            loc: { pageNumber: page.num },
+          },
+        } as Document));
+
+      if (documents.length === 0 && textResult.text?.trim()) {
+        documents = [{
+          pageContent: textResult.text.trim(),
+          metadata: { source: fileName, loc: { pageNumber: 1 } },
+        } as Document];
+      }
+
+      await pdf.destroy();
 
       return {
         success: true,
         documents,
         metadata: {
-          pageCount: documents.length,
+          pageCount: textResult.total,
           fileType: 'pdf',
         },
       };
