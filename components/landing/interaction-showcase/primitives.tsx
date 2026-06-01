@@ -7,6 +7,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
+  Network,
+  BookOpenText,
 } from "lucide-react";
 import { OpenAIIcon } from "@/components/icons/openaiIcon";
 import {
@@ -15,9 +17,13 @@ import {
   FRAME_SURFACE_CLASS,
   VIEWPORT_SURFACE_CLASS,
 } from "@/components/landing/interaction-showcase/constants";
-import type { DeviceKind } from "@/components/landing/interaction-showcase/types";
+import type { DeviceKind, SceneKind } from "@/components/landing/interaction-showcase/types";
 
-const omnibarIcon = <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />;
+const SCENE_ICONS: Record<SceneKind, ReactNode> = {
+  web: <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />,
+  orchestration: <Network className="size-3.5 shrink-0 text-muted-foreground/90" />,
+  "deep-research": <BookOpenText className="size-3.5 shrink-0 text-muted-foreground/90" />,
+};
 
 function ChromeUtilityRail({
   onPreviousScene,
@@ -57,11 +63,13 @@ function ChromeUtilityRail({
 function ContentChrome({
   device,
   chromeTitle,
+  scene,
   onPreviousScene,
   onNextScene,
 }: {
   device: DeviceKind;
   chromeTitle: string;
+  scene: SceneKind;
   onPreviousScene: () => void;
   onNextScene: () => void;
 }) {
@@ -98,7 +106,7 @@ function ContentChrome({
               <div
                 className={`flex w-full items-center justify-center gap-2 ${omnibarSurfaceClass} ${omnibarClass}`}
               >
-                {omnibarIcon}
+                {SCENE_ICONS[scene]}
                 <span className="truncate text-[10px] font-medium uppercase tracking-[0.09em] text-foreground/52 dark:text-white/[0.62] sm:text-[11px]">
                   {chromeTitle}
                 </span>
@@ -115,7 +123,7 @@ function ContentChrome({
             <div
               className={`flex w-full items-center justify-center gap-2 ${omnibarSurfaceClass} ${omnibarClass}`}
             >
-              {omnibarIcon}
+              {SCENE_ICONS[scene]}
               <span className="truncate text-[10px] font-medium uppercase tracking-[0.09em] text-foreground/52 dark:text-white/[0.62]">
                 {chromeTitle}
               </span>
@@ -130,12 +138,14 @@ function ContentChrome({
 export function DeviceShell({
   device,
   chromeTitle,
+  scene,
   onPreviousScene,
   onNextScene,
   children,
 }: {
   device: DeviceKind;
   chromeTitle: string;
+  scene: SceneKind;
   onPreviousScene: () => void;
   onNextScene: () => void;
   children: ReactNode;
@@ -150,6 +160,7 @@ export function DeviceShell({
             <ContentChrome
               device={device}
               chromeTitle={chromeTitle}
+              scene={scene}
               onPreviousScene={onPreviousScene}
               onNextScene={onNextScene}
             />
@@ -169,6 +180,7 @@ export function DeviceShell({
             <ContentChrome
               device={device}
               chromeTitle={chromeTitle}
+              scene={scene}
               onPreviousScene={onPreviousScene}
               onNextScene={onNextScene}
             />
@@ -188,6 +200,7 @@ export function DeviceShell({
           <ContentChrome
             device={device}
             chromeTitle={chromeTitle}
+              scene={scene}
             onPreviousScene={onPreviousScene}
             onNextScene={onNextScene}
           />

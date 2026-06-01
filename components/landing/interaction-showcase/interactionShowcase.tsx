@@ -5,6 +5,8 @@ import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "
 import { useInteractionTimeline, useShowcaseWidth, useViewportBounds } from "@/components/landing/interaction-showcase/hooks";
 import { DeviceShell } from "@/components/landing/interaction-showcase/primitives";
 import {
+  DeepResearchScene,
+  OrchestrationScene,
   WebSearchScene,
 } from "@/components/landing/interaction-showcase/scenes";
 import { SCENE_TRANSITION } from "@/components/landing/interaction-showcase/constants";
@@ -25,7 +27,8 @@ export function InteractionShowcase() {
       <div ref={showcaseRef} className="relative mx-auto w-full max-w-[700px]">
         <DeviceShell
           device={device}
-          chromeTitle={getSceneTitle()}
+          chromeTitle={getSceneTitle(scene)}
+          scene={scene}
           onPreviousScene={() => navigateScene(-1)}
           onNextScene={() => navigateScene(1)}
         >
@@ -41,6 +44,20 @@ export function InteractionShowcase() {
               {scene === "web" && (
                 <WebSearchScene
                   device={device}
+                  step={step}
+                  sceneElapsed={sceneElapsed}
+                  prefersReducedMotion={prefersReducedMotion}
+                />
+              )}
+              {scene === "orchestration" && (
+                <OrchestrationScene
+                  step={step}
+                  sceneElapsed={sceneElapsed}
+                  prefersReducedMotion={prefersReducedMotion}
+                />
+              )}
+              {scene === "deep-research" && (
+                <DeepResearchScene
                   step={step}
                   sceneElapsed={sceneElapsed}
                   prefersReducedMotion={prefersReducedMotion}
