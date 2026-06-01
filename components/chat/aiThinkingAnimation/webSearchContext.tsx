@@ -1,186 +1,85 @@
-import { Search, Target, Network, ShieldCheck, Boxes, BadgeCheck } from "lucide-react";
+import { Search, Loader, CheckCircle2 } from "lucide-react";
 import { ToolProgressStatus } from "@/types/chat";
-import { ContextItem } from "./contextItem";
 import { VisionContextItem } from "./visionContextItem";
 import type { MemoryStatusProps } from "./types";
-
-const phases = [
-  {
-    number: 1,
-    icon: Target,
-    label: 'Query Analysis',
-    description: 'Analyzing query for comprehensive search',
-    color: 'text-purple-600 dark:text-purple-400',
-    bgColor: 'bg-purple-500/10',
-  },
-  {
-    number: 2,
-    icon: Network,
-    label: 'Web Crawling',
-    description: 'Searching 10-15 comprehensive web sources',
-    color: 'text-blue-600 dark:text-blue-400',
-    bgColor: 'bg-blue-500/10',
-  },
-  {
-    number: 3,
-    icon: ShieldCheck,
-    label: 'Cross-Verification',
-    description: 'Comparing and verifying information across sources',
-    color: 'text-cyan-600 dark:text-cyan-400',
-    bgColor: 'bg-cyan-500/10',
-  },
-  {
-    number: 4,
-    icon: Boxes,
-    label: 'Synthesis',
-    description: 'Synthesizing comprehensive analysis',
-    color: 'text-amber-600 dark:text-amber-400',
-    bgColor: 'bg-amber-500/10',
-  },
-  {
-    number: 5,
-    icon: BadgeCheck,
-    label: 'Validation',
-    description: 'Final quality check and polish',
-    color: 'text-green-600 dark:text-green-400',
-    bgColor: 'bg-green-500/10',
-  },
-];
 
 export function WebSearchContext({ memoryStatus }: MemoryStatusProps) {
   const details = memoryStatus.toolProgress?.details as Record<string, unknown> | undefined;
   const isAdvancedSearch = details?.searchDepth === 'advanced';
   const phase = details?.phase;
-  const totalPhaseCount = details?.totalPhases;
+  const totalPhases = details?.totalPhases;
   const currentPhase = typeof phase === "number" ? phase : undefined;
-  const totalPhases = typeof totalPhaseCount === "number" ? totalPhaseCount : undefined;
+  const status = memoryStatus.toolProgress?.status;
+  const isCompleted = status === ToolProgressStatus.Completed;
 
-  if (isAdvancedSearch && currentPhase) {
-    const currentPhaseData = phases[currentPhase - 1];
+  const label = isAdvancedSearch
+    ? "Advanced web search"
+    : status === ToolProgressStatus.Searching
+      ? "Searching web"
+      : status === ToolProgressStatus.Found
+        ? `Found ${details?.resultsCount || 0} sources`
+        : status === ToolProgressStatus.ProcessingSources
+          ? `Processing ${details?.processedCount || 0}/${details?.resultsCount || 0}`
+          : isCompleted
+            ? `${details?.resultsCount || 0} sources analyzed`
+            : "Web search";
 
-    return (
-      <div className="flex flex-col gap-2">
-        {memoryStatus.hasImages && (
-          <VisionContextItem imageCount={memoryStatus.imageCount} />
-        )}
+  const meta = isAdvancedSearch && currentPhase
+    ? typeof totalPhases === "number" ? `Phase ${currentPhase}/${totalPhases}` : `Phase ${currentPhase}`
+    : isCompleted && details?.resultsCount
+      ? `${details.resultsCount} sources`
+      : null;
 
-        <div className="flex items-center gap-2">
-          <span className="text-foreground/40 font-mono text-[10px] select-none">└─</span>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center size-4 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20">
-              <Search className="size-2.5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <span className="text-[11px] font-medium text-blue-700 dark:text-blue-300">
-              Advanced Web Search
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono">
-              Phase {currentPhase}/{totalPhases}
-            </span>
-          </div>
-        </div>
-
-        {currentPhaseData && (
-          <div className="flex items-start gap-2 ml-6">
-            <span className="text-foreground/40 font-mono text-[10px] select-none mt-0.5">└─</span>
-            <div className={`flex items-center justify-center size-5 rounded-md ${currentPhaseData.bgColor}`}>
-              <currentPhaseData.icon className={`size-3 ${currentPhaseData.color}`} />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span className={`text-[11px] font-medium ${currentPhaseData.color}`}>
-                {currentPhaseData.label}
-              </span>
-              <span className="text-[10px] text-foreground/60">
-                {memoryStatus.toolProgress?.message || currentPhaseData.description}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {currentPhase >= 3 && memoryStatus.toolProgress?.details?.sources &&
-          memoryStatus.toolProgress.details.sources.length > 0 && (
-            <div className="flex items-start gap-2 ml-6">
-              <span className="text-foreground/40 font-mono text-[10px] select-none mt-0.5">└─</span>
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] text-foreground/60">
-                  Analyzing {memoryStatus.toolProgress.details.sources.length} sources:
-                </span>
-                <div className="flex flex-wrap gap-1 items-center">
-                  {memoryStatus.toolProgress.details.sources
-                    .slice(0, 6)
-                    .map((source) => (
-                      <span
-                        key={source.url}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono"
-                      >
-                        {source.domain}
-                      </span>
-                    ))}
-                  {memoryStatus.toolProgress.details.sources.length > 6 && (
-                    <span className="text-[10px] text-foreground/50">
-                      +{memoryStatus.toolProgress.details.sources.length - 6} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-      </div>
-    );
-  }
+  const sources = memoryStatus.toolProgress?.details?.sources as { domain: string; url: string }[] | undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
       {memoryStatus.hasImages && (
         <VisionContextItem imageCount={memoryStatus.imageCount} />
       )}
-      <ContextItem
-        icon={Search}
-        label={
-          memoryStatus.toolProgress?.status === ToolProgressStatus.Searching
-            ? "Searching web"
-            : memoryStatus.toolProgress?.status === ToolProgressStatus.Found
-              ? `Found ${memoryStatus.toolProgress.details?.resultsCount || 0} sources`
-              : memoryStatus.toolProgress?.status ===
-                ToolProgressStatus.ProcessingSources
-                ? `Processing ${(details as Record<string, unknown>)?.processedCount || 0}/${memoryStatus.toolProgress.details?.resultsCount || 0}`
-                : memoryStatus.toolProgress?.status === ToolProgressStatus.Completed
-                  ? `${memoryStatus.toolProgress.details?.resultsCount || 0} sources analyzed`
-                  : "Web search"
-        }
-        treeSymbol={
-          memoryStatus.toolProgress?.details?.sources &&
-            memoryStatus.toolProgress.details.sources.length > 0
-            ? "├─"
-            : "└─"
-        }
-        iconClassName="text-blue-600 dark:text-blue-400"
-        labelClassName="text-blue-700 dark:text-blue-300"
-      />
-      {memoryStatus.toolProgress?.details?.sources &&
-        memoryStatus.toolProgress.details.sources.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-foreground/40 font-mono text-[10px] select-none">
-              └─
-            </span>
-              <div className="flex flex-wrap gap-1 items-center">
-                {memoryStatus.toolProgress.details.sources
-                  .slice(0, 5)
-                  .map((source) => (
-                    <span
-                    key={source.url}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono"
-                    >
-                      {source.domain}
-                  </span>
-                ))}
-              {memoryStatus.toolProgress.details.sources.length > 5 && (
-                <span className="text-[10px] text-foreground/50">
-                  +{memoryStatus.toolProgress.details.sources.length - 5} more
-                </span>
-              )}
-            </div>
-          </div>
+
+      <div className="flex items-center gap-2 min-w-0">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="text-[12px] font-medium text-foreground/80 truncate">
+          {label}
+        </span>
+        {memoryStatus.toolProgress?.message && isAdvancedSearch && (
+          <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+            {memoryStatus.toolProgress.message}
+          </span>
         )}
+        <span className="ml-auto flex items-center gap-1.5 shrink-0">
+          {meta && (
+            <span className="text-[10px] text-muted-foreground">{meta}</span>
+          )}
+          {isCompleted ? (
+            <CheckCircle2 className="size-3 text-muted-foreground/70" />
+          ) : (
+            <Loader className="size-3 animate-spin text-muted-foreground" />
+          )}
+        </span>
+      </div>
+
+      {sources && sources.length > 0 && (
+        <div className="flex items-center gap-1 ml-5.5 flex-wrap">
+          {sources.slice(0, 5).map((source, i) => (
+            <a
+              key={`${source.domain}-${i}`}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+            >
+              {source.domain}
+            </a>
+          ))}
+          {sources.length > 5 && (
+            <span className="text-[10px] text-muted-foreground">
+              +{sources.length - 5} more
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

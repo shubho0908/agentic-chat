@@ -1,6 +1,9 @@
 export const styles = {
   page: {
-    padding: 40,
+    paddingTop: 40,
+    paddingLeft: 40,
+    paddingRight: 40,
+    paddingBottom: 60,
     fontSize: 10,
     fontFamily: "Helvetica",
     backgroundColor: "#ffffff",
@@ -102,14 +105,31 @@ export const styles = {
   },
   footer: {
     position: "absolute",
-    bottom: 25,
+    bottom: 20,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  brandingLogo: {
+    width: 12,
+    height: 12,
+  },
+  brandingText: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: "#333333",
+    marginTop: 3,
+  },
+  pageNumber: {
+    position: "absolute",
+    bottom: 8,
     left: 40,
     right: 40,
     textAlign: "center",
     fontSize: 7,
-    color: "#666666",
-    borderTopWidth: 0.5,
-    borderTopColor: "#cccccc",
-    paddingTop: 8,
+    color: "#999999",
   },
 } as const;

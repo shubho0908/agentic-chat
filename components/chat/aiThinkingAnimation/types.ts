@@ -8,9 +8,7 @@ export interface MemoryStatusProps {
   memoryStatus: MemoryStatus;
 }
 
-export interface ContextDetailsProps extends MemoryStatusProps {
-  isLoading?: boolean;
-}
+export type ContextDetailsProps = MemoryStatusProps;
 
 export interface HybridContextProps {
   imageCount: number;
@@ -23,7 +21,6 @@ export interface VisionOnlyContextProps {
 
 export interface VisionContextItemProps {
   imageCount: number;
-  treeSymbol?: "├─" | "└─";
 }
 
 export const AI_THINKING_MESSAGES = {

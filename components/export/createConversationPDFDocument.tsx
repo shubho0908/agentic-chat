@@ -7,7 +7,8 @@ export async function createConversationPDFDocument(
   conversation: ExportConversation,
   includeAttachments = true,
 ): Promise<ReactElement> {
-  const { Document, Page, Text, View } = await import("@react-pdf/renderer");
+  const { Document, Page, Text, View, Image } = await import("@react-pdf/renderer");
+  const logoUrl = typeof window !== "undefined" ? `${window.location.origin}/logo.png` : "/logo.png";
 
   return (
     <Document>
@@ -54,13 +55,22 @@ export async function createConversationPDFDocument(
             message={message}
             index={index + 1}
             includeAttachments={includeAttachments}
+            userName={conversation.user?.name}
             Text={Text}
             View={View}
           />
         ))}
 
+        <View style={styles.footer} fixed>
+          {/^https?:\/\//.test(logoUrl) && (
+            <View aria-label="Agentic Chat logo">
+              <Image src={logoUrl} style={styles.brandingLogo} />
+            </View>
+          )}
+          <Text style={styles.brandingText}>Agentic Chat</Text>
+        </View>
         <Text
-          style={styles.footer}
+          style={styles.pageNumber}
           render={({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => `Page ${pageNumber} of ${totalPages}`}
           fixed
         />

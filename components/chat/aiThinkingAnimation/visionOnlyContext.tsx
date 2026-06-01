@@ -11,10 +11,7 @@ export function VisionOnlyContext({ imageCount }: VisionOnlyContextProps) {
           ? `${imageCount} ${imageCount === 1 ? "image" : "images"}`
           : "Vision analysis"
       }
-      treeSymbol="└─"
-      note="(text context skipped)"
-      iconClassName="text-cyan-600 dark:text-cyan-400"
-      labelClassName="text-cyan-700 dark:text-cyan-300"
+      note="text context skipped"
     />
   );
 }

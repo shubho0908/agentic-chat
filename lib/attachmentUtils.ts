@@ -3,6 +3,7 @@ import { isSupportedDocumentExtension } from "./fileValidation";
 
 interface UploadFileResponse {
   url: string;
+  ufsUrl: string;
   name: string;
   size?: number;
   type?: string;
@@ -47,7 +48,7 @@ function uploadResponseToAttachment(
     inferMimeTypeFromFileName(uploadResult.name);
 
   return {
-    fileUrl: uploadResult.url,
+    fileUrl: uploadResult.ufsUrl,
     fileName: uploadResult.name,
     fileType: resolvedType,
     fileSize: uploadResult.size || 0,

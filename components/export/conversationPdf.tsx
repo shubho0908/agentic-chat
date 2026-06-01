@@ -6,6 +6,7 @@ interface MessageComponentProps {
   message: ExportMessage;
   index: number;
   includeAttachments: boolean;
+  userName?: string | null;
   Text: ElementType;
   View: ElementType;
 }
@@ -18,6 +19,7 @@ export function MessageComponent({
   message,
   index,
   includeAttachments,
+  userName,
   Text,
   View,
 }: MessageComponentProps) {
@@ -28,7 +30,7 @@ export function MessageComponent({
       <View style={styles.messageHeader}>
         <View style={styles.messageHeaderRow}>
           <Text style={styles.messageRole}>
-            {isUser ? "User" : "Assistant"} - Message {index}
+            {isUser ? (userName || "User") : "Assistant"} - Message {index}
           </Text>
           <Text style={styles.messageTime}>{formatDate(message.createdAt)}</Text>
         </View>

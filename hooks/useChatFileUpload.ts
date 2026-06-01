@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type SetStateAction } from "react";
+import { useMemo, useReducer, useRef, useState, type SetStateAction } from "react";
 import { uploadFiles as uploadThingFiles } from "@/utils/uploadthing";
 import { toast } from "sonner";
 import {
@@ -26,10 +26,33 @@ function getUploadErrorDescription(error: unknown): string {
   return message || HOOK_ERROR_MESSAGES.UNKNOWN_ERROR;
 }
 
+export interface UploadPhase {
+  isUploading: boolean;
+  isProcessing: boolean;
+  isBusy: boolean;
+}
+
+type UploadAction = { type: "upload" } | { type: "process" } | { type: "idle" };
+
+const IDLE_PHASE: UploadPhase = { isUploading: false, isProcessing: false, isBusy: false };
+const UPLOADING_PHASE: UploadPhase = { isUploading: true, isProcessing: false, isBusy: true };
+const PROCESSING_PHASE: UploadPhase = { isUploading: false, isProcessing: true, isBusy: true };
+
+function uploadPhaseReducer(_: UploadPhase, action: UploadAction): UploadPhase {
+  switch (action.type) {
+    case "upload":
+      return UPLOADING_PHASE;
+    case "process":
+      return PROCESSING_PHASE;
+    case "idle":
+      return IDLE_PHASE;
+  }
+}
+
 export function useChatFileUpload() {
   const [selectedFilesState, setSelectedFilesState] = useState<File[]>([]);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadAttachment[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [uploadPhase, dispatchUpload] = useReducer(uploadPhaseReducer, IDLE_PHASE);
   const selectedFilesRef = useRef<File[]>([]);
   const fileIdMapRef = useRef(new WeakMap<File, string>());
   const publicUploadedAttachments = useMemo<Attachment[]>(
@@ -124,7 +147,7 @@ export function useChatFileUpload() {
     const nextFiles = [...selectedFilesRef.current, ...allValidFiles];
 
     setSelectedFiles(nextFiles);
-    setIsUploading(true);
+    dispatchUpload({ type: "upload" });
 
     try {
       const response = await uploadThingFiles("ragDocumentUploader", {
@@ -157,7 +180,7 @@ export function useChatFileUpload() {
         description: getUploadErrorDescription(error),
       });
     } finally {
-      setIsUploading(false);
+      dispatchUpload({ type: "idle" });
     }
   }
 
@@ -181,7 +204,9 @@ export function useChatFileUpload() {
   return {
     selectedFiles: selectedFilesState,
     uploadedAttachments: publicUploadedAttachments,
-    isUploading,
+    isUploading: uploadPhase.isBusy,
+    uploadPhase,
+    dispatchUpload,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,

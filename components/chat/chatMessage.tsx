@@ -173,7 +173,6 @@ function MessageContentSurface({
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
         <AIThinkingAnimation
           memoryStatus={memoryStatus}
-          isLoading={isLoading}
         />
       ) : null}
     </div>
