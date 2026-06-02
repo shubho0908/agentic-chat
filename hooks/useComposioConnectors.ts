@@ -33,6 +33,7 @@ export function useComposioConnectors(opts?: { onActionComplete?: () => void }) 
       return (await res.json()).redirectUrl as string;
     },
     onSuccess: (redirectUrl) => {
+      queryClient.invalidateQueries({ queryKey: CONNECTIONS_KEY });
       globalThis.location.assign(redirectUrl);
     },
     onError: () => {

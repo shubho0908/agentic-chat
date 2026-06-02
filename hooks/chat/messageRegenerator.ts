@@ -6,7 +6,7 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
-import { buildMessagesForAPI } from "./conversationManager";
+import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
@@ -16,6 +16,8 @@ import { toUserFriendlyError } from "@/lib/errorMessages";
 import { toJsonValue } from "@/lib/json";
 
 import { logger } from "@/lib/logger";
+import { ArtifactEventType } from "@/types/artifact";
+import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
 
 export async function handleRegenerateResponse(
   messageId: string,
@@ -59,6 +61,7 @@ export async function handleRegenerateResponse(
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata | undefined;
+  const artifactCollector = createArtifactMetadataCollector();
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
@@ -202,10 +205,35 @@ export async function handleRegenerateResponse(
           )
         );
       },
+      onArtifact: (event) => {
+        const eventWithMessage = { ...event, messageId: assistantMessage.id };
+        artifactCollector.push(eventWithMessage);
+
+        if (event.type === ArtifactEventType.END) {
+          const artifacts = artifactCollector.getArtifacts();
+          if (artifacts.length > 0) {
+            messageMetadata = { ...(messageMetadata || {}), artifacts };
+            onMessagesUpdate((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessage.id
+                  ? { ...msg, metadata: messageMetadata }
+                  : msg
+              )
+            );
+          }
+        }
+
+        context.onArtifact?.(eventWithMessage);
+      },
     });
 
     if (toolActivities.length > 0) {
       messageMetadata = { ...(messageMetadata || {}), toolActivities };
+    }
+
+    const artifacts = artifactCollector.getArtifacts();
+    if (artifacts.length > 0) {
+      messageMetadata = { ...(messageMetadata || {}), artifacts };
     }
 
     onMessagesUpdate((prev) =>
@@ -216,8 +244,20 @@ export async function handleRegenerateResponse(
       )
     );
 
-    if (responseContent && !abortSignal.aborted) {
-      if (cacheQuery) {
+    const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
+
+    if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id
+            ? { ...msg, content: persistableAssistantContent }
+            : msg
+        )
+      );
+    }
+
+    if (persistableAssistantContent && !abortSignal.aborted) {
+      if (cacheQuery && responseContent && artifacts.length === 0) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
@@ -228,7 +268,7 @@ export async function handleRegenerateResponse(
         const updatedAssistant = await updateAssistantMessage(
           conversationId,
           assistantMessage.id,
-          responseContent,
+          persistableAssistantContent,
           messageMetadata
         );
         const parentId = updatedAssistant.parentMessageId || updatedAssistant.id;
@@ -261,7 +301,7 @@ export async function handleRegenerateResponse(
 
       persistConversationMemoryIfEligible({
         userMessageContent: previousUserMessage.content,
-        assistantContent: responseContent,
+        assistantContent: persistableAssistantContent,
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,

@@ -64,6 +64,7 @@ export async function createConversationPDFDocument(
         <View style={styles.footer} fixed>
           {/^https?:\/\//.test(logoUrl) && (
             <View aria-label="Agentic Chat logo">
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
               <Image src={logoUrl} style={styles.brandingLogo} />
             </View>
           )}

@@ -8,6 +8,7 @@ import type {
   ResponseInputMessageContentList,
 } from 'openai/resources/responses/responses';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
+import { MessageRole } from '@/lib/schemas/chat';
 import type { MemoryStatus } from '@/types/chat';
 import { routeContext } from '@/lib/contextRouter';
 import { parseOpenAIError } from '@/lib/openaiErrors';
@@ -72,7 +73,7 @@ function toTextContent(content: Message['content']): string {
 
 export function toOpenAIChatMessages(messages: Message[]): ChatCompletionMessageParam[] {
   return messages.map(({ role, content }) => {
-    if (role === 'user') {
+    if (role === MessageRole.USER) {
       return {
         role,
         content: typeof content === 'string'
@@ -144,11 +145,13 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
       const ensurePromptBudget = async () => {
         const budgetCheck = checkTokenBudget(enhancedMessages, model);
         memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
-        await emitMemoryStatus();
 
         if (budgetCheck.ok) {
+          void emitMemoryStatus();
           return true;
         }
+
+        await emitMemoryStatus();
 
         try {
           controller.enqueue(encodeError(budgetCheck.errorMessage ?? 'Request exceeds the server token budget.'));

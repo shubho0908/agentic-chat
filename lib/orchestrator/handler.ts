@@ -237,6 +237,8 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           return;
         }
 
+        mapper.flush(controller);
+
         const finalState = await graph.getState({ configurable: { thread_id: threadId } });
         const pendingInterrupts = (finalState.tasks ?? [])
           .flatMap((task) => task.interrupts ?? []);

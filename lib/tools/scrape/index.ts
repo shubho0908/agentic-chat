@@ -163,7 +163,7 @@ async function tier3Scrape(url: string, options: ScrapeContentOptions = {}): Pro
 }
 
 const webScrapeSchema = z.object({
-  url: z.string().url().describe("The URL to scrape content from"),
+  url: z.url().describe("The URL to scrape content from"),
 });
 
 export async function scrapeContent(url: string, options: ScrapeContentOptions = {}): Promise<string> {

@@ -1,4 +1,5 @@
 import type { ElementType } from "react";
+import { MessageRole } from "@/lib/schemas/chat";
 import type { ExportMessage } from "@/types/export";
 import { styles } from "./pdfStyles";
 
@@ -23,7 +24,7 @@ export function MessageComponent({
   Text,
   View,
 }: MessageComponentProps) {
-  const isUser = message.role === "user";
+  const isUser = message.role === MessageRole.USER;
 
   return (
     <View style={styles.messageContainer} break={message.content.length > 500}>

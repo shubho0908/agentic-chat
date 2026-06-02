@@ -1,4 +1,3 @@
-import { Brain, Eye, Zap, Focus, LucideIcon, Atom } from "lucide-react";
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
 import { AI_THINKING_MESSAGES } from "./types";
@@ -59,43 +58,4 @@ export function getContextualMessage(
   return contexts.length > 0
     ? `Synthesizing response with ${contexts.join(" and ")}...`
     : AI_THINKING_MESSAGES.GENERATING;
-}
-
-type RoutingIconConfig = {
-  icon: LucideIcon;
-  className: string;
-};
-
-export function getRoutingIconConfig(routingDecision?: RoutingDecision): RoutingIconConfig {
-  switch (routingDecision) {
-    case RoutingDecision.VisionOnly:
-      return { icon: Eye, className: "w-3.5 h-3.5 text-cyan-500" };
-    case RoutingDecision.Hybrid:
-      return { icon: Zap, className: "w-3.5 h-3.5 text-purple-500" };
-    case RoutingDecision.DocumentsOnly:
-      return { icon: Focus, className: "w-3.5 h-3.5 text-amber-500" };
-    case RoutingDecision.MemoryOnly:
-      return { icon: Brain, className: "w-3.5 h-3.5 text-indigo-500" };
-    case RoutingDecision.ToolOnly:
-      return { icon: Atom, className: "w-3.5 h-3.5 text-blue-500" };
-    default:
-      return { icon: Zap, className: "w-3.5 h-3.5 text-gray-500" };
-  }
-}
-
-export function getRoutingLabel(routingDecision?: RoutingDecision): string {
-  switch (routingDecision) {
-    case RoutingDecision.VisionOnly:
-      return "Vision Focus";
-    case RoutingDecision.Hybrid:
-      return "Hybrid Mode";
-    case RoutingDecision.DocumentsOnly:
-      return "Document Focus";
-    case RoutingDecision.MemoryOnly:
-      return "Memory Context";
-    case RoutingDecision.ToolOnly:
-      return "Tool Active";
-    default:
-      return "Standard";
-  }
 }

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { MessageRole } from "@/lib/schemas/chat";
 import { wrapOpenAIWithLangSmith } from "@/lib/langsmithConfig";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
 
@@ -240,7 +241,7 @@ async function runAIMediator({
       response_format: { type: "json_object" },
       messages: [
         {
-          role: "system",
+          role: MessageRole.SYSTEM,
           content:
             "You classify whether a chat request should retrieve prior personal conversation memory about the user. " +
             "Return strict JSON with one top-level key called memory. " +
@@ -248,7 +249,7 @@ async function runAIMediator({
             "Set memory.should_query false for current attachments, generic knowledge, or requests that do not need prior personal context.",
         },
         {
-          role: "user",
+          role: MessageRole.USER,
           content: JSON.stringify({
             message_text: messageText,
             recent_conversation: recentConversation || "",

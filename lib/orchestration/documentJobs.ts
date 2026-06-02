@@ -215,7 +215,9 @@ export async function drainQueuedDocumentJobs(options?: {
     atCapacity: false,
   };
 
-  for (let index = 0; index < maxJobs; index += 1) {
+  const processNext = async (index: number): Promise<void> => {
+    if (index >= maxJobs) return;
+
     const leaseOwner = `${baseLeaseOwner}-${Date.now()}-${index}`;
     const claimed = await claimNextQueuedJobWithinCapacity({
       type: "document_process",
@@ -226,11 +228,11 @@ export async function drainQueuedDocumentJobs(options?: {
 
     if (claimed.atCapacity) {
       summary.atCapacity = true;
-      break;
+      return;
     }
 
     if (!claimed.job) {
-      break;
+      return;
     }
 
     const result = await runClaimedDocumentJob(
@@ -250,7 +252,11 @@ export async function drainQueuedDocumentJobs(options?: {
     } else {
       summary.failed += 1;
     }
-  }
+
+    return processNext(index + 1);
+  };
+
+  await processNext(0);
 
   logInfo({
     event: "document_job_drain_finished",

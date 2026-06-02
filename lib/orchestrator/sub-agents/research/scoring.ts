@@ -40,7 +40,7 @@ export function getRankedSources(sources: ResearchSource[], limit: number): Rese
   const perDomain = new Map<string, number>();
   const ranked: ResearchSource[] = [];
 
-  for (const source of [...sources].sort((a, b) => b.qualityScore - a.qualityScore)) {
+  for (const source of sources.toSorted((a, b) => b.qualityScore - a.qualityScore)) {
     const domain = source.domain || "unknown";
     const count = perDomain.get(domain) ?? 0;
     if (count >= Limit.MAX_SOURCES_PER_DOMAIN) {

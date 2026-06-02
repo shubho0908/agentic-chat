@@ -7,7 +7,7 @@ import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
-import { buildMessagesForAPI } from "./conversationManager";
+import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
@@ -16,6 +16,8 @@ import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { queryKeys } from "@/lib/queryKeys";
 import { toJsonValue } from "@/lib/json";
+import { ArtifactEventType } from "@/types/artifact";
+import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
 
 export async function handleEditMessage(
   messageId: string,
@@ -55,6 +57,7 @@ export async function handleEditMessage(
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata = {};
+  const artifactCollector = createArtifactMetadataCollector();
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
@@ -66,7 +69,7 @@ export async function handleEditMessage(
   
   const newEditedVersion = createNewVersion(
     messageToEdit.versions || [],
-    "user",
+    MessageRole.USER,
     messageContent,
     `temp-edit-${Date.now()}`,
     undefined,
@@ -84,7 +87,7 @@ export async function handleEditMessage(
       versions: updatedVersions,
     },
     {
-      role: "assistant",
+      role: MessageRole.ASSISTANT,
       content: "",
       id: placeholderAssistantId,
       timestamp: Date.now(),
@@ -228,10 +231,35 @@ export async function handleEditMessage(
           )
         );
       },
+      onArtifact: (event) => {
+        const eventWithMessage = { ...event, messageId: placeholderAssistantId };
+        artifactCollector.push(eventWithMessage);
+
+        if (event.type === ArtifactEventType.END) {
+          const artifacts = artifactCollector.getArtifacts();
+          if (artifacts.length > 0) {
+            messageMetadata = { ...messageMetadata, artifacts };
+            onMessagesUpdate((prev) =>
+              prev.map((msg) =>
+                msg.id === placeholderAssistantId
+                  ? { ...msg, metadata: messageMetadata }
+                  : msg
+              )
+            );
+          }
+        }
+
+        context.onArtifact?.(eventWithMessage);
+      },
     });
 
     if (toolActivities.length > 0) {
       messageMetadata = { ...messageMetadata, toolActivities };
+    }
+
+    const artifacts = artifactCollector.getArtifacts();
+    if (artifacts.length > 0) {
+      messageMetadata = { ...messageMetadata, artifacts };
     }
 
     onMessagesUpdate((prev) =>
@@ -242,8 +270,20 @@ export async function handleEditMessage(
       )
     );
 
-    if (responseContent && !abortSignal.aborted) {
-      if (cacheQuery) {
+    const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
+
+    if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === placeholderAssistantId
+            ? { ...msg, content: persistableAssistantContent }
+            : msg
+        )
+      );
+    }
+
+    if (persistableAssistantContent && !abortSignal.aborted) {
+      if (cacheQuery && responseContent && artifacts.length === 0) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
@@ -256,7 +296,7 @@ export async function handleEditMessage(
           conversationIdStr,
           messageToEdit.id,
           messageContent,
-          responseContent,
+          persistableAssistantContent,
           persistedNextAssistantId,
           attachments,
           messageMetadata,
@@ -337,7 +377,7 @@ export async function handleEditMessage(
 
       persistConversationMemoryIfEligible({
         userMessageContent: messageContent,
-        assistantContent: responseContent,
+        assistantContent: persistableAssistantContent,
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,

@@ -1,5 +1,5 @@
 import { SourcesSheet } from "./sourcesSheet";
-import { OpenAIIcon } from "@/components/icons/openaiIcon";
+import Logo from "@/components/logo";
 
 interface Citation {
   id?: string | null;
@@ -39,8 +39,8 @@ export function MessageHeader({
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         {!isUser && (
-          <div className="relative flex size-6 items-center justify-center rounded-full overflow-hidden border border-black/5 dark:border-white/10 bg-white dark:bg-[#1A1A1C] shadow-sm">
-            <OpenAIIcon className="size-3 text-black dark:text-primary" />
+          <div className="relative flex size-6 shrink-0 items-center justify-center">
+            <Logo size={24} className="rounded-md" />
           </div>
         )}
         <span className="text-[13px] font-semibold tracking-tight text-muted-foreground">

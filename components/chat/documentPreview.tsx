@@ -21,12 +21,6 @@ interface EmbeddedFrameProps {
 
 function EmbeddedFrame({ src, fileName, fileUrl }: EmbeddedFrameProps) {
   const [status, setStatus] = useState<"loading" | "loaded" | "blocked">("loading");
-  const [prevSrc, setPrevSrc] = useState(src);
-
-  if (prevSrc !== src) {
-    setPrevSrc(src);
-    setStatus("loading");
-  }
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -217,7 +211,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   );
 
   const contentView = !fileUrl ? null : isPDF ? (
-    <EmbeddedFrame src={fileUrl} fileName={fileName} fileUrl={fileUrl} />
+    <EmbeddedFrame key={fileUrl} src={fileUrl} fileName={fileName} fileUrl={fileUrl} />
   ) : isTextFile ? (
     isLoading ? (
       renderStatus("Loading...")
@@ -243,7 +237,7 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
       renderStatus("No content available")
     )
   ) : isOfficeDoc ? (
-    <EmbeddedFrame src={getViewerUrl()} fileName={fileName} fileUrl={fileUrl} />
+    <EmbeddedFrame key={fileUrl} src={getViewerUrl()} fileName={fileName} fileUrl={fileUrl} />
   ) : (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
       <p className="text-muted-foreground">Preview not available for this file type</p>

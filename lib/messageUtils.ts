@@ -1,4 +1,4 @@
-import type { Message, Attachment } from '@/lib/schemas/chat';
+import type { Message, Attachment, MessageRole } from '@/lib/schemas/chat';
 
 type MessageWithVersions = Message & {
   versions?: Message[];
@@ -43,7 +43,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
   return dbMessages.map(msg => {
     const convertedMsg: MessageWithVersions = {
       id: msg.id,
-      role: msg.role.toLowerCase() as 'user' | 'assistant' | 'system',
+      role: msg.role.toLowerCase() as MessageRole,
       content: msg.content,
       timestamp: new Date(msg.createdAt).getTime(),
       attachments: msg.attachments || [],
@@ -57,7 +57,7 @@ export function convertDbMessagesToFrontend(dbMessages: DbMessage[]): MessageWit
     if (msg.versions && msg.versions.length > 0) {
       convertedMsg.versions = msg.versions.map((v) => ({
         id: v.id,
-        role: v.role.toLowerCase() as 'user' | 'assistant' | 'system',
+        role: v.role.toLowerCase() as MessageRole,
         content: v.content,
         timestamp: new Date(v.createdAt).getTime(),
         attachments: v.attachments || [],

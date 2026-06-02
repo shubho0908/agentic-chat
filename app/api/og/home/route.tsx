@@ -6,94 +6,29 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export const runtime = 'edge';
 
+const containerStyle = { height: '100%', width: '100%', display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: '#0a0a0a', position: 'relative' as const, fontFamily: 'Helvetica, Arial, sans-serif', overflow: 'hidden' as const };
+const bgGlowStyle = { position: 'absolute' as const, top: '-50%', left: '-50%', right: '-50%', bottom: '-50%', background: 'radial-gradient(circle at 30% 40%, rgba(139, 92, 246, 0.25) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(59, 130, 246, 0.2) 0%, transparent 50%)', opacity: 0.6 };
+const gridStyle = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundImage: 'linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px)', backgroundSize: '60px 60px', opacity: 0.3 };
+const orbTopStyle = { position: 'absolute' as const, top: '20%', right: '15%', width: '300px', height: '300px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)', filter: 'blur(8px)' };
+const orbBottomStyle = { position: 'absolute' as const, bottom: '15%', left: '10%', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%)', filter: 'blur(8px)' };
+const contentWrapStyle = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 1, textAlign: 'center' as const, padding: '80px', gap: '32px' };
+const logoWrapStyle = { display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const, position: 'relative' as const };
+const titleStyle = { fontSize: '80px', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.03em', lineHeight: 1.5 };
+const subtitleStyle = { fontSize: '32px', color: '#a1a1aa', fontWeight: '500', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center' as const, justifyContent: 'center' as const, gap: '12px' };
+const bottomLineStyle = { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.5) 50%, transparent 100%)' };
+
 export async function GET() {
   try {
     return new ImageResponse(
       (
-        <div
-          style={{
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#0a0a0a',
-            position: 'relative',
-            fontFamily: 'Helvetica, Arial, sans-serif',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: '-50%',
-              left: '-50%',
-              right: '-50%',
-              bottom: '-50%',
-              background: 'radial-gradient(circle at 30% 40%, rgba(139, 92, 246, 0.25) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(59, 130, 246, 0.2) 0%, transparent 50%)',
-              opacity: 0.6,
-            }}
-          />
+        <div style={containerStyle}>
+          <div style={bgGlowStyle} />
+          <div style={gridStyle} />
+          <div style={orbTopStyle} />
+          <div style={orbBottomStyle} />
 
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundImage: 'linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px)',
-              backgroundSize: '60px 60px',
-              opacity: 0.3,
-            }}
-          />
-
-          <div
-            style={{
-              position: 'absolute',
-              top: '20%',
-              right: '15%',
-              width: '300px',
-              height: '300px',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)',
-              filter: 'blur(8px)',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '15%',
-              left: '10%',
-              width: '400px',
-              height: '400px',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%)',
-              filter: 'blur(8px)',
-            }}
-          />
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1,
-              textAlign: 'center',
-              padding: '80px',
-              gap: '32px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-              }}
-            >
+          <div style={contentWrapStyle}>
+            <div style={logoWrapStyle}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="120" height="120">
                 <defs>
                   <linearGradient id="g1" x1="15.72" x2="84.51" y1="2.586" y2="97.11" gradientUnits="userSpaceOnUse">
@@ -112,102 +47,19 @@ export async function GET() {
               </svg>
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '80px',
-                  fontWeight: '800',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #e4e4e7 50%, #a1a1aa 100%)',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                  letterSpacing: '-0.03em',
-                  lineHeight: 1.5,
-                }}
-              >
-                Agentic Chat
-              </div>
-              
-              <div
-                style={{
-                  fontSize: '32px',
-                  color: '#a1a1aa',
-                  fontWeight: '500',
-                  letterSpacing: '-0.01em',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '12px',
-                }}
-              >
-                Your second brain, supercharged
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '16px' }}>
+              <div style={titleStyle}>Agentic Chat</div>
+              <div style={subtitleStyle}>Your second brain, supercharged</div>
             </div>
 
-            <div
-              style={{
-                display: 'flex',
-                gap: '16px',
-                marginTop: '24px',
-              }}
-            >
-              <div
-                style={{
-                  padding: '12px 28px',
-                  borderRadius: '100px',
-                  background: 'rgba(139, 92, 246, 0.15)',
-                  border: '2px solid rgba(139, 92, 246, 0.3)',
-                  color: '#e4e4e7',
-                  fontSize: '20px',
-                  fontWeight: '600',
-                }}
-              >
-                Research
-              </div>
-              <div
-                style={{
-                  padding: '12px 28px',
-                  borderRadius: '100px',
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  border: '2px solid rgba(59, 130, 246, 0.3)',
-                  color: '#e4e4e7',
-                  fontSize: '20px',
-                  fontWeight: '600',
-                }}
-              >
-                Documents
-              </div>
-              <div
-                style={{
-                  padding: '12px 28px',
-                  borderRadius: '100px',
-                  background: 'rgba(139, 92, 246, 0.15)',
-                  border: '2px solid rgba(139, 92, 246, 0.3)',
-                  color: '#e4e4e7',
-                  fontSize: '20px',
-                  fontWeight: '600',
-                }}
-              >
-                Workflows
-              </div>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '24px' }}>
+              <div style={{ padding: '12px 28px', borderRadius: '100px', background: 'rgba(139, 92, 246, 0.15)', border: '2px solid rgba(139, 92, 246, 0.3)', color: '#e4e4e7', fontSize: '20px', fontWeight: '600' }}>Research</div>
+              <div style={{ padding: '12px 28px', borderRadius: '100px', background: 'rgba(59, 130, 246, 0.15)', border: '2px solid rgba(59, 130, 246, 0.3)', color: '#e4e4e7', fontSize: '20px', fontWeight: '600' }}>Documents</div>
+              <div style={{ padding: '12px 28px', borderRadius: '100px', background: 'rgba(139, 92, 246, 0.15)', border: '2px solid rgba(139, 92, 246, 0.3)', color: '#e4e4e7', fontSize: '20px', fontWeight: '600' }}>Workflows</div>
             </div>
           </div>
 
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: '2px',
-              background: 'linear-gradient(90deg, transparent 0%, rgba(139, 92, 246, 0.5) 50%, transparent 100%)',
-            }}
-          />
+          <div style={bottomLineStyle} />
         </div>
       ),
       {

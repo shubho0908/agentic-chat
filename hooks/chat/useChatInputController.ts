@@ -124,7 +124,8 @@ export function useChatInputController({
 
   const snippetCountRef = useRef(0);
   const textSnippetsRef = useRef<TextSnippet[]>([]);
-  const snippetFilesRef = useRef<Map<string, File>>(new Map());
+  const snippetFilesRef = useRef<Map<string, File>>(null!);
+  if (snippetFilesRef.current === null) snippetFilesRef.current = new Map();
 
   const addTextSnippet = useCallback((content: string) => {
     const id = crypto.randomUUID();

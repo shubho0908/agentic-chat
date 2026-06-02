@@ -1,3 +1,5 @@
+import { MessageRole } from "@/lib/schemas/chat";
+
 interface ConversationMessageLike {
   id: string;
   role?: string;
@@ -16,11 +18,11 @@ function compareRoleTieBreak(
     return 0;
   }
 
-  if (left.role === "assistant" && right.role === "user") {
+  if (left.role === MessageRole.ASSISTANT && right.role === MessageRole.USER) {
     return -1;
   }
 
-  if (left.role === "user" && right.role === "assistant") {
+  if (left.role === MessageRole.USER && right.role === MessageRole.ASSISTANT) {
     return 1;
   }
 

@@ -7,6 +7,9 @@ import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 
 export const runtime = 'edge';
 
+const containerStyle = { height: '100%', width: '100%', display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-start' as const, justifyContent: 'space-between' as const, backgroundColor: '#0a0a0a', padding: '80px', fontFamily: 'Helvetica, Arial, sans-serif' };
+const bgOverlayStyle = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%)', opacity: 0.8 };
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -15,40 +18,10 @@ export async function GET(request: NextRequest) {
 
     return new ImageResponse(
       (
-        <div
-          style={{
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            backgroundColor: '#0a0a0a',
-            padding: '80px',
-            fontFamily: 'Helvetica, Arial, sans-serif',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%)',
-              opacity: 0.8,
-            }}
-          />
+        <div style={containerStyle}>
+          <div style={bgOverlayStyle} />
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '24px',
-              zIndex: 1,
-              width: '100%',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '24px', zIndex: 1, width: '100%' }}>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="80" height="80">
               <defs>
                 <linearGradient id="g1" x1="15.72" x2="84.51" y1="2.586" y2="97.11" gradientUnits="userSpaceOnUse">
@@ -66,50 +39,14 @@ export async function GET(request: NextRequest) {
               <path fill="#FFFFFF" d="m67 68.8c-1.8 0.7-6.9 3.6-16.1 4.2-3.3 0.1-7-0.4-10.2-1.6-0.9-0.4-2-0.6-2.8 0-1.9 1-4.8 2.2-7.9 2.9 0.9-1.7 1.8-4.4 1.9-7.4 0-0.5-0.2-1.6-0.7-2-3.9-4.1-7-9.1-7-15.4-0.1-9.8 9.9-22.6 26.4-22.8 5 0 8.8 0.9 12.6 2.2 1.7 0.6 2.7-1.3 1.3-2.2-3.1-2.3-7.8-4-14.5-4.1-13-0.1-30 8.8-30.5 26.1 0 6.9 2.6 12.7 6.8 17.7 1.3 0.9-0.6 5.3-2.6 10-0.7 1.7 0.7 3.1 2.2 3 4.8-0.4 8.8-1.6 12.8-3.4 0.5-0.3 0.9-0.4 1.6-0.1 8.2 2.2 19.6 2.2 28-4.6 1.6-1.2 0.4-3.3-1.3-2.5z" />
             </svg>
 
-            <div
-              style={{
-                fontSize: '64px',
-                fontWeight: '700',
-                color: '#ffffff',
-                lineHeight: 1.2,
-                letterSpacing: '-0.02em',
-                maxWidth: '90%',
-                wordWrap: 'break-word',
-              }}
-            >
+            <div style={{ fontSize: '64px', fontWeight: '700', color: '#ffffff', lineHeight: 1.2, letterSpacing: '-0.02em', maxWidth: '90%', wordWrap: 'break-word' as const }}>
               {truncatedTitle}
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              width: '100%',
-              zIndex: 1,
-            }}
-          >
-            <div
-              style={{
-                fontSize: '28px',
-                color: '#a1a1aa',
-                fontWeight: '500',
-              }}
-            >
-              Agentic Chat
-            </div>
-            <div
-              style={{
-                fontSize: '24px',
-                color: '#71717a',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              Your second brain, supercharged
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center' as const, justifyContent: 'space-between' as const, width: '100%', zIndex: 1 }}>
+            <div style={{ fontSize: '28px', color: '#a1a1aa', fontWeight: '500' }}>Agentic Chat</div>
+            <div style={{ fontSize: '24px', color: '#71717a', display: 'flex', alignItems: 'center' as const, gap: '8px' }}>Your second brain, supercharged</div>
           </div>
         </div>
       ),

@@ -6,15 +6,17 @@ import { Loader, Lock, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChatContainer } from "@/components/chat/chatContainer";
-import { type Message, type Attachment } from "@/lib/schemas/chat";
+import { type Message, type Attachment, MessageRole } from "@/lib/schemas/chat";
 import { useLayout } from "@/components/providers/layoutProvider";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiRoutes } from "@/lib/routes";
+import { ArtifactProvider, useArtifacts } from "@/contexts/artifact-context";
+import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 
 interface SharedMessage {
   id: string;
-  role: "user" | "assistant";
+  role: MessageRole;
   content: string;
   metadata?: Record<string, unknown>;
   createdAt: string;
@@ -52,8 +54,21 @@ export default function SharedConversationClient({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  return (
+    <ArtifactProvider>
+      <SharedConversationContent params={params} />
+    </ArtifactProvider>
+  );
+}
+
+function SharedConversationContent({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const { setShowSidebar } = useLayout();
+  const { hydrateMessageArtifacts, openArtifactFromMetadata, panelOpen } = useArtifacts();
 
   useEffect(() => {
     setShowSidebar(false);
@@ -72,6 +87,20 @@ export default function SharedConversationClient({
     const dbMessages = convertDbMessagesToFrontend(sharedMessages);
     return flattenMessageTree(dbMessages);
   }, [sharedMessages]);
+
+  useEffect(() => {
+    for (const message of messages) {
+      if (message.id && message.metadata?.artifacts?.length) {
+        hydrateMessageArtifacts(message.id, message.metadata.artifacts);
+      }
+
+      for (const version of message.versions ?? []) {
+        if (version.id && version.metadata?.artifacts?.length) {
+          hydrateMessageArtifacts(version.id, version.metadata.artifacts);
+        }
+      }
+    }
+  }, [hydrateMessageArtifacts, messages]);
 
   if (isLoading) {
     return (
@@ -139,35 +168,43 @@ export default function SharedConversationClient({
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-12 sm:h-14 items-center justify-between px-3 sm:px-4 gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Button variant="ghost" size="sm" className="shrink-0" asChild>
+    <div className="flex h-screen overflow-hidden">
+      <div className={panelOpen ? "hidden h-full min-w-0 flex-col lg:flex lg:w-1/2" : "flex h-full w-full min-w-0 flex-col"}>
+        <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-12 sm:h-14 items-center justify-between px-3 sm:px-4 gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Button variant="ghost" size="sm" className="shrink-0" asChild>
+                <Link href="/">
+                  <ArrowLeft className="size-4" />
+                </Link>
+              </Button>
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[300px] md:max-w-md">
+                  {data.title}
+                </h2>
+                <p className="text-xs text-muted-foreground hidden xs:block">Shared conversation</p>
+              </div>
+            </div>
+            <Button asChild variant="default" size="sm" className="shrink-0 text-xs sm:text-sm">
               <Link href="/">
-                <ArrowLeft className="size-4" />
+                <span className="hidden sm:inline">Start Your Own Chat</span>
+                <span className="sm:hidden">Start Chat</span>
               </Link>
             </Button>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold truncate max-w-[120px] xs:max-w-[180px] sm:max-w-[300px] md:max-w-md">
-                {data.title}
-              </h2>
-              <p className="text-xs text-muted-foreground hidden xs:block">Shared conversation</p>
-            </div>
           </div>
-          <Button asChild variant="default" size="sm" className="shrink-0 text-xs sm:text-sm">
-            <Link href="/">
-              <span className="hidden sm:inline">Start Your Own Chat</span>
-              <span className="sm:hidden">Start Chat</span>
-            </Link>
-          </Button>
         </div>
+        <ChatContainer
+          messages={messages}
+          isLoading={false}
+          userName="Shared conversation"
+          onOpenArtifact={openArtifactFromMetadata}
+        />
       </div>
-      <ChatContainer
-        messages={messages}
-        isLoading={false}
-        userName="Shared conversation"
-      />
+      {panelOpen && (
+        <div className="h-full w-full min-w-0 animate-in slide-in-from-right-5 duration-200 lg:w-1/2">
+          <ArtifactPanel />
+        </div>
+      )}
     </div>
   );
 }

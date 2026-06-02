@@ -1,5 +1,6 @@
 import type { Message } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "./chat";
+import type { ArtifactEvent } from "./artifact";
 import type { QueryClient } from "@tanstack/react-query";
 
 export interface BaseChatContext {
@@ -11,6 +12,7 @@ export interface BaseChatContext {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
   saveToCacheMutate: (data: { query: string; response: string }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
+  onArtifact?: (event: ArtifactEvent) => void;
 }
 
 export interface SendMessageContext extends BaseChatContext {

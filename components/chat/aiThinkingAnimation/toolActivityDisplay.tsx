@@ -219,7 +219,7 @@ function SourcesSheet({ sources }: { sources: { domain: string; url: string }[] 
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <button className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
+        <button type="button" className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
           +{sources.length - INLINE_SOURCE_LIMIT} more
         </button>
       </SheetTrigger>

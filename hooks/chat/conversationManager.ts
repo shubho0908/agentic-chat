@@ -1,4 +1,4 @@
-import { type Attachment, type MessageContentPart, type Message, type MessageMetadata } from "@/lib/schemas/chat";
+import { type Attachment, type MessageContentPart, type Message, type MessageMetadata, MessageRole } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
 import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/contentUtils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -9,6 +9,7 @@ import { OPENAI_MODELS } from "@/constants/openai-models";
 import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referentialQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiRoutes } from "@/lib/routes";
+import type { ArtifactMetadata } from "@/types/artifact";
 
 import { logger } from "@/lib/logger";
 function generateTitle(content: string | MessageContentPart[]): string {
@@ -37,8 +38,9 @@ const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
 const APPROX_IMAGE_TOKENS = 850;
 export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
+export const ARTIFACT_ONLY_ASSISTANT_CONTENT = "Created an artifact.";
 
-function getPersistableAssistantContent(
+export function getPersistableAssistantContent(
   assistantContent: string,
   metadata?: MessageMetadata
 ): string | null {
@@ -46,11 +48,54 @@ function getPersistableAssistantContent(
     return assistantContent;
   }
 
+  if (metadata?.artifacts && metadata.artifacts.length > 0) {
+    return ARTIFACT_ONLY_ASSISTANT_CONTENT;
+  }
+
   if (metadata?.humanInTheLoopStatus === "pending" && metadata.humanInTheLoopRequest) {
     return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
   }
 
   return null;
+}
+
+function formatArtifactForModelContext(artifact: ArtifactMetadata): string {
+  const attrs = [
+    `type="${artifact.type}"`,
+    `title="${escapeArtifactAttribute(artifact.title)}"`,
+    artifact.language ? `language="${escapeArtifactAttribute(artifact.language)}"` : null,
+  ].filter(Boolean).join(" ");
+
+  return `<artifact ${attrs}>\n${artifact.content}\n</artifact>`;
+}
+
+function escapeArtifactAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function buildAssistantContentForAPI(message: Message): string {
+  const text = extractTextFromContent(message.content);
+  const visibleText = text === ARTIFACT_ONLY_ASSISTANT_CONTENT ? "" : text;
+  const artifacts = message.metadata?.artifacts ?? [];
+
+  if (artifacts.length === 0) {
+    return visibleText;
+  }
+
+  const artifactContext = artifacts.map(formatArtifactForModelContext).join("\n\n");
+  return [visibleText, artifactContext].filter((part) => part.trim()).join("\n\n");
+}
+
+function getMessageContentForAPI(message: Message): string | MessageContentPart[] {
+  if (message.role === MessageRole.ASSISTANT) {
+    return buildAssistantContentForAPI(message);
+  }
+
+  return message.content;
 }
 
 function estimateMessageTokens(content: string | MessageContentPart[]): number {
@@ -70,13 +115,13 @@ function estimateMessageTokens(content: string | MessageContentPart[]): number {
 }
 
 function trimMessagesByApproximateTokenBudget(
-  messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>,
+  messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>,
   model: string
-): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
+): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
   const contextWindow = OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ?? 128000;
   const inputBudget = Math.max(4000, Math.floor(contextWindow * 0.8));
-  const systemMessages = messages.filter((message) => message.role === 'system');
-  const nonSystemMessages = messages.filter((message) => message.role !== 'system');
+  const systemMessages = messages.filter((message) => message.role === MessageRole.SYSTEM);
+  const nonSystemMessages = messages.filter((message) => message.role !== MessageRole.SYSTEM);
 
   const workingMessages = [...nonSystemMessages];
   let estimatedTokens =
@@ -100,7 +145,7 @@ export function buildMessagesForAPI(
   systemPrompt: string,
   model: string,
   currentAttachments?: { fileType: string }[]
-): Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }> {
+): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
   const hasCurrentDocumentAttachment = currentAttachments?.some(att =>
@@ -112,17 +157,17 @@ export function buildMessagesForAPI(
     
     return trimMessagesByApproximateTokenBudget([
       {
-        role: "system" as const,
+        role: MessageRole.SYSTEM,
         content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
       },
       ...recentMessages
-        .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
-        .map(({ role, content }) => ({
-          role: role as "user" | "assistant" | "system",
-          content,
-        })),
+        .flatMap((message) => {
+          const content = getMessageContentForAPI(message);
+          if (content === "" || (Array.isArray(content) && content.length === 0)) return [];
+          return [{ role: message.role as MessageRole, content }];
+        }),
       {
-        role: "user" as const,
+        role: MessageRole.USER,
         content: newContent,
       },
     ], model);
@@ -134,17 +179,17 @@ export function buildMessagesForAPI(
 
   return trimMessagesByApproximateTokenBudget([
     {
-      role: "system" as const,
+      role: MessageRole.SYSTEM,
       content: systemPrompt,
     },
     ...contextMessages
-      .filter(({ content }) => content !== "" && !(Array.isArray(content) && content.length === 0))
-      .map(({ role, content }) => ({
-        role: role as "user" | "assistant" | "system",
-        content,
-      })),
+      .flatMap((message) => {
+        const content = getMessageContentForAPI(message);
+        if (content === "" || (Array.isArray(content) && content.length === 0)) return [];
+        return [{ role: message.role as MessageRole, content }];
+      }),
     {
-      role: "user" as const,
+      role: MessageRole.USER,
       content: newContent,
     },
   ], model);
@@ -220,14 +265,14 @@ function updateQueryCacheWithUserMessage(
   const messages = orderConversationMessagesDesc([
     {
       id: userMessageId,
-      role: "user" as const,
+      role: MessageRole.USER,
       content: textContent,
       createdAt: new Date(userTimestamp).toISOString(),
       attachments: attachments || [],
     },
     {
       id: placeholderAssistantId,
-      role: "assistant" as const,
+      role: MessageRole.ASSISTANT,
       content: "",
       createdAt: new Date().toISOString(),
       attachments: [],
@@ -269,14 +314,14 @@ function updateQueryCache(
   const messages = orderConversationMessagesDesc([
     {
       id: userMessageId,
-      role: "user" as const,
+      role: MessageRole.USER,
       content: textContent,
       createdAt: new Date(userTimestamp).toISOString(),
       attachments: attachments || [],
     },
     {
       id: assistantMessageId,
-      role: "assistant" as const,
+      role: MessageRole.ASSISTANT,
       content: assistantContent,
       createdAt: new Date().toISOString(),
       ...(metadata && { metadata }),
@@ -330,12 +375,17 @@ export async function handleConversationSaving(
           userTimestamp,
           attachments
         );
-      } else if (assistantContent) {
+      } else {
+        const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+        if (!persistableAssistantContent) {
+          onConversationCreated(result);
+          return;
+        }
         updateQueryCache(
           queryClient,
           result.conversationId,
           userContent,
-          assistantContent,
+          persistableAssistantContent,
           result.userMessageId,
           result.assistantMessageId,
           userTimestamp,

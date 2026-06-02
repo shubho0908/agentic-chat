@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
 import { useConversation } from "@/hooks/useConversation";
@@ -11,6 +12,8 @@ import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
 import { AuthModal } from "@/components/authModal";
+import { ArtifactProvider, useArtifacts } from "@/contexts/artifact-context";
+import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
 import { useSession } from "@/lib/authClient";
 import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
@@ -24,7 +27,16 @@ interface ChatPageClientProps {
 }
 
 export function ChatPageClient({ conversationId }: ChatPageClientProps) {
+  return (
+    <ArtifactProvider>
+      <ChatPageInner conversationId={conversationId} />
+    </ArtifactProvider>
+  );
+}
+
+function ChatPageInner({ conversationId }: ChatPageClientProps) {
   const { data: session, isPending } = useSession();
+  const { handleArtifactEvent, hydrateMessageArtifacts, openArtifactFromMetadata, panelOpen } = useArtifacts();
   const {
     data: conversationData,
     error: conversationError,
@@ -48,6 +60,7 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, respondToHumanInTheLoop, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
+    onArtifact: handleArtifactEvent,
     autoContinue: session ? {
       session: session as { user: { id: string } },
       memoryEnabled: getMemoryEnabled(),
@@ -58,6 +71,20 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
     memoryStatus,
     conversationTokenUsage: conversationData?.tokenUsage
   });
+
+  useEffect(() => {
+    for (const message of messages) {
+      if (message.id && message.metadata?.artifacts?.length) {
+        hydrateMessageArtifacts(message.id, message.metadata.artifacts);
+      }
+
+      for (const version of message.versions ?? []) {
+        if (version.id && version.metadata?.artifacts?.length) {
+          hydrateMessageArtifacts(version.id, version.metadata.artifacts);
+        }
+      }
+    }
+  }, [hydrateMessageArtifacts, messages]);
 
   const { data: apiKeyData } = useApiKey();
   const isConfigured = apiKeyData?.exists ?? false;
@@ -145,38 +172,51 @@ export function ChatPageClient({ conversationId }: ChatPageClientProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <ChatHeader
-        onNewChat={clearChat}
-        byokTriggerRef={byokTriggerRef}
-        conversationId={conversationId}
-        isPublic={isPublic}
-        onToggleSharing={handleToggleSharing}
-        isToggling={isToggling}
-      />
-      <ChatContainer
-        messages={messages}
-        isLoading={isLoading}
-        userName={session?.user?.name}
-        onEditMessage={handleEdit}
-        onRegenerateMessage={handleRegenerate}
-        onSendMessage={handleFollowUpQuestion}
-        onHumanInTheLoopDecision={respondToHumanInTheLoop}
-        memoryStatus={mergedMemoryStatus}
-        hasNextPage={hasNextPage}
-        fetchNextPage={fetchNextPage}
-        isFetchingNextPage={isFetchingNextPage}
-        onNewChat={clearChat}
-      />
-      <ChatInput
-        onSend={handleSendMessage}
-        isLoading={isLoading}
-        onStop={stopGeneration}
-        onAuthRequired={() => setShowAuthModal(true)}
-        tokenUsage={tokenUsage}
-        conversationId={conversationId}
-        messages={messages}
-      />
+    <div className="flex h-screen overflow-hidden">
+      <div className={cn(
+        "flex h-full min-w-0 flex-col transition-[width] duration-200 ease-out",
+        panelOpen ? "hidden lg:flex lg:w-1/2" : "w-full"
+      )}>
+        <ChatHeader
+          onNewChat={clearChat}
+          byokTriggerRef={byokTriggerRef}
+          conversationId={conversationId}
+          isPublic={isPublic}
+          onToggleSharing={handleToggleSharing}
+          isToggling={isToggling}
+          artifactOpen={panelOpen}
+        />
+        <ChatContainer
+          messages={messages}
+          isLoading={isLoading}
+          userName={session?.user?.name}
+          onEditMessage={handleEdit}
+          onRegenerateMessage={handleRegenerate}
+          onSendMessage={handleFollowUpQuestion}
+          onHumanInTheLoopDecision={respondToHumanInTheLoop}
+          memoryStatus={mergedMemoryStatus}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          onNewChat={clearChat}
+          onOpenArtifact={openArtifactFromMetadata}
+        />
+        <ChatInput
+          onSend={handleSendMessage}
+          isLoading={isLoading}
+          onStop={stopGeneration}
+          onAuthRequired={() => setShowAuthModal(true)}
+          tokenUsage={tokenUsage}
+          conversationId={conversationId}
+          messages={messages}
+        />
+      </div>
+      <div className={cn(
+        "h-full w-full min-w-0 lg:w-1/2 transition-[transform,opacity] duration-200 ease-out",
+        panelOpen ? "animate-in slide-in-from-right-5" : "hidden"
+      )}>
+        <ArtifactPanel />
+      </div>
       <AuthModal open={showAuthModal} onOpenChange={setShowAuthModal} />
     </div>
   );

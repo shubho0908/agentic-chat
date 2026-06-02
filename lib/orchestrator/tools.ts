@@ -152,6 +152,10 @@ const DEEP_RESEARCH_WEAK_SIGNALS = [
   "investigate",
 ] as const;
 
+const DEEP_RESEARCH_WEAK_PATTERNS = DEEP_RESEARCH_WEAK_SIGNALS.map(
+  (signal) => new RegExp(`^(please\\s+|can you\\s+|could you\\s+)?${signal}\\b`, "i")
+);
+
 const MIN_RESEARCH_QUERY_WORDS = 4;
 
 function qualifiesForDeepResearch(text: string): boolean {
@@ -162,8 +166,7 @@ function qualifiesForDeepResearch(text: string): boolean {
 
   if (DEEP_RESEARCH_PHRASES.some((phrase) => lower.includes(phrase))) return true;
 
-  for (const signal of DEEP_RESEARCH_WEAK_SIGNALS) {
-    const pattern = new RegExp(`^(please\\s+|can you\\s+|could you\\s+)?${signal}\\b`, "i");
+  for (const pattern of DEEP_RESEARCH_WEAK_PATTERNS) {
     if (pattern.test(lower.trim()) && wordCount >= 5) return true;
   }
 
@@ -298,10 +301,8 @@ function scoreToolForIntent(
   const description = (tool.description ?? "").toLowerCase();
   const haystack = `${name} ${description}`;
 
-  for (const term of intentTerms) {
-    if (name.includes(term)) score += 8;
-    else if (description.includes(term)) score += 3;
-  }
+  const intentScore = intentTerms.reduce((acc, term) => acc + (name.includes(term) ? 8 : description.includes(term) ? 3 : 0), 0);
+  score += intentScore;
 
   if (tool.name === ToolName.WEB_SEARCH && matchesAnyTerm(rawText, WEB_SEARCH_TERMS)) {
     score += 35;
@@ -361,14 +362,13 @@ export function selectToolsForAgentStep(
   }
 
   const intentTerms = tokenizeIntent(latestUserText);
-  const ranked = allTools
-    .filter((tool) => !selected.has(tool.name))
-    .map((tool) => ({
-      tool,
-      score: scoreToolForIntent(tool, intentTerms, rawText, targetToolkits, plannedToolSet),
-    }))
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
+  const ranked: { tool: typeof allTools[number]; score: number }[] = [];
+  for (const tool of allTools) {
+    if (selected.has(tool.name)) continue;
+    const score = scoreToolForIntent(tool, intentTerms, rawText, targetToolkits, plannedToolSet);
+    if (score > 0) ranked.push({ tool, score });
+  }
+  ranked.sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name));
 
   for (const { tool } of ranked) {
     if (selected.size >= maxTools) break;

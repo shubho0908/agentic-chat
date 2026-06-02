@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { getResumeConversationState } from "@/hooks/chat/resumeState";
 import type { Message } from "@/lib/schemas/chat";
+import { MessageRole } from "@/lib/schemas/chat";
 
 function createMessage(message: Partial<Message> & Pick<Message, "id" | "role" | "content">): Message {
   return {
@@ -14,12 +15,12 @@ function createMessage(message: Partial<Message> & Pick<Message, "id" | "role" |
 test("resume state removes a pending assistant placeholder that appears before the user message", () => {
   const userMessage = createMessage({
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     content: "Plan my week",
   });
   const assistantPlaceholder = createMessage({
     id: "assistant-pending-conversation-1",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     content: "",
   });
 
@@ -32,22 +33,22 @@ test("resume state removes a pending assistant placeholder that appears before t
 test("resume state removes the resumed user message from API context", () => {
   const earlierUser = createMessage({
     id: "user-0",
-    role: "user",
+    role: MessageRole.USER,
     content: "Earlier question",
   });
   const earlierAssistant = createMessage({
     id: "assistant-0",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     content: "Earlier answer",
   });
   const resumedUser = createMessage({
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     content: "Follow-up question",
   });
   const assistantPlaceholder = createMessage({
     id: "assistant-pending-conversation-1",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     content: "",
   });
 
@@ -63,12 +64,12 @@ test("resume state removes the resumed user message from API context", () => {
 test("resume state keeps prior context when there is no pending assistant placeholder", () => {
   const earlierUser = createMessage({
     id: "user-0",
-    role: "user",
+    role: MessageRole.USER,
     content: "Earlier question",
   });
   const resumedUser = createMessage({
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     content: "Retry this send",
   });
 

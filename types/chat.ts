@@ -1,10 +1,11 @@
-import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart } from '@/lib/schemas/chat';
+import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart, MessageRole } from '@/lib/schemas/chat';
 import type { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from '@/lib/orchestrator/constants';
 import type { HumanInTheLoopRequestKindValue } from '@/lib/tools/constants';
 import type {
   WebSearchImage,
   WebSearchSource,
 } from './tools';
+import type { ArtifactEvent } from './artifact';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -86,6 +87,7 @@ export interface VersionData {
 export interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
+  onArtifact?: (event: ArtifactEvent) => void;
   autoContinue?: {
     session?: { user: { id: string } };
     activeTool?: string | null;
@@ -223,7 +225,7 @@ export interface HumanInTheLoopRequestEvent {
 }
 
 export interface StreamConfig {
-  messages: Array<{ role: "user" | "assistant" | "system"; content: string | MessageContentPart[] }>;
+  messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>;
   model: string;
   signal: AbortSignal;
   onChunk: (fullContent: string) => void;
@@ -235,6 +237,7 @@ export interface StreamConfig {
   onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   onThinking?: (thinking: string) => void;
+  onArtifact?: (event: ArtifactEvent) => void;
   memoryEnabled?: boolean;
   thinkingEnabled?: boolean;
 }
@@ -252,4 +255,5 @@ export interface ApprovalStreamConfig {
   onToolProgress?: (progress: ToolProgressEvent) => void;
   onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onThinking?: (thinking: string) => void;
+  onArtifact?: (event: ArtifactEvent) => void;
 }
