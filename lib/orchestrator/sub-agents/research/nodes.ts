@@ -2,6 +2,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
+import { z } from "zod";
 import type { ResearchStateType, ResearchSource, ResearchClaim } from "./state";
 import {
   TRIAGE_PROMPT,
@@ -11,39 +12,81 @@ import {
   SYNTHESIZER_PROMPT,
   REFLEXION_PROMPT,
 } from "./prompts";
-import { ResearchStep, Limit, DomainScore } from "./constants";
+import { ResearchNode, ResearchStep, Limit, DomainScore } from "./constants";
 import { CustomEventName } from "@/lib/orchestrator/constants";
 import { scoreSource, getRankedSources } from "./scoring";
 import { extractDomain } from "@/lib/utils";
 import { exaDeepSearch } from "@/lib/tools/exa";
 import { scrapeContent } from "@/lib/tools/scrape";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
+import { withRetry } from "@/lib/retry";
+import { logger } from "@/lib/logger";
+import {
+  dedupeSearchQueries,
+  emptyTokenUsage,
+  getAbortSignal,
+  invokeResearchJson,
+  invokeResearchLLM,
+  isAbortError,
+  mergeTokenUsage,
+  normalizeSearchQuery,
+  throwIfAborted,
+  withResearchNode,
+} from "./runtime";
 
 const SHORT_LLM_TIMEOUT_MS = 30_000;
 const LONG_LLM_TIMEOUT_MS = 60_000;
 
-function parseJsonSafe<T>(text: string, fallback: T): T {
-  try {
-    return JSON.parse(text.replace(/```json?\n?|\n?```/g, "").trim()) as T;
-  } catch {
-    return fallback;
-  }
-}
+const triageSchema = z.object({
+  needsClarification: z.boolean().optional(),
+  confidence: z.number().optional(),
+  questions: z.array(z.string()).optional(),
+});
 
-function extractLLMText(content: unknown): string {
-  return typeof content === "string" ? content : "";
-}
+const stringArraySchema = z.array(z.string());
 
-async function scrapeWithTimeout(url: string): Promise<string | null> {
+const evaluationSchema = z.object({
+  sufficient: z.boolean().optional(),
+  gaps: z.array(z.string()).optional(),
+  followUpQueries: z.array(z.string()).optional(),
+});
+
+const claimSchema = z.object({
+  claim: z.string(),
+  supportedBy: z.array(z.number()),
+  confidence: z.enum(["high", "medium", "low", "unsupported"]),
+});
+
+const reflexionSchema = z.object({
+  passed: z.boolean().optional(),
+  claims: z.array(claimSchema).optional(),
+  issues: z.array(z.string()).optional(),
+});
+
+async function scrapeWithTimeout(
+  url: string,
+  config?: LangGraphRunnableConfig
+): Promise<string | null> {
   try {
-    const result = await Promise.race([
-      scrapeContent(url),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), Limit.SCRAPE_TIMEOUT_MS)
-      ),
-    ]);
+    const result = await withRetry(
+      (signal) =>
+        scrapeContent(url, {
+          timeoutMs: Limit.SCRAPE_TIMEOUT_MS,
+          retries: 1,
+          signal,
+        }),
+      {
+        retries: Limit.SCRAPE_RETRIES,
+        initialDelayMs: 500,
+        timeoutMs: Limit.SCRAPE_TIMEOUT_MS,
+        signal: getAbortSignal(config),
+      }
+    );
     return result.length > 50 ? result : null;
-  } catch {
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     return null;
   }
 }
@@ -77,23 +120,28 @@ function collectImages(sources: ResearchSource[], limit: number): ResearchImage[
 export function triageNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 256, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.TRIAGE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.userContext) {
       return { clarificationQuestions: [] };
     }
 
     await emitProgress(ResearchStep.TRIAGING, "Analyzing research scope...", config);
 
-    const response = await llm.invoke(
+    const { value: result, tokenUsage } = await invokeResearchJson(
+      llm,
       [new SystemMessage(TRIAGE_PROMPT), new HumanMessage(state.query)],
-      config
+      {
+        nodeName: ResearchNode.TRIAGE,
+        state,
+        config,
+        maxOutputTokens: 256,
+        timeoutMs: SHORT_LLM_TIMEOUT_MS,
+        schema: triageSchema,
+        fallback: { needsClarification: false, confidence: 1 },
+        schemaDescription:
+          '{"needsClarification": boolean, "confidence": number, "questions": string[]}',
+      }
     );
-
-    const result = parseJsonSafe<{
-      needsClarification?: boolean;
-      confidence?: number;
-      questions?: string[];
-    }>(extractLLMText(response.content), { needsClarification: false, confidence: 1 });
 
     const needsClarification =
       result.needsClarification === true &&
@@ -103,81 +151,128 @@ export function triageNode(apiKey: string, model: string) {
 
     return {
       clarificationQuestions: needsClarification ? result.questions!.slice(0, 2) : [],
+      tokenUsage,
     };
-  };
+  });
 }
 
 export function decomposeNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.DECOMPOSE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     await emitProgress(ResearchStep.DECOMPOSING, "Breaking down research question...", config);
 
     const enrichedQuery = state.userContext
       ? `${state.query}\n\nAdditional context from user: ${state.userContext}`
       : state.query;
 
-    const response = await llm.invoke(
+    const { value, tokenUsage } = await invokeResearchJson(
+      llm,
       [new SystemMessage(DECOMPOSE_PROMPT), new HumanMessage(enrichedQuery)],
-      config
+      {
+        nodeName: ResearchNode.DECOMPOSE,
+        state,
+        config,
+        maxOutputTokens: 512,
+        timeoutMs: SHORT_LLM_TIMEOUT_MS,
+        schema: stringArraySchema,
+        fallback: [state.query],
+        schemaDescription: '["searchable sub-question", "..."]',
+      }
     );
-
-    const subQuestions = parseJsonSafe<string[]>(
-      extractLLMText(response.content),
-      [state.query]
-    ).slice(0, Limit.MAX_SUB_QUESTIONS);
+    const subQuestions = value
+      .filter((question) => question.trim().length > 0)
+      .slice(0, Limit.MAX_SUB_QUESTIONS);
 
     await emitProgress(ResearchStep.DECOMPOSING, `Identified ${subQuestions.length} research angles`, config);
-    return { subQuestions };
-  };
+    return { subQuestions: subQuestions.length > 0 ? subQuestions : [state.query], tokenUsage };
+  });
 }
 
 export function planQueriesNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.PLAN_QUERIES, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const queryGroups = await Promise.all(
       state.subQuestions.map(async (subQ) => {
-        const response = await llm.invoke(
+        const result = await invokeResearchJson(
+          llm,
           [new SystemMessage(QUERY_PLANNER_PROMPT), new HumanMessage(subQ)],
-          config
+          {
+            nodeName: ResearchNode.PLAN_QUERIES,
+            state,
+            config,
+            maxOutputTokens: 512,
+            timeoutMs: SHORT_LLM_TIMEOUT_MS,
+            schema: stringArraySchema,
+            fallback: [subQ],
+            schemaDescription: '["precise search query", "..."]',
+          }
         );
-        const queries = parseJsonSafe<string[]>(extractLLMText(response.content), [subQ]);
-        return queries.slice(0, Limit.MAX_QUERIES_PER_SUB);
+        return {
+          queries: result.value.slice(0, Limit.MAX_QUERIES_PER_SUB),
+          tokenUsage: result.tokenUsage,
+        };
       })
     );
-    const allQueries = queryGroups.flat();
+    const allQueries = dedupeSearchQueries(
+      queryGroups.flatMap((group) => group.queries),
+      state.searchedQueries
+    );
+    const tokenUsage = mergeTokenUsage(...queryGroups.map((group) => group.tokenUsage));
 
     await emitProgress(
       ResearchStep.PLANNING,
       `Generated ${allQueries.length} search queries across ${state.subQuestions.length} angles`,
       config
     );
-    return { searchQueries: allQueries };
-  };
+    return { searchQueries: allQueries, tokenUsage };
+  });
 }
 
 export function searchNode() {
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.SEARCH, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const { searchQueries, searchRound } = state;
     const nextRound = searchRound + 1;
+    const queriesToSearch = dedupeSearchQueries(searchQueries, state.searchedQueries);
 
-    if (!process.env.EXA_API_KEY) {
-      await emitProgress(ResearchStep.SEARCHING, "EXA_API_KEY not configured — skipping web search", config);
-      return { sources: [], searchRound: nextRound };
+    if (queriesToSearch.length === 0) {
+      await emitProgress(ResearchStep.SEARCHING, "No new search queries to execute", config);
+      return { sources: [], searchQueries: [], searchedQueries: [], searchRound: nextRound };
     }
 
-    await emitProgress(ResearchStep.SEARCHING, `Executing ${searchQueries.length} searches (round ${nextRound})...`, config);
+    if (!process.env.EXA_API_KEY && !process.env.SERPER_API_KEY) {
+      await emitProgress(ResearchStep.SEARCHING, "No search provider configured - skipping web search", config);
+      return { sources: [], searchQueries: [], searchRound: nextRound };
+    }
+
+    await emitProgress(ResearchStep.SEARCHING, `Executing ${queriesToSearch.length} searches (round ${nextRound})...`, config);
 
     const results = await Promise.allSettled(
-      searchQueries.map((query) => exaDeepSearch(query, { numResults: 8, maxCharacters: 3000 }))
+      queriesToSearch.map((query) => {
+        throwIfAborted(config);
+        return exaDeepSearch(query, {
+          numResults: 8,
+          maxCharacters: 3000,
+          signal: getAbortSignal(config),
+        });
+      })
     );
 
     const newSources: ResearchSource[] = [];
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      if (result.status !== "fulfilled") continue;
-      const query = searchQueries[i];
+      if (result.status === "rejected") {
+        if (isAbortError(result.reason)) {
+          throw result.reason;
+        }
+        logger.warn("[ResearchSearch] Query failed:", {
+          query: queriesToSearch[i],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+        continue;
+      }
+      const query = queriesToSearch[i];
 
       for (const item of result.value) {
         if (!item.url || !item.text) continue;
@@ -197,29 +292,44 @@ export function searchNode() {
     }
 
     await emitProgress(ResearchStep.SEARCHING, `Found ${newSources.length} new sources in round ${nextRound}`, config);
-    return { sources: newSources, searchRound: nextRound };
-  };
+    return {
+      sources: newSources,
+      searchQueries: [],
+      searchedQueries: queriesToSearch.map(normalizeSearchQuery),
+      searchRound: nextRound,
+    };
+  });
 }
 
 export function deepScrapeNode() {
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
-    const toScrape = [...state.sources]
-      .map((s) => ({ ...s, qualityScore: scoreSource(s) }))
-      .sort((a, b) => b.qualityScore - a.qualityScore)
-      .filter((s) => !s.fullContent)
-      .slice(0, Limit.TOP_SCRAPE_COUNT);
+  return withResearchNode(ResearchNode.DEEP_SCRAPE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+    const toScrape = getRankedSources(
+      state.sources
+        .map((s) => ({ ...s, qualityScore: scoreSource(s) }))
+        .filter((s) => !s.fullContent),
+      Limit.TOP_SCRAPE_COUNT
+    );
 
     if (toScrape.length === 0) return { sources: [] };
 
     await emitProgress(ResearchStep.DEEP_SCRAPING, `Deep-scraping ${toScrape.length} top sources...`, config);
 
     const scrapeResults = await Promise.allSettled(
-      toScrape.map((s) => scrapeWithTimeout(s.url))
+      toScrape.map((s) => {
+        throwIfAborted(config);
+        return scrapeWithTimeout(s.url, config);
+      })
     );
 
     const updatedSources: ResearchSource[] = [];
     for (let i = 0; i < toScrape.length; i++) {
       const r = scrapeResults[i];
+      if (r.status === "rejected") {
+        if (isAbortError(r.reason)) {
+          throw r.reason;
+        }
+        continue;
+      }
       if (r.status === "fulfilled" && r.value) {
         updatedSources.push({
           ...toScrape[i],
@@ -230,13 +340,13 @@ export function deepScrapeNode() {
     }
 
     return { sources: updatedSources };
-  };
+  });
 }
 
 export function evaluateNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 768, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.EVALUATE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.searchRound >= state.maxRounds || state.sources.length >= Limit.MAX_SOURCES) {
       return { searchQueries: [], gaps: [] };
     }
@@ -246,39 +356,60 @@ export function evaluateNode(apiKey: string, model: string) {
       .map((s, i) => `[${i + 1}] (score:${s.qualityScore}) ${s.title} [${s.domain}]: ${(s.fullContent ?? s.snippet).slice(0, 250)}`)
       .join("\n");
 
-    const response = await llm.invoke(
+    const { value: evaluation, tokenUsage } = await invokeResearchJson(
+      llm,
       [
         new SystemMessage(EVALUATOR_PROMPT),
         new HumanMessage(
           `Original query: ${state.query}\n\nSub-questions: ${state.subQuestions.join("; ")}\n\nSources (${state.sources.length} total, top 12):\n${sourceSummary}\n\nPrevious gaps: ${state.gaps.join(", ") || "none"}`
         ),
       ],
-      config
+      {
+        nodeName: ResearchNode.EVALUATE,
+        state,
+        config,
+        maxOutputTokens: 768,
+        timeoutMs: SHORT_LLM_TIMEOUT_MS,
+        schema: evaluationSchema,
+        fallback: { sufficient: true },
+        schemaDescription:
+          '{"sufficient": boolean, "gaps": string[], "followUpQueries": string[]}',
+      }
     );
 
-    const evaluation = parseJsonSafe<{
-      sufficient?: boolean;
-      gaps?: string[];
-      followUpQueries?: string[];
-    }>(extractLLMText(response.content), { sufficient: true });
+    const followUpQueries = dedupeSearchQueries(
+      evaluation.followUpQueries ?? [],
+      state.searchedQueries
+    ).slice(0, Limit.MAX_FOLLOW_UP_QUERIES);
 
-    if (evaluation.sufficient || !evaluation.followUpQueries?.length) {
-      await emitProgress(ResearchStep.EVALUATING, `Coverage sufficient — ${state.sources.length} sources across ${state.searchRound} rounds`, config);
-      return { searchQueries: [], gaps: evaluation.gaps ?? [] };
+    if (evaluation.sufficient || followUpQueries.length === 0) {
+      await emitProgress(ResearchStep.EVALUATING, `Coverage sufficient - ${state.sources.length} sources across ${state.searchRound} rounds`, config);
+      return { searchQueries: [], gaps: evaluation.gaps ?? [], tokenUsage };
     }
 
     await emitProgress(ResearchStep.EVALUATING, `Gaps: ${evaluation.gaps?.join(", ")}. Refining...`, config);
     return {
-      searchQueries: evaluation.followUpQueries.slice(0, Limit.MAX_FOLLOW_UP_QUERIES),
+      searchQueries: followUpQueries,
       gaps: evaluation.gaps ?? [],
+      tokenUsage,
     };
-  };
+  }, {
+    nonCritical: true,
+    fallback: async (state, error, config) => {
+      await emitProgress(
+        ResearchStep.EVALUATING,
+        `Evaluation skipped after failure: ${error instanceof Error ? error.message : "unknown error"}`,
+        config
+      );
+      return { searchQueries: [], gaps: state.gaps };
+    },
+  });
 }
 
 export function synthesizeNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0.1), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.SYNTHESIZE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const images = collectImages(state.sources, Limit.MAX_RESEARCH_IMAGES);
     await emitProgress(
       ResearchStep.SYNTHESIZING,
@@ -292,24 +423,35 @@ export function synthesizeNode(apiKey: string, model: string) {
       .map((s, i) => `[Source ${i + 1}] ${s.title}\nDomain: ${s.domain} | Quality: ${s.qualityScore}/20\nURL: ${s.url}\n${(s.fullContent ?? s.snippet).slice(0, 1500)}`)
       .join("\n\n---\n\n");
 
-    const response = await llm.invoke(
+    const { text, tokenUsage } = await invokeResearchLLM(
+      llm,
       [
         new SystemMessage(SYNTHESIZER_PROMPT),
         new HumanMessage(
           `Research query: ${state.query}\n\nSub-questions: ${state.subQuestions.join("; ")}\n\nRanked sources (${ranked.length}/${state.sources.length}):\n${sourcesText}`
         ),
       ],
-      config
+      {
+        nodeName: ResearchNode.SYNTHESIZE,
+        state,
+        config,
+        maxOutputTokens: 4096,
+        timeoutMs: LONG_LLM_TIMEOUT_MS,
+      }
     );
 
-    return { synthesis: extractLLMText(response.content) };
-  };
+    return { synthesis: text, tokenUsage };
+  });
 }
 
 export function reflexionNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 1024, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.REFLEXION, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+    if (!state.synthesis.trim()) {
+      return { reflexionPassed: true, claims: [] };
+    }
+
     await emitProgress(ResearchStep.VERIFYING, "Fact-checking synthesis against sources...", config);
 
     const topSources = getRankedSources(state.sources, 10);
@@ -317,49 +459,97 @@ export function reflexionNode(apiKey: string, model: string) {
       .map((s, i) => `[Source ${i + 1}] ${s.title}: ${(s.fullContent ?? s.snippet).slice(0, 400)}`)
       .join("\n");
 
-    const response = await llm.invoke(
+    const { value: audit, tokenUsage } = await invokeResearchJson(
+      llm,
       [
         new SystemMessage(REFLEXION_PROMPT),
         new HumanMessage(`Synthesis to verify:\n${state.synthesis}\n\nSources:\n${sourcesRef}`),
       ],
-      config
+      {
+        nodeName: ResearchNode.REFLEXION,
+        state,
+        config,
+        maxOutputTokens: 1024,
+        timeoutMs: SHORT_LLM_TIMEOUT_MS,
+        schema: reflexionSchema,
+        fallback: { passed: true },
+        schemaDescription:
+          '{"passed": boolean, "claims": [{"claim": string, "supportedBy": number[], "confidence": "high|medium|low|unsupported"}], "issues": string[]}',
+      }
     );
 
-    const audit = parseJsonSafe<{
-      passed?: boolean;
-      claims?: ResearchClaim[];
-      issues?: string[];
-    }>(extractLLMText(response.content), { passed: true });
-
     if (audit.passed) {
-      await emitProgress(ResearchStep.VERIFIED, "Synthesis passed fact-check ✓", config);
-      return { reflexionPassed: true, claims: audit.claims ?? [] };
+      await emitProgress(ResearchStep.VERIFIED, "Synthesis passed fact-check", config);
+      return { reflexionPassed: true, claims: audit.claims ?? [], tokenUsage };
     }
 
-    await emitProgress(ResearchStep.CORRECTING, `${audit.issues?.length ?? 0} issues found — correcting...`, config);
-    return { reflexionPassed: false, claims: audit.claims ?? [], gaps: audit.issues ?? [] };
-  };
+    await emitProgress(ResearchStep.CORRECTING, `${audit.issues?.length ?? 0} issues found - correcting...`, config);
+    return {
+      reflexionPassed: false,
+      claims: (audit.claims ?? []) as ResearchClaim[],
+      gaps: audit.issues ?? [],
+      tokenUsage,
+    };
+  }, {
+    nonCritical: true,
+    fallback: async (_state, error, config) => {
+      await emitProgress(
+        ResearchStep.VERIFIED,
+        `Verification skipped after failure: ${error instanceof Error ? error.message : "unknown error"}`,
+        config
+      );
+      return { reflexionPassed: true, claims: [] };
+    },
+  });
 }
 
 export function correctNode(apiKey: string, model: string) {
   const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
 
-  return async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+  return withResearchNode(ResearchNode.CORRECT, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
+    const correctionAttempts = state.correctionAttempts + 1;
     const topSources = getRankedSources(state.sources, 12);
     const sourcesRef = topSources
       .map((s, i) => `[Source ${i + 1}] ${s.title} (${s.domain}): ${(s.fullContent ?? s.snippet).slice(0, 800)}`)
       .join("\n\n");
 
-    const response = await llm.invoke(
+    const { text, tokenUsage } = await invokeResearchLLM(
+      llm,
       [
         new SystemMessage(SYNTHESIZER_PROMPT),
         new HumanMessage(
           `Research query: ${state.query}\n\nPREVIOUS ISSUES TO FIX:\n- ${state.gaps.join("\n- ")}\n\nCORRECTION: Remove unsourced claims. Add [Source N] to every fact. State "could not be verified" for unconfirmable info.\n\nSources:\n${sourcesRef}`
         ),
       ],
-      config
+      {
+        nodeName: ResearchNode.CORRECT,
+        state,
+        config,
+        maxOutputTokens: 4096,
+        timeoutMs: LONG_LLM_TIMEOUT_MS,
+      }
     );
 
-    return { synthesis: extractLLMText(response.content), reflexionPassed: true };
-  };
+    return {
+      synthesis: text,
+      reflexionPassed: false,
+      correctionAttempts,
+      tokenUsage,
+    };
+  }, {
+    nonCritical: true,
+    fallback: async (state, error, config) => {
+      await emitProgress(
+        ResearchStep.CORRECTING,
+        `Correction skipped after failure: ${error instanceof Error ? error.message : "unknown error"}`,
+        config
+      );
+      return {
+        synthesis: state.synthesis,
+        reflexionPassed: true,
+        correctionAttempts: Limit.MAX_CORRECTION_ATTEMPTS,
+        tokenUsage: emptyTokenUsage(),
+      };
+    },
+  });
 }

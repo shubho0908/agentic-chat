@@ -1,5 +1,6 @@
 import { ToolNode } from "@langchain/langgraph/prebuilt";
 import { interrupt } from "@langchain/langgraph";
+import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { AIMessage } from "@langchain/core/messages";
 import { ToolMessage } from "@langchain/core/messages";
@@ -106,7 +107,7 @@ function sanitizeToolMessage(message: ToolMessage): ToolMessage {
 export function createToolNode(tools: DynamicStructuredTool[]) {
   const toolNode = new ToolNode(tools);
 
-  return async (state: AgentStateType) => {
+  return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
     const lastMessage = state.messages[state.messages.length - 1] as AIMessage;
     const toolCalls = lastMessage.tool_calls ?? [];
 
@@ -179,7 +180,10 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
     }
 
     try {
-      const result = await toolNode.invoke({ ...state, messages: [...state.messages] }) as { messages: ToolMessage[] };
+      const result = await toolNode.invoke(
+        { ...state, messages: [...state.messages] },
+        config
+      ) as { messages: ToolMessage[] };
       const sanitized = result.messages.map(sanitizeToolMessage);
 
       const observedCallIds = new Set(

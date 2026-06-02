@@ -1,19 +1,20 @@
 const USER_FRIENDLY_FALLBACK = "Something went wrong. Please try again.";
 
 const KNOWN_PATTERNS: [RegExp, string][] = [
-  [/rate.?limit|too many requests/i, "You're sending messages too quickly. Please wait a moment."],
-  [/insufficient.?quota|quota exceeded/i, "Your API key has run out of credits."],
-  [/invalid.?api.?key|incorrect.?api.?key|authentication/i, "Your API key is invalid. Please check your settings."],
-  [/context.?length.?exceeded|token.?budget/i, "The conversation is too long. Please start a new chat."],
+  [/sending messages too quickly|please wait about/i, "You're sending messages too quickly. Take a short break and try again."],
+  [/rate.?limit|too many requests/i, "You're sending messages too quickly. Please wait a moment and try again."],
+  [/insufficient.?quota|quota exceeded/i, "Your API key has run out of credits. Please check your billing settings."],
+  [/invalid.?api.?key|incorrect.?api.?key|authentication/i, "Your API key appears to be invalid. Please check your settings."],
+  [/context.?length.?exceeded|token.?budget/i, "The conversation is too long. Please start a new chat or shorten your message."],
   [/model.*not found|does not exist/i, "The selected model is unavailable. Please choose another."],
-  [/network|ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed/i, "Network error. Please check your connection and try again."],
-  [/timeout|timed?\s*out|deadline exceeded/i, "The request timed out. Please try again."],
+  [/network|ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed/i, "Having trouble connecting. Please check your internet and try again."],
+  [/timeout|timed?\s*out|deadline exceeded/i, "The request took too long. Please try again."],
   [/abort/i, "Request was cancelled."],
-  [/server error|internal server|500/i, "A server error occurred. Please try again later."],
-  [/too many requests/i, "Too many requests. Please slow down."],
+  [/server error|internal server|500/i, "Something went wrong on our end. Please try again in a moment."],
+  [/search providers?.*(unavailable|failed)/i, "Web search is temporarily unavailable. The response will use existing knowledge instead."],
   [/not found|404/i, "The requested resource was not found."],
-  [/unauthorized|401|forbidden|403/i, "You don't have permission. Please sign in again."],
-  [/bad request|validation|invalid/i, "The request was invalid. Please try again."],
+  [/unauthorized|401|forbidden|403/i, "Your session may have expired. Please sign in again."],
+  [/bad request|validation|invalid/i, "Something wasn't right with that request. Please try again."],
 ];
 
 export function toUserFriendlyError(error: unknown, fallback?: string): string {

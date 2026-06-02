@@ -38,6 +38,7 @@ export function ChatInput({
     centered: isCentered,
     placeholder: resolvedPlaceholder,
     maxFilesReached,
+    textSnippets,
     textareaRef,
     dropZoneRef,
     dragState,
@@ -67,6 +68,7 @@ export function ChatInput({
             <ChatInputForm
               state={formState}
               handlers={formHandlers}
+              textSnippets={textSnippets}
               textareaRef={textareaRef}
               dropZoneRef={dropZoneRef}
               dragState={dragState}
@@ -89,6 +91,7 @@ export function ChatInput({
         <ChatInputForm
           state={formState}
           handlers={formHandlers}
+          textSnippets={textSnippets}
           textareaRef={textareaRef}
           dropZoneRef={dropZoneRef}
           dragState={dragState}

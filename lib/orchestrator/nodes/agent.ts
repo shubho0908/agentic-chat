@@ -14,6 +14,7 @@ import {
 } from "@/lib/tools/composio/config";
 import { getAnyMentionedComposioToolkits, selectToolsForAgentStep, hasWebActionIntent } from "../tools";
 import { logger } from "@/lib/logger";
+import { withRetry } from "@/lib/retry";
 
 const BASE_SYSTEM_PROMPT = `Helpful AI assistant with tool access. Act proactively — call tools immediately when user intent is clear. Only use ask_user when genuinely ambiguous.
 
@@ -349,9 +350,14 @@ export function createAgentNode(
       ? `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}\n\nPlanner guidance:\n${plannerHints.join("\n")}`
       : `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}`;
     const runnable = selectedTools.length > 0 ? llm.bindTools(selectedTools) : llm;
-    const response = await runnable.invoke(
-      [new SystemMessage(systemPrompt), ...reconcileDanglingToolCalls(conversationMessages)],
-      config
+    const messages = [new SystemMessage(systemPrompt), ...reconcileDanglingToolCalls(conversationMessages)];
+    const response = await withRetry(
+      (signal) => runnable.invoke(messages, { ...(config ?? {}), signal }),
+      {
+        retries: 2,
+        initialDelayMs: 400,
+        signal: config?.signal,
+      }
     );
     return { messages: [response] };
   };

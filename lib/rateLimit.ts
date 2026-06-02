@@ -28,7 +28,36 @@ interface RateLimitConfig {
 export const RATE_LIMITS = {
   chat: { windowMs: 60_000, maxRequests: 20 } satisfies RateLimitConfig,
   approval: { windowMs: 60_000, maxRequests: 10 } satisfies RateLimitConfig,
+  research: { windowMs: 300_000, maxRequests: 5 } satisfies RateLimitConfig,
 } as const;
+
+export function isRateLimited(
+  userId: string,
+  endpoint: string,
+  config: RateLimitConfig
+): boolean {
+  const key = `${userId}:${endpoint}`;
+  const now = Date.now();
+  const cutoff = now - config.windowMs;
+
+  cleanup(config.windowMs);
+
+  const entry = store.get(key);
+  if (!entry) return false;
+
+  const recent = entry.timestamps.filter((t) => t > cutoff);
+  return recent.length >= config.maxRequests;
+}
+
+export function recordUsage(userId: string, endpoint: string): void {
+  const key = `${userId}:${endpoint}`;
+  let entry = store.get(key);
+  if (!entry) {
+    entry = { timestamps: [] };
+    store.set(key, entry);
+  }
+  entry.timestamps.push(Date.now());
+}
 
 export function checkRateLimit(
   userId: string,
@@ -53,8 +82,11 @@ export function checkRateLimit(
     const retryAfter = Math.ceil(
       (entry.timestamps[0] + config.windowMs - now) / 1000
     );
+    const friendlyWait = retryAfter > 60
+      ? `${Math.ceil(retryAfter / 60)} minute${Math.ceil(retryAfter / 60) > 1 ? "s" : ""}`
+      : `${retryAfter} second${retryAfter > 1 ? "s" : ""}`;
     return NextResponse.json(
-      { error: "Too many requests. Please slow down." },
+      { error: `You're sending messages too quickly. Please wait about ${friendlyWait} and try again.` },
       {
         status: 429,
         headers: { "Retry-After": String(retryAfter) },

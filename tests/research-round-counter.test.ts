@@ -10,6 +10,7 @@ function createResearchState(overrides: Partial<ResearchStateType> = {}): Resear
     userContext: "",
     subQuestions: [],
     searchQueries: [],
+    searchedQueries: [],
     sources: [],
     claims: [],
     synthesis: "",
@@ -17,6 +18,14 @@ function createResearchState(overrides: Partial<ResearchStateType> = {}): Resear
     maxRounds: 6,
     gaps: [],
     reflexionPassed: false,
+    correctionAttempts: 0,
+    tokenUsage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      llmCalls: 0,
+    },
+    tokenBudget: 60_000,
     clarificationQuestions: [],
     ...overrides,
   };
@@ -24,7 +33,9 @@ function createResearchState(overrides: Partial<ResearchStateType> = {}): Resear
 
 test("searchNode bumps searchRound by exactly 1 per invocation (round counter integrity)", async () => {
   const previousKey = process.env.EXA_API_KEY;
+  const previousSerperKey = process.env.SERPER_API_KEY;
   delete process.env.EXA_API_KEY;
+  delete process.env.SERPER_API_KEY;
   try {
     const node = searchNode();
 
@@ -42,6 +53,9 @@ test("searchNode bumps searchRound by exactly 1 per invocation (round counter in
   } finally {
     if (previousKey !== undefined) {
       process.env.EXA_API_KEY = previousKey;
+    }
+    if (previousSerperKey !== undefined) {
+      process.env.SERPER_API_KEY = previousSerperKey;
     }
   }
 });
