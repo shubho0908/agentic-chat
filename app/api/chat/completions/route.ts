@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
           })
         : createChatStreamHandler({
             messages: validatedMessages,
-            memoryStatusInfo: BASE_MEMORY_STATUS,
+            memoryStatusInfo: { ...BASE_MEMORY_STATUS },
             model: validatedModel,
             openai,
             apiKey,

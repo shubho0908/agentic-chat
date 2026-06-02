@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useEffect, useMemo } from "react";
+import { useSandboxIframe } from "./useSandboxIframe";
 
-function buildReactSrcdoc(jsx: string): string {
+function buildReactHtml(jsx: string): string {
   const escaped = jsx.replace(/<\/script/gi, "<\\/script");
 
   return `<!DOCTYPE html>
@@ -71,11 +72,14 @@ try {
 }
 
 export const ReactArtifact = memo(function ReactArtifact({ content }: { content: string }) {
-  const srcdoc = useMemo(() => content ? buildReactSrcdoc(content) : "", [content]);
-  const [loaded, setLoaded] = useState(false);
-  const onLoad = useCallback(() => setLoaded(true), []);
+  const html = useMemo(() => content ? buildReactHtml(content) : "", [content]);
+  const { iframeRef, ready, send, sandboxUrl, sandboxAttr } = useSandboxIframe();
 
-  if (!srcdoc) {
+  useEffect(() => {
+    if (ready && html) send(html);
+  }, [ready, html, send]);
+
+  if (!html) {
     return (
       <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
         Waiting for content…
@@ -85,7 +89,7 @@ export const ReactArtifact = memo(function ReactArtifact({ content }: { content:
 
   return (
     <div className="relative h-full w-full">
-      {!loaded && (
+      {!ready && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
           <div className="flex flex-col items-center gap-3">
             <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary" />
@@ -94,12 +98,12 @@ export const ReactArtifact = memo(function ReactArtifact({ content }: { content:
         </div>
       )}
       <iframe
-        srcDoc={srcdoc}
-        sandbox="allow-scripts allow-same-origin"
+        ref={iframeRef}
+        src={sandboxUrl}
+        sandbox={sandboxAttr}
         referrerPolicy="no-referrer"
         className="h-full w-full border-0"
         title="React Artifact"
-        onLoad={onLoad}
       />
     </div>
   );

@@ -75,6 +75,19 @@ function deriveThreadId(conversationId: string | undefined, userId: string): str
   return `user-${userId}-ephemeral`;
 }
 
+const ARTIFACT_TAG_PATTERN = /<artifact\b/i;
+
+function conversationHasPriorArtifacts(messages: Message[]): boolean {
+  for (const message of messages) {
+    if (message.role !== "assistant") continue;
+    const text = extractTextFromMessage(message.content);
+    if (text && ARTIFACT_TAG_PATTERN.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function createOrchestratorStreamHandler(options: OrchestratorStreamOptions) {
   const {
     messages,
@@ -101,6 +114,21 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         skippedMemory: false,
       };
 
+      const mapper = createStreamEventMapper();
+
+      const closeStream = () => {
+        try {
+          mapper.flush(controller);
+        } catch (flushError) {
+          logger.warn("[Orchestrator] Failed to flush artifact parser before close:", flushError);
+        }
+        try {
+          controller.close();
+        } catch (closeError) {
+          logger.warn("[Orchestrator] Failed to close stream controller:", closeError);
+        }
+      };
+
       const failStream = (error: unknown) => {
         const isRecursionError =
           (error instanceof Error &&
@@ -119,11 +147,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           controller.enqueue(encodeError(friendly));
           controller.enqueue(encodeDone());
         } finally {
-          try {
-            controller.close();
-          } catch (closeError) {
-            logger.warn("[Orchestrator] Failed to close error stream:", closeError);
-          }
+          closeStream();
         }
       };
 
@@ -174,17 +198,16 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         if (!budgetCheck.ok) {
           controller.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
           controller.enqueue(encodeDone());
-          controller.close();
+          closeStream();
           return;
         }
 
         const connectedToolkits = await getConnectedToolkits(userId);
 
         const queryText = extractTextFromMessage(lastUserMessage);
-        const bypassSemanticCache = shouldBypassSemanticCacheForToolIntent(
-          queryText,
-          connectedToolkits
-        );
+        const bypassSemanticCache =
+          shouldBypassSemanticCacheForToolIntent(queryText, connectedToolkits) ||
+          conversationHasPriorArtifacts(messages);
         if (queryText && !bypassSemanticCache && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId);
@@ -193,7 +216,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
               logger.log("[Orchestrator] Semantic cache HIT");
               controller.enqueue(encodeChatChunk(cached));
               controller.enqueue(encodeDone());
-              controller.close();
+              closeStream();
               return;
             }
           } catch (cacheErr) {
@@ -226,7 +249,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           version: "v2",
         });
 
-        const mapper = createStreamEventMapper();
         for await (const event of eventStream) {
           if (abortSignal?.aborted) break;
           mapper.map(controller, event as Record<string, unknown>);
@@ -236,8 +258,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           abortStream();
           return;
         }
-
-        mapper.flush(controller);
 
         const finalState = await graph.getState({ configurable: { thread_id: threadId } });
         const pendingInterrupts = (finalState.tasks ?? [])
@@ -253,12 +273,12 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           };
           handleGraphInterrupt(controller, interruptData);
           controller.enqueue(encodeDone());
-          controller.close();
+          closeStream();
           return;
         }
 
         handleGraphEnd(controller);
-        controller.close();
+        closeStream();
       } catch (error) {
         if (isGraphInterrupt(error)) {
           const interruptValue = (error as { value?: unknown }).value;
@@ -267,7 +287,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             : { threadId };
           handleGraphInterrupt(controller, interruptData);
           controller.enqueue(encodeDone());
-          controller.close();
+          closeStream();
           return;
         }
 

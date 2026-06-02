@@ -38,7 +38,7 @@ const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
 const APPROX_IMAGE_TOKENS = 850;
 export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
-export const ARTIFACT_ONLY_ASSISTANT_CONTENT = "Created an artifact.";
+export const ARTIFACT_ONLY_ASSISTANT_CONTENT = "[[__artifact_only_assistant_content_v1__]]";
 
 export function getPersistableAssistantContent(
   assistantContent: string,
@@ -66,13 +66,20 @@ function formatArtifactForModelContext(artifact: ArtifactMetadata): string {
     artifact.language ? `language="${escapeArtifactAttribute(artifact.language)}"` : null,
   ].filter(Boolean).join(" ");
 
-  return `<artifact ${attrs}>\n${artifact.content}\n</artifact>`;
+  return `<artifact ${attrs}>\n${escapeArtifactBody(artifact.content)}\n</artifact>`;
 }
 
 function escapeArtifactAttribute(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeArtifactBody(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }

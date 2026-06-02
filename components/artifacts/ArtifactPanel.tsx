@@ -247,7 +247,7 @@ export const ArtifactPanel = memo(function ArtifactPanel() {
 
       {fullscreen && (
         <Dialog open onOpenChange={setFullscreen}>
-          <DialogContent className="!inset-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !max-w-none !w-screen !h-screen !rounded-none !border-none !p-0 !gap-0 flex flex-col">
+          <DialogContent showCloseButton={false} className="!inset-0 !translate-x-0 !translate-y-0 !top-0 !left-0 !max-w-none !w-screen !h-screen !rounded-none !border-none !p-0 !gap-0 flex flex-col">
             <DialogTitle className="sr-only">{activeArtifact.title}</DialogTitle>
             <div className="flex items-center justify-between border-b px-4 py-2">
               <h3 className="text-sm font-medium truncate">{activeArtifact.title}</h3>

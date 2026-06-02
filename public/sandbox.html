@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<script>
+(function() {
+  parent.postMessage({ type: 'sandbox-ready' }, '*');
+  addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
+      document.open();
+      document.write(e.data.html);
+      document.close();
+    }
+  });
+})();
+</script>
+</body>
+</html>

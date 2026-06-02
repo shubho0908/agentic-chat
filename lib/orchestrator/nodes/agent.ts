@@ -54,8 +54,8 @@ Artifacts: When creating substantial, self-contained content (complete HTML page
 content here
 </artifact>
 Valid types: html, react, svg, mermaid, code, markdown.
-- html: Complete web pages or interactive HTML with CSS/JS. Include Tailwind via CDN for styling.
-- react: Self-contained React components (export default). Can use Tailwind classes, Recharts.
+- html: Complete web pages or interactive HTML with CSS/JS. Keep the artifact self-contained: use inline/local styles or assume Tailwind utility classes are available — do NOT include external CDN <script>/<link> tags. The renderer injects Tailwind automatically for both fragments and full documents.
+- react: Self-contained React components (export default). Can use Tailwind classes, Recharts. Do NOT add external <script> tags or imports beyond 'react'/'react-dom'/'recharts' — the renderer provides them.
 - svg: SVG graphics and illustrations.
 - mermaid: Mermaid diagram syntax.
 - code: Standalone code files (set language attribute, e.g. language="python").
