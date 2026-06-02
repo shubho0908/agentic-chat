@@ -157,7 +157,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                   <span className="text-muted-foreground">Orchestration</span>
                 </div>
                 <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">Delegates like a team</h3>
-                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Breaks complex tasks into subtasks, routes each to the right agent, and assembles the result — without you managing the steps.</p>
+                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Breaks complex tasks into subtasks, routes each to the right agent, and assembles the result, without you managing the steps.</p>
               </m.div>
 
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:p-7 lg:p-10">
@@ -173,7 +173,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                   <span className="text-muted-foreground">Parallel tools</span>
                 </div>
                 <h3 className="mb-3 text-balance font-[family-name:var(--font-newsreader)] text-[clamp(1.7rem,5vw,2rem)] font-medium tracking-tight sm:mb-4">All tools at once</h3>
-                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Fires web search, code execution, document reading, and calculations simultaneously — results land together, not one at a time.</p>
+                <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Fires web search, code execution, document reading, and calculations simultaneously; results land together, not one at a time.</p>
               </m.div>
             </m.section>
           </div>

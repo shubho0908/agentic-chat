@@ -1,4 +1,6 @@
-import type { ApprovalStreamConfig, HumanInTheLoopRequestEvent, StreamConfig } from "@/types/chat";
+import type { ApprovalStreamConfig, HumanInTheLoopRequestEvent, MemoryStatus, StreamConfig } from "@/types/chat";
+import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
+import type { ToolArgs } from "@/lib/schemas/chat";
 import { apiRoutes } from "@/lib/routes";
 import { logger } from "@/lib/logger";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
@@ -12,6 +14,17 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+function readerToIterable(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncIterable<Uint8Array> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => reader.read().then(({ done, value }) => ({ done: !!done, value: value! })),
+        return: () => reader.cancel().then(() => ({ done: true as const, value: undefined })),
+      };
+    },
+  };
+}
+
 type StreamCallbacks = Pick<
   StreamConfig,
   | "onChunk"
@@ -22,6 +35,7 @@ type StreamCallbacks = Pick<
   | "onHumanInTheLoopRequest"
   | "onUsageUpdated"
   | "onThinking"
+  | "onArtifact"
 >;
 
 async function assertOkResponse(response: Response): Promise<void> {
@@ -92,13 +106,107 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     onHumanInTheLoopRequest,
     onUsageUpdated,
     onThinking,
+    onArtifact,
   } = callbacks;
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
+  function optionalString(value: unknown): string | undefined {
+    return typeof value === "string" ? value : undefined;
+  }
 
-      const chunk = decoder.decode(value, { stream: !done });
+  function optionalNumber(value: unknown): number | undefined {
+    return typeof value === "number" ? value : undefined;
+  }
+
+  function optionalBoolean(value: unknown): boolean | undefined {
+    return typeof value === "boolean" ? value : undefined;
+  }
+
+  function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
+  }
+
+  function processParsedEvent(parsed: Record<string, unknown>): void {
+    if (parsed.error) {
+      throw new Error(typeof parsed.error === "string" ? parsed.error : "Stream error");
+    }
+
+    const parsedType = optionalString(parsed.type);
+
+    if (parsedType === 'memory_status' && onMemoryStatus) {
+      onMemoryStatus({
+        hasMemories: optionalBoolean(parsed.hasMemories) ?? false,
+        attemptedMemory: optionalBoolean(parsed.attemptedMemory),
+        hasDocuments: optionalBoolean(parsed.hasDocuments) ?? false,
+        memoryCount: optionalNumber(parsed.memoryCount) ?? 0,
+        documentCount: optionalNumber(parsed.documentCount) ?? 0,
+        hasImages: optionalBoolean(parsed.hasImages) ?? false,
+        imageCount: optionalNumber(parsed.imageCount) ?? 0,
+        routingDecision: optionalString(parsed.routingDecision) as MemoryStatus["routingDecision"],
+        skippedMemory: optionalBoolean(parsed.skippedMemory),
+        activeToolName: optionalString(parsed.activeToolName),
+        tokenUsage: optionalRecord(parsed.tokenUsage) as MemoryStatus["tokenUsage"],
+      });
+    }
+
+    if (parsedType === 'thinking' && onThinking) {
+      thinkingContent += typeof parsed.content === "string" ? parsed.content : '';
+      onThinking(thinkingContent);
+    }
+
+    if (parsedType === 'tool_call' && onToolCall) {
+      onToolCall({
+        toolName: optionalString(parsed.toolName) ?? "unknown_tool",
+        toolCallId: optionalString(parsed.toolCallId) ?? "unknown-tool-call",
+        args: (optionalRecord(parsed.args) ?? {}) as ToolArgs,
+      });
+    }
+
+    if (parsedType === 'tool_result' && onToolResult) {
+      onToolResult({
+        toolName: optionalString(parsed.toolName) ?? "unknown_tool",
+        toolCallId: optionalString(parsed.toolCallId) ?? "unknown-tool-call",
+        result: typeof parsed.result === "string" || Array.isArray(parsed.result) || optionalRecord(parsed.result)
+          ? parsed.result as string | Record<string, unknown> | unknown[]
+          : "",
+      });
+    }
+
+    if (parsedType === 'tool_progress' && onToolProgress) {
+      onToolProgress({
+        toolName: optionalString(parsed.toolName) ?? "unknown_tool",
+        status: optionalString(parsed.status) ?? "running",
+        message: optionalString(parsed.message) ?? "",
+        details: optionalRecord(parsed.details),
+      });
+    }
+
+    if ((parsedType === 'hitl_request' || parsedType === HUMAN_IN_THE_LOOP_REQUEST_TYPE) && onHumanInTheLoopRequest) {
+      onHumanInTheLoopRequest(normalizeHumanInTheLoopRequest(parsed));
+    }
+
+    if (parsedType === 'usage_updated' && onUsageUpdated) {
+      onUsageUpdated({
+        usageCount: optionalNumber(parsed.usageCount) ?? 0,
+        remaining: optionalNumber(parsed.remaining) ?? 0,
+        limit: optionalNumber(parsed.limit) ?? 0,
+      });
+    }
+
+    if ((parsedType === ArtifactEventType.START || parsedType === ArtifactEventType.CHUNK || parsedType === ArtifactEventType.END) && onArtifact) {
+      onArtifact(parsed as unknown as ArtifactEvent);
+    }
+
+    if (typeof parsed.content === "string" && parsed.content && !parsedType) {
+      fullContent += parsed.content;
+      onChunk(fullContent);
+    }
+  }
+
+  try {
+    for await (const value of readerToIterable(reader)) {
+      const chunk = decoder.decode(value, { stream: true });
       buffer += chunk;
 
       const lines = buffer.split('\n');
@@ -114,74 +222,7 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
         if (data === '[DONE]') continue;
 
         try {
-          const parsed = JSON.parse(data);
-
-          if (parsed.error) {
-            throw new Error(parsed.error);
-          }
-
-          if (parsed.type === 'memory_status' && onMemoryStatus) {
-            onMemoryStatus({
-              hasMemories: parsed.hasMemories,
-              attemptedMemory: parsed.attemptedMemory,
-              hasDocuments: parsed.hasDocuments,
-              memoryCount: parsed.memoryCount,
-              documentCount: parsed.documentCount || 0,
-              hasImages: parsed.hasImages || false,
-              imageCount: parsed.imageCount || 0,
-              routingDecision: parsed.routingDecision,
-              skippedMemory: parsed.skippedMemory,
-              activeToolName: parsed.activeToolName,
-              tokenUsage: parsed.tokenUsage,
-            });
-          }
-
-          if (parsed.type === 'thinking' && onThinking) {
-            thinkingContent += parsed.content ?? '';
-            onThinking(thinkingContent);
-          }
-
-          if (parsed.type === 'tool_call' && onToolCall) {
-            onToolCall({
-              toolName: parsed.toolName,
-              toolCallId: parsed.toolCallId,
-              args: parsed.args,
-            });
-          }
-
-          if (parsed.type === 'tool_result' && onToolResult) {
-            onToolResult({
-              toolName: parsed.toolName,
-              toolCallId: parsed.toolCallId,
-              result: parsed.result,
-            });
-          }
-
-          if (parsed.type === 'tool_progress' && onToolProgress) {
-            onToolProgress({
-              toolName: parsed.toolName,
-              status: parsed.status,
-              message: parsed.message,
-              details: parsed.details,
-            });
-          }
-
-          if (parsed.type === 'hitl_request' && onHumanInTheLoopRequest) {
-            onHumanInTheLoopRequest(normalizeHumanInTheLoopRequest(parsed));
-          }
-
-          if (parsed.type === 'usage_updated' && onUsageUpdated) {
-            onUsageUpdated({
-              usageCount: parsed.usageCount,
-              remaining: parsed.remaining,
-              limit: parsed.limit,
-            });
-          }
-
-          if (parsed.content && !parsed.type) {
-            fullContent += parsed.content;
-            onChunk(fullContent);
-          }
+          processParsedEvent(JSON.parse(data));
         } catch (err) {
           if (!(err instanceof SyntaxError)) {
             throw err;
@@ -189,38 +230,22 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
           logger.warn('Failed to parse SSE data:', data, err);
         }
       }
+    }
 
-      if (done) {
-        if (buffer.trim()) {
-          const trimmedLine = buffer.trim();
-          if (trimmedLine.startsWith('data:')) {
-            const data = trimmedLine.slice(5).trim();
-            if (data !== '[DONE]') {
-              try {
-                const parsed = JSON.parse(data);
-
-                if (parsed.error) {
-                  throw new Error(parsed.error);
-                }
-
-                if (parsed.content && !parsed.type) {
-                  fullContent += parsed.content;
-                  onChunk(fullContent);
-                }
-
-                if (parsed.type === HUMAN_IN_THE_LOOP_REQUEST_TYPE && onHumanInTheLoopRequest) {
-                  onHumanInTheLoopRequest(normalizeHumanInTheLoopRequest(parsed));
-                }
-              } catch (err) {
-                if (!(err instanceof SyntaxError)) {
-                  throw err;
-                }
-                logger.warn('Failed to parse final SSE data:', data, err);
-              }
+    if (buffer.trim()) {
+      const trimmedLine = buffer.trim();
+      if (trimmedLine.startsWith('data:')) {
+        const data = trimmedLine.slice(5).trim();
+        if (data !== '[DONE]') {
+          try {
+            processParsedEvent(JSON.parse(data));
+          } catch (err) {
+            if (!(err instanceof SyntaxError)) {
+              throw err;
             }
+            logger.warn('Failed to parse final SSE data:', data, err);
           }
         }
-        break;
       }
     }
   } catch (error) {

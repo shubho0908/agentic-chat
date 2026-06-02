@@ -9,6 +9,7 @@ import { calculateTokenUsage } from '@/lib/utils/tokenCounter';
 import { DEFAULT_MODEL } from '@/constants/openai-models';
 import type { TokenUsage } from '@/types/chat';
 import type { Message } from '@/lib/schemas/chat';
+import { MessageRole } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
@@ -42,9 +43,9 @@ type VersionMessage = BaseMessage;
 function toChatMessageForTokenUsage(message: { role: string; content: string; attachments?: MessageAttachment[] }): Message {
   const normalizedRole = message.role.toLowerCase();
   const role: Message['role'] =
-    normalizedRole === 'user' || normalizedRole === 'assistant' || normalizedRole === 'system'
-      ? normalizedRole
-      : 'assistant';
+    (Object.values(MessageRole) as string[]).includes(normalizedRole)
+      ? (normalizedRole as Message['role'])
+      : MessageRole.ASSISTANT;
 
   return {
     role,

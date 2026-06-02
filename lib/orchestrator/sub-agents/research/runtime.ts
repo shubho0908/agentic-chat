@@ -49,7 +49,7 @@ export class ResearchTokenBudgetExceededError extends Error {
   }
 }
 
-export function createAbortError(message = "Research request aborted"): Error {
+function createAbortError(message = "Research request aborted"): Error {
   const error = new Error(message);
   error.name = "AbortError";
   return error;
@@ -301,7 +301,7 @@ function parseJsonCandidate(text: string): unknown {
   }
 }
 
-export function parseJsonWithSchema<T>(
+function parseJsonWithSchema<T>(
   text: string,
   schema: z.ZodType<T>
 ): { ok: true; value: T } | { ok: false; error: Error } {

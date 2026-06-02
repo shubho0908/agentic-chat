@@ -8,7 +8,7 @@ interface RetryOptions {
   shouldRetry?: (error: unknown, attempt: number) => boolean;
 }
 
-export function isRateLimitError(error: unknown): boolean {
+function isRateLimitError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const candidate = error as Error & { status?: number; code?: string | number; cause?: { status?: number } };
   const status = candidate.status ?? candidate.cause?.status;
@@ -166,9 +166,7 @@ export async function withRetry<T>(
     shouldRetry = defaultShouldRetry,
   } = options;
 
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  const attempt = async (index: number): Promise<T> => {
     if (signal?.aborted) {
       throw createAbortError('Operation aborted');
     }
@@ -176,21 +174,20 @@ export async function withRetry<T>(
     try {
       return await runWithTimeout(operation, timeoutMs, signal);
     } catch (error) {
-      lastError = error;
-
-      if (attempt === retries || !shouldRetry(error, attempt + 1)) {
+      if (index >= retries || !shouldRetry(error, index + 1)) {
         throw error;
       }
 
       const rateLimited = isRateLimitError(error);
       const retryAfterMs = rateLimited ? getRetryAfterMs(error) : null;
       const baseBackoff = rateLimited
-        ? retryAfterMs ?? Math.min(initialDelayMs * 4 ** attempt, 10_000)
-        : Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
+        ? retryAfterMs ?? Math.min(initialDelayMs * 4 ** index, 10_000)
+        : Math.min(initialDelayMs * 2 ** index, maxDelayMs);
       const jitter = Math.floor(Math.random() * Math.max(0, jitterMs));
       await sleep(baseBackoff + jitter, signal);
+      return attempt(index + 1);
     }
-  }
+  };
 
-  throw lastError instanceof Error ? lastError : new Error('Retry operation failed');
+  return attempt(0);
 }

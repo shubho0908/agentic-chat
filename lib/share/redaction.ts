@@ -28,6 +28,7 @@ const SAFE_METADATA_KEYS = new Set([
   "citations",
   "sources",
   "followUpQuestions",
+  "artifacts",
 ]);
 
 function redactMetadata(metadata: Prisma.JsonValue | undefined): Record<string, unknown> | undefined {

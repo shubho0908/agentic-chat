@@ -6,16 +6,17 @@ import {
   orderConversationMessagesAsc,
   orderConversationMessagesDesc,
 } from "@/lib/conversationMessageOrder";
+import { MessageRole } from "@/lib/schemas/chat";
 
 test("descending ordering keeps a pending assistant placeholder ahead of its triggering user in cache shape", () => {
   const userMessage = {
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     createdAt: "2026-03-25T10:00:00.000Z",
   };
   const assistantPlaceholder = {
     id: "assistant-pending-conversation-1",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     createdAt: "2026-03-25T10:00:01.000Z",
   };
 
@@ -30,12 +31,12 @@ test("descending ordering keeps a pending assistant placeholder ahead of its tri
 test("ascending ordering used by the UI restores the expected user-then-assistant flow", () => {
   const userMessage = {
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     createdAt: "2026-03-25T10:00:00.000Z",
   };
   const assistantPlaceholder = {
     id: "assistant-pending-conversation-1",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     createdAt: "2026-03-25T10:00:01.000Z",
   };
 
@@ -50,12 +51,12 @@ test("ascending ordering used by the UI restores the expected user-then-assistan
 test("role tie-break keeps user before assistant after the UI reverses identical timestamps", () => {
   const userMessage = {
     id: "user-1",
-    role: "user",
+    role: MessageRole.USER,
     createdAt: "2026-03-25T10:00:00.000Z",
   };
   const assistantMessage = {
     id: "assistant-1",
-    role: "assistant",
+    role: MessageRole.ASSISTANT,
     createdAt: "2026-03-25T10:00:00.000Z",
   };
 

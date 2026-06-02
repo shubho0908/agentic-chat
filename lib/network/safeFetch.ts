@@ -3,6 +3,17 @@ import { assertSafePublicUrl, type SafeResolvedUrl } from './ssrf';
 import { withRetry } from '@/lib/retry';
 import { logger } from '@/lib/logger';
 
+function readerToIterable(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncIterable<Uint8Array> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => reader.read().then(({ done, value }) => ({ done: !!done, value: value! })),
+        return: () => reader.cancel().then(() => ({ done: true as const, value: undefined })),
+      };
+    },
+  };
+}
+
 interface SafeFetchOptions extends RequestInit {
   timeoutMs?: number;
   retries?: number;
@@ -102,12 +113,7 @@ async function readResponseBody(
   let totalBytes = 0;
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
+    for await (const value of readerToIterable(reader)) {
       totalBytes += value.byteLength;
       if (totalBytes > maxResponseBytes) {
         throw new Error(`Response too large: exceeded ${maxResponseBytes} bytes`);

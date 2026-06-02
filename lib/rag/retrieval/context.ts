@@ -314,12 +314,10 @@ async function enrichWithNeighborChunks(
   const enriched: Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }> = [];
   const seenContent = new Set<string>();
   const requestedTargets = results
-    .filter((result) => result.metadata.attachmentId && result.content)
-    .map((result, index) => ({
-      ord: index,
-      attachment_id: result.metadata.attachmentId,
-      content: result.content,
-    }));
+    .flatMap((result, index) => {
+      if (!result.metadata.attachmentId || !result.content) return [];
+      return [{ ord: index, attachment_id: result.metadata.attachmentId, content: result.content }];
+    });
 
   if (requestedTargets.length === 0) {
     return [];

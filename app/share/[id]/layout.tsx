@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { MessageRole } from "@/lib/schemas/chat";
 import { absoluteUrl, noIndexRobots, siteConfig } from "@/lib/seo";
 import { apiRoutes, appRoutes } from "@/lib/routes";
 
@@ -54,7 +55,7 @@ async function getSharedConversation(id: string) {
       messages: {
         items: conversation.messages.map(msg => ({
           id: msg.id,
-          role: msg.role.toLowerCase() as "user" | "assistant",
+          role: msg.role.toLowerCase() as MessageRole,
           content: msg.content,
           createdAt: msg.createdAt.toISOString(),
         })),
@@ -84,7 +85,7 @@ export async function generateMetadata({
 
   const title = conversation.conversation.title || "Shared Conversation";
   const userName = conversation.conversation.user.name || conversation.conversation.user.email.split('@')[0];
-  const firstUserMessage = conversation.messages.items.find(m => m.role === 'user');
+  const firstUserMessage = conversation.messages.items.find(m => m.role === MessageRole.USER);
   const normalizedSnippet = firstUserMessage?.content.replace(/\s+/g, " ").trim();
   const description = normalizedSnippet
     ? normalizedSnippet.slice(0, 155) + (normalizedSnippet.length > 155 ? "..." : "")

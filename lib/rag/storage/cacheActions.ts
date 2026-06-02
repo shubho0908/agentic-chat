@@ -5,6 +5,12 @@ import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
 import { logger } from '@/lib/logger';
 
+async function auth() {
+  const { user, error } = await getAuthenticatedUser(await headers());
+  if (error || !user) throw new Error('Authentication required');
+  return user;
+}
+
 interface CacheCheckResult {
   cached: boolean;
   response?: string;
@@ -24,17 +30,11 @@ function shouldUseSemanticCache(query: string): boolean {
 }
 
 export async function checkSemanticCacheAction(query: string, conversationId?: string): Promise<CacheCheckResult> {
+  const user = await auth();
+
   const startTime = Date.now();
 
   try {
-    const { user, error } = await getAuthenticatedUser(await headers());
-    if (error || !user) {
-      return {
-        cached: false,
-        error: 'Authentication required',
-        latency: Date.now() - startTime
-      };
-    }
 
     if (!query || query.trim().length === 0) {
       return {
@@ -84,11 +84,9 @@ export async function saveToSemanticCacheAction(
   response: string,
   conversationId?: string
 ): Promise<CacheSaveResult> {
+  const user = await auth();
+
   try {
-    const { user, error } = await getAuthenticatedUser(await headers());
-    if (error || !user) {
-      return { success: false, error: 'Authentication required' };
-    }
 
     if (!query || query.trim().length === 0) {
       return { success: false, error: 'Query is required' };

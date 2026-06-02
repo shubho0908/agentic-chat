@@ -82,3 +82,7 @@ export function encodeError(message: string): Uint8Array {
 export function encodeDone(): Uint8Array {
   return encoder.encode('data: [DONE]\n\n');
 }
+
+export function encodeArtifactEvent(event: Record<string, unknown>): Uint8Array {
+  return encodeSSEMessage(event);
+}

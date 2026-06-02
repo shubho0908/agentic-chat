@@ -36,14 +36,11 @@ export async function loadDocument(
       const pageTexts = pdfData.text ? pdfData.text.split(/\f/) : [];
 
       documents = pageTexts
-        .map((text: string, index: number) => ({
-          pageContent: text.trim(),
-          metadata: {
-            source: fileName,
-            loc: { pageNumber: index + 1 },
-          },
-        } as Document))
-        .filter((doc: Document) => doc.pageContent.length > 0);
+        .flatMap((text: string, index: number) => {
+          const trimmed = text.trim();
+          if (!trimmed) return [];
+          return [{ pageContent: trimmed, metadata: { source: fileName, loc: { pageNumber: index + 1 } } } as Document];
+        });
 
       if (documents.length === 0 && pdfData.text?.trim()) {
         documents = [{

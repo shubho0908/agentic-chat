@@ -7,12 +7,12 @@ import { getModel } from "@/lib/storage";
 import { orderConversationMessagesAsc } from "@/lib/conversationMessageOrder";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiRoutes } from "@/lib/routes";
-import type { Attachment } from "@/lib/schemas/chat";
+import type { Attachment, MessageRole } from "@/lib/schemas/chat";
 import type { TokenUsage } from "@/types/chat";
 
 interface ConversationMessage {
   id: string;
-  role: "user" | "assistant";
+  role: MessageRole;
   content: string;
   metadata?: Record<string, unknown>;
   createdAt: string;

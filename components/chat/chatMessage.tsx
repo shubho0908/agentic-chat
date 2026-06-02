@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
-import type { Message, Attachment } from "@/lib/schemas/chat";
+import { MessageRole, type Message, type Attachment } from "@/lib/schemas/chat";
+import type { ArtifactMetadata } from "@/types/artifact";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
@@ -19,7 +20,8 @@ import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT } from "@/hooks/chat/conversationManager";
+import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT } from "@/hooks/chat/conversationManager";
+import { ArtifactButtons } from "./artifactButtons";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -78,6 +80,7 @@ interface ChatMessageProps {
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
+  onOpenArtifact?: (messageId: string, artifact: ArtifactMetadata) => void;
   isSharePage?: boolean;
   isLastMessage?: boolean;
   isLoading?: boolean;
@@ -85,8 +88,7 @@ interface ChatMessageProps {
 }
 
 interface MessageContentSurfaceProps {
-  variant: "user" | "assistant";
-  message: Message;
+  variant: MessageRole;
   displayedMessage: Message;
   textContent: string;
   renderState: {
@@ -94,6 +96,7 @@ interface MessageContentSurfaceProps {
     isLastMessage: boolean;
     humanInTheLoopPending: boolean;
     hideHumanInTheLoopPlaceholder: boolean;
+    hideArtifactPlaceholder: boolean;
   };
   memoryStatus?: MemoryStatus;
   humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
@@ -103,7 +106,6 @@ interface MessageContentSurfaceProps {
 
 function MessageContentSurface({
   variant,
-  message,
   displayedMessage,
   textContent,
   renderState,
@@ -112,13 +114,15 @@ function MessageContentSurface({
   onHumanInTheLoopDecision,
   renderUserTextContent,
 }: MessageContentSurfaceProps) {
-  const isUser = variant === "user";
+  const isUser = variant === MessageRole.USER;
   const {
     isLoading,
     isLastMessage,
     humanInTheLoopPending,
     hideHumanInTheLoopPlaceholder,
+    hideArtifactPlaceholder,
   } = renderState;
+  const hidePlaceholderContent = hideHumanInTheLoopPlaceholder || hideArtifactPlaceholder;
 
   return (
     <div className={cn(
@@ -166,10 +170,10 @@ function MessageContentSurface({
         />
       )}
 
-      {!hideHumanInTheLoopPlaceholder && textContent ? (
+      {!hidePlaceholderContent && textContent ? (
         isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
-      ) : !hideHumanInTheLoopPlaceholder && message.content && message.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
-        isUser ? (typeof message.content === 'string' ? renderUserTextContent(message.content) : '') : <Response>{typeof message.content === 'string' ? message.content : ''}</Response>
+      ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
+        isUser ? (typeof displayedMessage.content === 'string' ? renderUserTextContent(displayedMessage.content) : '') : <Response>{typeof displayedMessage.content === 'string' ? displayedMessage.content : ''}</Response>
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
         <AIThinkingAnimation
           memoryStatus={memoryStatus}
@@ -179,8 +183,25 @@ function MessageContentSurface({
   );
 }
 
-function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
-  const isUser = message.role === "user";
+function renderUserTextContent(text: string): ReactNode[] | null {
+  if (!text) return null;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(USER_URL_REGEX)) {
+    const matchStart = match.index ?? 0;
+    const rawUrl = match[0];
+    const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
+    if (matchStart > lastIndex) nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
+    if (url) nodes.push(<a key={`url-${matchStart}`} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all">{url}</a>);
+    if (trailing) nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
+    lastIndex = matchStart + rawUrl.length;
+  }
+  if (lastIndex < text.length) nodes.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
+  return nodes;
+}
+
+function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+  const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [versionIndex, setVersionIndex] = useState(-1);
@@ -196,6 +217,8 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
+  const artifactMetadata = !isUser ? displayedMessage.metadata?.artifacts ?? [] : [];
+  const displayedMessageId = displayedMessage.id ?? message.id;
 
   const modelName = "AI Assistant"
 
@@ -203,6 +226,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
     const text = extractTextFromContent(displayedContent);
     return text === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? "" : text;
   }, [displayedContent]);
+  const hideArtifactPlaceholder = artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT;
 
   const handleEditStart = useCallback(() => {
     setEditText(textContent);
@@ -321,50 +345,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const humanInTheLoopPending = displayedMessage.metadata?.humanInTheLoopStatus === "pending" && !!humanInTheLoopRequest;
   const hideHumanInTheLoopPlaceholder = humanInTheLoopPending;
 
-  const renderUserTextContent = useCallback((text: string) => {
-    if (!text) return null;
-
-    const nodes: ReactNode[] = [];
-    let lastIndex = 0;
-
-    for (const match of text.matchAll(USER_URL_REGEX)) {
-      const matchStart = match.index ?? 0;
-      const rawUrl = match[0];
-      const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
-
-      if (matchStart > lastIndex) {
-        nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
-      }
-
-      if (url) {
-          nodes.push(
-            <a
-              key={`url-${matchStart}`}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all"
-            >
-              {url}
-            </a>
-          );
-      }
-
-      if (trailing) {
-        nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
-      }
-
-      lastIndex = matchStart + rawUrl.length;
-    }
-
-    if (lastIndex < text.length) {
-      nodes.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
-    }
-
-    return nodes;
-  }, []);
-
-  if (message.role === "system") return null;
+  if (message.role === MessageRole.SYSTEM) return null;
 
   return (
     <div
@@ -404,8 +385,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
             ) : (
               <>
                 <MessageContentSurface
-                  variant={isUser ? "user" : "assistant"}
-                  message={message}
+                  variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
                   displayedMessage={displayedMessage}
                   textContent={textContent}
                   renderState={{
@@ -413,12 +393,21 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     isLastMessage,
                     humanInTheLoopPending,
                     hideHumanInTheLoopPlaceholder,
+                    hideArtifactPlaceholder,
                   }}
                   memoryStatus={memoryStatus}
                   humanInTheLoopRequest={humanInTheLoopRequest}
                   onHumanInTheLoopDecision={onHumanInTheLoopDecision}
                   renderUserTextContent={renderUserTextContent}
                 />
+
+                {!isUser && artifactMetadata.length > 0 && (
+                  <ArtifactButtons
+                    artifacts={artifactMetadata}
+                    messageId={displayedMessageId}
+                    onOpenArtifact={onOpenArtifact}
+                  />
+                )}
 
                 {isUser && userUrls.length > 0 && (
                   <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
@@ -480,6 +469,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevProps.message.metadata !== nextProps.message.metadata ||
     prevProps.message.toolActivities !== nextProps.message.toolActivities ||
     prevProps.message.versions !== nextProps.message.versions ||
+    prevProps.onOpenArtifact !== nextProps.onOpenArtifact ||
     prevProps.isLastMessage !== nextProps.isLastMessage ||
     prevProps.isLoading !== nextProps.isLoading
   ) {
@@ -503,7 +493,8 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
     prevMetadata?.images?.length !== nextMetadata?.images?.length ||
-    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length
+    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
+    prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
   ) {
     return false;
   }

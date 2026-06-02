@@ -5,11 +5,13 @@ import {
   encodeToolProgress,
   encodeToolResult,
   encodeThinkingChunk,
+  encodeArtifactEvent,
 } from "@/lib/chat/streamingHelpers";
 
 import { ToolName } from "@/lib/tools/constants";
 import { CustomEventName, StreamEventType, ToolStatus, HUMAN_IN_THE_LOOP_REQUEST_TYPE, GraphNode } from "./constants";
 import { toJsonValue } from "@/lib/json";
+import { createArtifactStreamParser, type ArtifactSSE } from "./artifactParser";
 
 const encoder = new TextEncoder();
 
@@ -53,10 +55,12 @@ function extractToolOutput(output: unknown): string | Record<string, unknown> | 
 
 interface StreamEventMapper {
   map(controller: ReadableStreamDefaultController, event: Record<string, unknown>): void;
+  flush(controller: ReadableStreamDefaultController): void;
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
   let askUserPending = false;
+  const artifactParser = createArtifactStreamParser();
 
   const getNode = (event: Record<string, unknown>): string | undefined => {
     const metadata = event.metadata as Record<string, unknown> | undefined;
@@ -67,6 +71,16 @@ export function createStreamEventMapper(): StreamEventMapper {
     if (name === ToolName.DEEP_RESEARCH) return false;
     return getNode(event) !== GraphNode.TOOLS;
   };
+
+  function emitParsedResults(controller: ReadableStreamDefaultController, results: Array<{ text: string } | { event: ArtifactSSE }>) {
+    for (const item of results) {
+      if ("text" in item) {
+        controller.enqueue(encodeChatChunk(item.text));
+      } else {
+        controller.enqueue(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
+      }
+    }
+  }
 
   return {
     map(controller, event) {
@@ -92,14 +106,13 @@ export function createStreamEventMapper(): StreamEventMapper {
 
           const content = chunk?.chunk?.content;
           if (typeof content === "string" && content) {
-            controller.enqueue(encodeChatChunk(content));
+            emitParsedResults(controller, artifactParser.push(content));
           } else if (Array.isArray(content)) {
-            // Responses API format: content blocks include reasoning and text
             for (const block of content) {
               if (block.type === "reasoning" && block.reasoning) {
                 controller.enqueue(encodeThinkingChunk(block.reasoning));
               } else if (block.type === "text" && block.text) {
-                controller.enqueue(encodeChatChunk(block.text));
+                emitParsedResults(controller, artifactParser.push(block.text));
               }
             }
           }
@@ -173,6 +186,9 @@ export function createStreamEventMapper(): StreamEventMapper {
           break;
         }
       }
+    },
+    flush(controller) {
+      emitParsedResults(controller, artifactParser.flush());
     },
   };
 }

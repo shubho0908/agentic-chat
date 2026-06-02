@@ -1,4 +1,5 @@
 import type { ExportConversation, ExportMessage, ExportOptions } from '@/types/export';
+import { MessageRole } from "@/lib/schemas/chat";
 import { logger } from "@/lib/logger";
 import {
   downloadTextFile,
@@ -47,7 +48,7 @@ function formatMessage(
   includeVersions: boolean
 ): string {
   const lines: string[] = [];
-  const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
+  const role = message.role === MessageRole.USER ? '👤 User' : '🤖 Assistant';
   
   lines.push(`### Message ${index}: ${role}`);
   lines.push(`*${formatDate(message.createdAt)}*\n`);

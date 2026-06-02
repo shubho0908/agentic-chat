@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
+import { MessageRole } from '@/lib/schemas/chat';
 import {
   addMemories,
   retrieveMemories,
@@ -110,8 +111,8 @@ export async function storeConversationMemory(
 
   try {
     const messages = [
-      { role: 'user' as const, content: [{ type: 'text' as const, text: normalizedUserMessage }] },
-      { role: 'assistant' as const, content: [{ type: 'text' as const, text: normalizedAssistantMessage }] },
+      { role: MessageRole.USER, content: [{ type: 'text' as const, text: normalizedUserMessage }] },
+      { role: MessageRole.ASSISTANT, content: [{ type: 'text' as const, text: normalizedAssistantMessage }] },
     ];
 
     await addMemories(messages, {

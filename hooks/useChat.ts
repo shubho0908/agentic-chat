@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { type Message, type MessageMetadata, type ToolActivity, ToolStatus } from "@/lib/schemas/chat";
+import { type Message, type MessageMetadata, type ToolActivity, ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import { useSaveToCache } from "./useSemanticCache";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
 import type {
@@ -20,11 +20,13 @@ import { handleRegenerateResponse } from "./chat/messageRegenerator";
 import { useStreaming } from "@/contexts/streaming-context";
 import { getModel } from "@/lib/storage";
 import { streamChatApproval } from "./chat/streamingApi";
-import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT } from "./chat/conversationManager";
+import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, getPersistableAssistantContent } from "./chat/conversationManager";
 import { saveAssistantMessage, updateAssistantMessage as updateSavedAssistantMessage } from "./chat/messageApi";
 import { queryKeys } from "@/lib/queryKeys";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { toJsonValue } from "@/lib/json";
+import { ArtifactEventType } from "@/types/artifact";
+import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -35,7 +37,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { initialMessages = [], conversationId: initialConversationId, autoContinue } = options;
+  const { initialMessages = [], conversationId: initialConversationId, autoContinue, onArtifact } = options;
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
@@ -95,6 +97,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onNavigate: (path: string) => router.replace(path),
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
+            onArtifact,
           },
           session,
           activeTool,
@@ -114,7 +117,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         abortControllerRef.current = null;
       }
     },
-    [isLoading, saveToCache, conversationId, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]
+    [isLoading, saveToCache, conversationId, onArtifact, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]
   );
 
   const editMessage = useCallback(
@@ -141,6 +144,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
+            onArtifact,
           },
           activeTool,
           memoryEnabled,
@@ -156,7 +160,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         stopStreamingContext(false);
       }
     },
-    [isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
+    [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const regenerateResponse = useCallback(
@@ -181,6 +185,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
+            onArtifact,
           },
           activeTool,
           memoryEnabled,
@@ -196,7 +201,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         stopStreamingContext(false);
       }
     },
-    [isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
+    [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const continueConversation = useCallback(
@@ -220,6 +225,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
+            onArtifact,
           },
           session,
           activeTool,
@@ -236,7 +242,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         stopStreamingContext(false);
       }
     },
-    [isLoading, conversationId, saveToCache, queryClient, startStreaming, stopStreamingContext]
+    [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const respondToHumanInTheLoop = useCallback(
@@ -250,7 +256,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       const currentMessages = messagesRef.current;
       const pendingMessage = currentMessages.findLast(
-        (message) => message.role === "assistant" && message.metadata?.humanInTheLoopRequest && message.metadata.humanInTheLoopStatus !== "approved" && message.metadata.humanInTheLoopStatus !== "denied"
+        (message) => message.role === MessageRole.ASSISTANT && message.metadata?.humanInTheLoopRequest && message.metadata.humanInTheLoopStatus !== "approved" && message.metadata.humanInTheLoopStatus !== "denied"
       );
 
       if (!pendingMessage?.id) {
@@ -264,6 +270,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         humanInTheLoopStatus: approved ? "approved" : "denied",
         humanInTheLoopRequest: undefined,
       };
+      const artifactCollector = createArtifactMetadataCollector();
       let resumedContent = "";
       const previousContent = typeof pendingMessage.content === "string" ? pendingMessage.content : "";
       const previousMetadata = pendingMessage.metadata;
@@ -334,12 +341,36 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onThinking: (thinking) => {
             updateLocalAssistantMessage({ thinking });
           },
+          onArtifact: (event) => {
+            const eventWithMessage = { ...event, messageId: assistantMessageId };
+            artifactCollector.push(eventWithMessage);
+
+            if (event.type === ArtifactEventType.END) {
+              const artifacts = artifactCollector.getArtifacts();
+              if (artifacts.length > 0) {
+                messageMetadata = { ...messageMetadata, artifacts };
+                updateLocalAssistantMessage({ metadata: messageMetadata });
+              }
+            }
+
+            onArtifact?.(eventWithMessage);
+          },
         });
 
         resumedContent = responseContent || resumedContent;
-        const persistableContent = resumedContent.trim()
-          ? resumedContent
-          : HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
+        const artifacts = artifactCollector.getArtifacts();
+        if (artifacts.length > 0) {
+          messageMetadata = { ...messageMetadata, artifacts };
+          updateLocalAssistantMessage({ metadata: messageMetadata });
+        }
+
+        const persistableContent =
+          getPersistableAssistantContent(resumedContent, messageMetadata) ??
+          HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
+
+        if (persistableContent !== resumedContent) {
+          updateLocalAssistantMessage({ content: persistableContent, metadata: messageMetadata });
+        }
 
         try {
           const savedMessage = await updateSavedAssistantMessage(
@@ -395,20 +426,20 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         abortControllerRef.current = null;
       }
     },
-    [conversationId, isLoading, queryClient, startStreaming, stopStreamingContext]
+    [conversationId, isLoading, onArtifact, queryClient, startStreaming, stopStreamingContext]
   );
 
   useEffect(() => {
     if (isLoading || messages.length === 0 || !autoContinue?.session) return;
 
     const lastMessage = messages[messages.length - 1];
-    const lastUserMessage = messages.findLast(msg => msg.role === "user");
+    const lastUserMessage = messages.findLast(msg => msg.role === MessageRole.USER);
 
-    if (lastMessage?.role === "assistant" && lastMessage.metadata?.humanInTheLoopStatus === "pending") return;
+    if (lastMessage?.role === MessageRole.ASSISTANT && lastMessage.metadata?.humanInTheLoopStatus === "pending") return;
 
     const isIncomplete =
-      (lastMessage?.role === "user" && lastMessage.id) ||
-      (lastMessage?.role === "assistant" && !lastMessage.content && !lastMessage.metadata?.humanInTheLoopRequest && lastUserMessage?.id);
+      (lastMessage?.role === MessageRole.USER && lastMessage.id) ||
+      (lastMessage?.role === MessageRole.ASSISTANT && !lastMessage.content && !lastMessage.metadata?.humanInTheLoopRequest && lastUserMessage?.id);
 
     if (isIncomplete && lastUserMessage?.id && conversationId) {
       const resumeKey = `${conversationId}:${lastUserMessage.id}`;
@@ -446,15 +477,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     stopStreamingContext(false);
   }, [stopStreamingContext]);
 
-  useEffect(() => {
-    const controller = abortControllerRef.current;
-    return () => {
-      if (controller) {
-        controller.abort();
-        abortControllerRef.current = null;
-      }
-    };
-  }, []);
+  useEffect(() => () => { abortControllerRef.current?.abort(); }, [abortControllerRef]);
 
   return {
     messages,

@@ -54,7 +54,8 @@ export function useChatFileUpload() {
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadAttachment[]>([]);
   const [uploadPhase, dispatchUpload] = useReducer(uploadPhaseReducer, IDLE_PHASE);
   const selectedFilesRef = useRef<File[]>([]);
-  const fileIdMapRef = useRef(new WeakMap<File, string>());
+  const fileIdMapRef = useRef<WeakMap<File, string>>(null!);
+  if (fileIdMapRef.current === null) fileIdMapRef.current = new WeakMap();
   const publicUploadedAttachments = useMemo<Attachment[]>(
     () => uploadedAttachments.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({
       id,

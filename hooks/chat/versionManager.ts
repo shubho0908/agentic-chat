@@ -1,11 +1,11 @@
-import { type Message, type MessageContentPart, type Attachment } from "@/lib/schemas/chat";
+import { type Message, type MessageContentPart, type Attachment, type MessageRole as MessageRoleType } from "@/lib/schemas/chat";
 import type { VersionData } from "@/types/chat";
 import { apiRoutes } from "@/lib/routes";
 
 import { logger } from "@/lib/logger";
 export function createNewVersion(
   existingVersions: Message[],
-  role: "user" | "assistant",
+  role: MessageRoleType,
   content: string | MessageContentPart[],
   messageId: string,
   model?: string,
@@ -94,7 +94,7 @@ export async function fetchMessageVersions(
     if (versionsData?.versions && Array.isArray(versionsData.versions)) {
       return versionsData.versions.map((v: VersionData) => ({
         id: v.id,
-        role: v.role as 'user' | 'assistant',
+        role: v.role as MessageRoleType,
         content: v.content,
         timestamp: new Date(v.createdAt).getTime(),
         attachments: v.attachments || [],

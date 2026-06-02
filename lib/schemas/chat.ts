@@ -2,6 +2,7 @@ import { z } from "zod";
 import { VALIDATION_LIMITS } from "@/constants/validation";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 import { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from "../orchestrator/constants";
+import { ArtifactType } from "@/types/artifact";
 
 const messageRoleSchema = z.enum(["user", "assistant", "system"]);
 
@@ -76,6 +77,22 @@ const toolActivitySchema = z.object({
   timestamp: z.number(),
 });
 
+const artifactMetadataSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum([
+    ArtifactType.HTML,
+    ArtifactType.REACT,
+    ArtifactType.SVG,
+    ArtifactType.MERMAID,
+    ArtifactType.CODE,
+    ArtifactType.MARKDOWN,
+  ]),
+  title: z.string().min(1),
+  language: z.string().min(1).optional(),
+  content: z.string(),
+  createdAt: z.number(),
+});
+
 const messageMetadataBaseSchema = z.object({
   thinking: z.string().optional(),
   thinkingDurationMs: z.number().optional(),
@@ -127,7 +144,7 @@ const messageMetadataBaseSchema = z.object({
   }).optional(),
   humanInTheLoopStatus: z.enum(["pending", "approved", "denied"]).optional(),
   toolActivities: z.array(toolActivitySchema).optional(),
-
+  artifacts: z.array(artifactMetadataSchema).optional(),
 });
 
 export const messageMetadataSchema = messageMetadataBaseSchema.optional();

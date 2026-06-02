@@ -1,14 +1,16 @@
 import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
-import { ToolStatus } from "@/lib/schemas/chat";
+import { ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
+import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
-import { handleConversationSaving, buildMessagesForAPI } from "./conversationManager";
+import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { toJsonValue } from "@/lib/json";
+import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
 
 interface StreamingContext {
   messages: Message[];
@@ -30,6 +32,7 @@ interface StreamingCallbacks {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
   saveToCacheMutate: (data: { query: string; response: string }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
+  onArtifact?: (event: ArtifactEvent) => void;
 }
 
 interface StreamingResult {
@@ -114,7 +117,7 @@ export async function handleStreamingResponse(
     existingAssistantMessageId,
   } = context;
 
-  const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate } = callbacks;
+  const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
   let assistantMessageId = existingAssistantMessageId || `assistant-pending-${conversationId}`;
   let assistantContent = "";
   const toolActivities: ToolActivity[] = [];
@@ -124,6 +127,7 @@ export async function handleStreamingResponse(
   let thinkingContent = "";
   let thinkingStartTime = 0;
   let humanInTheLoopPending = false;
+  const artifactCollector = createArtifactMetadataCollector();
 
   const upsertAssistantMessage = (prev: Message[], msg: Message): Message[] => {
     const idx = prev.findIndex((m) => m.id === msg.id);
@@ -143,7 +147,33 @@ export async function handleStreamingResponse(
     updateAssistantMessage(onMessagesUpdate, previousAssistantMessageId, {
       id: savedAssistantMessageId,
       ...(metadata && { metadata }),
-    });
+      });
+  };
+
+  const ensureAssistantMessage = (content = "") => {
+    if (messageCreated) return;
+
+    messageCreated = true;
+    onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+      role: MessageRole.ASSISTANT,
+      content,
+      id: assistantMessageId,
+      timestamp: Date.now(),
+      model,
+      toolActivities: [...toolActivities],
+      metadata: messageMetadata,
+    }));
+  };
+
+  const applyArtifactMetadata = (): MessageMetadata | undefined => {
+    const artifacts = artifactCollector.getArtifacts();
+    if (artifacts.length === 0) return messageMetadata;
+
+    messageMetadata = {
+      ...messageMetadata,
+      artifacts,
+    };
+    return messageMetadata;
   };
 
   try {
@@ -164,7 +194,7 @@ export async function handleStreamingResponse(
         });
       } else {
         onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-            role: "assistant",
+            role: MessageRole.ASSISTANT,
             content: assistantContent,
             id: assistantMessageId,
             timestamp: Date.now(),
@@ -213,7 +243,7 @@ export async function handleStreamingResponse(
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-              role: "assistant",
+              role: MessageRole.ASSISTANT,
               content: fullContent,
               id: assistantMessageId,
               timestamp: Date.now(),
@@ -234,7 +264,7 @@ export async function handleStreamingResponse(
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-              role: "assistant",
+              role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
               timestamp: Date.now(),
@@ -258,7 +288,7 @@ export async function handleStreamingResponse(
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-              role: "assistant",
+              role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
               timestamp: Date.now(),
@@ -322,7 +352,7 @@ export async function handleStreamingResponse(
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-              role: "assistant",
+              role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
               timestamp: Date.now(),
@@ -342,7 +372,7 @@ export async function handleStreamingResponse(
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
-              role: "assistant",
+              role: MessageRole.ASSISTANT,
               content: "",
               thinking,
               id: assistantMessageId,
@@ -357,9 +387,29 @@ export async function handleStreamingResponse(
           });
         }
       },
+      onArtifact: (event) => {
+        const eventWithMessage = { ...event, messageId: assistantMessageId };
+        artifactCollector.push(eventWithMessage);
+
+        if (event.type === ArtifactEventType.START) {
+          ensureAssistantMessage();
+        }
+
+        if (event.type === ArtifactEventType.END) {
+          const nextMetadata = applyArtifactMetadata();
+          if (nextMetadata) {
+            ensureAssistantMessage();
+            updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+              metadata: nextMetadata,
+            });
+          }
+        }
+        onArtifact?.(eventWithMessage);
+      },
     });
 
     assistantContent = responseContent;
+    const artifacts = artifactCollector.getArtifacts();
 
     if (thinkingContent) {
       const thinkingDurationMs = thinkingStartTime ? Date.now() - thinkingStartTime : undefined;
@@ -370,14 +420,26 @@ export async function handleStreamingResponse(
       messageMetadata = { ...messageMetadata, toolActivities };
     }
 
+    if (artifacts.length > 0) {
+      messageMetadata = { ...messageMetadata, artifacts };
+    }
+
     if (messageMetadata) {
       updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
         metadata: messageMetadata,
       });
     }
 
-    if (assistantContent !== undefined && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent) {
+    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, messageMetadata);
+
+    if (persistableAssistantContent && persistableAssistantContent !== assistantContent) {
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+        content: persistableAssistantContent,
+      });
+    }
+
+    if (persistableAssistantContent && !abortSignal.aborted) {
+      if (cacheQuery && assistantContent && artifacts.length === 0) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
@@ -409,7 +471,7 @@ export async function handleStreamingResponse(
 
         persistConversationMemoryIfEligible({
           userMessageContent,
-          assistantContent,
+          assistantContent: persistableAssistantContent,
           userId: session?.user?.id,
           memoryEnabled,
           activeTool,

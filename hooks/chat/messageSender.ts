@@ -1,4 +1,5 @@
-import type { Message, Attachment } from "@/lib/schemas/chat";
+import type { Message, Attachment, MessageContentPart } from "@/lib/schemas/chat";
+import { MessageRole } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
@@ -73,6 +74,7 @@ export async function continueIncompleteConversation(
       onMessagesUpdate,
       saveToCacheMutate,
       onMemoryStatusUpdate,
+      onArtifact: context.onArtifact,
     }
   );
 
@@ -83,6 +85,48 @@ export async function continueIncompleteConversation(
   }
 
   return result;
+}
+
+async function createAndSaveConversation(
+  messageContent: string | MessageContentPart[],
+  userMessage: Message,
+  queryClient: SendMessageContext['queryClient'],
+  onMessagesUpdate: SendMessageContext['onMessagesUpdate'],
+  onConversationIdUpdate: SendMessageContext['onConversationIdUpdate'],
+  onNavigate: SendMessageContext['onNavigate'],
+  attachments: Attachment[] | undefined,
+  abortSignal: AbortSignal,
+): Promise<string> {
+  let conversationId: string | null = null;
+  await handleConversationSaving(
+    true,
+    null,
+    messageContent,
+    "",
+    userMessage.timestamp ?? Date.now(),
+    queryClient,
+    (data: ConversationResult) => {
+      conversationId = data.conversationId;
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
+        )
+      );
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      onNavigate(appRoutes.conversation(data.conversationId));
+    },
+    attachments,
+    true,
+    abortSignal,
+    undefined,
+    (id: string) => {
+      conversationId = id;
+      onConversationIdUpdate(id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+    }
+  );
+  if (!conversationId) throw new Error("Failed to create conversation");
+  return conversationId;
 }
 
 export async function handleSendMessage(
@@ -115,7 +159,7 @@ export async function handleSendMessage(
   const messageContent = buildMultimodalContent(content.trim(), attachments);
 
   const userMessage: Message = {
-    role: "user",
+    role: MessageRole.USER,
     content: messageContent,
     id: `user-${Date.now()}`,
     timestamp: Date.now(),
@@ -131,7 +175,7 @@ export async function handleSendMessage(
     ...prev,
     userMessage,
     {
-      role: "assistant",
+      role: MessageRole.ASSISTANT,
       content: "",
       id: placeholderAssistantId,
       timestamp: Date.now(),
@@ -145,43 +189,13 @@ export async function handleSendMessage(
 
   try {
     let currentConversationId = conversationId;
-    let shouldResumeOnConversationPage = false;
 
     if (isNewConversation) {
-      await handleConversationSaving(
-        true,
-        null,
-        messageContent,
-        "",
-        userMessage.timestamp ?? Date.now(),
-        queryClient,
-        (data: ConversationResult) => {
-          currentConversationId = data.conversationId;
-          onMessagesUpdate((prev) =>
-            prev.map((msg) =>
-              msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
-            )
-          );
-          userMessageWasPersisted = true;
-          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
-          onNavigate(appRoutes.conversation(data.conversationId));
-        },
-        attachments,
-        true,
-        abortSignal,
-        undefined,
-        (conversationId: string) => {
-          currentConversationId = conversationId;
-          onConversationIdUpdate(conversationId);
-          queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
-        }
+      currentConversationId = await createAndSaveConversation(
+        messageContent, userMessage, queryClient, onMessagesUpdate,
+        onConversationIdUpdate, onNavigate, attachments, abortSignal
       );
-
-      if (!currentConversationId) {
-        throw new Error("Failed to create conversation");
-      }
-
-      shouldResumeOnConversationPage = true;
+      return { success: true };
     } else {
       if (!currentConversationId) {
         throw new Error("Conversation ID is required for existing conversations");
@@ -212,10 +226,6 @@ export async function handleSendMessage(
       throw new Error("Conversation ID is required before streaming the response");
     }
 
-    if (shouldResumeOnConversationPage) {
-      return { success: true };
-    }
-
     const result = await handleStreamingResponse(
       {
         messages,
@@ -236,6 +246,7 @@ export async function handleSendMessage(
         onMessagesUpdate,
         saveToCacheMutate,
         onMemoryStatusUpdate,
+        onArtifact: context.onArtifact,
       }
     );
 

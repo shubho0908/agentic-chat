@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Loader } from "lucide-react";
-import type { Message, Attachment } from "@/lib/schemas/chat";
+import { MessageRole, type Message, type Attachment } from "@/lib/schemas/chat";
+import type { ArtifactMetadata } from "@/types/artifact";
 import { ChatMessage } from "./chatMessage";
 import { ContextLimitBanner } from "./contextLimitBanner";
 import { ScrollArea } from "@/components/ui/scrollArea";
@@ -18,6 +19,7 @@ interface ChatContainerProps {
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
+  onOpenArtifact?: (messageId: string, artifact: ArtifactMetadata) => void;
   memoryStatus?: MemoryStatus;
   hasNextPage?: boolean;
   fetchNextPage?: () => void;
@@ -49,6 +51,7 @@ export function ChatContainer({
   onRegenerateMessage,
   onSendMessage,
   onHumanInTheLoopDecision,
+  onOpenArtifact,
   memoryStatus,
   hasNextPage,
   fetchNextPage,
@@ -117,7 +120,7 @@ export function ChatContainer({
     isContextBlocked &&
     !isLoading &&
     messages.length > 0 &&
-    lastMessage?.role === 'assistant';
+    lastMessage?.role === MessageRole.ASSISTANT;
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
@@ -163,6 +166,8 @@ export function ChatContainer({
                 onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
                 onSendMessage={onSendMessage}
                 onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+                onOpenArtifact={onOpenArtifact}
+                isSharePage={isSharePage}
                 isLastMessage={index === messages.length - 1}
                 isLoading={isLoading}
                 memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}

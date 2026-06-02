@@ -33,6 +33,10 @@ export function shouldUseSemanticCache(
   if (activeTool) {
     return false;
   }
+
+  if (messages.some((message) => message.metadata?.artifacts && message.metadata.artifacts.length > 0)) {
+    return false;
+  }
   
   return true;
 }

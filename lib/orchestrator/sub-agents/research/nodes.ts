@@ -305,8 +305,10 @@ export function deepScrapeNode() {
   return withResearchNode(ResearchNode.DEEP_SCRAPE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const toScrape = getRankedSources(
       state.sources
-        .map((s) => ({ ...s, qualityScore: scoreSource(s) }))
-        .filter((s) => !s.fullContent),
+        .flatMap((s) => {
+          if (s.fullContent) return [];
+          return [{ ...s, qualityScore: scoreSource(s) }];
+        }),
       Limit.TOP_SCRAPE_COUNT
     );
 

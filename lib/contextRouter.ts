@@ -1,6 +1,7 @@
 import { getMemoryContextResult } from './memory';
 import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
 import type { Message } from '@/lib/schemas/chat';
+import { MessageRole } from '@/lib/schemas/chat';
 import { RoutingDecision } from '@/types/chat';
 import { prisma } from './prisma';
 import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
@@ -125,7 +126,7 @@ function detectImages(content: string | Array<{ type: string; text?: string; ima
 
 function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
   const relevantMessages = messages
-    .filter((message) => message.role !== 'system')
+    .filter((message) => message.role !== MessageRole.SYSTEM)
     .slice(-maxMessages)
     .map((message) => {
       const text = extractTextFromMessage(message.content).trim();
@@ -197,7 +198,9 @@ async function resolveDocumentContext(
     waitForProcessing: index === 0 ? options.waitForProcessing : false,
   }));
 
-  for (const attempt of attempts) {
+  const tryAttempt = async (index: number): Promise<ReturnType<typeof getRAGContext> | undefined> => {
+    if (index >= attempts.length) return undefined;
+    const attempt = attempts[index];
     try {
       const result = await getRAGContext(attempt.query, userId, {
         conversationId: options.conversationId,
@@ -208,13 +211,15 @@ async function resolveDocumentContext(
         processingTimeoutMs: options.processingTimeoutMs,
       });
 
-      if (result) {
-        return result;
-      }
+      if (result) return result;
     } catch (error) {
       logger.warn('[Context Router] RAG retrieval attempt failed:', error);
     }
-  }
+    return tryAttempt(index + 1);
+  };
+
+  const ragResult = await tryAttempt(0);
+  if (ragResult) return ragResult;
 
   return null;
 }

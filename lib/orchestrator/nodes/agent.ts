@@ -45,14 +45,43 @@ Execution budget:
 - If a tool fails, try ONE alternative approach. Do not retry the same failing call.
 - If after 2 attempts you cannot get what you need, respond with what you have and explain what failed.
 - For deep_research: it handles its own multi-step searching internally. Call it ONCE per topic — never loop on it.
-- Never call the same tool with identical arguments more than once.`;
+- Never call the same tool with identical arguments more than once.
+
+Formatting: Use LaTeX ($inline$, $$block$$), fenced code blocks with language tags, mermaid diagrams, and markdown tables as appropriate.
+
+Artifacts: When creating substantial, self-contained content (complete HTML pages, React components, SVGs, diagrams, standalone code files of 15+ lines, or full documents), wrap it in an artifact tag:
+<artifact type="TYPE" title="TITLE" language="LANG">
+content here
+</artifact>
+Valid types: html, react, svg, mermaid, code, markdown.
+- html: Complete web pages or interactive HTML with CSS/JS. Keep the artifact self-contained: use inline/local styles or assume Tailwind utility classes are available — do NOT include external CDN <script>/<link> tags. The renderer injects Tailwind automatically for both fragments and full documents.
+- react: Self-contained React components (export default). Can use Tailwind classes, Recharts. Do NOT add external <script> tags or imports beyond 'react'/'react-dom'/'recharts' — the renderer provides them.
+- svg: SVG graphics and illustrations.
+- mermaid: Mermaid diagram syntax.
+- code: Standalone code files (set language attribute, e.g. language="python").
+- markdown: Long-form documents, reports, READMEs.
+Do NOT use artifacts for: short inline snippets, code examples under 15 lines, simple explanations, or partial code. Only use artifacts when the content is independently useful and renderable.
+
+Artifact completeness: NEVER use placeholder comments like "// ... rest of code", "/* add more here */", or "// TODO: implement". Every artifact must be fully functional, complete, and runnable as-is. If the content would be too long, reduce scope rather than using placeholders.
+
+UI Quality (html & react artifacts):
+- Design with a polished, production-grade aesthetic. Use generous spacing, consistent padding, and clear visual hierarchy.
+- Use modern UI patterns: subtle shadows, rounded corners, smooth transitions, hover states, and focus rings.
+- Always implement responsive design that works on mobile and desktop.
+- Use a cohesive color palette with good contrast ratios. Default to a clean neutral theme with accent colors for interactive elements.
+- Typography: use proper font sizes, weights, and line heights. Headings should be distinct from body text.
+- Include loading states, empty states, and error states where appropriate.
+- Add subtle micro-interactions (hover effects, transitions) to make the UI feel alive.
+- Never use default browser styles. Every element should be intentionally styled.`;
 
 function buildSystemPrompt(connectedServices: string[]): string {
   if (connectedServices.length === 0) return BASE_SYSTEM_PROMPT;
 
   const connectedNames = connectedServices
-    .map((s) => TOOLKIT_DISPLAY_NAMES[s as ComposioToolkit])
-    .filter(Boolean)
+    .flatMap((s) => {
+      const name = TOOLKIT_DISPLAY_NAMES[s as ComposioToolkit];
+      return name ? [name] : [];
+    })
     .join(", ");
 
   return `${BASE_SYSTEM_PROMPT}
@@ -311,8 +340,7 @@ export function createAgentNode(
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
     const incomingMessages: BaseMessage[] = [...state.messages];
     const plannerHints = incomingMessages
-      .filter(isPlannerHint)
-      .map(getMessageText);
+      .flatMap((msg) => isPlannerHint(msg) ? [getMessageText(msg)] : []);
 
     const conversationMessages = incomingMessages.filter((message, index) => {
       if (isPlannerHint(message)) return false;

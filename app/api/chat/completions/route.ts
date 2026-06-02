@@ -38,6 +38,17 @@ function getOpenAIClient(apiKey: string): OpenAI {
 import { isValidConversationId, validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import type { MemoryStatus } from '@/types/chat';
+
+const BASE_MEMORY_STATUS: MemoryStatus = {
+  hasMemories: false,
+  attemptedMemory: false,
+  hasDocuments: false,
+  memoryCount: 0,
+  documentCount: 0,
+  hasImages: false,
+  imageCount: 0,
+  skippedMemory: false,
+};
 import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
@@ -153,16 +164,6 @@ export async function POST(request: NextRequest) {
     }
 
     const validatedMessages = validation.messages;
-    const baseMemoryStatusInfo: MemoryStatus = {
-      hasMemories: false, 
-      attemptedMemory: false,
-      hasDocuments: false, 
-      memoryCount: 0, 
-      documentCount: 0,
-      hasImages: false,
-      imageCount: 0,
-      skippedMemory: false,
-    };
 
     const openai = wrapOpenAIWithLangSmith(getOpenAIClient(apiKey));
 
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
           })
         : createChatStreamHandler({
             messages: validatedMessages,
-            memoryStatusInfo: baseMemoryStatusInfo,
+            memoryStatusInfo: { ...BASE_MEMORY_STATUS },
             model: validatedModel,
             openai,
             apiKey,
@@ -226,7 +227,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       let enhancedMessages = validatedMessages;
-      let memoryStatusInfo: MemoryStatus = { ...baseMemoryStatusInfo };
+      let memoryStatusInfo: MemoryStatus = { ...BASE_MEMORY_STATUS };
 
       try {
         const { routeContext } = await import('@/lib/contextRouter');

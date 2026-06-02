@@ -3,6 +3,7 @@
 import { type RefObject } from "react";
 import { LogIn, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { SidebarTriggerWithShortcut } from "@/components/sidebarTriggerWithShortcut";
 import { Byok } from "@/components/byok";
 import { AuthModal } from "@/components/authModal";
@@ -20,6 +21,7 @@ interface ChatHeaderProps {
   isPublic?: boolean;
   onToggleSharing?: (id: string, isPublic: boolean) => void;
   isToggling?: boolean;
+  artifactOpen?: boolean;
 }
 
 export function ChatHeader({
@@ -28,12 +30,18 @@ export function ChatHeader({
   conversationId,
   isPublic = false,
   onToggleSharing,
-  isToggling = false
+  isToggling = false,
+  artifactOpen = false,
 }: ChatHeaderProps) {
   const { data: session, isPending } = useSession();
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between gap-2 bg-white/40 dark:bg-black/20 backdrop-blur-3xl p-4 border-b border-black/5 dark:border-white/5 md:left-auto md:top-6 md:right-6 md:bg-transparent md:backdrop-blur-none md:p-0 md:border-none">
+    <div className={cn(
+      "fixed z-50 flex items-center justify-between gap-2",
+      artifactOpen
+        ? "bottom-6 right-6 top-auto left-auto bg-transparent backdrop-blur-none p-0 border-none"
+        : "top-0 left-0 right-0 bg-white/40 dark:bg-black/20 backdrop-blur-3xl p-4 border-b border-black/5 dark:border-white/5 md:left-auto md:top-6 md:right-6 md:bg-transparent md:backdrop-blur-none md:p-0 md:border-none"
+    )}>
       {session && (
         <SidebarTriggerWithShortcut className="md:hidden" showTooltip={false} />
       )}
