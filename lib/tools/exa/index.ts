@@ -5,7 +5,7 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { withRetry } from "@/lib/retry";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
-import { getCircuitBreaker } from "@/lib/circuitBreaker";
+import { getCircuitBreaker, registerCircuitBreaker } from "@/lib/circuitBreaker";
 import { ToolName } from "@/lib/tools/constants";
 import { CustomEventName } from "@/lib/orchestrator/constants";
 
@@ -14,6 +14,12 @@ let exaClient: Exa | null = null;
 const EXA_REQUEST_TIMEOUT_MS = 15_000;
 const SERPER_SEARCH_URL = "https://google.serper.dev/search";
 const SERPER_MAX_RESPONSE_BYTES = 512 * 1024;
+
+const EXA_BREAKER_OPTIONS = { failureThreshold: 4, resetTimeoutMs: 30_000 } as const;
+const SERPER_BREAKER_OPTIONS = { failureThreshold: 4, resetTimeoutMs: 30_000 } as const;
+
+registerCircuitBreaker("exa", EXA_BREAKER_OPTIONS);
+registerCircuitBreaker("serper", SERPER_BREAKER_OPTIONS);
 
 function getExaClient(): Exa {
   if (!exaClient) {
@@ -146,8 +152,8 @@ export async function exaDeepSearch(
   options: DeepSearchOptions = {}
 ): Promise<SearchResult[]> {
   const { numResults = 8, maxCharacters = 3000 } = options;
-  const exaBreaker = getCircuitBreaker("exa", { failureThreshold: 4, resetTimeoutMs: 30_000 });
-  const serperBreaker = getCircuitBreaker("serper", { failureThreshold: 4, resetTimeoutMs: 30_000 });
+  const exaBreaker = getCircuitBreaker("exa");
+  const serperBreaker = getCircuitBreaker("serper");
 
   if (exaBreaker.canAttempt() && process.env.EXA_API_KEY) {
     try {

@@ -30,7 +30,7 @@ interface FormHandlers {
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onInput: (e: React.FormEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
-  onRemoveFile: (index: number) => void;
+  onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
   onToolSelected: (toolId: ToolId) => void;
   onMemoryToggle: (enabled: boolean) => void;

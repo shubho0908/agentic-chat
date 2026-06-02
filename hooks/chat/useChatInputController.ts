@@ -123,6 +123,8 @@ export function useChatInputController({
   const [textSnippets, setTextSnippets] = useState<TextSnippet[]>([]);
 
   const snippetCountRef = useRef(0);
+  const textSnippetsRef = useRef<TextSnippet[]>([]);
+  const snippetFilesRef = useRef<Map<string, File>>(new Map());
 
   const addTextSnippet = useCallback((content: string) => {
     const id = crypto.randomUUID();
@@ -131,24 +133,21 @@ export function useChatInputController({
       ? "pasted-text.txt"
       : `pasted-text-${snippetCountRef.current}.txt`;
     const byteSize = new TextEncoder().encode(content).byteLength;
-    setTextSnippets((prev) => [...prev, { id, content, fileName, byteSize }]);
-    return fileName;
+    const file = new File([content], fileName, { type: "text/plain" });
+    const next = [...textSnippetsRef.current, { id, content, fileName, byteSize }];
+    textSnippetsRef.current = next;
+    snippetFilesRef.current.set(id, file);
+    setTextSnippets(next);
+    return file;
   }, []);
 
-  const selectedFilesRef = useRef(selectedFiles);
-  useEffect(() => { selectedFilesRef.current = selectedFiles; }, [selectedFiles]);
-
   const removeTextSnippet = useCallback((id: string) => {
-    setTextSnippets((prev) => {
-      const snippet = prev.find((s) => s.id === id);
-      if (snippet) {
-        const fileIndex = selectedFilesRef.current.findIndex(
-          (f) => f.name === snippet.fileName && f.type === "text/plain"
-        );
-        if (fileIndex !== -1) handleRemoveFile(fileIndex);
-      }
-      return prev.filter((s) => s.id !== id);
-    });
+    const file = snippetFilesRef.current.get(id);
+    snippetFilesRef.current.delete(id);
+    const next = textSnippetsRef.current.filter((s) => s.id !== id);
+    textSnippetsRef.current = next;
+    setTextSnippets(next);
+    if (file) handleRemoveFile(file);
   }, [handleRemoveFile]);
 
   useEffect(() => {
@@ -223,6 +222,8 @@ export function useChatInputController({
       }
 
       clearInput();
+      textSnippetsRef.current = [];
+      snippetFilesRef.current.clear();
       setTextSnippets([]);
 
       if (hasDocuments) {
@@ -277,8 +278,7 @@ export function useChatInputController({
         return;
       }
 
-      const fileName = addTextSnippet(pastedText);
-      const file = new File([pastedText], fileName, { type: "text/plain" });
+      const file = addTextSnippet(pastedText);
       handleFilesSelected([file]);
       return;
     }

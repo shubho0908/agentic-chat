@@ -184,15 +184,12 @@ export function useChatFileUpload() {
     }
   }
 
-  function handleRemoveFile(index: number) {
-    const fileToRemove = selectedFilesRef.current[index];
-    if (!fileToRemove) {
-      return;
-    }
+  function handleRemoveFile(file: File) {
+    if (!file) return;
 
-    const fileId = getFileId(fileToRemove);
+    const fileId = getFileId(file);
 
-    setSelectedFiles((prev) => prev.filter((file) => getFileId(file) !== fileId));
+    setSelectedFiles((prev) => prev.filter((f) => getFileId(f) !== fileId));
     setUploadedAttachments((prev) => prev.filter((attachment) => attachment.clientFileId !== fileId));
   }
 

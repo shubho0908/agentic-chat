@@ -30,6 +30,19 @@ function isInlineEligibleType(fileType: string): boolean {
   return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith('text/');
 }
 
+function sanitizeAttachedFileName(name: string): string {
+  const sanitized = name
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .trim()
+    .slice(0, 256);
+  return sanitized || 'untitled';
+}
+
 async function tryInlineAttachmentContent(
   attachmentIds: string[],
   userId: string,
@@ -56,7 +69,7 @@ async function tryInlineAttachmentContent(
         const res = await safeFetch(att.fileUrl, { timeoutMs: 10000, maxResponseBytes: INLINE_ATTACHMENT_MAX_BYTES });
         if (!res.ok) return null;
         const text = await res.text();
-        return `<attached_file name="${att.fileName}">\n${text}\n</attached_file>`;
+        return `<attached_file name="${sanitizeAttachedFileName(att.fileName)}">\n${text}\n</attached_file>`;
       }),
     );
 

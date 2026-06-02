@@ -99,9 +99,8 @@ export function createPlannerNode(
       const response = await withRetry(
         (signal) => llm.invoke(messages, { ...(config ?? {}), signal }),
         {
-          retries: 2,
+          retries: 1,
           initialDelayMs: 400,
-          timeoutMs: PLANNER_TIMEOUT_MS,
           signal: config?.signal,
         }
       );

@@ -1,7 +1,7 @@
 "use client";
 
 import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
-import { LazyMotion, m, domAnimation } from "framer-motion";
+import { AnimatePresence, LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ const formatFileSize = (bytes: number) => {
 
 interface FilePreviewProps {
   files: File[];
-  onRemove: (index: number) => void;
+  onRemove: (file: File) => void;
   disabled?: boolean;
   isUploading?: boolean;
   uploadPhase?: UploadPhase;
@@ -117,109 +117,114 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
 
   return (
     <LazyMotion features={domAnimation}>
-      {files.length > 0 && (
-        <m.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
-          className="overflow-hidden"
-        >
-          <div className="border-b border-border/50 px-3 pt-3 pb-2 relative">
-            {canScrollLeft && (
-              <Button
-                type="button"
-                onClick={() => scroll("left")}
-                className="absolute cursor-pointer left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+      <AnimatePresence initial={false}>
+        {files.length > 0 && (
+          <m.div
+            key="file-preview-wrapper"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="border-b border-border/50 px-3 pt-3 pb-2 relative">
+              {canScrollLeft && (
+                <Button
+                  type="button"
+                  onClick={() => scroll("left")}
+                  className="absolute cursor-pointer left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                >
+                  <ChevronLeft className="size-4 text-foreground" />
+                </Button>
+              )}
+              {canScrollRight && (
+                <Button
+                  type="button"
+                  onClick={() => scroll("right")}
+                  className="absolute cursor-pointer right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                >
+                  <ChevronRight className="size-4 text-foreground" />
+                </Button>
+              )}
+              <div
+                key={files.length}
+                ref={setScrollContainerRef}
+                className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                <ChevronLeft className="size-4 text-foreground" />
-              </Button>
-            )}
-            {canScrollRight && (
-              <Button
-                type="button"
-                onClick={() => scroll("right")}
-                className="absolute cursor-pointer right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
-              >
-                <ChevronRight className="size-4 text-foreground" />
-              </Button>
-            )}
-            <div
-              key={files.length}
-              ref={setScrollContainerRef}
-              className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-            >
-              {files.map((file, index) => {
-                const preview = previewUrls[index];
-                return (
-                  <m.div
-                    key={`${file.name}-${file.size}-${file.lastModified}`}
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
-                  >
-                    {isUploading && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
-                        <Loader className="size-4 animate-spin text-muted-foreground" />
-                        <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
-                          {uploadPhase?.isProcessing ? "Processing" : "Uploading"}
-                        </span>
-                      </div>
-                    )}
-                    {preview && !imageErrors[index] ? (
-                      <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
-                        <Image
-                          src={preview}
-                          alt={file.name}
-                          fill
-                          sizes="40px"
-                          className="object-cover"
-                          unoptimized
-                          onError={() => handleImageError(index)}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex size-10 items-center justify-center rounded-md bg-background/80 ring-1 ring-border/50 flex-shrink-0">
-                        {getFileIcon(file)}
-                      </div>
-                    )}
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-xs font-medium truncate max-w-[120px]">
-                              {file.name}
+                <AnimatePresence initial={false}>
+                  {files.map((file, index) => {
+                    const preview = previewUrls[index];
+                    return (
+                      <m.div
+                        key={`${file.name}-${file.size}-${file.lastModified}`}
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
+                      >
+                        {isUploading && (
+                          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+                            <Loader className="size-4 animate-spin text-muted-foreground" />
+                            <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
+                              {uploadPhase?.isProcessing ? "Processing" : "Uploading"}
                             </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{file.name}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <span className="text-[10px] text-muted-foreground/70">
-                        {formatFileSize(file.size)}
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => onRemove(index)}
-                      disabled={disabled}
-                      className="size-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <X className="size-3" />
-                    </Button>
-                  </m.div>
-                );
-              })}
+                          </div>
+                        )}
+                        {preview && !imageErrors[index] ? (
+                          <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
+                            <Image
+                              src={preview}
+                              alt={file.name}
+                              fill
+                              sizes="40px"
+                              className="object-cover"
+                              unoptimized
+                              onError={() => handleImageError(index)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex size-10 items-center justify-center rounded-md bg-background/80 ring-1 ring-border/50 flex-shrink-0">
+                            {getFileIcon(file)}
+                          </div>
+                        )}
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-xs font-medium truncate max-w-[120px]">
+                                  {file.name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{file.name}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <span className="text-[10px] text-muted-foreground/70">
+                            {formatFileSize(file.size)}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onRemove(file)}
+                          disabled={disabled}
+                          className="size-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </m.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
-        </m.div>
-      )}
+          </m.div>
+        )}
+      </AnimatePresence>
     </LazyMotion>
   );
 }

@@ -88,6 +88,40 @@ test("invokeResearchJson retries with a JSON repair prompt before using fallback
   assert.equal(result.tokenUsage.totalTokens, 10);
 });
 
+test("invokeResearchJson repair call enforces budget against merged token usage", async () => {
+  let calls = 0;
+  const fakeLLM: InvokableLLM = {
+    async invoke() {
+      calls += 1;
+      return {
+        content: "not json",
+        usage_metadata: {
+          input_tokens: 30,
+          output_tokens: 20,
+          total_tokens: 50,
+        },
+      };
+    },
+  };
+
+  const result = await invokeResearchJson(
+    fakeLLM,
+    [new HumanMessage("hi")],
+    {
+      nodeName: ResearchNode.TRIAGE,
+      state: createResearchState({ tokenBudget: 80 }),
+      maxOutputTokens: 30,
+      timeoutMs: 1000,
+      schema: z.object({ ok: z.boolean() }),
+      fallback: { ok: false },
+      schemaDescription: '{"ok": boolean}',
+    }
+  );
+
+  assert.equal(calls, 1);
+  assert.deepEqual(result.value, { ok: false });
+});
+
 test("invokeResearchLLM rejects before invoking when token budget would be exceeded", async () => {
   let invoked = false;
   const fakeLLM: InvokableLLM = {

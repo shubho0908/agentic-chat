@@ -10,6 +10,12 @@ const eslintConfig = [
       "lib/generated/**",
     ],
   },
+  {
+    files: ["components/export/**/*.tsx"],
+    rules: {
+      "jsx-a11y/alt-text": ["warn", { img: ["Image"], components: [] }],
+    },
+  },
 ];
 
 export default eslintConfig;

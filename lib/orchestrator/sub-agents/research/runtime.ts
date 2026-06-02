@@ -344,8 +344,16 @@ export async function invokeResearchJson<T>(
     ),
   ];
 
+  const repairOptions: InvokeResearchLLMOptions = {
+    ...options,
+    state: {
+      ...options.state,
+      tokenUsage: mergeTokenUsage(options.state.tokenUsage ?? emptyTokenUsage(), first.tokenUsage),
+    },
+  };
+
   try {
-    const repair = await invokeResearchLLM(llm, repairMessages, options);
+    const repair = await invokeResearchLLM(llm, repairMessages, repairOptions);
     const repaired = parseJsonWithSchema(repair.text, options.schema);
     const tokenUsage = mergeTokenUsage(first.tokenUsage, repair.tokenUsage);
     if (repaired.ok) {
