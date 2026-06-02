@@ -375,9 +375,10 @@ export async function handleEditMessage(
         queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
+      const assistantContentForMemory = prepareAssistantContentForMemory(persistableAssistantContent);
       persistConversationMemoryIfEligible({
         userMessageContent: messageContent,
-        assistantContent: persistableAssistantContent,
+        assistantContent: assistantContentForMemory,
         userId: context.session?.user?.id,
         memoryEnabled: memoryEnabled ?? true,
         activeTool,
@@ -402,4 +403,31 @@ export async function handleEditMessage(
     onMessagesUpdate(() => originalMessagesState);
     return { success: false, error: errorMessage };
   }
+}
+
+function prepareAssistantContentForMemory(content: string): string {
+  if (!content) return content;
+
+  let stripped = content;
+
+  stripped = stripped.replace(/<artifact(\s[^>]*)?>[\s\S]*?<\/artifact>/g, "");
+
+  stripped = stripped.replace(/^ {0,3}```[\s\S]*?^ {0,3}```/gm, (match) => {
+    if (match.length > 500) {
+      const lang = match.match(/```(\w*)/)?.[1] || "";
+      const lines = match.split('\n').length - 2;
+      return `\`\`\`${lang}\n[${lines} lines omitted]\n\`\`\``;
+    }
+    return match;
+  });
+
+  stripped = stripped.replace(/<[^>]+>/g, "");
+
+  stripped = stripped.replace(/\n{3,}/g, "\n\n");
+
+  if (stripped.length > 2000) {
+    stripped = stripped.slice(0, 2000) + "...";
+  }
+
+  return stripped.trim();
 }

@@ -7,7 +7,7 @@ import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { shouldBypassSemanticCacheForToolIntent } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt, handleGraphEnd } from "./streaming";
+import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -123,6 +123,11 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           logger.warn("[Orchestrator] Failed to flush artifact parser before close:", flushError);
         }
         try {
+          controller.enqueue(encodeDone());
+        } catch (doneError) {
+          logger.warn("[Orchestrator] Failed to enqueue done event:", doneError);
+        }
+        try {
           controller.close();
         } catch (closeError) {
           logger.warn("[Orchestrator] Failed to close stream controller:", closeError);
@@ -145,7 +150,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
         try {
           controller.enqueue(encodeError(friendly));
-          controller.enqueue(encodeDone());
         } finally {
           closeStream();
         }
@@ -197,7 +201,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
         if (!budgetCheck.ok) {
           controller.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
-          controller.enqueue(encodeDone());
           closeStream();
           return;
         }
@@ -215,7 +218,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             if (cached) {
               logger.log("[Orchestrator] Semantic cache HIT");
               controller.enqueue(encodeChatChunk(cached));
-              controller.enqueue(encodeDone());
               closeStream();
               return;
             }
@@ -272,12 +274,10 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             threadId,
           };
           handleGraphInterrupt(controller, interruptData);
-          controller.enqueue(encodeDone());
           closeStream();
           return;
         }
 
-        handleGraphEnd(controller);
         closeStream();
       } catch (error) {
         if (isGraphInterrupt(error)) {
@@ -286,7 +286,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             ? { ...interruptValue as Record<string, unknown>, threadId }
             : { threadId };
           handleGraphInterrupt(controller, interruptData);
-          controller.enqueue(encodeDone());
           closeStream();
           return;
         }

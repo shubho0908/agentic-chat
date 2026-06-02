@@ -143,6 +143,87 @@ async function testIframe(label: string, browser: Browser, sandbox: string, srcd
   return lines.join("\n");
 }
 
+async function testConsecutiveRenders(
+  label: string,
+  browser: Browser,
+  sandbox: string,
+  fixed: boolean,
+): Promise<string> {
+  const page = await browser.newPage();
+  const errors: string[] = [];
+
+  page.on("pageerror", (err) => errors.push(err.message));
+
+  const handlerBody = fixed
+    ? `function handleRender(e) {
+    if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
+      document.open();
+      document.write(e.data.html);
+      document.close();
+      addEventListener('message', handleRender);
+    }
+  }
+  addEventListener('message', handleRender);`
+    : `addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
+      document.open();
+      document.write(e.data.html);
+      document.close();
+    }
+  });`;
+
+  const sandboxLogic = `<!DOCTYPE html><html><body><script>
+(function() {
+  parent.postMessage({ type: 'sandbox-ready' }, '*');
+  ${handlerBody}
+})();
+<\/script></body></html>`;
+
+  const escaped = sandboxLogic.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const pageHtml = `<!DOCTYPE html><html><body>
+<iframe id="frame" sandbox="${sandbox}" srcdoc="${escaped}" style="width:600px;height:300px;border:1px solid #000"></iframe>
+<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'sandbox-ready') {
+    e.source.postMessage({ type: 'render', html: '<div id="result">first</div>' }, '*');
+    setTimeout(function() {
+      e.source.postMessage({ type: 'render', html: '<div id="result">second</div>' }, '*');
+    }, 50);
+  }
+});
+<\/script>
+</body></html>`;
+
+  await page.setContent(pageHtml);
+  await page.waitForTimeout(2000);
+
+  const mode = fixed ? "FIXED" : "BUGGY";
+  const lines: string[] = [`--- ${label} | ${mode} | consecutive renders | sandbox="${sandbox}" ---`];
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+
+  if (!frame) {
+    lines.push("  iframe not found");
+    await page.close();
+    return lines.join("\n");
+  }
+
+  try {
+    const text = await frame.evaluate(() => {
+      const el = document.getElementById("result");
+      return el ? el.textContent || "" : "NO_ELEMENT";
+    });
+    const passed = text === "second";
+    lines.push(`  second render applied: ${passed}`);
+    if (!passed) lines.push(`  got: "${text}" (expected "second")`);
+  } catch (err) {
+    lines.push(`  inspect failed: ${(err as Error).message}`);
+  }
+
+  if (errors.length) lines.push(`  pageerrors: ${errors.join(" | ")}`);
+  await page.close();
+  return lines.join("\n");
+}
+
 async function runWithBrowser(name: string, launcher: { launch: () => Promise<Browser> }) {
   console.log(`\n############ ${name} ############`);
   const browser = await launcher.launch();
@@ -153,6 +234,11 @@ async function runWithBrowser(name: string, launcher: { launch: () => Promise<Br
   console.log(await testIframe("REACT", browser, "allow-scripts", reactDoc, "#root > div"));
   console.log(await testIframe("HTML", browser, "allow-scripts allow-same-origin", htmlDoc, "body > div"));
   console.log(await testIframe("HTML", browser, "allow-scripts", htmlDoc, "body > div"));
+
+  console.log(await testConsecutiveRenders("BUGGY", browser, "allow-scripts allow-same-origin", false));
+  console.log(await testConsecutiveRenders("FIXED", browser, "allow-scripts allow-same-origin", true));
+  console.log(await testConsecutiveRenders("BUGGY", browser, "allow-scripts", false));
+  console.log(await testConsecutiveRenders("FIXED", browser, "allow-scripts", true));
   await browser.close();
 }
 

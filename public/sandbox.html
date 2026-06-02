@@ -9,13 +9,15 @@
 <script>
 (function() {
   parent.postMessage({ type: 'sandbox-ready' }, '*');
-  addEventListener('message', function(e) {
+  function handleRender(e) {
     if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
       document.open();
       document.write(e.data.html);
       document.close();
+      addEventListener('message', handleRender);
     }
-  });
+  }
+  addEventListener('message', handleRender);
 })();
 </script>
 </body>
