@@ -414,7 +414,7 @@ export async function getToolsForRequest(
   }
 
   if (options?.apiKey) {
-    baseTools.push(createDeepResearchTool(options.apiKey, options.model ?? "gpt-4o-mini"));
+    baseTools.push(createDeepResearchTool(options.apiKey, options.model ?? "gpt-4o-mini", userId));
   }
 
   try {

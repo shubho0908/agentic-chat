@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   extractLinks,
   formatLinksAsMarkdown,
+  scrapeUrl,
 } from "@/lib/url-scraper/scraper";
 import { extractDomain } from "@/lib/utils";
 import { hasWebActionIntent, shouldBypassSemanticCacheForToolIntent } from "@/lib/orchestrator/tools";
@@ -47,6 +48,16 @@ test("formatLinksAsMarkdown renders labeled and bare links with indent", () => {
     "  "
   );
   assert.equal(md, "  - [A](https://a.com)\n  - https://b.com");
+});
+
+test("scrapeUrl preserves parent abort signals", async () => {
+  const controller = new AbortController();
+  controller.abort(new Error("cancelled by test"));
+
+  await assert.rejects(
+    () => scrapeUrl("https://1.1.1.1/", { signal: controller.signal }),
+    (error) => error instanceof Error && error.name === "AbortError"
+  );
 });
 
 test("extractDomain strips www and returns empty on invalid input", () => {

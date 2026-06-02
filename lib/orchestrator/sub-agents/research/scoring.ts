@@ -1,5 +1,5 @@
 import type { ResearchSource } from "./state";
-import { DomainScore } from "./constants";
+import { DomainScore, Limit } from "./constants";
 
 const HIGH_AUTHORITY_DOMAINS = new Set([
   "github.com", "stackoverflow.com", "developer.mozilla.org", "docs.google.com",
@@ -37,7 +37,22 @@ export function scoreSource(source: ResearchSource): number {
 }
 
 export function getRankedSources(sources: ResearchSource[], limit: number): ResearchSource[] {
-  return [...sources]
-    .sort((a, b) => b.qualityScore - a.qualityScore)
-    .slice(0, limit);
+  const perDomain = new Map<string, number>();
+  const ranked: ResearchSource[] = [];
+
+  for (const source of [...sources].sort((a, b) => b.qualityScore - a.qualityScore)) {
+    const domain = source.domain || "unknown";
+    const count = perDomain.get(domain) ?? 0;
+    if (count >= Limit.MAX_SOURCES_PER_DOMAIN) {
+      continue;
+    }
+
+    perDomain.set(domain, count + 1);
+    ranked.push(source);
+    if (ranked.length >= limit) {
+      break;
+    }
+  }
+
+  return ranked;
 }

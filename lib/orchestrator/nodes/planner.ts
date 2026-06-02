@@ -9,6 +9,7 @@ import type { PlanComplexityValue } from "../constants";
 import { logger } from "@/lib/logger";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import { z } from "zod";
+import { withRetry } from "@/lib/retry";
 
 const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
 
@@ -88,14 +89,21 @@ export function createPlannerNode(
         ? `\n\nConnected services (pre-authenticated, never ask for credentials): ${connected.join(", ")}`
         : "";
 
-      const response = await llm.invoke(
-        [
-          new SystemMessage(
-            `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`
-          ),
-          new HumanMessage(content),
-        ],
-        config
+      const messages = [
+        new SystemMessage(
+          `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`
+        ),
+        new HumanMessage(content),
+      ];
+
+      const response = await withRetry(
+        (signal) => llm.invoke(messages, { ...(config ?? {}), signal }),
+        {
+          retries: 2,
+          initialDelayMs: 400,
+          timeoutMs: PLANNER_TIMEOUT_MS,
+          signal: config?.signal,
+        }
       );
 
       const planText = typeof response.content === "string" ? response.content : "";

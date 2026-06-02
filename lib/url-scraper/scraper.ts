@@ -66,6 +66,7 @@ const MAX_SCRAPE_RESPONSE_BYTES = 5 * 1024 * 1024;
 interface ScrapeRequestOptions {
   timeoutMs?: number;
   retries?: number;
+  signal?: AbortSignal;
 }
 
 function getPositiveFiniteNumber(value: number | undefined, fallback: number): number {
@@ -190,6 +191,7 @@ async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): P
     const response = await safeFetch(url, {
       timeoutMs,
       retries,
+      signal: options.signal,
       maxResponseBytes: MAX_SCRAPE_RESPONSE_BYTES,
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -230,6 +232,11 @@ async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): P
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === "AbortError") {
+        if (options.signal?.aborted) {
+          logError({ event: 'url_scrape_aborted', url, error: error.message });
+          throw error;
+        }
+
         logError({ event: 'url_scrape_timeout', url, error: error.message });
         throw new Error("Request timeout - the website took too long to respond");
       }
@@ -244,4 +251,3 @@ async function scrapeUrlCore(url: string, options: ScrapeRequestOptions = {}): P
 export async function scrapeUrl(url: string, options: ScrapeRequestOptions = {}): Promise<ScrapedContent> {
   return scrapeUrlCore(url, options);
 }
-

@@ -8,6 +8,24 @@ interface RetryOptions {
   shouldRetry?: (error: unknown, attempt: number) => boolean;
 }
 
+export function isRateLimitError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as Error & { status?: number; code?: string | number; cause?: { status?: number } };
+  const status = candidate.status ?? candidate.cause?.status;
+  if (status === 429) return true;
+  const msg = candidate.message?.toLowerCase() ?? "";
+  return msg.includes("rate limit") || msg.includes("too many requests");
+}
+
+function getRetryAfterMs(error: unknown): number | null {
+  if (!error || typeof error !== "object") return null;
+  const candidate = error as { headers?: { get?: (k: string) => string | null }; response?: { headers?: { get?: (k: string) => string | null } } };
+  const raw = candidate.headers?.get?.("retry-after") ?? candidate.response?.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
+}
+
 type AbortableOperation<T> = (signal?: AbortSignal) => Promise<T>;
 
 function createAbortError(message: string): Error {
@@ -164,12 +182,13 @@ export async function withRetry<T>(
         throw error;
       }
 
-      const backoffMs = Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
+      const rateLimited = isRateLimitError(error);
+      const retryAfterMs = rateLimited ? getRetryAfterMs(error) : null;
+      const baseBackoff = rateLimited
+        ? retryAfterMs ?? Math.min(initialDelayMs * 4 ** attempt, 10_000)
+        : Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
       const jitter = Math.floor(Math.random() * Math.max(0, jitterMs));
-      await sleep(backoffMs, signal);
-      if (jitter > 0) {
-        await sleep(jitter, signal);
-      }
+      await sleep(baseBackoff + jitter, signal);
     }
   }
 

@@ -15,6 +15,12 @@ const CRAWL_PAGE_TIMEOUT_MS = 8000;
 
 let firecrawlClient: Firecrawl | null = null;
 
+interface ScrapeContentOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  retries?: number;
+}
+
 function getFirecrawlClient(): Firecrawl | null {
   if (firecrawlClient) return firecrawlClient;
   const apiKey = process.env.FIRECRAWL_API_KEY;
@@ -26,6 +32,42 @@ function getFirecrawlClient(): Firecrawl | null {
 function truncate(text: string): string {
   if (text.length <= MAX_CONTENT_LENGTH) return text;
   return text.slice(0, MAX_CONTENT_LENGTH) + "\n\n[Content truncated]";
+}
+
+function createAbortError(message = "Scrape aborted"): Error {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function createCombinedTimeoutController(
+  timeoutMs: number,
+  parentSignal?: AbortSignal
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(createAbortError("Scrape timeout"));
+  }, timeoutMs);
+
+  const onParentAbort = () => {
+    controller.abort(parentSignal?.reason ?? createAbortError());
+  };
+
+  parentSignal?.addEventListener("abort", onParentAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      parentSignal?.removeEventListener("abort", onParentAbort);
+    },
+  };
 }
 
 async function readBoundedText(response: Response): Promise<string> {
@@ -58,8 +100,13 @@ async function readBoundedText(response: Response): Promise<string> {
   return chunks.map((c) => decoder.decode(c, { stream: true })).join("") + decoder.decode();
 }
 
-async function tier1Scrape(url: string): Promise<string> {
-  const result = await scrapeUrl(url, { timeoutMs: 8000, retries: 1 });
+async function tier1Scrape(url: string, options: ScrapeContentOptions = {}): Promise<string> {
+  throwIfAborted(options.signal);
+  const result = await scrapeUrl(url, {
+    timeoutMs: options.timeoutMs ?? 8000,
+    retries: options.retries ?? 1,
+    signal: options.signal,
+  });
   if (!result.textContent || result.textContent.length < 100) {
     throw new Error("Tier 1: insufficient content extracted");
   }
@@ -81,7 +128,8 @@ async function tier1Scrape(url: string): Promise<string> {
   return header + body + links;
 }
 
-async function tier2Scrape(url: string): Promise<string> {
+async function tier2Scrape(url: string, options: ScrapeContentOptions = {}): Promise<string> {
+  throwIfAborted(options.signal);
   const client = getFirecrawlClient();
   if (!client) throw new Error("Tier 2: FIRECRAWL_API_KEY not configured");
 
@@ -93,14 +141,17 @@ async function tier2Scrape(url: string): Promise<string> {
   if (content.length < 100) {
     throw new Error("Tier 2: insufficient content from Firecrawl");
   }
+  throwIfAborted(options.signal);
   return content;
 }
 
-async function tier3Scrape(url: string): Promise<string> {
+async function tier3Scrape(url: string, options: ScrapeContentOptions = {}): Promise<string> {
+  throwIfAborted(options.signal);
+  const timeout = createCombinedTimeoutController(JINA_TIMEOUT_MS, options.signal);
   const response = await fetch(`https://r.jina.ai/${url}`, {
     headers: { Accept: "text/plain" },
-    signal: AbortSignal.timeout(JINA_TIMEOUT_MS),
-  });
+    signal: timeout.signal,
+  }).finally(timeout.cleanup);
   if (!response.ok) {
     throw new Error(`Tier 3: Jina returned ${response.status}`);
   }
@@ -115,20 +166,24 @@ const webScrapeSchema = z.object({
   url: z.string().url().describe("The URL to scrape content from"),
 });
 
-export async function scrapeContent(url: string): Promise<string> {
+export async function scrapeContent(url: string, options: ScrapeContentOptions = {}): Promise<string> {
   const validation = validateUrl(url);
   if (!validation.isValid) return "";
 
   const tiers = [
-    { name: "fetch+readability", fn: () => tier1Scrape(url) },
-    { name: "firecrawl", fn: () => tier2Scrape(url) },
-    { name: "jina", fn: () => tier3Scrape(url) },
+    { name: "fetch+readability", fn: () => tier1Scrape(url, options) },
+    { name: "firecrawl", fn: () => tier2Scrape(url, options) },
+    { name: "jina", fn: () => tier3Scrape(url, options) },
   ];
 
   for (const tier of tiers) {
+    throwIfAborted(options.signal);
     try {
       return truncate(await tier.fn());
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw error;
+      }
       logger.warn(`[WebScrape] ${tier.name} failed for ${url}: ${error instanceof Error ? error.message : "unknown"}`);
     }
   }
@@ -140,23 +195,27 @@ export const webScrapeTool = new DynamicStructuredTool({
   description:
     "Extract the full content of a SINGLE webpage URL, including a list of hyperlinks found on that page. Use to read one page or to discover links to follow. To explore a whole site across multiple pages, use web_crawl instead.",
   schema: webScrapeSchema,
-  func: async ({ url }) => {
+  func: async ({ url }, _runManager, config) => {
     const validation = validateUrl(url);
     if (!validation.isValid) {
       return `Invalid URL: ${validation.error}`;
     }
 
     const tiers = [
-      { name: "fetch+readability", fn: () => tier1Scrape(url) },
-      { name: "firecrawl", fn: () => tier2Scrape(url) },
-      { name: "jina", fn: () => tier3Scrape(url) },
+      { name: "fetch+readability", fn: () => tier1Scrape(url, { signal: config?.signal }) },
+      { name: "firecrawl", fn: () => tier2Scrape(url, { signal: config?.signal }) },
+      { name: "jina", fn: () => tier3Scrape(url, { signal: config?.signal }) },
     ];
 
     for (const tier of tiers) {
+      throwIfAborted(config?.signal);
       try {
         const content = await tier.fn();
         return truncate(content);
       } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw error;
+        }
         logger.warn(
           `[WebScrape] ${tier.name} failed for ${url}: ${error instanceof Error ? error.message : "unknown"}`
         );
@@ -218,7 +277,7 @@ export const webCrawlTool = new DynamicStructuredTool({
 
       let result;
       try {
-        result = await scrapeUrl(current, { timeoutMs: CRAWL_PAGE_TIMEOUT_MS, retries: 0 });
+        result = await scrapeUrl(current, { timeoutMs: CRAWL_PAGE_TIMEOUT_MS, retries: 0, signal });
       } catch (error) {
         logger.warn(`[WebCrawl] Failed ${current}: ${error instanceof Error ? error.message : "unknown"}`);
         continue;
