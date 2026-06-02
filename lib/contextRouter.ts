@@ -12,6 +12,67 @@ import { extractTextQuery, isReferentialQuery } from './chat/referentialQuery';
 import { logWarn } from './observability';
 
 import { logger } from "@/lib/logger";
+import { safeFetch } from '@/lib/network/safeFetch';
+
+const INLINE_ATTACHMENT_MAX_BYTES = 512 * 1024;
+
+const INLINE_ELIGIBLE_TYPES = new Set([
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/json',
+  'application/xml',
+  'text/html',
+  'text/xml',
+]);
+
+function isInlineEligibleType(fileType: string): boolean {
+  return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith('text/');
+}
+
+async function tryInlineAttachmentContent(
+  attachmentIds: string[],
+  userId: string,
+): Promise<{ context: string; documentCount: number } | null> {
+  try {
+    const attachments = await prisma.attachment.findMany({
+      where: {
+        id: { in: attachmentIds },
+        message: { conversation: { userId } },
+      },
+      select: { id: true, fileName: true, fileUrl: true, fileSize: true, fileType: true },
+    });
+
+    if (attachments.length === 0) return null;
+
+    const eligible = attachments.filter((a) => isInlineEligibleType(a.fileType));
+    if (eligible.length === 0) return null;
+
+    const totalSize = eligible.reduce((sum, a) => sum + a.fileSize, 0);
+    if (totalSize > INLINE_ATTACHMENT_MAX_BYTES) return null;
+
+    const contents = await Promise.all(
+      eligible.map(async (att) => {
+        const res = await safeFetch(att.fileUrl, { timeoutMs: 10000, maxResponseBytes: INLINE_ATTACHMENT_MAX_BYTES });
+        if (!res.ok) return null;
+        const text = await res.text();
+        return `<attached_file name="${att.fileName}">\n${text}\n</attached_file>`;
+      }),
+    );
+
+    const validContents = contents.filter((c): c is string => c !== null);
+    if (validContents.length === 0) return null;
+
+    const context =
+      '\n\nThe user has attached the following files. Use their FULL content to answer.\n' +
+      validContents.join('\n\n');
+
+    return { context, documentCount: validContents.length };
+  } catch (error) {
+    logger.warn('[Context Router] Inline attachment fetch failed:', error);
+    return null;
+  }
+}
 interface ContextRoutingMetadata {
   hasMemories: boolean;
   attemptedMemory: boolean;
@@ -278,6 +339,18 @@ export async function routeContext(
     metadata.skippedMemory = true;
 
     if (attachmentInfo.hasDocuments) {
+      const inlineResult = await tryInlineAttachmentContent(
+        attachmentInfo.documentAttachmentIds,
+        userId,
+      );
+
+      if (inlineResult) {
+        metadata.hasDocuments = true;
+        metadata.documentCount = inlineResult.documentCount;
+        if (hasImages) metadata.routingDecision = RoutingDecision.Hybrid;
+        return { context: inlineResult.context, metadata };
+      }
+
       const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
         conversationId,
         attachmentIds: attachmentInfo.documentAttachmentIds,
@@ -332,6 +405,18 @@ export async function routeContext(
   }
 
   if (attachmentInfo.hasDocuments) {
+    const inlineResult = await tryInlineAttachmentContent(
+      attachmentInfo.documentAttachmentIds,
+      userId,
+    );
+
+    if (inlineResult) {
+      metadata.hasDocuments = true;
+      metadata.documentCount = inlineResult.documentCount;
+      metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+      return { context: inlineResult.context, metadata };
+    }
+
     const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
       conversationId,
       attachmentIds: attachmentInfo.documentAttachmentIds,

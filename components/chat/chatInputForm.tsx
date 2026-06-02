@@ -4,10 +4,12 @@ import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
 import { ToolsMenu } from "./toolsMenu";
 import { FilePreview } from "./filePreview";
+import { TextSnippetPreview, type TextSnippet } from "./textSnippetPreview";
 import { DropZone } from "./dropZone";
 import type { ToolId } from "@/lib/tools/config";
 import type { DragState } from "@/hooks/useDragAndDrop";
 import type { UploadPhase } from "@/hooks/useChatFileUpload";
+import { VALIDATION_LIMITS } from "@/constants/validation";
 
 interface FormState {
   input: string;
@@ -29,6 +31,7 @@ interface FormHandlers {
   onInput: (e: React.FormEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (index: number) => void;
+  onRemoveSnippet: (id: string) => void;
   onToolSelected: (toolId: ToolId) => void;
   onMemoryToggle: (enabled: boolean) => void;
   onThinkingToggle?: (enabled: boolean) => void;
@@ -40,6 +43,7 @@ interface FormHandlers {
 interface ChatInputFormProps {
   state: FormState;
   handlers: FormHandlers;
+  textSnippets: TextSnippet[];
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   dropZoneRef: RefObject<HTMLDivElement | null>;
   dragState: DragState;
@@ -57,6 +61,7 @@ interface ChatInputFormProps {
 export function ChatInputForm({
   state,
   handlers,
+  textSnippets,
   textareaRef,
   dropZoneRef,
   dragState,
@@ -66,7 +71,15 @@ export function ChatInputForm({
   centered = false,
 }: ChatInputFormProps) {
   const { input, selectedFiles, isLoading, isUploading, uploadPhase, isSending, disabled, activeTool, memoryEnabled, thinkingEnabled } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onToolSelected, onMemoryToggle, onThinkingToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
+  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onRemoveSnippet, onToolSelected, onMemoryToggle, onThinkingToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
+
+  const snippetFileNames = new Set(textSnippets.map((s) => s.fileName));
+  const visibleFiles = selectedFiles.filter((f) => !snippetFileNames.has(f.name));
+
+  const maxLength = VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH;
+  const warningThreshold = maxLength * 0.9;
+  const showCounter = input.length >= warningThreshold;
+  const isOverLimit = input.length >= maxLength;
 
   const textareaClassName = centered
     ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
@@ -84,7 +97,8 @@ export function ChatInputForm({
         handlers={dragHandlers}
       >
         <div className="relative isolate overflow-hidden rounded-2xl border border-black/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,248,250,0.94))] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus-within:border-black/[0.1] focus-within:ring-1 focus-within:ring-black/[0.06] dark:border-white/[0.1] dark:bg-[linear-gradient(180deg,rgba(24,24,28,0.96),rgba(12,12,15,0.96))] dark:shadow-[0_8px_24px_rgba(0,0,0,0.18)] dark:focus-within:border-white/[0.14] dark:focus-within:ring-white/[0.1] group">
-          <FilePreview files={selectedFiles} onRemove={onRemoveFile} disabled={isSending} isUploading={isUploading} uploadPhase={uploadPhase} />
+          <FilePreview files={visibleFiles} onRemove={onRemoveFile} disabled={isSending} isUploading={isUploading} uploadPhase={uploadPhase} />
+          <TextSnippetPreview snippets={textSnippets} onRemove={onRemoveSnippet} disabled={isSending} isUploading={isUploading} />
           <Textarea
             ref={textareaRef}
             value={input}
@@ -97,6 +111,12 @@ export function ChatInputForm({
             rows={1}
             className={textareaClassName}
           />
+
+          {showCounter && (
+            <div className={`px-5 pb-1 text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}>
+              {input.length.toLocaleString()} / {maxLength.toLocaleString()}
+            </div>
+          )}
 
           <div className={`absolute ${buttonPosition} flex items-center gap-1`}>
             <div className="hidden md:block">
@@ -123,7 +143,7 @@ export function ChatInputForm({
             <ActionButtons
               status={isLoading ? "loading" : isUploading ? "uploading" : isSending ? "sending" : "idle"}
               disabled={disabled}
-              hasInput={!!input.trim()}
+              hasInput={!!input.trim() || textSnippets.length > 0}
               onStop={onStop}
               size={buttonSize}
             />

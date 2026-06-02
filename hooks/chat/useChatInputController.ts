@@ -1,10 +1,11 @@
-import { type ClipboardEvent, useEffect, useReducer } from "react";
+import { type ClipboardEvent, useEffect, useReducer, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import type { Message } from "@/lib/schemas/chat";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import { VALIDATION_LIMITS } from "@/constants/validation";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
@@ -16,8 +17,21 @@ import {
   getThinkingEnabled as getStoredThinkingEnabled,
   setThinkingEnabled as storeThinkingEnabled,
 } from "@/lib/storage";
+import type { TextSnippet } from "@/components/chat/textSnippetPreview";
 
 import { logger } from "@/lib/logger";
+
+function countLines(text: string): number {
+  let count = 1;
+  const limit = VALIDATION_LIMITS.SNIPPET_THRESHOLD_LINES + 1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') {
+      count++;
+      if (count > limit) return count;
+    }
+  }
+  return count;
+}
 interface UseChatInputControllerProps {
   onSend: MessageSendHandler;
   isLoading: boolean;
@@ -106,6 +120,37 @@ export function useChatInputController({
     clearInput,
   } = useChatTextarea(sendMessage);
 
+  const [textSnippets, setTextSnippets] = useState<TextSnippet[]>([]);
+
+  const snippetCountRef = useRef(0);
+
+  const addTextSnippet = useCallback((content: string) => {
+    const id = crypto.randomUUID();
+    snippetCountRef.current += 1;
+    const fileName = snippetCountRef.current === 1
+      ? "pasted-text.txt"
+      : `pasted-text-${snippetCountRef.current}.txt`;
+    const byteSize = new TextEncoder().encode(content).byteLength;
+    setTextSnippets((prev) => [...prev, { id, content, fileName, byteSize }]);
+    return fileName;
+  }, []);
+
+  const selectedFilesRef = useRef(selectedFiles);
+  useEffect(() => { selectedFilesRef.current = selectedFiles; }, [selectedFiles]);
+
+  const removeTextSnippet = useCallback((id: string) => {
+    setTextSnippets((prev) => {
+      const snippet = prev.find((s) => s.id === id);
+      if (snippet) {
+        const fileIndex = selectedFilesRef.current.findIndex(
+          (f) => f.name === snippet.fileName && f.type === "text/plain"
+        );
+        if (fileIndex !== -1) handleRemoveFile(fileIndex);
+      }
+      return prev.filter((s) => s.id !== id);
+    });
+  }, [handleRemoveFile]);
+
   useEffect(() => {
     if (!isPending) {
       if (session) {
@@ -143,7 +188,7 @@ export function useChatInputController({
   });
 
   async function sendMessage() {
-    if (!input.trim() || isLoading || disabled || isUploading || isSending) return;
+    if ((!input.trim() && textSnippets.length === 0) || isLoading || disabled || isUploading || isSending) return;
 
     if (isContextBlocked) {
       toast.error(TOAST_ERROR_MESSAGES.CONTEXT.LIMIT_REACHED, {
@@ -178,6 +223,7 @@ export function useChatInputController({
       }
 
       clearInput();
+      setTextSnippets([]);
 
       if (hasDocuments) {
         dispatchUpload({ type: "process" });
@@ -215,6 +261,27 @@ export function useChatInputController({
   function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
     const items = e.clipboardData?.items;
     if (!items) return;
+
+    const pastedText = e.clipboardData.getData("text/plain");
+    if (
+      pastedText &&
+      (pastedText.length > VALIDATION_LIMITS.SNIPPET_THRESHOLD_CHARS ||
+        countLines(pastedText) > VALIDATION_LIMITS.SNIPPET_THRESHOLD_LINES)
+    ) {
+      e.preventDefault();
+
+      if (!session) {
+        toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+          description: "Please sign in to attach files",
+        });
+        return;
+      }
+
+      const fileName = addTextSnippet(pastedText);
+      const file = new File([pastedText], fileName, { type: "text/plain" });
+      handleFilesSelected([file]);
+      return;
+    }
 
     const { files, hasUnsupportedFormats } = extractImagesFromClipboard(items);
 
@@ -264,6 +331,7 @@ export function useChatInputController({
       ? "Context limit reached. Start a new chat to continue..."
       : placeholder,
     maxFilesReached,
+    textSnippets,
     textareaRef,
     dropZoneRef,
     dragState,
@@ -285,11 +353,16 @@ export function useChatInputController({
         e.preventDefault();
         void sendMessage();
       },
-      onInputChange: setInput,
+      onInputChange: (value: string) => {
+        if (value.length <= VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH) {
+          setInput(value);
+        }
+      },
       onKeyDown: handleKeyDown,
       onInput: handleInput,
       onPaste: handlePaste,
       onRemoveFile: handleRemoveFile,
+      onRemoveSnippet: removeTextSnippet,
       onToolSelected: () => {},
       onMemoryToggle: handleMemoryToggle,
       onThinkingToggle: handleThinkingToggle,
