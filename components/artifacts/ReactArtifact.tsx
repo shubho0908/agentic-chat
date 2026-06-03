@@ -73,11 +73,11 @@ try {
 
 export const ReactArtifact = memo(function ReactArtifact({ content }: { content: string }) {
   const html = useMemo(() => content ? buildReactHtml(content) : "", [content]);
-  const { iframeRef, ready, send, sandboxUrl, sandboxAttr } = useSandboxIframe();
+  const { iframeRef, ready, send, handleLoad, sandboxUrl, sandboxAttr } = useSandboxIframe();
 
   useEffect(() => {
-    if (ready && html) send(html);
-  }, [ready, html, send]);
+    if (html) send(html);
+  }, [html, send]);
 
   if (!html) {
     return (
@@ -101,6 +101,7 @@ export const ReactArtifact = memo(function ReactArtifact({ content }: { content:
         ref={iframeRef}
         src={sandboxUrl}
         sandbox={sandboxAttr}
+        onLoad={handleLoad}
         referrerPolicy="no-referrer"
         className="h-full w-full border-0"
         title="React Artifact"

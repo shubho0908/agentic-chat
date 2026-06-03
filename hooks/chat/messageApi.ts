@@ -14,7 +14,11 @@ interface SavedMessageWithAttachments {
 }
 
 function logDocumentProcessingDispatchError(context: string, error: unknown): void {
-  logger.warn(`[Message API] Failed to ${context}:`, error);
+  try {
+    logger.warn(`[Message API] Failed to ${context}:`, error);
+  } catch {
+    // Swallow — logging must never crash
+  }
 }
 
 async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
@@ -76,10 +80,18 @@ export async function saveUserMessage(
     
     return savedMessage.id;
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       throw err;
     }
-    logger.error("Failed to save user message:", err);
+    try {
+      logger.error("Failed to save user message:", err);
+    } catch {
+      // Swallow — logging must never crash the application
+    }
     return null;
   }
 }
@@ -109,7 +121,11 @@ export async function saveAssistantMessage(
     const savedMessage = await response.json();
     return savedMessage.id;
   } catch (err) {
-    logger.error("Failed to save assistant message:", err);
+    try {
+      logger.error("Failed to save assistant message:", err);
+    } catch {
+      // Swallow — logging must never crash the application
+    }
     return null;
   }
 }
@@ -149,7 +165,11 @@ export async function finalizeEditedMessage(
         errorMessage = errorData.message;
       }
     } catch (error) {
-      logger.warn("Failed to parse finalize edited message error response:", error);
+      try {
+        logger.warn("Failed to parse finalize edited message error response:", error);
+      } catch {
+        // Swallow — logging must never crash the application
+      }
     }
     throw new Error(errorMessage);
   }

@@ -7,8 +7,9 @@ import { Command } from "@langchain/langgraph";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
-import { createStreamEventMapper, handleGraphEnd, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
+import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
+import { createSafeStream } from "@/lib/chat/safeStream";
 import { DEFAULT_MODEL } from "@/constants/openai-models";
 import { validateRequestedModel } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
@@ -103,6 +104,18 @@ export async function POST(request: NextRequest) {
 
     const readableStream = new ReadableStream({
       async start(controller) {
+        const stream = createSafeStream(controller, {
+          abortSignal: abortController.signal,
+          label: "Approve",
+        });
+        const mapper = createStreamEventMapper();
+        const finishStream = () => {
+          stream.finish({
+            done: encodeDone(),
+            flush: (writer) => mapper.flush(writer),
+          });
+        };
+
         try {
           const eventStream = await graph.streamEvents(
             new Command({ resume: resumeValue }),
@@ -113,18 +126,13 @@ export async function POST(request: NextRequest) {
             }
           );
 
-          const mapper = createStreamEventMapper();
           for await (const event of eventStream) {
             if (abortController.signal.aborted) break;
-            mapper.map(controller, event as Record<string, unknown>);
+            mapper.map(stream, event as Record<string, unknown>);
           }
 
           if (abortController.signal.aborted) {
-            try {
-              controller.enqueue(encodeDone());
-            } finally {
-              controller.close();
-            }
+            stream.abort();
             return;
           }
 
@@ -140,31 +148,21 @@ export async function POST(request: NextRequest) {
                 : {}),
               threadId,
             };
-            handleGraphInterrupt(controller, interruptData);
-            controller.enqueue(encodeDone());
-            controller.close();
+            handleGraphInterrupt(stream, interruptData);
+            finishStream();
             return;
           }
 
-          handleGraphEnd(controller);
-          controller.close();
+          finishStream();
         } catch (err) {
           if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
             logger.warn("[Approve] Stream aborted by client");
-            try {
-              controller.enqueue(encodeDone());
-            } finally {
-              controller.close();
-            }
+            stream.abort();
             return;
           }
           logger.error("[Approve] Error resuming graph:", err);
-          try {
-            controller.enqueue(encodeError(toUserFriendlyError(err)));
-            controller.enqueue(encodeDone());
-          } finally {
-            controller.close();
-          }
+          stream.enqueue(encodeError(toUserFriendlyError(err)));
+          finishStream();
         }
       },
       cancel() {

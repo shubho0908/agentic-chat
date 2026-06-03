@@ -169,6 +169,17 @@ export async function POST(request: NextRequest) {
 
     if (stream) {
       const abortController = new AbortController();
+      if (request.signal.aborted) {
+        abortController.abort();
+      } else {
+        request.signal.addEventListener(
+          'abort',
+          () => {
+            abortController.abort();
+          },
+          { once: true },
+        );
+      }
       const useOrchestratorResult = parseOptionalBoolean(
         body.useOrchestrator,
         'useOrchestrator',

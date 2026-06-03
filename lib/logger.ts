@@ -2,72 +2,98 @@ import { isObservabilityLoggingEnabled, logError, logInfo, logWarn } from "@/lib
 
 type LoggerMethod = (...args: unknown[]) => void;
 
-function formatValue(value: unknown): string {
-  if (value instanceof Error) {
-    return value.stack || value.message;
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    typeof value === "symbol"
-  ) {
-    return String(value);
-  }
-
-  if (typeof value === "function") {
-    return `[Function${value.name ? `: ${value.name}` : ""}]`;
-  }
-
-  if (typeof value !== "object") {
-    return String(value);
-  }
-
-  const seen = new WeakSet<object>();
-
+function safeStringify(value: unknown): string {
   try {
+    const seen = new WeakSet<object>();
     const serialized = JSON.stringify(value, (_key, current) => {
-      if (current instanceof Error) {
-        return {
-          name: current.name,
-          message: current.message,
-          stack: current.stack,
-        };
-      }
-
-      if (typeof current === "bigint") {
-        return current.toString();
-      }
-
-      if (typeof current === "symbol") {
-        return current.toString();
-      }
-
-      if (typeof current === "function") {
-        return `[Function${current.name ? `: ${current.name}` : ""}]`;
-      }
-
-      if (current && typeof current === "object") {
-        if (seen.has(current)) {
-          return "[Circular]";
+      try {
+        if (typeof current === "bigint") {
+          return current.toString();
         }
-
-        seen.add(current);
+        if (typeof current === "symbol") {
+          return current.toString();
+        }
+        if (typeof current === "function") {
+          return `[Function${typeof current.name === "string" ? `: ${current.name}` : ""}]`;
+        }
+        if (current && typeof current === "object") {
+          if (seen.has(current)) {
+            return "[Circular]";
+          }
+          seen.add(current);
+          if (
+            typeof (current as Record<string, unknown>).stack === "string" ||
+            typeof (current as Record<string, unknown>).message === "string"
+          ) {
+            try {
+              const err = current as Record<string, unknown>;
+              return {
+                name: typeof err.name === "string" ? err.name : "",
+                message: typeof err.message === "string" ? err.message : String(err.message ?? ""),
+                stack: typeof err.stack === "string" ? err.stack : undefined,
+              };
+            } catch {
+              return "[Error-like]";
+            }
+          }
+        }
+        return current;
+      } catch {
+        return "[Unserializable]";
       }
-
-      return current;
     });
-
     return serialized ?? String(value);
   } catch {
     return Object.prototype.toString.call(value);
+  }
+}
+
+function safeEval(fn: () => string): string {
+  try {
+    return fn();
+  } catch {
+    return "unknown";
+  }
+}
+
+function formatValue(value: unknown): string {
+  try {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint" ||
+      typeof value === "symbol"
+    ) {
+      return String(value);
+    }
+
+    if (typeof value === "function") {
+      return `[Function${typeof value.name === "string" ? `: ${value.name}` : ""}]`;
+    }
+
+    if (typeof value !== "object") {
+      return String(value);
+    }
+
+    try {
+      const errCandidate = value as Record<string, unknown>;
+      if (typeof errCandidate.stack === "string" || typeof errCandidate.message === "string") {
+        const stack = typeof errCandidate.stack === "string" ? errCandidate.stack : undefined;
+        const message = typeof errCandidate.message === "string" ? errCandidate.message : String(errCandidate.message ?? "");
+        return stack || message;
+      }
+    } catch {
+    }
+
+    return safeStringify(value);
+  } catch {
+    return "[Log Error: Unformatable value]";
   }
 }
 
@@ -83,25 +109,38 @@ function formatArgs(args: unknown[]): { message: string; details?: string[] } {
     : { message: formatted[0] };
 }
 
+export function emergencyLog(messageOrFactory: string | (() => string)): void {
+  const message = safeEval(() => typeof messageOrFactory === "function" ? messageOrFactory() : messageOrFactory);
+  try {
+    if (typeof process !== "undefined" && typeof process.stderr?.write === "function") {
+      process.stderr.write("[logger:emergency] " + message + "\n");
+    }
+  } catch {
+  }
+}
+
 function emit(level: "info" | "warn" | "error", args: unknown[]): void {
-  if (level === "info" && !isObservabilityLoggingEnabled()) {
-    return;
+  try {
+    if (level === "info" && !isObservabilityLoggingEnabled()) {
+      return;
+    }
+    const { message, details } = formatArgs(args);
+    const payload = details && details.length > 0 ? { event: `console_${level}`, message, details } : { event: `console_${level}`, message };
+    if (level === "error") {
+      logError(payload);
+      return;
+    }
+    if (level === "warn") {
+      logWarn(payload);
+      return;
+    }
+    logInfo(payload);
+  } catch (err) {
+    emergencyLog(() => {
+      const r = err && typeof err === "object" ? String((err as Error).message ?? err) : String(err ?? "unknown");
+      return `emit(${level}) failed: ${r}`;
+    });
   }
-
-  const { message, details } = formatArgs(args);
-  const payload = details && details.length > 0 ? { event: `console_${level}`, message, details } : { event: `console_${level}`, message };
-
-  if (level === "error") {
-    logError(payload);
-    return;
-  }
-
-  if (level === "warn") {
-    logWarn(payload);
-    return;
-  }
-
-  logInfo(payload);
 }
 
 export const logger = {

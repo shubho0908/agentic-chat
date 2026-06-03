@@ -1,33 +1,38 @@
-import { encoding_for_model, get_encoding, type TiktokenModel } from 'tiktoken';
-import type { Message, MessageContentPart } from '@/lib/schemas/chat';
-import type { TokenUsage } from '@/types/chat';
-import { OPENAI_MODELS } from '@/constants/openai-models';
-import { getResponseTokenReserve } from '@/lib/modelPolicy';
+import { encoding_for_model, get_encoding, type TiktokenModel } from "tiktoken";
+import type { Message, MessageContentPart } from "@/lib/schemas/chat";
+import type { TokenUsage } from "@/types/chat";
+import { OPENAI_MODELS } from "@/constants/openai-models";
+import { getResponseTokenReserve } from "@/lib/modelPolicy";
+import { estimateImageTokensForModel } from "@/lib/utils/imageTokenCost";
 
 const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
-  OPENAI_MODELS.map(model => [model.id, model.contextWindow])
+  OPENAI_MODELS.map((model) => [model.id, model.contextWindow]),
 );
 
-const IMAGE_TOKEN_COST = 850;
 const TOKENS_PER_MESSAGE = 4;
 
-const encoderCache = new Map<string, ReturnType<typeof encoding_for_model>>();
+const encoderCache = new Map<string, ReturnType<typeof get_encoding>>();
+
+function resolveEncodingName(model: string): string {
+  try {
+    const enc = encoding_for_model(model as TiktokenModel);
+    const name = enc.name ?? "o200k_base";
+    enc.free();
+    return name;
+  } catch {
+    return "o200k_base";
+  }
+}
 
 function getEncoder(model: string) {
-  if (!encoderCache.has(model)) {
-    try {
-      const tiktokenModel = model.startsWith('gpt-5')
-        ? 'gpt-4o'
-        : model.startsWith('gpt-4')
-        ? 'gpt-4o'
-        : 'gpt-4o';
-
-      encoderCache.set(model, encoding_for_model(tiktokenModel as TiktokenModel));
-    } catch {
-      encoderCache.set(model, get_encoding('o200k_base'));
-    }
+  const encodingName = resolveEncodingName(model);
+  if (!encoderCache.has(encodingName)) {
+    encoderCache.set(
+      encodingName,
+      get_encoding(encodingName as Parameters<typeof get_encoding>[0]),
+    );
   }
-  return encoderCache.get(model)!;
+  return encoderCache.get(encodingName)!;
 }
 
 function countTokens(text: string, model: string): number {
@@ -39,10 +44,10 @@ export function truncateTextToTokenLimit(
   text: string,
   model: string,
   maxTokens: number,
-  suffix = '\n\n[Context truncated to fit budget.]'
+  suffix = "\n\n[Context truncated to fit budget.]",
 ): string {
   if (maxTokens <= 0) {
-    return '';
+    return "";
   }
 
   const encoder = getEncoder(model);
@@ -54,7 +59,9 @@ export function truncateTextToTokenLimit(
 
   const suffixTokens = encoder.encode(suffix);
   if (suffixTokens.length >= maxTokens) {
-    return new TextDecoder().decode(encoder.decode(suffixTokens.slice(0, maxTokens)));
+    return new TextDecoder().decode(
+      encoder.decode(suffixTokens.slice(0, maxTokens)),
+    );
   }
   const availableTokens = Math.max(0, maxTokens - suffixTokens.length);
   const truncatedTokens = encoded.slice(0, availableTokens);
@@ -64,9 +71,9 @@ export function truncateTextToTokenLimit(
 
 function countContentTokens(
   content: string | MessageContentPart[],
-  model: string
+  model: string,
 ): { textTokens: number; imageCount: number } {
-  if (typeof content === 'string') {
+  if (typeof content === "string") {
     return { textTokens: countTokens(content, model), imageCount: 0 };
   }
 
@@ -74,9 +81,9 @@ function countContentTokens(
   let imageCount = 0;
 
   for (const part of content) {
-    if (part.type === 'text') {
+    if (part.type === "text") {
       textTokens += countTokens(part.text, model);
-    } else if (part.type === 'image_url') {
+    } else if (part.type === "image_url") {
       imageCount++;
     }
   }
@@ -90,16 +97,19 @@ function getModelContextWindow(model: string): number {
 
 export function calculateTokenUsage(
   messages: Message[],
-  model: string
+  model: string,
 ): TokenUsage {
   const limit = getModelContextWindow(model);
   let conversationTokens = 0;
   let imageTokens = 0;
 
   for (const message of messages) {
-    const { textTokens, imageCount } = countContentTokens(message.content, model);
+    const { textTokens, imageCount } = countContentTokens(
+      message.content,
+      model,
+    );
     conversationTokens += textTokens + TOKENS_PER_MESSAGE;
-    imageTokens += imageCount * IMAGE_TOKEN_COST;
+    imageTokens += imageCount * estimateImageTokensForModel(model);
   }
 
   conversationTokens += 3;

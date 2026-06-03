@@ -3,6 +3,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
+import { JSON_ONLY_RESPONSE_PROMPT, joinPromptSections } from "@/lib/prompts";
 import {
   logError,
   logInfo,
@@ -337,7 +338,10 @@ export async function invokeResearchJson<T>(
 
   const repairMessages = [
     new SystemMessage(
-      "You repair invalid LLM JSON outputs. Return ONLY valid JSON matching the requested schema. No markdown, no prose."
+      joinPromptSections(
+        JSON_ONLY_RESPONSE_PROMPT,
+        "You repair invalid LLM JSON outputs. Return valid JSON matching the requested schema exactly."
+      )
     ),
     new HumanMessage(
       `Schema: ${options.schemaDescription}\n\nInvalid output:\n${first.text}\n\nParser error: ${parsed.error.message}`

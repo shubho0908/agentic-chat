@@ -1,17 +1,9 @@
-import { MessageRole, type Message } from "@/lib/schemas/chat";
+import type { Message } from "@/lib/schemas/chat";
+import { isPendingAssistantPlaceholder } from "./pendingAssistant";
 
 interface ResumeConversationState {
   contextMessages: Message[];
   existingAssistantMessageId?: string;
-}
-
-function isPendingAssistantPlaceholder(message: Message): boolean {
-  return (
-    message.role === MessageRole.ASSISTANT &&
-    !message.content &&
-    typeof message.id === "string" &&
-    message.id.startsWith("assistant-pending-")
-  );
 }
 
 export function getResumeConversationState(

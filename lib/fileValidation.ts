@@ -3,6 +3,7 @@ import {
   MAX_IMAGE_FILE_SIZE_BYTES,
   SUPPORTED_DOCUMENT_EXTENSIONS,
   SUPPORTED_IMAGE_EXTENSIONS,
+  UNSUPPORTED_VISION_EXTENSIONS,
 } from "@/constants/upload";
 
 interface FileFilterResult {
@@ -20,18 +21,23 @@ interface ClipboardImageResult {
 }
 
 function getFileExtension(filename: string): string {
-  const lastDot = filename.lastIndexOf('.');
-  if (lastDot === -1) return '';
+  const lastDot = filename.lastIndexOf(".");
+  if (lastDot === -1) return "";
   return filename.slice(lastDot).toLowerCase();
 }
 
 function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/');
+  return file.type.startsWith("image/");
 }
 
 export function isSupportedImageExtension(filename: string): boolean {
   const ext = getFileExtension(filename);
   return (SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
+}
+
+export function isUnsupportedVisionExtension(filename: string): boolean {
+  const ext = getFileExtension(filename);
+  return (UNSUPPORTED_VISION_EXTENSIONS as readonly string[]).includes(ext);
 }
 
 export function isSupportedDocumentExtension(filename: string): boolean {
@@ -46,7 +52,7 @@ export function filterFiles(files: File[]): FileFilterResult {
   const validDocuments: File[] = [];
   const oversizedDocuments: File[] = [];
   const unsupportedFiles: File[] = [];
-  
+
   for (const file of files) {
     if (isSupportedDocumentExtension(file.name)) {
       if (file.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
@@ -60,13 +66,13 @@ export function filterFiles(files: File[]): FileFilterResult {
       } else {
         validImages.push(file);
       }
-    } else if (isImageFile(file)) {
+    } else if (isUnsupportedVisionExtension(file.name) || isImageFile(file)) {
       unsupportedImages.push(file);
     } else {
       unsupportedFiles.push(file);
     }
   }
-  
+
   return {
     validImages,
     unsupportedImages,
@@ -78,28 +84,31 @@ export function filterFiles(files: File[]): FileFilterResult {
 }
 
 export function getFileNames(files: File[]): string {
-  return files.map(f => f.name).join(', ');
+  return files.map((f) => f.name).join(", ");
 }
 
+/**
+ * Only MIME types accepted by the OpenAI Vision API are listed here.
+ * BMP, SVG, TIFF, and ICO are deliberately omitted so clipboard pastes of
+ * those formats are flagged as unsupported rather than silently uploaded.
+ */
 const MIME_TO_EXTENSION: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/jpg': '.jpg',
-  'image/png': '.png',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'image/bmp': '.bmp',
-  'image/svg+xml': '.svg',
-  'image/tiff': '.tiff',
-  'image/x-icon': '.ico',
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/png": ".png",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
 };
 
-export function extractImagesFromClipboard(items: DataTransferItemList): ClipboardImageResult {
+export function extractImagesFromClipboard(
+  items: DataTransferItemList,
+): ClipboardImageResult {
   const files: File[] = [];
   let hasUnsupportedFormats = false;
-  
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (item.type.startsWith('image/')) {
+    if (item.type.startsWith("image/")) {
       const extension = MIME_TO_EXTENSION[item.type];
       if (!extension) {
         hasUnsupportedFormats = true;
@@ -109,13 +118,17 @@ export function extractImagesFromClipboard(items: DataTransferItemList): Clipboa
       const file = item.getAsFile();
       if (file) {
         const timestamp = new Date().getTime();
-        const newFile = new File([file], `pasted-image-${timestamp}${extension}`, {
-          type: file.type,
-        });
+        const newFile = new File(
+          [file],
+          `pasted-image-${timestamp}${extension}`,
+          {
+            type: file.type,
+          },
+        );
         files.push(newFile);
       }
     }
   }
-  
+
   return { files, hasUnsupportedFormats };
 }

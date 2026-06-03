@@ -27,6 +27,12 @@ import { toUserFriendlyError } from "@/lib/errorMessages";
 import { toJsonValue } from "@/lib/json";
 import { ArtifactEventType } from "@/types/artifact";
 import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
+import {
+  dedupeMessagesById,
+  isPendingAssistantId,
+  replaceMessageId,
+  updateMessageById,
+} from "./chat/pendingAssistant";
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -38,7 +44,7 @@ function isAbortError(error: unknown): boolean {
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const { initialMessages = [], conversationId: initialConversationId, autoContinue, onArtifact } = options;
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(() => dedupeMessagesById(initialMessages));
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
   const [memoryStatus, setMemoryStatus] = useState<MemoryStatus | undefined>();
@@ -61,7 +67,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     const isNavigatingToExistingConversation = currentId !== null && prevId !== currentId && initialMessages.length > 0;
     const messagesJustLoaded = messages.length === 0 && initialMessages.length > 0 && currentId !== null;
     if (isNavigatingToExistingConversation || messagesJustLoaded) {
-      setMessages(initialMessages);
+      setMessages(dedupeMessagesById(initialMessages));
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
       autoContinuedRef.current = null;
@@ -281,9 +287,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       const updateLocalAssistantMessage = (updates: Partial<Message>, targetMessageId = assistantMessageId) => {
         setMessages((prev) =>
-          prev.map((message) =>
-            message.id === targetMessageId ? { ...message, ...updates } : message
-          )
+          updateMessageById(prev, targetMessageId, updates)
         );
       };
 
@@ -384,13 +388,13 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           );
           const previousAssistantMessageId = assistantMessageId;
           assistantMessageId = savedMessage.id;
-          updateLocalAssistantMessage({
+          setMessages((prev) => replaceMessageId(prev, previousAssistantMessageId, savedMessage.id, {
             id: savedMessage.id,
             content: savedMessage.content,
             metadata: messageMetadata,
-          }, previousAssistantMessageId);
+          }));
         } catch (saveError) {
-          if (!assistantMessageId.startsWith("assistant-pending-")) {
+          if (!isPendingAssistantId(assistantMessageId)) {
             throw saveError;
           }
 
@@ -405,11 +409,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
           const previousAssistantMessageId = assistantMessageId;
           assistantMessageId = savedAssistantMessageId;
-          updateLocalAssistantMessage({
+          setMessages((prev) => replaceMessageId(prev, previousAssistantMessageId, savedAssistantMessageId, {
             id: savedAssistantMessageId,
             content: persistableContent,
             metadata: messageMetadata,
-          }, previousAssistantMessageId);
+          }));
         }
 
         queryClient.invalidateQueries({ queryKey: queryKeys.conversations });

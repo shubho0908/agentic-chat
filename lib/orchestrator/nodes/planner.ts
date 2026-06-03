@@ -7,11 +7,17 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { PlanComplexity, CustomEventName } from "../constants";
 import type { PlanComplexityValue } from "../constants";
 import { logger } from "@/lib/logger";
-import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
+import {
+  getChatReasoningEffort,
+  getSupportedTemperature,
+} from "@/lib/modelPolicy";
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
+import { JSON_ONLY_RESPONSE_PROMPT } from "@/lib/prompts";
 
-const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
+export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
+
+${JSON_ONLY_RESPONSE_PROMPT}
 
 Output ONLY a JSON object (no markdown, no explanation):
 {
@@ -52,7 +58,7 @@ function isValidComplexity(value: unknown): value is PlanComplexityValue {
 export function createPlannerNode(
   tools: DynamicStructuredTool[],
   apiKey: string,
-  model: string
+  model: string,
 ) {
   const toolNames = tools.map((t) => t.name);
   const toolNameSet = new Set(toolNames);
@@ -65,19 +71,31 @@ export function createPlannerNode(
     apiKey,
     maxTokens: 150,
     timeout: PLANNER_TIMEOUT_MS,
-    ...(supportedTemperature !== undefined ? { temperature: supportedTemperature } : {}),
+    ...(supportedTemperature !== undefined
+      ? { temperature: supportedTemperature }
+      : {}),
     ...(reasoningEffort && reasoningEffort !== "none"
       ? { reasoning: { effort: reasoningEffort } }
-      : reasoningEffort === "none" ? { reasoningEffort: "none" } : {}),
+      : reasoningEffort === "none"
+        ? { reasoningEffort: "none" }
+        : {}),
   });
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (!lastMessage) return { messages: [] };
 
-    const content = typeof lastMessage.content === "string"
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
+    const content =
+      typeof lastMessage.content === "string"
+        ? lastMessage.content
+        : Array.isArray(lastMessage.content)
+          ? lastMessage.content
+              .filter(
+                (p): p is { type: "text"; text: string } => p.type === "text",
+              )
+              .map((p) => p.text)
+              .join(" ")
+          : JSON.stringify(lastMessage.content);
 
     if (content.length < MIN_PLANNABLE_LENGTH) {
       return { messages: [] };
@@ -85,13 +103,14 @@ export function createPlannerNode(
 
     try {
       const connected = state.connectedServices ?? [];
-      const connectedContext = connected.length > 0
-        ? `\n\nConnected services (pre-authenticated, never ask for credentials): ${connected.join(", ")}`
-        : "";
+      const connectedContext =
+        connected.length > 0
+          ? `\n\nConnected services (pre-authenticated, never ask for credentials): ${connected.join(", ")}`
+          : "";
 
       const messages = [
         new SystemMessage(
-          `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`
+          `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`,
         ),
         new HumanMessage(content),
       ];
@@ -102,14 +121,17 @@ export function createPlannerNode(
           retries: 1,
           initialDelayMs: 400,
           signal: config?.signal,
-        }
+        },
       );
 
-      const planText = typeof response.content === "string" ? response.content : "";
+      const planText =
+        typeof response.content === "string" ? response.content : "";
       const cleaned = planText.replace(/```json?\n?|\n?```/g, "").trim();
       const parsed = plannerResponseSchema.parse(JSON.parse(cleaned));
 
-      const complexity: PlanComplexityValue = isValidComplexity(parsed.complexity)
+      const complexity: PlanComplexityValue = isValidComplexity(
+        parsed.complexity,
+      )
         ? parsed.complexity
         : PlanComplexity.DIRECT;
 
@@ -121,14 +143,18 @@ export function createPlannerNode(
         plan: typeof parsed.plan === "string" ? parsed.plan : "",
       };
 
-      await dispatchCustomEvent(CustomEventName.PLANNING, { plan }, config ?? {});
+      await dispatchCustomEvent(
+        CustomEventName.PLANNING,
+        { plan },
+        config ?? {},
+      );
 
       if (plan.complexity !== PlanComplexity.DIRECT) {
         return {
           toolPlan: plan,
           messages: [
             new SystemMessage(
-              `[PLAN] Complexity: ${plan.complexity}. Tools: ${plan.tools_needed.join(", ") || "none"}. Approach: ${plan.plan}`
+              `[PLAN] Complexity: ${plan.complexity}. Tools: ${plan.tools_needed.join(", ") || "none"}. Approach: ${plan.plan}`,
             ),
           ],
         };
@@ -136,7 +162,10 @@ export function createPlannerNode(
 
       return { messages: [], toolPlan: plan };
     } catch (error) {
-      logger.warn("[Planner] Failed to produce a valid plan; continuing without planner hint:", error);
+      logger.warn(
+        "[Planner] Failed to produce a valid plan; continuing without planner hint:",
+        error,
+      );
       return { messages: [] };
     }
   };

@@ -16,8 +16,10 @@ import {
   ASK_USER_TOOL_NAME,
   filterToolsForContext,
   selectToolsForAgentStep,
+  shouldBypassSemanticCacheForMessageContext,
   shouldBypassSemanticCacheForToolIntent,
 } from "@/lib/orchestrator/tools";
+import { MessageRole, type Message } from "@/lib/schemas/chat";
 import type { AgentStateType } from "@/lib/orchestrator/state";
 import {
   COMPOSIO_TOOLKITS,
@@ -293,6 +295,25 @@ test("semantic cache is bypassed for connector-backed and fresh web intents", ()
   assert.equal(
     shouldBypassSemanticCacheForToolIntent("Explain what a binary search tree is", []),
     false
+  );
+});
+
+test("semantic cache is bypassed when the request context includes images", () => {
+  const messages: Message[] = [{
+    role: MessageRole.USER,
+    content: [
+      { type: "text", text: "Build an artifact using the attached image" },
+      { type: "image_url", image_url: { url: "https://utfs.io/f/artifact-image.png" } },
+    ],
+  }];
+
+  assert.equal(
+    shouldBypassSemanticCacheForMessageContext(
+      messages,
+      "Build an artifact using the attached image",
+      []
+    ),
+    true
   );
 });
 
