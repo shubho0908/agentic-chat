@@ -66,7 +66,7 @@ export function filterFiles(files: File[]): FileFilterResult {
       } else {
         validImages.push(file);
       }
-    } else if (isImageFile(file)) {
+    } else if (isUnsupportedVisionExtension(file.name) || isImageFile(file)) {
       unsupportedImages.push(file);
     } else {
       unsupportedFiles.push(file);

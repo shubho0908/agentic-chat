@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   SANDBOX_URL,
   SANDBOX_ATTR,
@@ -33,7 +33,14 @@ export function useSandboxIframe(): UseSandboxIframeResult {
     pendingRef.current = null;
   }, []);
 
-  useEffect(() => {
+  const requestReady = useCallback((targetWindow?: Window | null) => {
+    const win = targetWindow ?? iframeRef.current?.contentWindow;
+    if (!win) return;
+
+    win.postMessage({ type: "sandbox-probe" }, getSandboxTargetOrigin());
+  }, []);
+
+  useLayoutEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.data?.type !== "sandbox-ready" && e.data?.type !== "sandbox-rendered") return;
       const sourceWindow = e.source as Window | null;
@@ -49,9 +56,8 @@ export function useSandboxIframe(): UseSandboxIframeResult {
   }, [flushPending]);
 
   const handleLoad = useCallback(() => {
-    setReady(true);
-    flushPending();
-  }, [flushPending]);
+    requestReady();
+  }, [requestReady]);
 
   const send = useCallback((html: string) => {
     pendingRef.current = html;
@@ -60,8 +66,10 @@ export function useSandboxIframe(): UseSandboxIframeResult {
 
     if (ready) {
       flushPending(win);
+    } else {
+      requestReady(win);
     }
-  }, [flushPending, ready]);
+  }, [flushPending, ready, requestReady]);
 
   return { iframeRef, ready, send, handleLoad, sandboxUrl: SANDBOX_URL, sandboxAttr: SANDBOX_ATTR };
 }

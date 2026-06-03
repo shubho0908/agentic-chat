@@ -23,6 +23,7 @@ import {
 import { queryKeys } from "@/lib/queryKeys";
 import { apiRoutes } from "@/lib/routes";
 import type { ArtifactMetadata } from "@/types/artifact";
+import { estimateImageTokensForModel } from "@/lib/utils/imageTokenCost";
 
 import { logger } from "@/lib/logger";
 function generateTitle(content: string | MessageContentPart[]): string {
@@ -54,7 +55,6 @@ function hasRecentAttachments(
 const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
 
-const APPROX_IMAGE_TOKENS = 1105;
 export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT =
   "Awaiting your response.";
 export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
@@ -151,7 +151,10 @@ function getMessageContentForAPI(
   return message.content;
 }
 
-function estimateMessageTokens(content: string | MessageContentPart[]): number {
+function estimateMessageTokens(
+  content: string | MessageContentPart[],
+  model: string,
+): number {
   if (typeof content === "string") {
     return Math.ceil(content.length / 4) + 4;
   }
@@ -161,7 +164,7 @@ function estimateMessageTokens(content: string | MessageContentPart[]): number {
       return total + Math.ceil(part.text.length / 4);
     }
     if (part.type === "image_url") {
-      return total + APPROX_IMAGE_TOKENS;
+      return total + estimateImageTokensForModel(model);
     }
     return total;
   }, 4);
@@ -188,11 +191,11 @@ function trimMessagesByApproximateTokenBudget(
   const workingMessages = [...nonSystemMessages];
   let estimatedTokens =
     systemMessages.reduce(
-      (total, message) => total + estimateMessageTokens(message.content),
+      (total, message) => total + estimateMessageTokens(message.content, model),
       0,
     ) +
     workingMessages.reduce(
-      (total, message) => total + estimateMessageTokens(message.content),
+      (total, message) => total + estimateMessageTokens(message.content, model),
       0,
     );
 
@@ -201,7 +204,7 @@ function trimMessagesByApproximateTokenBudget(
     if (!removed) {
       break;
     }
-    estimatedTokens -= estimateMessageTokens(removed.content);
+    estimatedTokens -= estimateMessageTokens(removed.content, model);
   }
 
   return [...systemMessages, ...workingMessages];

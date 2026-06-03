@@ -22,7 +22,9 @@ export function extractTextFromContent(content: string | MessageContentPart[]): 
 
 function sanitizeAttachedImageName(value: string): string {
   return value
-    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]+/g, " ")
+    .replace(/[<>{}\[\]"'`\\]/g, " ")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 256);
 }

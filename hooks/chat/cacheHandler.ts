@@ -6,7 +6,6 @@ import {
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
-import { isSupportedForRAG } from "@/lib/rag/utils";
 
 const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
@@ -24,10 +23,8 @@ export function shouldUseSemanticCache(
   activeTool?: string | null,
 ): boolean {
   const hasCurrentAttachment = (attachments?.length ?? 0) > 0;
-  const hasConversationDocuments = messages.some((message) =>
-    message.attachments?.some((attachment) =>
-      isSupportedForRAG(attachment.fileType),
-    ),
+  const hasConversationAttachments = messages.some(
+    (message) => (message.attachments?.length ?? 0) > 0,
   );
   const hasConversationImages = messages.some(
     (message) =>
@@ -37,7 +34,7 @@ export function shouldUseSemanticCache(
 
   if (
     hasCurrentAttachment ||
-    hasConversationDocuments ||
+    hasConversationAttachments ||
     hasConversationImages
   ) {
     return false;

@@ -12,17 +12,22 @@
     parent.postMessage({ type: 'sandbox-ready' }, '*');
   }
 
-  function handleRender(e) {
+  function handleMessage(e) {
+    if (e.data && e.data.type === 'sandbox-probe') {
+      notifyReady();
+      return;
+    }
+
     if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
       document.open();
       document.write(e.data.html);
       document.close();
-      addEventListener('message', handleRender);
+      addEventListener('message', handleMessage);
       parent.postMessage({ type: 'sandbox-rendered' }, '*');
     }
   }
 
-  addEventListener('message', handleRender);
+  addEventListener('message', handleMessage);
   addEventListener('load', notifyReady);
   notifyReady();
   setTimeout(notifyReady, 0);

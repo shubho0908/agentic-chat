@@ -3,12 +3,12 @@ import type { Message, MessageContentPart } from "@/lib/schemas/chat";
 import type { TokenUsage } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
 import { getResponseTokenReserve } from "@/lib/modelPolicy";
+import { estimateImageTokensForModel } from "@/lib/utils/imageTokenCost";
 
 const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
   OPENAI_MODELS.map((model) => [model.id, model.contextWindow]),
 );
 
-const IMAGE_TOKEN_COST = 1105;
 const TOKENS_PER_MESSAGE = 4;
 
 const encoderCache = new Map<string, ReturnType<typeof get_encoding>>();
@@ -109,7 +109,7 @@ export function calculateTokenUsage(
       model,
     );
     conversationTokens += textTokens + TOKENS_PER_MESSAGE;
-    imageTokens += imageCount * IMAGE_TOKEN_COST;
+    imageTokens += imageCount * estimateImageTokensForModel(model);
   }
 
   conversationTokens += 3;
