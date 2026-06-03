@@ -11,6 +11,12 @@ import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { toJsonValue } from "@/lib/json";
 import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
+import {
+  getPendingAssistantMessageId,
+  replaceMessageId,
+  updateMessageById,
+  upsertMessageById,
+} from "./pendingAssistant";
 
 interface StreamingContext {
   messages: Message[];
@@ -88,13 +94,7 @@ function updateAssistantMessage(
   assistantMessageId: string,
   updates: Partial<Message>
 ): void {
-  onMessagesUpdate((prev) =>
-    prev.map((msg) =>
-      msg.id === assistantMessageId
-        ? { ...msg, ...updates }
-        : msg
-    )
-  );
+  onMessagesUpdate((prev) => updateMessageById(prev, assistantMessageId, updates));
 }
 
 export async function handleStreamingResponse(
@@ -118,7 +118,7 @@ export async function handleStreamingResponse(
   } = context;
 
   const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
-  let assistantMessageId = existingAssistantMessageId || `assistant-pending-${conversationId}`;
+  let assistantMessageId = existingAssistantMessageId || getPendingAssistantMessageId(conversationId);
   let assistantContent = "";
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
@@ -129,32 +129,22 @@ export async function handleStreamingResponse(
   let humanInTheLoopPending = false;
   const artifactCollector = createArtifactMetadataCollector();
 
-  const upsertAssistantMessage = (prev: Message[], msg: Message): Message[] => {
-    const idx = prev.findIndex((m) => m.id === msg.id);
-    if (idx !== -1) {
-      const updated = [...prev];
-      updated[idx] = msg;
-      return updated;
-    }
-    return [...prev, msg];
-  };
-
   const replaceAssistantMessageId = (savedAssistantMessageId: string, metadata?: MessageMetadata) => {
     if (!savedAssistantMessageId) return;
 
     const previousAssistantMessageId = assistantMessageId;
     assistantMessageId = savedAssistantMessageId;
-    updateAssistantMessage(onMessagesUpdate, previousAssistantMessageId, {
+    onMessagesUpdate((prev) => replaceMessageId(prev, previousAssistantMessageId, savedAssistantMessageId, {
       id: savedAssistantMessageId,
       ...(metadata && { metadata }),
-      });
+    }));
   };
 
   const ensureAssistantMessage = (content = "") => {
     if (messageCreated) return;
 
     messageCreated = true;
-    onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+    onMessagesUpdate((prev) => upsertMessageById(prev, {
       role: MessageRole.ASSISTANT,
       content,
       id: assistantMessageId,
@@ -193,7 +183,7 @@ export async function handleStreamingResponse(
           content: assistantContent,
         });
       } else {
-        onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+        onMessagesUpdate((prev) => upsertMessageById(prev, {
             role: MessageRole.ASSISTANT,
             content: assistantContent,
             id: assistantMessageId,
@@ -243,7 +233,7 @@ export async function handleStreamingResponse(
         assistantContent += delta;
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+          onMessagesUpdate((prev) => upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: assistantContent,
               id: assistantMessageId,
@@ -264,7 +254,7 @@ export async function handleStreamingResponse(
         onMemoryStatusUpdate?.(status);
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+          onMessagesUpdate((prev) => upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -288,7 +278,7 @@ export async function handleStreamingResponse(
 
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+          onMessagesUpdate((prev) => upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -352,7 +342,7 @@ export async function handleStreamingResponse(
 
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+          onMessagesUpdate((prev) => upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -372,7 +362,7 @@ export async function handleStreamingResponse(
         thinkingContent += delta;
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
+          onMessagesUpdate((prev) => upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               thinking: thinkingContent,
@@ -485,14 +475,23 @@ export async function handleStreamingResponse(
 
     return { success: true, assistantMessageId };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       if (messageCreated) {
         onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
       }
       return { success: false, error: "aborted" };
     }
 
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    let errorMessage: string;
+    try {
+      errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    } catch {
+      errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    }
     if (messageCreated) {
       onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
     }

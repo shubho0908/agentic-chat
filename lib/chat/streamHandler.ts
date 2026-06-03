@@ -22,10 +22,10 @@ import {
   encodeThinkingChunk,
   encodeToolProgress,
 } from './streamingHelpers';
-import { TOOL_ERROR_MESSAGES } from '@/constants/errors';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { getChatReasoningEffort } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
+import { createSafeStream } from './safeStream';
 
 import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
@@ -99,10 +99,6 @@ function toOpenAIResponseInput(messages: Message[]): ResponseInputItem[] {
   }));
 }
 
-function logStreamWriteFailure(context: string, error: unknown): void {
-  logger.warn(`[Stream Handler] Failed to ${context}:`, error);
-}
-
 export function createChatStreamHandler(options: StreamHandlerOptions) {
   const {
     apiKey,
@@ -120,26 +116,22 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
   return {
     async start(controller: ReadableStreamDefaultController) {
-      let streamClosed = false;
-      
-      const safeClose = () => {
-        if (!streamClosed) {
-          try {
-            controller.close();
-            streamClosed = true;
-          } catch (error) {
-            logStreamWriteFailure('close stream controller', error);
-          }
-        }
+      const stream = createSafeStream(controller, {
+        abortSignal,
+        label: "Stream Handler",
+      });
+
+      const finishStream = () => {
+        stream.finish({ done: encodeDone() });
+      };
+
+      const abortStream = () => {
+        stream.abort();
       };
 
       const emitMemoryStatus = async () => {
-        try {
-          controller.enqueue(encodeMemoryStatus(memoryStatusInfo));
-          await Promise.resolve();
-        } catch (error) {
-          logStreamWriteFailure('send memory status', error);
-        }
+        stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
+        await Promise.resolve();
       };
 
       const ensurePromptBudget = async () => {
@@ -153,25 +145,15 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
         await emitMemoryStatus();
 
-        try {
-          controller.enqueue(encodeError(budgetCheck.errorMessage ?? 'Request exceeds the server token budget.'));
-          controller.enqueue(encodeDone());
-        } catch (error) {
-          logStreamWriteFailure('send prompt budget error', error);
-        }
+        stream.enqueue(encodeError(budgetCheck.errorMessage ?? 'Request exceeds the server token budget.'));
 
-        safeClose();
+        finishStream();
         return false;
       };
       
       try {
         if (abortSignal?.aborted) {
-          try {
-            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch (error) {
-            logStreamWriteFailure('send aborted request message', error);
-          }
-          safeClose();
+          abortStream();
           return;
         }
 
@@ -200,16 +182,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             }
 
             if (contextResult.metadata.citations?.length) {
-              try {
-                controller.enqueue(encodeToolProgress(
+              stream.enqueue(encodeToolProgress(
                   'document_retrieval',
                   'completed',
                   'Retrieved relevant document passages',
                   { citations: contextResult.metadata.citations }
-                ));
-              } catch (error) {
-                logStreamWriteFailure('send document retrieval progress', error);
-              }
+              ));
             }
           }
         } catch (error) {
@@ -228,12 +206,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         }
 
         if (abortSignal?.aborted) {
-          try {
-            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch (error) {
-            logStreamWriteFailure('send aborted request fallback', error);
-          }
-          safeClose();
+          abortStream();
           return;
         }
         
@@ -255,18 +228,13 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           );
 
           for await (const event of responseStream) {
+            if (abortSignal?.aborted) break;
             if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
-              try {
-                controller.enqueue(encodeThinkingChunk(event.delta));
-              } catch (error) {
-                logStreamWriteFailure('send thinking chunk', error);
+              if (!stream.enqueue(encodeThinkingChunk(event.delta))) {
                 break;
               }
             } else if (event.type === 'response.output_text.delta') {
-              try {
-                controller.enqueue(encodeChatChunk(event.delta));
-              } catch (error) {
-                logStreamWriteFailure('send response chunk', error);
+              if (!stream.enqueue(encodeChatChunk(event.delta))) {
                 break;
               }
             }
@@ -287,47 +255,38 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           );
 
           for await (const chunk of streamResponse) {
+            if (abortSignal?.aborted) break;
             const delta = chunk.choices[0]?.delta;
             const text = delta?.content || '';
 
             if (text) {
-              try {
-                controller.enqueue(encodeChatChunk(text));
-              } catch (error) {
-                logStreamWriteFailure('send chat chunk', error);
+              if (!stream.enqueue(encodeChatChunk(text))) {
                 break;
               }
             }
           }
         }
-        
-        try {
-          controller.enqueue(encodeDone());
-        } catch (error) {
-          logStreamWriteFailure('send done marker', error);
+
+        if (abortSignal?.aborted) {
+          abortStream();
+          return;
         }
-        safeClose();
+
+        finishStream();
       } catch (error) {
-        if (error instanceof Error && (error.message.includes('aborted by user') || abortSignal?.aborted)) {
-          logger.warn('[Stream Handler] Request aborted, closing stream cleanly');
-          try {
-            controller.enqueue(encodeChatChunk(TOOL_ERROR_MESSAGES.GENERAL.REQUEST_ABORTED));
-          } catch (error) {
-            logStreamWriteFailure('send aborted request terminal message', error);
-          }
-          safeClose();
+        if (
+          abortSignal?.aborted ||
+          (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted by user')))
+        ) {
+          logger.warn('[Stream Handler] Request aborted by user');
+          abortStream();
           return;
         }
 
         const { message } = parseOpenAIError(error);
-        
-        try {
-          controller.enqueue(encodeError(message));
-          controller.enqueue(encodeDone());
-        } catch (error) {
-          logStreamWriteFailure('send terminal stream error', error);
-        }
-        safeClose();
+
+        stream.enqueue(encodeError(message));
+        finishStream();
       }
     },
   };

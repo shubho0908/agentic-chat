@@ -123,11 +123,19 @@ async function checkCache(
 
     return result;
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       logger.log("[Cache] Aborted by user");
       return { cached: false };
     }
-    logger.error("[Cache] Error:", err);
+    try {
+      logger.error("[Cache] Error:", err);
+    } catch (logErr) {
+      emergencyLog(`logger.error() threw in checkCache: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+    }
     return { cached: false };
   }
 }
@@ -153,4 +161,4 @@ export async function performCacheCheck(
   return { cacheQuery, cacheData };
 }
 
-import { logger } from "@/lib/logger";
+import { logger, emergencyLog } from "@/lib/logger";

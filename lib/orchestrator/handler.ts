@@ -14,6 +14,7 @@ import {
   encodeDone,
   encodeChatChunk,
 } from "@/lib/chat/streamingHelpers";
+import { createSafeStream } from "@/lib/chat/safeStream";
 import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { isGraphInterrupt } from "@langchain/langgraph";
 import { RECURSION_LIMIT, MIN_CACHEABLE_QUERY_LENGTH } from "./constants";
@@ -89,6 +90,10 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
   return {
     async start(controller: ReadableStreamDefaultController) {
+      const stream = createSafeStream(controller, {
+        abortSignal,
+        label: "Orchestrator",
+      });
       const threadId = deriveThreadId(conversationId, userId);
       let memoryStatusInfo: MemoryStatus = {
         hasMemories: false,
@@ -104,24 +109,17 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
       const mapper = createStreamEventMapper();
 
       const closeStream = () => {
-        try {
-          mapper.flush(controller);
-        } catch (flushError) {
-          logger.warn("[Orchestrator] Failed to flush artifact parser before close:", flushError);
-        }
-        try {
-          controller.enqueue(encodeDone());
-        } catch (doneError) {
-          logger.warn("[Orchestrator] Failed to enqueue done event:", doneError);
-        }
-        try {
-          controller.close();
-        } catch (closeError) {
-          logger.warn("[Orchestrator] Failed to close stream controller:", closeError);
-        }
+        stream.finish({
+          done: encodeDone(),
+          flush: (writer) => mapper.flush(writer),
+        });
       };
 
       const failStream = (error: unknown) => {
+        if (stream.isAborted) {
+          return;
+        }
+
         const isRecursionError =
           (error instanceof Error &&
             (("lc_error_code" in error &&
@@ -135,17 +133,12 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           ? `I couldn't complete this request in ${RECURSION_LIMIT} reasoning steps. Try breaking it into smaller asks or rephrasing.`
           : toUserFriendlyError(error);
 
-        try {
-          controller.enqueue(encodeError(friendly));
-        } finally {
-          closeStream();
-        }
+        stream.enqueue(encodeError(friendly));
+        closeStream();
       };
 
       const abortStream = () => {
-        const abortError = new Error("Request aborted");
-        abortError.name = "AbortError";
-        failStream(abortError);
+        stream.abort();
       };
 
       try {
@@ -180,14 +173,14 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           return;
         }
 
-        controller.enqueue(encodeMemoryStatus(memoryStatusInfo));
+        stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
 
         const budgetCheck = checkTokenBudget(enhancedMessages, model);
         memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
-        controller.enqueue(encodeMemoryStatus(memoryStatusInfo));
+        stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
 
         if (!budgetCheck.ok) {
-          controller.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
+          stream.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
           closeStream();
           return;
         }
@@ -206,7 +199,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             const cached = await searchSemanticCache(embedding, userId, conversationId);
             if (cached) {
               logger.log("[Orchestrator] Semantic cache HIT");
-              controller.enqueue(encodeChatChunk(cached));
+              stream.enqueue(encodeChatChunk(cached));
               closeStream();
               return;
             }
@@ -242,7 +235,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
         for await (const event of eventStream) {
           if (abortSignal?.aborted) break;
-          mapper.map(controller, event as Record<string, unknown>);
+          mapper.map(stream, event as Record<string, unknown>);
         }
 
         if (abortSignal?.aborted) {
@@ -262,7 +255,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
               : {}),
             threadId,
           };
-          handleGraphInterrupt(controller, interruptData);
+          handleGraphInterrupt(stream, interruptData);
           closeStream();
           return;
         }
@@ -274,13 +267,15 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           const interruptData = typeof interruptValue === "object" && interruptValue !== null
             ? { ...interruptValue as Record<string, unknown>, threadId }
             : { threadId };
-          handleGraphInterrupt(controller, interruptData);
+          handleGraphInterrupt(stream, interruptData);
           closeStream();
           return;
         }
 
         if (abortSignal?.aborted || (error instanceof Error && error.name === "AbortError")) {
           logger.warn("[Orchestrator] Stream aborted by user");
+          abortStream();
+          return;
         } else {
           logger.error("[Orchestrator] Stream error:", error);
         }

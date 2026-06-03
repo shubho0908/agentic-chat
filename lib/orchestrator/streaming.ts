@@ -1,12 +1,12 @@
 import {
   encodeChatChunk,
-  encodeDone,
   encodeToolCall,
   encodeToolProgress,
   encodeToolResult,
   encodeThinkingChunk,
   encodeArtifactEvent,
 } from "@/lib/chat/streamingHelpers";
+import type { StreamWriter } from "@/lib/chat/safeStream";
 
 import { ToolName } from "@/lib/tools/constants";
 import { CustomEventName, StreamEventType, ToolStatus, HUMAN_IN_THE_LOOP_REQUEST_TYPE, GraphNode } from "./constants";
@@ -54,8 +54,8 @@ function extractToolOutput(output: unknown): string | Record<string, unknown> | 
 }
 
 interface StreamEventMapper {
-  map(controller: ReadableStreamDefaultController, event: Record<string, unknown>): void;
-  flush(controller: ReadableStreamDefaultController): void;
+  map(writer: StreamWriter, event: Record<string, unknown>): void;
+  flush(writer: StreamWriter): void;
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
@@ -72,18 +72,18 @@ export function createStreamEventMapper(): StreamEventMapper {
     return getNode(event) !== GraphNode.TOOLS;
   };
 
-  function emitParsedResults(controller: ReadableStreamDefaultController, results: Array<{ text: string } | { event: ArtifactSSE }>) {
+  function emitParsedResults(writer: StreamWriter, results: Array<{ text: string } | { event: ArtifactSSE }>) {
     for (const item of results) {
       if ("text" in item) {
-        controller.enqueue(encodeChatChunk(item.text));
+        writer.enqueue(encodeChatChunk(item.text));
       } else {
-        controller.enqueue(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
+        writer.enqueue(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
       }
     }
   }
 
   return {
-    map(controller, event) {
+    map(writer, event) {
       const eventType = event.event as string;
 
       switch (eventType) {
@@ -101,18 +101,18 @@ export function createStreamEventMapper(): StreamEventMapper {
           // Handle reasoning: Chat Completions API format (additional_kwargs.reasoning_content)
           const reasoningContent = chunk?.chunk?.additional_kwargs?.reasoning_content;
           if (reasoningContent && typeof reasoningContent === "string") {
-            controller.enqueue(encodeThinkingChunk(reasoningContent));
+            writer.enqueue(encodeThinkingChunk(reasoningContent));
           }
 
           const content = chunk?.chunk?.content;
           if (typeof content === "string" && content) {
-            emitParsedResults(controller, artifactParser.push(content));
+            emitParsedResults(writer, artifactParser.push(content));
           } else if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "reasoning" && block.reasoning) {
-                controller.enqueue(encodeThinkingChunk(block.reasoning));
+                writer.enqueue(encodeThinkingChunk(block.reasoning));
               } else if (block.type === "text" && block.text) {
-                emitParsedResults(controller, artifactParser.push(block.text));
+                emitParsedResults(writer, artifactParser.push(block.text));
               }
             }
           }
@@ -129,8 +129,8 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { input?: Record<string, unknown> } | undefined;
           const args = extractToolArgs(data?.input ?? {});
-          controller.enqueue(encodeToolCall(name, runId, args));
-          controller.enqueue(encodeToolProgress(name, ToolStatus.RUNNING, `Executing ${name}...`));
+          writer.enqueue(encodeToolCall(name, runId, args));
+          writer.enqueue(encodeToolProgress(name, ToolStatus.RUNNING, `Executing ${name}...`));
           break;
         }
 
@@ -144,8 +144,8 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);
-          controller.enqueue(encodeToolResult(name, runId, result));
-          controller.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
+          writer.enqueue(encodeToolResult(name, runId, result));
+          writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
           break;
         }
 
@@ -154,11 +154,11 @@ export function createStreamEventMapper(): StreamEventMapper {
           const eventName = event.name as string | undefined;
 
           if (customData?.type === CustomEventName.THINKING) {
-            controller.enqueue(encodeThinkingChunk(customData.content as string));
+            writer.enqueue(encodeThinkingChunk(customData.content as string));
           }
           if (customData?.type === CustomEventName.PLANNING || eventName === CustomEventName.PLANNING) {
             const planData = customData?.plan ?? customData;
-            controller.enqueue(
+            writer.enqueue(
               encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, "Plan ready", planData as Record<string, unknown>)
             );
           }
@@ -166,7 +166,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             const step = (customData?.step as string) ?? "researching";
             const detail = (customData?.detail as string) ?? "Researching...";
             const images = Array.isArray(customData?.images) ? customData.images : undefined;
-            controller.enqueue(
+            writer.enqueue(
               encodeToolProgress(
                 ToolName.DEEP_RESEARCH,
                 ToolStatus.RUNNING,
@@ -178,7 +178,7 @@ export function createStreamEventMapper(): StreamEventMapper {
           if (eventName === CustomEventName.SEARCH_IMAGES) {
             const images = Array.isArray(customData?.images) ? customData.images : undefined;
             if (images) {
-              controller.enqueue(
+              writer.enqueue(
                 encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images })
               );
             }
@@ -187,20 +187,16 @@ export function createStreamEventMapper(): StreamEventMapper {
         }
       }
     },
-    flush(controller) {
-      emitParsedResults(controller, artifactParser.flush());
+    flush(writer) {
+      emitParsedResults(writer, artifactParser.flush());
     },
   };
 }
 
 export function handleGraphInterrupt(
-  controller: ReadableStreamDefaultController,
+  writer: StreamWriter,
   interruptData: unknown
 ): void {
   const data = interruptData as Record<string, unknown>;
-  controller.enqueue(encodeHumanInTheLoopRequest(data));
-}
-
-export function handleGraphEnd(controller: ReadableStreamDefaultController): void {
-  controller.enqueue(encodeDone());
+  writer.enqueue(encodeHumanInTheLoopRequest(data));
 }

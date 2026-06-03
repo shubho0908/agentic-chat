@@ -13,7 +13,8 @@ import { getResumeConversationState } from "./resumeState";
 import { queryKeys } from "@/lib/queryKeys";
 import { appRoutes } from "@/lib/routes";
 import { toUserFriendlyError } from "@/lib/errorMessages";
-import { logger } from "@/lib/logger";
+import { logger, emergencyLog } from "@/lib/logger";
+import { appendMessagesDedupingIds, getPendingAssistantMessageId } from "./pendingAssistant";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -83,7 +84,11 @@ export async function continueIncompleteConversation(
     try {
       await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER);
     } catch (err) {
-      logger.warn("[messageSender] Failed to save stream-stopped marker (continue):", err);
+      try {
+        logger.warn("[messageSender] Failed to save stream-stopped marker (continue):", err);
+      } catch (logErr) {
+        emergencyLog(`logger.warn() threw in continueIncompleteConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+      }
     }
   }
 
@@ -166,22 +171,22 @@ export async function handleSendMessage(
   }
 
   const messageContent = buildMultimodalContent(content.trim(), attachments);
+  const userMessageId = `user-${Date.now()}`;
 
   const userMessage: Message = {
     role: MessageRole.USER,
     content: messageContent,
-    id: `user-${Date.now()}`,
+    id: userMessageId,
     timestamp: Date.now(),
     attachments,
   };
 
   const isNewConversation = !conversationId;
-  const placeholderAssistantId = conversationId
-    ? `assistant-pending-${conversationId}`
-    : `assistant-pending-${userMessage.id}`;
+  const placeholderAssistantId = getPendingAssistantMessageId(
+    conversationId ?? userMessageId
+  );
 
-  onMessagesUpdate((prev) => [
-    ...prev,
+  onMessagesUpdate((prev) => appendMessagesDedupingIds(prev, [
     userMessage,
     {
       role: MessageRole.ASSISTANT,
@@ -191,7 +196,7 @@ export async function handleSendMessage(
       model,
       toolActivities: [],
     },
-  ]);
+  ]));
 
   let savedMsgId: string | null = null;
   let userMessageWasPersisted = false;
@@ -263,7 +268,11 @@ export async function handleSendMessage(
       try {
         await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER);
       } catch (err) {
-        logger.warn("[messageSender] Failed to save stream-stopped marker:", err);
+        try {
+          logger.warn("[messageSender] Failed to save stream-stopped marker:", err);
+        } catch (logErr) {
+          emergencyLog(`logger.warn() threw in handleSendMessage: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+        }
       }
     }
 
@@ -283,11 +292,20 @@ export async function handleSendMessage(
       );
     }
 
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       return { success: false, error: "aborted" };
     }
 
-    const errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    let errorMessage: string;
+    try {
+      errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    } catch {
+      errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+    }
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });

@@ -25,7 +25,8 @@ import { apiRoutes } from "@/lib/routes";
 import type { ArtifactMetadata } from "@/types/artifact";
 import { estimateImageTokensForModel } from "@/lib/utils/imageTokenCost";
 
-import { logger } from "@/lib/logger";
+import { logger, emergencyLog } from "@/lib/logger";
+import { getPendingAssistantMessageId } from "./pendingAssistant";
 function generateTitle(content: string | MessageContentPart[]): string {
   return generateTitleUtil(content);
 }
@@ -345,10 +346,18 @@ async function createNewConversation(
 
     return { conversationId, userMessageId, assistantMessageId };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       throw err;
     }
-    logger.error("Failed to create conversation:", err);
+    try {
+      logger.error("Failed to create conversation:", err);
+    } catch (logErr) {
+      emergencyLog(`logger.error() threw in createNewConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+    }
     return null;
   }
 }
@@ -363,7 +372,7 @@ function updateQueryCacheWithUserMessage(
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
-  const placeholderAssistantId = `assistant-pending-${conversationId}`;
+  const placeholderAssistantId = getPendingAssistantMessageId(conversationId);
   const messages = orderConversationMessagesDesc([
     {
       id: userMessageId,

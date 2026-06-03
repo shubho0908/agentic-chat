@@ -317,7 +317,11 @@ export async function handleRegenerateResponse(
 
     return { success: true };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }

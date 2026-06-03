@@ -43,6 +43,18 @@ function serializeAnchorValue(value: unknown): string {
   }
 }
 
+function getMessageRenderKey(
+  message: Message,
+  index: number,
+  keyOccurrences: Map<string, number>,
+): string {
+  const baseKey = message.id || `${message.role}-${message.timestamp ?? index}`;
+  const occurrence = keyOccurrences.get(baseKey) ?? 0;
+  keyOccurrences.set(baseKey, occurrence + 1);
+
+  return occurrence === 0 ? baseKey : `${baseKey}:${occurrence}`;
+}
+
 export function ChatContainer({
   messages,
   isLoading,
@@ -121,6 +133,7 @@ export function ChatContainer({
     !isLoading &&
     messages.length > 0 &&
     lastMessage?.role === MessageRole.ASSISTANT;
+  const messageKeyOccurrences = new Map<string, number>();
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
@@ -157,7 +170,7 @@ export function ChatContainer({
         )}
         {messages.map((message, index) => (
             <div
-              key={message.id || `${message.role}-${index}`}
+              key={getMessageRenderKey(message, index, messageKeyOccurrences)}
             >
               <ChatMessage
                 message={message}

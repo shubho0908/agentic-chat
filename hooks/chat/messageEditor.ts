@@ -18,6 +18,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { toJsonValue } from "@/lib/json";
 import { ArtifactEventType } from "@/types/artifact";
 import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
+import { getPendingAssistantMessageId, isPendingAssistantId } from "./pendingAssistant";
 
 export async function handleEditMessage(
   messageId: string,
@@ -51,7 +52,7 @@ export async function handleEditMessage(
   }
 
   const messageContent = buildMultimodalContent(newContent, attachments);
-  const placeholderAssistantId = `assistant-pending-${conversationId}`;
+  const placeholderAssistantId = getPendingAssistantMessageId(conversationId ?? messageId);
   const messagesUpToEdit = messages.slice(0, messageIndex);
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
@@ -62,7 +63,7 @@ export async function handleEditMessage(
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
   const persistedNextAssistantId =
-    nextAssistantMessage?.id && !nextAssistantMessage.id.startsWith("assistant-pending-")
+    nextAssistantMessage?.id && !isPendingAssistantId(nextAssistantMessage.id)
       ? nextAssistantMessage.id
       : undefined;
   const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
@@ -394,7 +395,11 @@ export async function handleEditMessage(
 
     return { success: true };
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
+    const errorName =
+      err !== null && err !== undefined && typeof err === "object"
+        ? (err as Record<string, unknown>).name
+        : undefined;
+    if (errorName === "AbortError") {
       onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }

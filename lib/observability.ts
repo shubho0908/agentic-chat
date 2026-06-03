@@ -38,51 +38,71 @@ function shouldEmit(
   return isVerboseLoggingEnabled(nodeEnv);
 }
 
-function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
-  if (typeof console === "undefined") {
-    return;
-  }
-
-  const method =
-    level === "error"
-      ? console.error
-      : level === "warn"
-        ? console.warn
-        : console.info;
-
-  if (typeof method === "function") {
-    method.call(console, serialized);
-    return;
-  }
-
-  if (typeof console.log === "function") {
-    console.log(serialized);
+function safeEval(fn: () => string): string {
+  try {
+    return fn();
+  } catch {
+    return "unknown";
   }
 }
 
-const defaultLogSink: LogSink = (level, serialized) => {
-  writeWithConsoleFallback(level, serialized);
-};
+function writeToStderr(message: string): void {
+  try {
+    if (typeof process !== "undefined" && typeof process.stderr?.write === "function") {
+      process.stderr.write(message + "\n");
+    }
+  } catch {
+  }
+}
 
-const logSink: LogSink = defaultLogSink;
+function writeWithConsoleFallback(level: LogLevel, serialized: string): void {
+  try {
+    if (typeof console !== "undefined") {
+      const method =
+        level === "error"
+          ? console.error
+          : level === "warn"
+            ? console.warn
+            : console.info;
+      if (typeof method === "function") {
+        method.call(console, serialized);
+        return;
+      }
+      if (typeof console.log === "function") {
+        console.log(serialized);
+        return;
+      }
+    }
+  } catch {
+  }
+  writeToStderr(`[observability:${level}] ${serialized}`);
+}
+
+const logSink: LogSink = writeWithConsoleFallback;
 
 function write(
   level: LogLevel,
   payload: LogPayload,
   nodeEnv: string | undefined = process.env.NODE_ENV,
 ): void {
-  if (!shouldEmit(level, nodeEnv)) {
-    return;
+  try {
+    if (!shouldEmit(level, nodeEnv)) {
+      return;
+    }
+    const record = {
+      timestamp: new Date().toISOString(),
+      level,
+      ...payload,
+    };
+    const serialized = JSON.stringify(record);
+    logSink(level, serialized);
+  } catch (err) {
+    const reason = safeEval(() => {
+      const r = err && typeof err === "object" ? String((err as Error).message ?? err) : String(err ?? "unknown");
+      return `[observability] write() failed: ${r}`;
+    });
+    writeToStderr(reason);
   }
-
-  const record = {
-    timestamp: new Date().toISOString(),
-    level,
-    ...payload,
-  };
-
-  const serialized = JSON.stringify(record);
-  logSink(level, serialized);
 }
 
 export function logInfo(payload: LogPayload, nodeEnv?: string): void {
