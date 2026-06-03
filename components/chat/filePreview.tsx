@@ -1,12 +1,28 @@
 "use client";
 
-import { X, FileText, FileSpreadsheet, Image as ImageIcon, ChevronLeft, ChevronRight, Loader } from "lucide-react";
+import {
+  X,
+  FileText,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Loader,
+} from "lucide-react";
 import { AnimatePresence, LazyMotion, m, domAnimation } from "framer-motion";
 import Image from "next/image";
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isSupportedDocumentExtension, isSupportedImageExtension } from "@/lib/fileValidation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  isSupportedDocumentExtension,
+  isSupportedImageExtension,
+} from "@/lib/fileValidation";
 import type { UploadPhase } from "@/hooks/useChatFileUpload";
 
 const isDocumentFile = (file: File): boolean => {
@@ -41,42 +57,126 @@ const formatFileSize = (bytes: number) => {
 
 interface FilePreviewProps {
   files: File[];
+  getFileKey: (file: File) => string;
+  getPreviewUrl: (file: File) => string | null;
   onRemove: (file: File) => void;
   disabled?: boolean;
   isUploading?: boolean;
   uploadPhase?: UploadPhase;
 }
 
-export function FilePreview({ files, onRemove, disabled = false, isUploading = false, uploadPhase }: FilePreviewProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState<boolean>();
-  const [canScrollRight, setCanScrollRight] = useState<boolean>();
-  const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
+interface FilePreviewItemProps {
+  file: File;
+  previewUrl: string | null;
+  onRemove: (file: File) => void;
+  disabled: boolean;
+  isUploading: boolean;
+  uploadPhase?: UploadPhase;
+}
 
-  const previewUrls = useMemo(
-    () => files.map((file) => (isImageFile(file) && !isDocumentFile(file) ? URL.createObjectURL(file) : null)),
-    [files]
+const FilePreviewItem = memo(function FilePreviewItem({
+  file,
+  previewUrl,
+  onRemove,
+  disabled,
+  isUploading,
+  uploadPhase,
+}: FilePreviewItemProps) {
+  const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
+
+  return (
+    <m.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.8, opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="group relative flex shrink-0 items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 transition-all hover:border-border hover:bg-muted/90"
+    >
+      {isUploading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
+          <Loader className="size-4 animate-spin text-muted-foreground" />
+          <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
+            {uploadPhase?.isProcessing ? "Processing" : "Uploading"}
+          </span>
+        </div>
+      )}
+      {previewUrl && failedPreviewUrl !== previewUrl ? (
+        <div className="relative size-10 shrink-0 overflow-hidden rounded-md ring-1 ring-border/50">
+          <Image
+            src={previewUrl}
+            alt={file.name}
+            fill
+            sizes="40px"
+            className="object-cover"
+            unoptimized
+            onError={() => setFailedPreviewUrl(previewUrl)}
+          />
+        </div>
+      ) : (
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-background/80 ring-1 ring-border/50">
+          {getFileIcon(file)}
+        </div>
+      )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="max-w-30 truncate text-xs font-medium">
+                {file.name}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{file.name}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <span className="text-[10px] text-muted-foreground/70">
+          {formatFileSize(file.size)}
+        </span>
+      </div>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        onClick={() => onRemove(file)}
+        disabled={disabled}
+        className="size-6 rounded-full opacity-0 transition-opacity hover:bg-background/80 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <X className="size-3" />
+      </Button>
+    </m.div>
   );
+});
 
-  useEffect(() => {
-    return () => {
-      previewUrls.forEach((url) => { if (url) URL.revokeObjectURL(url); });
-    };
-  }, [previewUrls]);
+export function FilePreview({
+  files,
+  getFileKey,
+  getPreviewUrl,
+  onRemove,
+  disabled = false,
+  isUploading = false,
+  uploadPhase,
+}: FilePreviewProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const updateScrollState = useCallback((container: HTMLDivElement | null) => {
     if (!container) return;
 
     setCanScrollLeft(container.scrollLeft > 0);
     setCanScrollRight(
-      container.scrollLeft < container.scrollWidth - container.clientWidth - 1
+      container.scrollLeft < container.scrollWidth - container.clientWidth - 1,
     );
   }, []);
 
-  const setScrollContainerRef = useCallback((container: HTMLDivElement | null) => {
-    scrollContainerRef.current = container;
-    updateScrollState(container);
-  }, [updateScrollState]);
+  const setScrollContainerRef = useCallback(
+    (container: HTMLDivElement | null) => {
+      scrollContainerRef.current = container;
+      updateScrollState(container);
+    },
+    [updateScrollState],
+  );
 
   useEffect(() => {
     const checkScroll = () => {
@@ -96,23 +196,24 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
     }
   }, [updateScrollState]);
 
+  useEffect(() => {
+    updateScrollState(scrollContainerRef.current);
+  }, [files.length, updateScrollState]);
+
   const scroll = (direction: "left" | "right") => {
     const container = scrollContainerRef.current;
     if (!container) return;
 
     const scrollAmount = 200;
-    const newScrollLeft = direction === "left" 
-      ? container.scrollLeft - scrollAmount 
-      : container.scrollLeft + scrollAmount;
+    const newScrollLeft =
+      direction === "left"
+        ? container.scrollLeft - scrollAmount
+        : container.scrollLeft + scrollAmount;
 
     container.scrollTo({
       left: newScrollLeft,
       behavior: "smooth",
     });
-  };
-
-  const handleImageError = (index: number) => {
-    setImageErrors(prev => ({ ...prev, [index]: true }));
   };
 
   return (
@@ -127,12 +228,12 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            <div className="border-b border-border/50 px-3 pt-3 pb-2 relative">
+            <div className="relative border-b border-border/50 px-3 pb-2 pt-3">
               {canScrollLeft && (
                 <Button
                   type="button"
                   onClick={() => scroll("left")}
-                  className="absolute cursor-pointer left-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                  className="absolute left-0 top-1/2 z-10 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-background/95 shadow-lg transition-colors hover:bg-background"
                 >
                   <ChevronLeft className="size-4 text-foreground" />
                 </Button>
@@ -141,84 +242,28 @@ export function FilePreview({ files, onRemove, disabled = false, isUploading = f
                 <Button
                   type="button"
                   onClick={() => scroll("right")}
-                  className="absolute cursor-pointer right-0 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center size-8 rounded-full bg-background/95 border border-border/60 shadow-lg hover:bg-background transition-colors"
+                  className="absolute right-0 top-1/2 z-10 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-background/95 shadow-lg transition-colors hover:bg-background"
                 >
                   <ChevronRight className="size-4 text-foreground" />
                 </Button>
               )}
               <div
-                key={files.length}
                 ref={setScrollContainerRef}
                 className="flex items-center gap-2 overflow-x-auto scrollbar-hide"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
                 <AnimatePresence initial={false}>
-                  {files.map((file, index) => {
-                    const preview = previewUrls[index];
-                    return (
-                      <m.div
-                        key={`${file.name}-${file.size}-${file.lastModified}`}
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.8, opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="group relative flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/70 px-3 py-2 hover:bg-muted/90 hover:border-border transition-all flex-shrink-0"
-                      >
-                        {isUploading && (
-                          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/60 backdrop-blur-[1px]">
-                            <Loader className="size-4 animate-spin text-muted-foreground" />
-                            <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
-                              {uploadPhase?.isProcessing ? "Processing" : "Uploading"}
-                            </span>
-                          </div>
-                        )}
-                        {preview && !imageErrors[index] ? (
-                          <div className="relative size-10 rounded-md overflow-hidden flex-shrink-0 ring-1 ring-border/50">
-                            <Image
-                              src={preview}
-                              alt={file.name}
-                              fill
-                              sizes="40px"
-                              className="object-cover"
-                              unoptimized
-                              onError={() => handleImageError(index)}
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex size-10 items-center justify-center rounded-md bg-background/80 ring-1 ring-border/50 flex-shrink-0">
-                            {getFileIcon(file)}
-                          </div>
-                        )}
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-xs font-medium truncate max-w-[120px]">
-                                  {file.name}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{file.name}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <span className="text-[10px] text-muted-foreground/70">
-                            {formatFileSize(file.size)}
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => onRemove(file)}
-                          disabled={disabled}
-                          className="size-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-background/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <X className="size-3" />
-                        </Button>
-                      </m.div>
-                    );
-                  })}
+                  {files.map((file) => (
+                    <FilePreviewItem
+                      key={getFileKey(file)}
+                      file={file}
+                      previewUrl={getPreviewUrl(file)}
+                      onRemove={onRemove}
+                      disabled={disabled}
+                      isUploading={isUploading}
+                      uploadPhase={uploadPhase}
+                    />
+                  ))}
                 </AnimatePresence>
               </div>
             </div>

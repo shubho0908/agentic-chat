@@ -1,4 +1,9 @@
-import { FormEvent, ClipboardEvent, RefObject } from "react";
+import {
+  useMemo,
+  type FormEvent,
+  type ClipboardEvent,
+  type RefObject,
+} from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
 import { FileUploadButton } from "./fileUploadButton";
@@ -17,6 +22,8 @@ interface FormState {
   isLoading: boolean;
   isUploading: boolean;
   uploadPhase: UploadPhase;
+  getFileId: (file: File) => string;
+  getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
   disabled: boolean;
   activeTool: ToolId | null;
@@ -70,11 +77,44 @@ export function ChatInputForm({
   maxFilesReached,
   centered = false,
 }: ChatInputFormProps) {
-  const { input, selectedFiles, isLoading, isUploading, uploadPhase, isSending, disabled, activeTool, memoryEnabled, thinkingEnabled } = state;
-  const { onSubmit, onInputChange, onKeyDown, onInput, onPaste, onRemoveFile, onRemoveSnippet, onToolSelected, onMemoryToggle, onThinkingToggle, onFilesSelected, onStop, onAuthRequired } = handlers;
+  const {
+    input,
+    selectedFiles,
+    isLoading,
+    isUploading,
+    uploadPhase,
+    getFileId,
+    getFilePreviewUrl,
+    isSending,
+    disabled,
+    activeTool,
+    memoryEnabled,
+    thinkingEnabled,
+  } = state;
+  const {
+    onSubmit,
+    onInputChange,
+    onKeyDown,
+    onInput,
+    onPaste,
+    onRemoveFile,
+    onRemoveSnippet,
+    onToolSelected,
+    onMemoryToggle,
+    onThinkingToggle,
+    onFilesSelected,
+    onStop,
+    onAuthRequired,
+  } = handlers;
 
-  const snippetFileNames = new Set(textSnippets.map((s) => s.fileName));
-  const visibleFiles = selectedFiles.filter((f) => !snippetFileNames.has(f.name));
+  const visibleFiles = useMemo(() => {
+    if (textSnippets.length === 0) {
+      return selectedFiles;
+    }
+
+    const snippetFileNames = new Set(textSnippets.map((s) => s.fileName));
+    return selectedFiles.filter((file) => !snippetFileNames.has(file.name));
+  }, [selectedFiles, textSnippets]);
 
   const maxLength = VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH;
   const warningThreshold = maxLength * 0.9;
@@ -96,9 +136,22 @@ export function ChatInputForm({
         dropZoneRef={dropZoneRef}
         handlers={dragHandlers}
       >
-        <div className="relative isolate overflow-hidden rounded-2xl border border-black/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,248,250,0.94))] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus-within:border-black/[0.1] focus-within:ring-1 focus-within:ring-black/[0.06] dark:border-white/[0.1] dark:bg-[linear-gradient(180deg,rgba(24,24,28,0.96),rgba(12,12,15,0.96))] dark:shadow-[0_8px_24px_rgba(0,0,0,0.18)] dark:focus-within:border-white/[0.14] dark:focus-within:ring-white/[0.1] group">
-          <FilePreview files={visibleFiles} onRemove={onRemoveFile} disabled={isSending} isUploading={isUploading} uploadPhase={uploadPhase} />
-          <TextSnippetPreview snippets={textSnippets} onRemove={onRemoveSnippet} disabled={isSending} isUploading={isUploading} />
+        <div className="relative isolate overflow-hidden rounded-2xl border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,248,250,0.94))] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus-within:border-black/10 focus-within:ring-1 focus-within:ring-black/6 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,28,0.96),rgba(12,12,15,0.96))] dark:shadow-[0_8px_24px_rgba(0,0,0,0.18)] dark:focus-within:border-white/[0.14] dark:focus-within:ring-white/10 group">
+          <FilePreview
+            files={visibleFiles}
+            getFileKey={getFileId}
+            getPreviewUrl={getFilePreviewUrl}
+            onRemove={onRemoveFile}
+            disabled={isSending}
+            isUploading={isUploading}
+            uploadPhase={uploadPhase}
+          />
+          <TextSnippetPreview
+            snippets={textSnippets}
+            onRemove={onRemoveSnippet}
+            disabled={isSending}
+            isUploading={isUploading}
+          />
           <Textarea
             ref={textareaRef}
             value={input}
@@ -113,7 +166,9 @@ export function ChatInputForm({
           />
 
           {showCounter && (
-            <div className={`px-5 pb-1 text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}>
+            <div
+              className={`px-5 pb-1 text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}
+            >
               {input.length.toLocaleString()} / {maxLength.toLocaleString()}
             </div>
           )}
@@ -121,7 +176,13 @@ export function ChatInputForm({
           <div className={`absolute ${buttonPosition} flex items-center gap-1`}>
             <div className="hidden md:block">
               <FileUploadButton
-                disabled={disabled || isLoading || isUploading || isSending || maxFilesReached}
+                disabled={
+                  disabled ||
+                  isLoading ||
+                  isUploading ||
+                  isSending ||
+                  maxFilesReached
+                }
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
               />
@@ -141,7 +202,15 @@ export function ChatInputForm({
               />
             </div>
             <ActionButtons
-              status={isLoading ? "loading" : isUploading ? "uploading" : isSending ? "sending" : "idle"}
+              status={
+                isLoading
+                  ? "loading"
+                  : isUploading
+                    ? "uploading"
+                    : isSending
+                      ? "sending"
+                      : "idle"
+              }
               disabled={disabled}
               hasInput={!!input.trim() || textSnippets.length > 0}
               onStop={onStop}

@@ -1,16 +1,29 @@
-import { type ClipboardEvent, useEffect, useReducer, useState, useCallback, useRef } from "react";
+import {
+  type ClipboardEvent,
+  useEffect,
+  useReducer,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { toast } from "sonner";
 import type { Message } from "@/lib/schemas/chat";
 import { useChatFileUpload } from "@/hooks/useChatFileUpload";
 import { useChatTextarea } from "@/hooks/useChatTextarea";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
-import { MAX_FILE_ATTACHMENTS, SUPPORTED_IMAGE_EXTENSIONS_DISPLAY } from "@/constants/upload";
+import {
+  MAX_FILE_ATTACHMENTS,
+  SUPPORTED_IMAGE_EXTENSIONS_DISPLAY,
+} from "@/constants/upload";
 import { VALIDATION_LIMITS } from "@/constants/validation";
 import { extractImagesFromClipboard } from "@/lib/fileValidation";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
-import { TOAST_SUCCESS_MESSAGES, TOAST_INFO_MESSAGES } from "@/constants/toasts";
+import {
+  TOAST_SUCCESS_MESSAGES,
+  TOAST_INFO_MESSAGES,
+} from "@/constants/toasts";
 import {
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
@@ -18,6 +31,7 @@ import {
   setThinkingEnabled as storeThinkingEnabled,
 } from "@/lib/storage";
 import type { TextSnippet } from "@/components/chat/textSnippetPreview";
+import type { UploadAttachment } from "@/lib/attachmentUtils";
 
 import { logger } from "@/lib/logger";
 
@@ -25,7 +39,7 @@ function countLines(text: string): number {
   let count = 1;
   const limit = VALIDATION_LIMITS.SNIPPET_THRESHOLD_LINES + 1;
   for (let i = 0; i < text.length; i++) {
-    if (text[i] === '\n') {
+    if (text[i] === "\n") {
       count++;
       if (count > limit) return count;
     }
@@ -64,7 +78,18 @@ const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   thinkingEnabled: false,
 };
 
-function chatInputUiReducer(state: ChatInputUiState, action: ChatInputUiAction): ChatInputUiState {
+interface InputSnapshot {
+  messageText: string;
+  snippets: TextSnippet[];
+  snippetFiles: Map<string, File>;
+  files: File[];
+  uploadedAttachments: UploadAttachment[];
+}
+
+function chatInputUiReducer(
+  state: ChatInputUiState,
+  action: ChatInputUiAction,
+): ChatInputUiState {
   switch (action.type) {
     case "hydrate":
       return { ...state, ...action.payload };
@@ -95,7 +120,10 @@ export function useChatInputController({
   onAuthRequired,
   tokenUsage,
 }: UseChatInputControllerProps) {
-  const [uiState, dispatchUi] = useReducer(chatInputUiReducer, INITIAL_CHAT_INPUT_UI_STATE);
+  const [uiState, dispatchUi] = useReducer(
+    chatInputUiReducer,
+    INITIAL_CHAT_INPUT_UI_STATE,
+  );
   const { isSending, memoryEnabled, thinkingEnabled } = uiState;
 
   const { data: session, isPending } = useSession();
@@ -106,9 +134,12 @@ export function useChatInputController({
     isUploading,
     uploadPhase,
     dispatchUpload,
+    getFileId,
+    getFilePreviewUrl,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
+    restoreAttachments,
   } = useChatFileUpload();
 
   const {
@@ -130,26 +161,33 @@ export function useChatInputController({
   const addTextSnippet = useCallback((content: string) => {
     const id = crypto.randomUUID();
     snippetCountRef.current += 1;
-    const fileName = snippetCountRef.current === 1
-      ? "pasted-text.txt"
-      : `pasted-text-${snippetCountRef.current}.txt`;
+    const fileName =
+      snippetCountRef.current === 1
+        ? "pasted-text.txt"
+        : `pasted-text-${snippetCountRef.current}.txt`;
     const byteSize = new TextEncoder().encode(content).byteLength;
     const file = new File([content], fileName, { type: "text/plain" });
-    const next = [...textSnippetsRef.current, { id, content, fileName, byteSize }];
+    const next = [
+      ...textSnippetsRef.current,
+      { id, content, fileName, byteSize },
+    ];
     textSnippetsRef.current = next;
     snippetFilesRef.current.set(id, file);
     setTextSnippets(next);
     return file;
   }, []);
 
-  const removeTextSnippet = useCallback((id: string) => {
-    const file = snippetFilesRef.current.get(id);
-    snippetFilesRef.current.delete(id);
-    const next = textSnippetsRef.current.filter((s) => s.id !== id);
-    textSnippetsRef.current = next;
-    setTextSnippets(next);
-    if (file) handleRemoveFile(file);
-  }, [handleRemoveFile]);
+  const removeTextSnippet = useCallback(
+    (id: string) => {
+      const file = snippetFilesRef.current.get(id);
+      snippetFilesRef.current.delete(id);
+      const next = textSnippetsRef.current.filter((s) => s.id !== id);
+      textSnippetsRef.current = next;
+      setTextSnippets(next);
+      if (file) handleRemoveFile(file);
+    },
+    [handleRemoveFile],
+  );
 
   useEffect(() => {
     if (!isPending) {
@@ -168,7 +206,8 @@ export function useChatInputController({
   }, [session, isPending]);
 
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
-  const isContextBlocked = tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
+  const isContextBlocked =
+    tokenUsage && tokenUsage.percentage >= 95 && !isLoading;
 
   const handleFilesSelectedWithAuth = (files: File[]) => {
     if (!session) {
@@ -187,8 +226,29 @@ export function useChatInputController({
     currentFileCount: selectedFiles.length,
   });
 
+  const restoreInputFromSnapshot = useCallback(
+    (snap: InputSnapshot, withAttachments: boolean) => {
+      setInput(snap.messageText);
+      setTextSnippets(snap.snippets);
+      textSnippetsRef.current = snap.snippets;
+      snippetFilesRef.current = snap.snippetFiles;
+      if (withAttachments) {
+        restoreAttachments(snap.files, snap.uploadedAttachments);
+        dispatchUpload({ type: "idle" });
+      }
+    },
+    [restoreAttachments, dispatchUpload, setInput, setTextSnippets],
+  );
+
   async function sendMessage() {
-    if ((!input.trim() && textSnippets.length === 0) || isLoading || disabled || isUploading || isSending) return;
+    if (
+      (!input.trim() && textSnippets.length === 0) ||
+      isLoading ||
+      disabled ||
+      isUploading ||
+      isSending
+    )
+      return;
 
     if (isContextBlocked) {
       toast.error(TOAST_ERROR_MESSAGES.CONTEXT.LIMIT_REACHED, {
@@ -209,6 +269,7 @@ export function useChatInputController({
     dispatchUi({ type: "set-sending", isSending: true });
 
     let hasDocuments = false;
+    let snapshot: InputSnapshot | null = null;
     try {
       const messageText = input;
       const attachmentsToSend = uploadedAttachments;
@@ -216,11 +277,20 @@ export function useChatInputController({
 
       if (hasDocuments && attachmentsToSend.length !== selectedFiles.length) {
         toast.info(TOAST_INFO_MESSAGES.UPLOAD_IN_PROGRESS, {
-          description: "Please wait for attachments to finish uploading before sending.",
+          description:
+            "Please wait for attachments to finish uploading before sending.",
         });
         dispatchUi({ type: "set-sending", isSending: false });
         return;
       }
+
+      snapshot = {
+        messageText,
+        snippets: [...textSnippetsRef.current],
+        snippetFiles: new Map(snippetFilesRef.current),
+        files: [...selectedFiles],
+        uploadedAttachments: [...uploadedAttachments],
+      };
 
       clearInput();
       textSnippetsRef.current = [];
@@ -229,7 +299,6 @@ export function useChatInputController({
 
       if (hasDocuments) {
         dispatchUpload({ type: "process" });
-      } else {
         clearAttachments();
       }
 
@@ -238,21 +307,21 @@ export function useChatInputController({
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         null,
         !!session && memoryEnabled,
-        thinkingEnabled
+        thinkingEnabled,
       );
 
       if (!result.success) {
-        setInput(messageText);
-        if (hasDocuments) {
-          dispatchUpload({ type: "idle" });
+        if (snapshot) {
+          restoreInputFromSnapshot(snapshot, hasDocuments);
         }
       } else if (hasDocuments) {
-        clearAttachments();
         dispatchUpload({ type: "idle" });
       }
     } catch (error) {
       logger.error("Error sending message:", error);
-      if (hasDocuments) {
+      if (snapshot) {
+        restoreInputFromSnapshot(snapshot, hasDocuments);
+      } else if (hasDocuments) {
         dispatchUpload({ type: "idle" });
       }
     } finally {
@@ -316,9 +385,14 @@ export function useChatInputController({
 
     dispatchUi({ type: "set-memory", enabled });
     storeMemoryEnabled(enabled);
-    toast.success(enabled ? TOAST_SUCCESS_MESSAGES.MEMORY_ENABLED : TOAST_SUCCESS_MESSAGES.MEMORY_DISABLED, {
-      duration: 2500,
-    });
+    toast.success(
+      enabled
+        ? TOAST_SUCCESS_MESSAGES.MEMORY_ENABLED
+        : TOAST_SUCCESS_MESSAGES.MEMORY_DISABLED,
+      {
+        duration: 2500,
+      },
+    );
   }
 
   function handleThinkingToggle(enabled: boolean) {
@@ -343,6 +417,8 @@ export function useChatInputController({
       isLoading,
       isUploading,
       uploadPhase,
+      getFileId,
+      getFilePreviewUrl,
       isSending,
       disabled: disabled || !!isContextBlocked,
       activeTool: null,

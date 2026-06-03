@@ -13,25 +13,63 @@ interface LogPayload {
   [key: string]: unknown;
 }
 
-function isVerboseLoggingEnabled(
-  nodeEnv: string | undefined = process.env.NODE_ENV,
-): boolean {
-  if (process.env.OBSERVABILITY_VERBOSE === "true") {
-    return true;
+type GlobalWithProcess = {
+  process?: { env?: Record<string, string | undefined> } | null;
+};
+
+function getGlobalProcess(): GlobalWithProcess["process"] {
+  try {
+    if (typeof globalThis === "undefined") {
+      return undefined;
+    }
+    const candidate = (globalThis as unknown as GlobalWithProcess).process;
+    if (candidate && typeof candidate === "object") {
+      return candidate;
+    }
+    return undefined;
+  } catch {
+    return undefined;
   }
-  return nodeEnv === "development";
 }
 
-export function isObservabilityLoggingEnabled(
-  nodeEnv: string | undefined = process.env.NODE_ENV,
-): boolean {
+function readNodeEnv(): string | undefined {
+  try {
+    const proc = getGlobalProcess();
+    if (!proc || !proc.env || typeof proc.env !== "object") {
+      return undefined;
+    }
+    const value = proc.env.NODE_ENV;
+    return typeof value === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readObservabilityVerbose(): boolean {
+  try {
+    const proc = getGlobalProcess();
+    if (!proc || !proc.env || typeof proc.env !== "object") {
+      return false;
+    }
+    return proc.env.OBSERVABILITY_VERBOSE === "true";
+  } catch {
+    return false;
+  }
+}
+
+function isVerboseLoggingEnabled(nodeEnv?: string): boolean {
+  if (readObservabilityVerbose()) {
+    return true;
+  }
+  const env = nodeEnv ?? readNodeEnv();
+  return env === "development";
+}
+
+export function isObservabilityLoggingEnabled(nodeEnv?: string): boolean {
   return isVerboseLoggingEnabled(nodeEnv);
 }
 
-function shouldEmit(
-  level: LogLevel,
-  nodeEnv: string | undefined = process.env.NODE_ENV,
-): boolean {
+function shouldEmit(level: LogLevel, nodeEnv?: string): boolean {
   if (level === "error" || level === "warn") {
     return true;
   }
@@ -48,8 +86,26 @@ function safeEval(fn: () => string): string {
 
 function writeToStderr(message: string): void {
   try {
-    if (typeof process !== "undefined" && typeof process.stderr?.write === "function") {
-      process.stderr.write(message + "\n");
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      console.error(message);
+      return;
+    }
+  } catch {
+  }
+  try {
+    const proc = getGlobalProcess() as
+      | (GlobalWithProcess["process"] & {
+          stderr?: { write?: (s: string) => void } | null;
+        })
+      | undefined;
+    if (proc && typeof proc === "object") {
+      const stderr = (proc as { stderr?: { write?: (s: string) => void } | null }).stderr;
+      if (stderr && typeof stderr.write === "function") {
+        try {
+          stderr.write(message + "\n");
+        } catch {
+        }
+      }
     }
   } catch {
   }
@@ -83,7 +139,7 @@ const logSink: LogSink = writeWithConsoleFallback;
 function write(
   level: LogLevel,
   payload: LogPayload,
-  nodeEnv: string | undefined = process.env.NODE_ENV,
+  nodeEnv?: string,
 ): void {
   try {
     if (!shouldEmit(level, nodeEnv)) {

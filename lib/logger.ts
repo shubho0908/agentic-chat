@@ -112,10 +112,21 @@ function formatArgs(args: unknown[]): { message: string; details?: string[] } {
 export function emergencyLog(messageOrFactory: string | (() => string)): void {
   const message = safeEval(() => typeof messageOrFactory === "function" ? messageOrFactory() : messageOrFactory);
   try {
-    if (typeof process !== "undefined" && typeof process.stderr?.write === "function") {
-      process.stderr.write("[logger:emergency] " + message + "\n");
+    if (typeof console !== "undefined" && typeof console.error === "function") {
+      console.error("[logger:emergency] " + message);
+      return;
     }
   } catch {
+  }
+  const g = (typeof globalThis !== "undefined" ? globalThis : null) as { process?: unknown } | null;
+  if (g && typeof g.process === "object" && g.process !== null) {
+    const stderr = (g.process as { stderr?: { write?: (s: string) => void } }).stderr;
+    if (stderr && typeof stderr.write === "function") {
+      try {
+        stderr.write("[logger:emergency] " + message + "\n");
+      } catch {
+      }
+    }
   }
 }
 
