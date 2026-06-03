@@ -1,8 +1,8 @@
-# Feature Demos
+# Features
 
-Visual walkthroughs showcasing the key capabilities of Agentic Chat.
+Comprehensive overview of the key capabilities of Agentic Chat.
 
-## 📹 Quick Navigation
+## Quick Navigation
 
 | Feature | Description |
 |---------|-------------|
@@ -23,8 +23,6 @@ Real-time internet search powered by Exa API with intelligent query planning.
 - Image results with gallery view
 - Source deduplication and relevance scoring
 
-https://github.com/user-attachments/assets/062a477c-f577-4ca6-ad3c-c3a1aafa60da
-
 ---
 
 ## RAG Document Intelligence
@@ -41,21 +39,7 @@ Semantic search across documents with pgvector embeddings and Cohere reranking.
 - Real-time processing status
 - Batch document uploads (up to 5 files)
 
-**Demos:**
-- Query single document
-
-
-https://github.com/user-attachments/assets/c7cf2457-b8fc-45b4-b9b7-9744e83129e5
-
-
-- Cross-document intelligence
-
-
-https://github.com/user-attachments/assets/b368b5c0-0bc1-462d-bad7-a8a25710deba
-
-
 ---
-
 
 ## URL Scraping
 
@@ -67,8 +51,6 @@ Automatic detection and extraction of web page content (up to 5 URLs per message
 - Rich metadata and Open Graph link previews
 - Content bounded to 3000 chars per tool output
 - Automatic context injection into queries
-
-https://github.com/user-attachments/assets/283deac3-d207-434b-a315-0b86a500c648
 
 ---
 
@@ -90,10 +72,6 @@ OAuth 2.0 per-user connections to 9 services via Composio SDK with intent-based 
 **Safety:**
 - Dangerous actions (send, delete, create, update, share, archive) require explicit user approval
 - Side-effect verb detection as additional safety layer
-
-
-https://github.com/user-attachments/assets/b84a87a1-2da6-48f5-aada-4b7819f7326d
-
 
 ---
 
@@ -120,6 +98,13 @@ https://github.com/user-attachments/assets/b84a87a1-2da6-48f5-aada-4b7819f7326d
 - Navigate between message versions
 - Edit and regenerate with version history
 - Soft deletion with recovery
+
+### Artifacts
+- AI generation of HTML, React components, SVG graphics, Mermaid diagrams, Markdown, and code snippets
+- Live preview panel with sandboxed iframe rendering
+- Streaming artifact generation with progressive content display
+- Version tracking with history navigation per artifact
+- Real-time chunked updates during streaming
 
 ### Semantic Caching
 - pgvector-based similarity caching
@@ -158,6 +143,6 @@ https://github.com/user-attachments/assets/b84a87a1-2da6-48f5-aada-4b7819f7326d
 
 Ready to try these features? Check out the [Setup Guide](../SETUP.md) for installation instructions.
 
-## Architecture Details
+## Architecture
 
-For technical implementation details, see the Architecture section in the main [README](../README.md).
+For technical implementation details, see the main [README](../README.md).

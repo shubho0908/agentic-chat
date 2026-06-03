@@ -64,6 +64,7 @@ Configure these in `.env` for additional features:
 
 - **EXA_API_KEY** - Web search capability via Exa API
 - **COHERE_API_KEY** - Enhanced RAG retrieval with reranking (rerank-v3.5)
+- **RERANKER_MODEL** - Cohere reranker model (default: `rerank-v3.5`)
 - **FIRECRAWL_API_KEY** - Tier 2 JS-rendered web scraping for sites that require JavaScript
 - **COMPOSIO_API_KEY** - Third-party integrations (Gmail, Calendar, Drive, Docs, Sheets, Slack, Notion, GitHub, Linear)
 - **CACHE_TTL_SECONDS** - Semantic cache TTL (default: 3600)
