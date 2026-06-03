@@ -25,7 +25,7 @@ function getToolCallId(toolCall: ToolCall, index: number): string {
 }
 
 function isAuthFailureText(content: string): boolean {
-  return /(?:not connected|no connected account|connection not found|no account connected|invalid auth|authentication failed|unauthori[sz]ed|\b401\b)/i.test(content);
+  return /(?:not connected|no connected account|connection not found|no account connected|invalid auth|authentication failed|unauthori[sz]ed|\b401\b|token_expired|refresh_failed|expired_token|invalid_token|token has expired|connection_expired|reauth|re-authenticate|session expired|oauth token)/i.test(content);
 }
 
 function getConnectorFailureText(content: string): string | null {

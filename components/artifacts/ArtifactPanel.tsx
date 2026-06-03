@@ -87,15 +87,37 @@ const ArtifactRenderer = memo(function ArtifactRenderer({ artifact, viewMode }: 
     ? ViewMode.CODE
     : viewMode;
 
+  const isIframeType = IFRAME_TYPES.has(artifact.type);
+
+  if (isIframeType) {
+    const previewComponent = artifact.type === ArtifactType.HTML
+      ? <HtmlArtifact content={artifact.content} />
+      : <ReactArtifact content={artifact.content} />;
+
+    const showCode = effectiveViewMode === ViewMode.CODE;
+
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0"
+          style={{ visibility: showCode ? "hidden" : "visible", pointerEvents: showCode ? "none" : "auto" }}
+        >
+          {previewComponent}
+        </div>
+        {showCode && (
+          <div className="absolute inset-0 z-10">
+            <CodeArtifact content={artifact.content} language={artifact.language ?? artifact.type} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (effectiveViewMode === ViewMode.CODE) {
     return <CodeArtifact content={artifact.content} language={artifact.language ?? artifact.type} />;
   }
 
   switch (artifact.type) {
-    case ArtifactType.HTML:
-      return <HtmlArtifact content={artifact.content} />;
-    case ArtifactType.REACT:
-      return <ReactArtifact content={artifact.content} />;
     case ArtifactType.SVG:
       return <SvgArtifact content={artifact.content} />;
     case ArtifactType.MERMAID:

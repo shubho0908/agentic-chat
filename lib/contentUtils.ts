@@ -32,8 +32,15 @@ export function buildMultimodalContent(
     return text;
   }
   
+  const urlReferences = imageAttachments
+    .map(att => `- ${att.fileName}: ${att.fileUrl}`)
+    .join('\n');
+  
+  const metadataBlock = `<system_metadata>\nAttached images are available for code/artifact generation:\n${urlReferences}\n</system_metadata>`;
+  const contextualText = text.trim() ? `${metadataBlock}\n\n${text}` : metadataBlock;
+  
   return [
-    { type: "text" as const, text },
+    { type: "text" as const, text: contextualText },
     ...imageAttachments.map(att => ({
       type: "image_url" as const,
       image_url: { url: att.fileUrl },

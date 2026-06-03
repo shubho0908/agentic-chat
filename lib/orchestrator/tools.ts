@@ -44,14 +44,14 @@ const MAX_AGENT_STEP_TOOLS = 18;
 
 const TOOLKIT_INTENT_TERMS: Record<ComposioToolkit, string[]> = {
   gmail: ["gmail", "email", "mail", "inbox"],
-  googlecalendar: ["calendar", "meeting", "schedule"],
-  googledrive: ["drive", "folder"],
-  googledocs: ["docs", "google doc"],
-  googlesheets: ["sheets", "spreadsheet"],
-  slack: ["slack", "channel", "dm"],
-  notion: ["notion"],
-  github: ["github", "repo", "repository", "pull request", "branch", "commit"],
-  linear: ["linear", "issue", "ticket", "cycle"],
+  googlecalendar: ["calendar", "calender", "meeting", "schedule", "appointment", "event"],
+  googledrive: ["drive", "folder", "file"],
+  googledocs: ["docs", "google doc", "document"],
+  googlesheets: ["sheets", "spreadsheet", "excel"],
+  slack: ["slack", "channel", "dm", "message"],
+  notion: ["notion", "page", "database", "note", "wiki"],
+  github: ["github", "repo", "repository", "pull request", "branch", "commit", "code", "pr"],
+  linear: ["linear", "issue", "ticket", "cycle", "task", "project"],
 };
 
 const WEB_SEARCH_TERMS = [
@@ -337,11 +337,7 @@ export function selectToolsForAgentStep(
   const latestUserText = context.latestUserText ?? "";
   const rawText = latestUserText.toLowerCase();
   const mentionedToolkits = getMentionedToolkits(latestUserText, context.connectedServices);
-  const mentionedToolkitSet = new Set(mentionedToolkits);
-  const plannedTools = [...new Set(context.plannedTools ?? [])].filter((toolName) => {
-    const toolkit = getComposioToolkitForToolName(toolName);
-    return !toolkit || mentionedToolkitSet.size === 0 || mentionedToolkitSet.has(toolkit);
-  });
+  const plannedTools = [...new Set(context.plannedTools ?? [])];
   const plannedToolSet = new Set(plannedTools);
 
   addToolByName(selected, toolsByName, ToolName.ASK_USER);
@@ -419,8 +415,9 @@ export async function getToolsForRequest(
 
   try {
     const toolkits = connectedToolkits ?? (await getConnectedToolkits(userId));
-    if (toolkits.length > 0) {
-      const composioTools = await getToolsForUser(userId, toolkits);
+    const targetToolkits = toolkits.length > 0 ? toolkits : [...COMPOSIO_TOOLKITS];
+    const composioTools = await getToolsForUser(userId, targetToolkits);
+    if (composioTools.length > 0) {
       const allTools = [...baseTools, ...composioTools];
       if (allTools.length > MAX_TOOLS) {
         logger.warn(

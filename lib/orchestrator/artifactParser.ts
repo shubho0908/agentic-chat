@@ -57,10 +57,24 @@ export interface ArtifactSSE {
   content?: string;
 }
 
-/**
- * Stateful streaming parser that detects <artifact> tags in LLM output chunks.
- * Returns arrays of either text chunks (to send as regular content) or artifact SSE events.
- */
+const OPEN_TAG_LOWER = OPEN_TAG_PREFIX.toLowerCase();
+const CLOSE_TAG_LOWER = CLOSE_TAG.toLowerCase();
+
+function indexOfOpenTag(text: string): number {
+  return text.toLowerCase().indexOf(OPEN_TAG_LOWER);
+}
+
+function indexOfCloseTag(text: string): number {
+  return text.toLowerCase().indexOf(CLOSE_TAG_LOWER);
+}
+
+function createStreamId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function createArtifactStreamParser() {
   let buffer = "";
   let insideArtifact = false;
@@ -72,58 +86,60 @@ export function createArtifactStreamParser() {
     return `artifact-${streamId}-${++artifactCounter}`;
   }
 
-  /**
-   * Process a text chunk from the LLM stream.
-   * Returns an array of actions: { text: string } for regular content, { event: ArtifactSSE } for artifact events.
-   */
+  function holdPartialSuffix(text: string): number {
+    let maxHold = 0;
+    for (let len = 1; len <= text.length && len <= OPEN_TAG_PREFIX.length; len++) {
+      if (OPEN_TAG_PREFIX.slice(0, len) === text.slice(text.length - len).toLowerCase()) {
+        maxHold = len;
+      }
+    }
+    for (let len = 1; len <= text.length && len <= CLOSE_TAG.length; len++) {
+      if (CLOSE_TAG.slice(0, len) === text.slice(text.length - len).toLowerCase()) {
+        maxHold = Math.max(maxHold, len);
+      }
+    }
+    return maxHold;
+  }
+
   function push(chunk: string): Array<{ text: string } | { event: ArtifactSSE }> {
     buffer += chunk;
     const results: Array<{ text: string } | { event: ArtifactSSE }> = [];
 
     while (true) {
       if (!insideArtifact) {
-        // Look for opening tag
-        const openIdx = findOpenTag(buffer);
+        const openIdx = indexOfOpenTag(buffer);
 
         if (openIdx === -1) {
-          // No tag start — but keep a trailing partial if buffer ends with `<` or `<a` etc.
-          const safeFlush = trailingPartialTagLength(buffer, [OPEN_TAG_PREFIX]);
-          if (buffer.length - safeFlush > 0) {
-            results.push({ text: buffer.slice(0, buffer.length - safeFlush) });
-            buffer = buffer.slice(buffer.length - safeFlush);
+          const hold = holdPartialSuffix(buffer);
+          const flushLen = buffer.length - hold;
+          if (flushLen > 0) {
+            results.push({ text: buffer.slice(0, flushLen) });
+            buffer = buffer.slice(flushLen);
           }
           break;
         }
 
-        // Flush text before the tag
         if (openIdx > 0) {
           results.push({ text: buffer.slice(0, openIdx) });
           buffer = buffer.slice(openIdx);
         }
 
-        // Find the closing `>` of the opening tag
-        const tagEnd = buffer.search(CLOSE_BRACKET_RE);;
-        if (tagEnd < 1) {
-          // Incomplete opening tag — wait for more data
-          break;
-        }
+        const tagEnd = buffer.search(CLOSE_BRACKET_RE);
+        if (tagEnd < 1) break;
 
         const fullOpenTag = buffer.slice(0, tagEnd + 1);
         const parsed = parseOpenTag(fullOpenTag);
 
         if (!parsed) {
-          // Invalid artifact tag — emit as text and skip past it
           results.push({ text: fullOpenTag });
           buffer = buffer.slice(tagEnd + 1);
           continue;
         }
 
-        // Valid artifact opening tag
         currentId = generateId();
         insideArtifact = true;
         buffer = buffer.slice(tagEnd + 1);
 
-        // Strip one leading newline after opening tag.
         if (buffer.startsWith("\r\n")) {
           buffer = buffer.slice(2);
         } else if (buffer.startsWith("\n")) {
@@ -140,28 +156,25 @@ export function createArtifactStreamParser() {
           },
         });
       } else {
-        // Inside artifact — look for close tag
-        const closeIdx = findCloseTag(buffer);
+        const closeIdx = indexOfCloseTag(buffer);
 
         if (closeIdx === -1) {
-          // No close tag yet — flush content up to a possible partial close tag.
-          const safeLen = buffer.length - trailingPartialTagLength(buffer, [CLOSE_TAG]);
-          if (safeLen > 0) {
+          const hold = holdPartialSuffix(buffer);
+          const flushLen = buffer.length - hold;
+          if (flushLen > 0) {
             results.push({
               event: {
                 type: ArtifactEventType.CHUNK,
                 artifactId: currentId,
-                content: buffer.slice(0, safeLen),
+                content: buffer.slice(0, flushLen),
               },
             });
-            buffer = buffer.slice(safeLen);
+            buffer = buffer.slice(flushLen);
           }
           break;
         }
 
-        // Found close tag — emit remaining content and end event
         let content = buffer.slice(0, closeIdx);
-        // Strip one trailing newline before close tag.
         if (content.endsWith("\r\n")) {
           content = content.slice(0, -2);
         } else if (content.endsWith("\n")) {
@@ -194,7 +207,6 @@ export function createArtifactStreamParser() {
     return results;
   }
 
-  /** Flush any remaining buffered content (call at stream end). */
   function flush(): Array<{ text: string } | { event: ArtifactSSE }> {
     const results: Array<{ text: string } | { event: ArtifactSSE }> = [];
 
@@ -218,38 +230,4 @@ export function createArtifactStreamParser() {
   }
 
   return { push, flush };
-}
-
-/**
- * How many trailing characters could be the start of `<artifact` or `</artifact>`.
- * We hold them back so we don't emit partial tag text prematurely.
- */
-function trailingPartialTagLength(text: string, candidates: string[]): number {
-  const lowerText = text.toLowerCase();
-  let maxHold = 0;
-
-  for (const candidate of candidates) {
-    for (let len = 1; len < candidate.length && len <= text.length; len++) {
-      if (lowerText.endsWith(candidate.slice(0, len))) {
-        maxHold = Math.max(maxHold, len);
-      }
-    }
-  }
-
-  return maxHold;
-}
-
-function findOpenTag(text: string): number {
-  return text.toLowerCase().indexOf(OPEN_TAG_PREFIX);
-}
-
-function findCloseTag(text: string): number {
-  return text.toLowerCase().indexOf(CLOSE_TAG);
-}
-
-function createStreamId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

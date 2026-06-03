@@ -7,8 +7,6 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { MAX_RESPONSE_TOKENS, PlanComplexity } from "../constants";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import {
-  notConnectedMessage,
-  getComposioToolkitForToolName,
   TOOLKIT_DISPLAY_NAMES,
   type ComposioToolkit,
 } from "@/lib/tools/composio/config";
@@ -17,6 +15,15 @@ import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
 
 const BASE_SYSTEM_PROMPT = `Helpful AI assistant with tool access. Act proactively — call tools immediately when user intent is clear. Only use ask_user when genuinely ambiguous.
+
+Thinking discipline (CRITICAL):
+- Think ONLY about what's directly required to fulfill the user's request. No tangents, no hypotheticals, no edge-case exploration unless the user explicitly asked.
+- For simple queries (greetings, confirmations, single-fact lookups), suppress unnecessary internal reasoning entirely — just respond or call the obvious tool.
+- Before any chain of thought, ask: "Does every step of this reasoning directly serve answering the user?" If a step doesn't, drop it.
+- Never use thinking to: restate the question, praise the question, narrate your process step-by-step, plan trivial responses, or generate content you'll discard. Every thinking token must pull weight.
+- If you lack sufficient information, say so. Never backfill gaps with fabricated reasoning chains.
+- Tool choice reasoning: think about which tool, then call it. Don't deliberate between tools unnecessarily — if one clearly fits, use it.
+- Short, focused reasoning is always better than long, meandering reasoning. When in doubt, stop thinking and act.
 
 Key rules:
 - ABSOLUTE RULE: Service tools are pre-authenticated as the user. NEVER ask for usernames, workspace URLs, account IDs, API keys, or credentials. The tools already know the user's connected account.
@@ -61,6 +68,7 @@ Valid types: html, react, svg, mermaid, code, markdown.
 - code: Standalone code files (set language attribute, e.g. language="python").
 - markdown: Long-form documents, reports, READMEs.
 Do NOT use artifacts for: short inline snippets, code examples under 15 lines, simple explanations, or partial code. Only use artifacts when the content is independently useful and renderable.
+- CRITICAL: NEVER use artifacts to simulate or fake a tool action. Do NOT generate .ics calendar files, SQL scripts, CSV exports, terminal commands, or "here's what you'd see if..." content when a real tool or connected service exists to perform that action. If a connected service tool (calendar, email, database, etc.) can do it, call the tool — don't simulate its output in an artifact.
 
 Artifact completeness: NEVER use placeholder comments like "// ... rest of code", "/* add more here */", or "// TODO: implement". Every artifact must be fully functional, complete, and runnable as-is. If the content would be too long, reduce scope rather than using placeholders.
 
@@ -281,34 +289,6 @@ function getLatestHumanText(messages: BaseMessage[]): string {
   return "";
 }
 
-function isConnectorActionRequest(text: string): boolean {
-  return /\b(my|list|show|fetch|get|find|search|send|read|create|update|delete|query|count|workspace|database|page|project|projects|table|row|repo|repository|pull request|issue|inbox|email|mail|thread|message|calendar|event|file|folder|document|doc|sheet|spreadsheet|channel)\b/i.test(text);
-}
-
-function getAvailableComposioToolkits(tools: DynamicStructuredTool[]): Set<ComposioToolkit> {
-  return new Set(
-    tools
-      .map((tool) => getComposioToolkitForToolName(tool.name))
-      .filter((toolkit): toolkit is ComposioToolkit => toolkit !== null)
-  );
-}
-
-function getDisconnectedConnectorMessage(
-  latestUserText: string,
-  connectedServices: string[],
-  tools: DynamicStructuredTool[]
-): string | null {
-  if (!isConnectorActionRequest(latestUserText)) return null;
-
-  const connected = new Set(connectedServices);
-  const available = getAvailableComposioToolkits(tools);
-  const requested = getAnyMentionedComposioToolkits(latestUserText);
-  const disconnected = requested.find(
-    (toolkit) => !connected.has(toolkit) && !available.has(toolkit)
-  );
-
-  return disconnected ? notConnectedMessage(disconnected) : null;
-}
 
 interface AgentNodeOptions {
   thinkingEnabled?: boolean;
@@ -349,20 +329,12 @@ export function createAgentNode(
 
     const latestUserText = getLatestHumanText(conversationMessages);
     const connectedServices = state.connectedServices ?? [];
-    const disconnectedMessage = getDisconnectedConnectorMessage(
-      latestUserText,
-      connectedServices,
-      tools
-    );
-
-    if (disconnectedMessage) {
-      return { messages: [new AIMessage(disconnectedMessage)] };
-    }
 
     const baseSystemPrompt = buildSystemPrompt(connectedServices);
     const isDirect =
       state.toolPlan?.complexity === PlanComplexity.DIRECT &&
-      !hasWebActionIntent(latestUserText);
+      !hasWebActionIntent(latestUserText) &&
+      getAnyMentionedComposioToolkits(latestUserText).length === 0;
     const selectedTools = isDirect
       ? []
       : selectToolsForAgentStep(tools, {

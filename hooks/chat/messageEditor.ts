@@ -110,15 +110,18 @@ export async function handleEditMessage(
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments);
 
+    let accumulatedContent = "";
+    let thinkingBuffer = "";
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
       signal: abortSignal,
-      onChunk: (fullContent) => {
+      onChunk: (delta) => {
+        accumulatedContent += delta;
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === placeholderAssistantId
-              ? { ...msg, content: fullContent }
+              ? { ...msg, content: accumulatedContent }
               : msg
           )
         );
@@ -222,11 +225,12 @@ export async function handleEditMessage(
       },
       memoryEnabled: memoryEnabled ?? true,
       thinkingEnabled,
-      onThinking: (thinking) => {
+      onThinking: (delta) => {
+        thinkingBuffer += delta;
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === placeholderAssistantId
-              ? { ...msg, thinking }
+              ? { ...msg, thinking: thinkingBuffer }
               : msg
           )
         );

@@ -228,7 +228,7 @@ export interface StreamConfig {
   messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>;
   model: string;
   signal: AbortSignal;
-  onChunk: (fullContent: string) => void;
+  onChunk: (delta: string) => void;
   conversationId?: string | null;
   onMemoryStatus?: (status: MemoryStatus) => void;
   onToolCall?: (toolCall: ToolCallEvent) => void;
@@ -249,7 +249,7 @@ export interface ApprovalStreamConfig {
   approved?: boolean;
   response?: string;
   signal: AbortSignal;
-  onChunk: (fullContent: string) => void;
+  onChunk: (delta: string) => void;
   onToolCall?: (toolCall: ToolCallEvent) => void;
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;

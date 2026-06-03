@@ -5,14 +5,15 @@ import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
 import { TOAST_ERROR_MESSAGES, HOOK_ERROR_MESSAGES } from "@/constants/errors";
-import { saveUserMessage } from "./messageApi";
-import { handleConversationSaving } from "./conversationManager";
+import { saveUserMessage, saveAssistantMessage } from "./messageApi";
+import { handleConversationSaving, STREAM_STOPPED_BY_USER_MARKER } from "./conversationManager";
 import type { SendMessageContext, BaseChatContext } from "@/types/chatHooks";
 import { handleStreamingResponse } from "./streamingHandler";
 import { getResumeConversationState } from "./resumeState";
 import { queryKeys } from "@/lib/queryKeys";
 import { appRoutes } from "@/lib/routes";
 import { toUserFriendlyError } from "@/lib/errorMessages";
+import { logger } from "@/lib/logger";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -77,6 +78,14 @@ export async function continueIncompleteConversation(
       onArtifact: context.onArtifact,
     }
   );
+
+  if (!result.success && result.error === "aborted" && conversationId) {
+    try {
+      await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER);
+    } catch (err) {
+      logger.warn("[messageSender] Failed to save stream-stopped marker (continue):", err);
+    }
+  }
 
   if (!result.success && result.error && result.error !== "aborted") {
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
@@ -249,6 +258,14 @@ export async function handleSendMessage(
         onArtifact: context.onArtifact,
       }
     );
+
+    if (!result.success && result.error === "aborted" && currentConversationId && userMessageWasPersisted) {
+      try {
+        await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER);
+      } catch (err) {
+        logger.warn("[messageSender] Failed to save stream-stopped marker:", err);
+      }
+    }
 
     if (!result.success && result.error && result.error !== "aborted") {
       toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {

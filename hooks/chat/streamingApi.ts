@@ -94,8 +94,7 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     throw new Error("No response stream available");
   }
 
-  let fullContent = "";
-  let thinkingContent = "";
+  const contentParts: string[] = [];
   let buffer = "";
   const {
     onChunk,
@@ -151,8 +150,8 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     }
 
     if (parsedType === 'thinking' && onThinking) {
-      thinkingContent += typeof parsed.content === "string" ? parsed.content : '';
-      onThinking(thinkingContent);
+      const delta = typeof parsed.content === "string" ? parsed.content : '';
+      onThinking(delta);
     }
 
     if (parsedType === 'tool_call' && onToolCall) {
@@ -199,52 +198,46 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     }
 
     if (typeof parsed.content === "string" && parsed.content && !parsedType) {
-      fullContent += parsed.content;
-      onChunk(fullContent);
+      contentParts.push(parsed.content);
+      onChunk(parsed.content);
     }
   }
 
+  const SSE_DATA_PREFIX = "data:";
   try {
     for await (const value of readerToIterable(reader)) {
       const chunk = decoder.decode(value, { stream: true });
       buffer += chunk;
 
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || "";
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIdx);
+        buffer = buffer.slice(newlineIdx + 1);
 
-      for (const line of lines) {
-        const trimmedLine = line.trim();
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith(SSE_DATA_PREFIX)) continue;
 
-        if (!trimmedLine || !trimmedLine.startsWith('data:')) continue;
-
-        const data = trimmedLine.slice(5).trim();
-
+        const data = trimmed.slice(SSE_DATA_PREFIX.length).trim();
         if (data === '[DONE]') continue;
 
         try {
           processParsedEvent(JSON.parse(data));
         } catch (err) {
-          if (!(err instanceof SyntaxError)) {
-            throw err;
-          }
+          if (!(err instanceof SyntaxError)) throw err;
           logger.warn('Failed to parse SSE data:', data, err);
         }
       }
     }
 
-    if (buffer.trim()) {
-      const trimmedLine = buffer.trim();
-      if (trimmedLine.startsWith('data:')) {
-        const data = trimmedLine.slice(5).trim();
-        if (data !== '[DONE]') {
-          try {
-            processParsedEvent(JSON.parse(data));
-          } catch (err) {
-            if (!(err instanceof SyntaxError)) {
-              throw err;
-            }
-            logger.warn('Failed to parse final SSE data:', data, err);
-          }
+    const trailing = buffer.trim();
+    if (trailing.startsWith(SSE_DATA_PREFIX)) {
+      const data = trailing.slice(SSE_DATA_PREFIX.length).trim();
+      if (data !== '[DONE]') {
+        try {
+          processParsedEvent(JSON.parse(data));
+        } catch (err) {
+          if (!(err instanceof SyntaxError)) throw err;
+          logger.warn('Failed to parse final SSE data:', data, err);
         }
       }
     }
@@ -257,7 +250,7 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     throw error;
   }
 
-  return fullContent;
+  return contentParts.join('');
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {

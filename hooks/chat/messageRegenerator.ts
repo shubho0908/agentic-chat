@@ -84,15 +84,18 @@ export async function handleRegenerateResponse(
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
     const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments);
 
+    let accumulatedContent = "";
+    let thinkingBuffer = "";
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
       signal: abortSignal,
-      onChunk: (fullContent) => {
+      onChunk: (delta) => {
+        accumulatedContent += delta;
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
-              ? { ...msg, content: fullContent }
+              ? { ...msg, content: accumulatedContent }
               : msg
           )
         );
@@ -196,11 +199,12 @@ export async function handleRegenerateResponse(
       },
       memoryEnabled: memoryEnabled ?? true,
       thinkingEnabled,
-      onThinking: (thinking) => {
+      onThinking: (delta) => {
+        thinkingBuffer += delta;
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
-              ? { ...msg, thinking }
+              ? { ...msg, thinking: thinkingBuffer }
               : msg
           )
         );

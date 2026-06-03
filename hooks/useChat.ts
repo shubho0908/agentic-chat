@@ -273,6 +273,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       const artifactCollector = createArtifactMetadataCollector();
       let resumedContent = "";
       const previousContent = typeof pendingMessage.content === "string" ? pendingMessage.content : "";
+      let thinkingAccumulator = previousContent ? pendingMessage.thinking || "" : "";
       const previousMetadata = pendingMessage.metadata;
       if (previousContent && previousContent !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT) {
         resumedContent = previousContent;
@@ -299,10 +300,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           approved,
           response,
           signal: abortControllerRef.current.signal,
-          onChunk: (fullContent) => {
-            resumedContent = fullContent;
+          onChunk: (delta) => {
+            resumedContent += delta;
             updateLocalAssistantMessage({
-              content: fullContent,
+              content: resumedContent,
               metadata: messageMetadata,
             });
           },
@@ -338,8 +339,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             };
             updateLocalAssistantMessage({ metadata: messageMetadata });
           },
-          onThinking: (thinking) => {
-            updateLocalAssistantMessage({ thinking });
+          onThinking: (delta) => {
+            thinkingAccumulator += delta;
+            updateLocalAssistantMessage({ thinking: thinkingAccumulator });
           },
           onArtifact: (event) => {
             const eventWithMessage = { ...event, messageId: assistantMessageId };

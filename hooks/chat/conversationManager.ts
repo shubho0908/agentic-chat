@@ -39,6 +39,7 @@ const DOCUMENT_CONTEXT_MESSAGES = 12;
 const APPROX_IMAGE_TOKENS = 850;
 export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
 export const ARTIFACT_ONLY_ASSISTANT_CONTENT = "[[__artifact_only_assistant_content_v1__]]";
+export const STREAM_STOPPED_BY_USER_MARKER = "[[__stream_stopped_by_user_v1__]]";
 
 export function getPersistableAssistantContent(
   assistantContent: string,
@@ -86,7 +87,7 @@ function escapeArtifactBody(value: string): string {
 
 function buildAssistantContentForAPI(message: Message): string {
   const text = extractTextFromContent(message.content);
-  const visibleText = text === ARTIFACT_ONLY_ASSISTANT_CONTENT ? "" : text;
+  const visibleText = (text === ARTIFACT_ONLY_ASSISTANT_CONTENT || text === STREAM_STOPPED_BY_USER_MARKER) ? "" : text;
   const artifacts = message.metadata?.artifacts ?? [];
 
   if (artifacts.length === 0) {
