@@ -239,12 +239,13 @@ export async function handleStreamingResponse(
       messages: messagesForAPI,
       model,
       signal: abortSignal,
-      onChunk: (fullContent) => {
+      onChunk: (delta) => {
+        assistantContent += delta;
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: MessageRole.ASSISTANT,
-              content: fullContent,
+              content: assistantContent,
               id: assistantMessageId,
               timestamp: Date.now(),
               model,
@@ -253,7 +254,7 @@ export async function handleStreamingResponse(
           }));
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
-            content: fullContent,
+            content: assistantContent,
           });
         }
       },
@@ -366,15 +367,15 @@ export async function handleStreamingResponse(
           });
         }
       },
-      onThinking: (thinking) => {
+      onThinking: (delta) => {
         if (!thinkingStartTime) thinkingStartTime = Date.now();
-        thinkingContent = thinking;
+        thinkingContent += delta;
         if (!messageCreated) {
           messageCreated = true;
           onMessagesUpdate((prev) => upsertAssistantMessage(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
-              thinking,
+              thinking: thinkingContent,
               id: assistantMessageId,
               timestamp: Date.now(),
               model,
@@ -383,7 +384,7 @@ export async function handleStreamingResponse(
           }));
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
-            thinking,
+            thinking: thinkingContent,
           });
         }
       },

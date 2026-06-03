@@ -20,7 +20,7 @@ import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT } from "@/hooks/chat/conversationManager";
+import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
@@ -97,6 +97,7 @@ interface MessageContentSurfaceProps {
     humanInTheLoopPending: boolean;
     hideHumanInTheLoopPlaceholder: boolean;
     hideArtifactPlaceholder: boolean;
+    hideStoppedMarker: boolean;
   };
   memoryStatus?: MemoryStatus;
   humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
@@ -121,8 +122,9 @@ function MessageContentSurface({
     humanInTheLoopPending,
     hideHumanInTheLoopPlaceholder,
     hideArtifactPlaceholder,
+    hideStoppedMarker,
   } = renderState;
-  const hidePlaceholderContent = hideHumanInTheLoopPlaceholder || hideArtifactPlaceholder;
+  const hidePlaceholderContent = hideHumanInTheLoopPlaceholder || hideArtifactPlaceholder || hideStoppedMarker;
 
   return (
     <div className={cn(
@@ -222,11 +224,14 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
   const modelName = "AI Assistant"
 
+  const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
+
   const textContent = useMemo(() => {
-    const text = extractTextFromContent(displayedContent);
-    return text === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? "" : text;
-  }, [displayedContent]);
+    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
+    return rawText;
+  }, [rawText]);
   const hideArtifactPlaceholder = artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT;
+  const hideStoppedMarker = rawText === STREAM_STOPPED_BY_USER_MARKER;
 
   const handleEditStart = useCallback(() => {
     setEditText(textContent);
@@ -347,6 +352,8 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
   if (message.role === MessageRole.SYSTEM) return null;
 
+  if (hideStoppedMarker) return null;
+
   return (
     <div
       className={cn(
@@ -394,6 +401,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     humanInTheLoopPending,
                     hideHumanInTheLoopPlaceholder,
                     hideArtifactPlaceholder,
+                    hideStoppedMarker,
                   }}
                   memoryStatus={memoryStatus}
                   humanInTheLoopRequest={humanInTheLoopRequest}

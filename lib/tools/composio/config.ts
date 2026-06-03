@@ -163,6 +163,13 @@ export function getComposioToolkitForToolName(toolName: string): ComposioToolkit
       return toolkit;
     }
   }
+  const firstToken = upperName.split(/[^A-Z0-9]+/)[0];
+  if (firstToken) {
+    for (const toolkit of COMPOSIO_TOOLKITS) {
+      const prefix = TOOLKIT_TOOL_PREFIXES[toolkit].replace(/_$/, "");
+      if (firstToken === prefix) return toolkit;
+    }
+  }
   return null;
 }
 
@@ -216,7 +223,6 @@ const DANGEROUS_ACTIONS = new Set([
 ]);
 
 const SIDE_EFFECT_ACTION_VERBS = new Set([
-  "ADD",
   "APPEND",
   "ARCHIVE",
   "CANCEL",
@@ -238,11 +244,16 @@ const SIDE_EFFECT_ACTION_VERBS = new Set([
   "WRITE",
 ]);
 
+const NON_DANGEROUS_ACTIONS = new Set([
+  "GITHUB_ADD_LABELS_TO_AN_ISSUE",
+  "GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE",
+  "SLACK_ADD_REACTION_TO_AN_ITEM",
+]);
+
 export function isDangerousAction(actionSlug: string): boolean {
   const normalized = actionSlug.toUpperCase();
-  if (DANGEROUS_ACTIONS.has(normalized)) {
-    return true;
-  }
+  if (DANGEROUS_ACTIONS.has(normalized)) return true;
+  if (NON_DANGEROUS_ACTIONS.has(normalized)) return false;
 
   const segments = normalized.split(/[^A-Z0-9]+/).filter(Boolean);
   return segments.some((segment) => SIDE_EFFECT_ACTION_VERBS.has(segment));

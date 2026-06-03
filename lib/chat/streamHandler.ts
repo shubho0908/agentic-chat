@@ -136,7 +136,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
       const emitMemoryStatus = async () => {
         try {
           controller.enqueue(encodeMemoryStatus(memoryStatusInfo));
-          await new Promise((resolve) => setImmediate(resolve));
+          await Promise.resolve();
         } catch (error) {
           logStreamWriteFailure('send memory status', error);
         }
@@ -260,6 +260,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 controller.enqueue(encodeThinkingChunk(event.delta));
               } catch (error) {
                 logStreamWriteFailure('send thinking chunk', error);
+                break;
               }
             } else if (event.type === 'response.output_text.delta') {
               try {

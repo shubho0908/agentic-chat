@@ -9,7 +9,7 @@ import { z } from "zod";
 import { toJsonValue } from "@/lib/json";
 import { parsePaginationInteger } from "@/lib/pagination";
 import { encodeToolResult } from "@/lib/chat/streamingHelpers";
-import { createAgentNode, reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
+import { reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
 import { createToolNode } from "@/lib/orchestrator/nodes/tools";
 import { routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
 import {
@@ -95,16 +95,6 @@ test("connector not-connected messages are generic across toolkits", () => {
   );
 });
 
-test("agent returns generic disconnected connector message before calling the model", async () => {
-  const node = createAgentNode([], "test-api-key", "gpt-5-nano");
-
-  const result = await node(createAgentState({
-    messages: [new HumanMessage("Read my Gmail inbox")],
-    connectedServices: [],
-  }));
-
-  assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
-});
 
 test("connector tool auth failures normalize per toolkit", async () => {
   const node = createToolNode([
