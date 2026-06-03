@@ -1,4 +1,8 @@
-import { type Message, type Attachment, type MessageContentPart } from "@/lib/schemas/chat";
+import {
+  type Message,
+  type Attachment,
+  type MessageContentPart,
+} from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
@@ -16,58 +20,73 @@ interface CacheCheckContext {
 
 export function shouldUseSemanticCache(
   messages: Message[],
-  attachments?: Attachment[], 
-  activeTool?: string | null
+  attachments?: Attachment[],
+  activeTool?: string | null,
 ): boolean {
-  const hasCurrentDocument = attachments?.some((attachment) =>
-    isSupportedForRAG(attachment.fileType)
-  );
+  const hasCurrentAttachment = (attachments?.length ?? 0) > 0;
   const hasConversationDocuments = messages.some((message) =>
-    message.attachments?.some((attachment) => isSupportedForRAG(attachment.fileType))
+    message.attachments?.some((attachment) =>
+      isSupportedForRAG(attachment.fileType),
+    ),
+  );
+  const hasConversationImages = messages.some(
+    (message) =>
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === "image_url"),
   );
 
-  if (hasCurrentDocument || hasConversationDocuments) {
+  if (
+    hasCurrentAttachment ||
+    hasConversationDocuments ||
+    hasConversationImages
+  ) {
     return false;
   }
-  
+
   if (activeTool) {
     return false;
   }
 
-  if (messages.some((message) => message.metadata?.artifacts && message.metadata.artifacts.length > 0)) {
+  if (
+    messages.some(
+      (message) =>
+        message.metadata?.artifacts && message.metadata.artifacts.length > 0,
+    )
+  ) {
     return false;
   }
-  
+
   return true;
 }
 
 export function buildCacheQuery(
-  messages: Message[], 
+  messages: Message[],
   newContent: string | MessageContentPart[],
-  options?: { includeVersionInfo?: boolean }
+  options?: { includeVersionInfo?: boolean },
 ): string {
   const { includeVersionInfo = true } = options || {};
-  
+
   const textOnlyMessages = messages
-    .filter(m => !m.attachments || m.attachments.length === 0)
+    .filter((m) => !m.attachments || m.attachments.length === 0)
     .slice(-4);
 
-  const contextParts = textOnlyMessages.map(m => {
+  const contextParts = textOnlyMessages.map((m) => {
     const text = extractTextFromContent(m.content);
-    const versionInfo = includeVersionInfo && m.versions && m.versions.length > 0 
-      ? `[v${m.siblingIndex || 0}]` 
-      : '';
+    const versionInfo =
+      includeVersionInfo && m.versions && m.versions.length > 0
+        ? `[v${m.siblingIndex || 0}]`
+        : "";
     return `${m.role.toLowerCase()}${versionInfo}: ${text}`;
   });
-  
+
   const newText = extractTextFromContent(newContent);
   contextParts.push(`user: ${newText}`);
-  return contextParts.join('\n');
+  return contextParts.join("\n");
 }
 
 async function checkCache(
   query: string,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<CacheCheckResult> {
   try {
     if (signal.aborted) {
@@ -76,16 +95,16 @@ async function checkCache(
 
     const startTime = Date.now();
     const CACHE_TIMEOUT_MS = 5000;
-    
+
     const abortPromise = new Promise<CacheCheckResult>((_, reject) => {
       if (signal.aborted) {
-        reject(new DOMException('Aborted', 'AbortError'));
+        reject(new DOMException("Aborted", "AbortError"));
       }
-      signal.addEventListener('abort', () => {
-        reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener("abort", () => {
+        reject(new DOMException("Aborted", "AbortError"));
       });
     });
-    
+
     const timeoutPromise = new Promise<CacheCheckResult>((resolve) => {
       setTimeout(() => {
         resolve({ cached: false });
@@ -93,7 +112,11 @@ async function checkCache(
     });
 
     const cachePromise = checkSemanticCacheAction(query);
-    const result = await Promise.race([cachePromise, timeoutPromise, abortPromise]);
+    const result = await Promise.race([
+      cachePromise,
+      timeoutPromise,
+      abortPromise,
+    ]);
     const duration = Date.now() - startTime;
     if (result.cached) {
       logger.log(`[Cache] ✅ HIT in ${duration}ms - using cached response`);
@@ -102,30 +125,29 @@ async function checkCache(
     }
 
     return result;
-
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
-      logger.log('[Cache] Aborted by user');
+    if ((err as Error).name === "AbortError") {
+      logger.log("[Cache] Aborted by user");
       return { cached: false };
     }
-    logger.error('[Cache] Error:', err);
+    logger.error("[Cache] Error:", err);
     return { cached: false };
   }
 }
 
 export async function performCacheCheck(
-  context: CacheCheckContext
+  context: CacheCheckContext,
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
   const { messages, content, attachments, abortSignal, activeTool } = context;
-  
+
   const useCaching = shouldUseSemanticCache(messages, attachments, activeTool);
-  let cacheQuery = '';
+  let cacheQuery = "";
   let cacheData: CacheCheckResult = { cached: false };
 
   if (useCaching) {
     const rawText = extractTextFromContent(content);
     if (rawText.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
-      return { cacheQuery: '', cacheData: { cached: false } };
+      return { cacheQuery: "", cacheData: { cached: false } };
     }
     cacheQuery = buildCacheQuery(messages, content);
     cacheData = await checkCache(cacheQuery, abortSignal);

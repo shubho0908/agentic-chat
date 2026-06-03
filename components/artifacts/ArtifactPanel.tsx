@@ -1,8 +1,7 @@
 "use client";
 
-import { Component, memo, useCallback, useMemo, type ErrorInfo, type ReactNode } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Code2, Copy, Download, Eye, Maximize2, X } from "lucide-react";
-import { useState } from "react";
+import { Component, memo, useCallback, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Code2, Copy, Download, Eye, Maximize2, RefreshCw, X } from "lucide-react";
 import { useArtifacts } from "@/contexts/artifact-context";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -164,8 +163,14 @@ const VersionNav = memo(function VersionNav({ artifact }: { artifact: Artifact }
 
 export const ArtifactPanel = memo(function ArtifactPanel() {
   const { activeArtifact, closePanel } = useArtifacts();
+  const activeArtifactId = activeArtifact?.id ?? null;
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.PREVIEW);
   const [fullscreen, setFullscreen] = useState(false);
+  const [refreshState, setRefreshState] = useState<{ artifactId: string | null; key: number }>({
+    artifactId: null,
+    key: 0,
+  });
+  const refreshKey = refreshState.artifactId === activeArtifactId ? refreshState.key : 0;
 
   const handleCopy = useCallback(async () => {
     if (!activeArtifact) return;
@@ -192,6 +197,12 @@ export const ArtifactPanel = memo(function ArtifactPanel() {
   }, [activeArtifact]);
 
   const openFullscreen = useCallback(() => setFullscreen(true), []);
+  const handleRefresh = useCallback(() => {
+    setRefreshState((state) => ({
+      artifactId: activeArtifactId,
+      key: state.artifactId === activeArtifactId ? state.key + 1 : 1,
+    }));
+  }, [activeArtifactId]);
 
   const effectiveViewMode = useMemo(() => {
     if (!activeArtifact) return ViewMode.CODE;
@@ -244,27 +255,52 @@ export const ArtifactPanel = memo(function ArtifactPanel() {
           <Button variant="ghost" size="icon" className="size-7" onClick={handleDownload} aria-label="Download artifact">
             <Download className="size-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="hidden size-7 lg:inline-flex" onClick={openFullscreen} aria-label="Fullscreen artifact">
-            <Maximize2 className="size-3.5" />
-          </Button>
           <Button variant="ghost" size="icon" className="size-7" onClick={closePanel} aria-label="Close artifact panel">
             <X className="size-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <ArtifactErrorBoundary
-          fallback={(error, reset) => (
-            <ArtifactError
-              error={error}
-              onRetry={reset}
-              onViewCode={() => { reset(); setViewMode(ViewMode.CODE); }}
-            />
-          )}
+      <div className="relative isolate min-h-0 flex-1 overflow-hidden">
+        <div
+          role="toolbar"
+          aria-orientation="horizontal"
+          aria-label="Artifact actions"
+          className="pointer-events-auto absolute right-3 top-3 z-30 flex items-center gap-1 rounded-md border border-border/70 bg-background/90 p-1 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75"
         >
-          <ArtifactRenderer artifact={activeArtifact} viewMode={effectiveViewMode} />
-        </ArtifactErrorBoundary>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={handleRefresh}
+            aria-label="Refresh artifact"
+          >
+            <RefreshCw className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden size-8 lg:inline-flex"
+            onClick={openFullscreen}
+            aria-label="Fullscreen artifact"
+          >
+            <Maximize2 className="size-4" />
+          </Button>
+        </div>
+        <div className="h-full overflow-auto">
+          <ArtifactErrorBoundary
+            key={`${activeArtifact.id}:${activeArtifact.currentVersion}:${effectiveViewMode}:${refreshKey}`}
+            fallback={(error, reset) => (
+              <ArtifactError
+                error={error}
+                onRetry={reset}
+                onViewCode={() => { reset(); setViewMode(ViewMode.CODE); }}
+              />
+            )}
+          >
+            <ArtifactRenderer artifact={activeArtifact} viewMode={effectiveViewMode} />
+          </ArtifactErrorBoundary>
+        </div>
       </div>
 
       {fullscreen && (
@@ -278,7 +314,11 @@ export const ArtifactPanel = memo(function ArtifactPanel() {
               </Button>
             </div>
             <div className="flex-1 overflow-auto">
-              <ArtifactRenderer artifact={activeArtifact} viewMode={effectiveViewMode} />
+              <ArtifactRenderer
+                key={`fullscreen:${activeArtifact.id}:${activeArtifact.currentVersion}:${effectiveViewMode}:${refreshKey}`}
+                artifact={activeArtifact}
+                viewMode={effectiveViewMode}
+              />
             </div>
           </DialogContent>
         </Dialog>

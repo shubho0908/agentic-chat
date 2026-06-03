@@ -50,11 +50,11 @@ ${TAILWIND_SCRIPT}
 
 export const HtmlArtifact = memo(function HtmlArtifact({ content }: { content: string }) {
   const html = useMemo(() => content ? buildHtmlDocument(content) : "", [content]);
-  const { iframeRef, ready, send, sandboxUrl, sandboxAttr } = useSandboxIframe();
+  const { iframeRef, ready, send, handleLoad, sandboxUrl, sandboxAttr } = useSandboxIframe();
 
   useEffect(() => {
-    if (ready && html) send(html);
-  }, [ready, html, send]);
+    if (html) send(html);
+  }, [html, send]);
 
   if (!html) {
     return (
@@ -78,6 +78,7 @@ export const HtmlArtifact = memo(function HtmlArtifact({ content }: { content: s
         ref={iframeRef}
         src={sandboxUrl}
         sandbox={sandboxAttr}
+        onLoad={handleLoad}
         referrerPolicy="no-referrer"
         className="h-full w-full border-0"
         title="HTML Artifact"

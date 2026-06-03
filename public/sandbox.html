@@ -8,15 +8,24 @@
 <body>
 <script>
 (function() {
-  parent.postMessage({ type: 'sandbox-ready' }, '*');
+  function notifyReady() {
+    parent.postMessage({ type: 'sandbox-ready' }, '*');
+  }
+
   function handleRender(e) {
     if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
       document.open();
       document.write(e.data.html);
       document.close();
+      addEventListener('message', handleRender);
+      parent.postMessage({ type: 'sandbox-rendered' }, '*');
     }
   }
+
   addEventListener('message', handleRender);
+  addEventListener('load', notifyReady);
+  notifyReady();
+  setTimeout(notifyReady, 0);
 })();
 </script>
 </body>

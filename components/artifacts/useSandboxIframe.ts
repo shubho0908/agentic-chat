@@ -12,6 +12,7 @@ interface UseSandboxIframeResult {
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
   ready: boolean;
   send: (html: string) => void;
+  handleLoad: () => void;
   sandboxUrl: string;
   sandboxAttr: string;
 }
@@ -21,38 +22,46 @@ export function useSandboxIframe(): UseSandboxIframeResult {
   const [ready, setReady] = useState(false);
   const pendingRef = useRef<string | null>(null);
 
+  const flushPending = useCallback((targetWindow?: Window | null) => {
+    const win = targetWindow ?? iframeRef.current?.contentWindow;
+    if (!win || pendingRef.current === null) return;
+
+    win.postMessage(
+      { type: "render", html: pendingRef.current },
+      getSandboxTargetOrigin(),
+    );
+    pendingRef.current = null;
+  }, []);
+
   useEffect(() => {
     function onMessage(e: MessageEvent) {
-      if (e.data?.type !== "sandbox-ready") return;
+      if (e.data?.type !== "sandbox-ready" && e.data?.type !== "sandbox-rendered") return;
       const sourceWindow = e.source as Window | null;
       if (!sourceWindow || sourceWindow !== iframeRef.current?.contentWindow) return;
       if (!SANDBOX_VALID_ORIGINS.has(e.origin)) return;
 
       setReady(true);
-
-      if (pendingRef.current !== null) {
-        sourceWindow.postMessage(
-          { type: "render", html: pendingRef.current },
-          getSandboxTargetOrigin(),
-        );
-        pendingRef.current = null;
-      }
+      flushPending(sourceWindow);
     }
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [flushPending]);
+
+  const handleLoad = useCallback(() => {
+    setReady(true);
+    flushPending();
+  }, [flushPending]);
 
   const send = useCallback((html: string) => {
+    pendingRef.current = html;
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
 
     if (ready) {
-      win.postMessage({ type: "render", html }, getSandboxTargetOrigin());
-    } else {
-      pendingRef.current = html;
+      flushPending(win);
     }
-  }, [ready]);
+  }, [flushPending, ready]);
 
-  return { iframeRef, ready, send, sandboxUrl: SANDBOX_URL, sandboxAttr: SANDBOX_ATTR };
+  return { iframeRef, ready, send, handleLoad, sandboxUrl: SANDBOX_URL, sandboxAttr: SANDBOX_ATTR };
 }

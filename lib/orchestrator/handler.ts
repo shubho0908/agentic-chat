@@ -6,7 +6,7 @@ import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
-import { shouldBypassSemanticCacheForToolIntent } from "./tools";
+import { shouldBypassSemanticCacheForMessageContext } from "./tools";
 import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
 import {
   encodeMemoryStatus,
@@ -73,19 +73,6 @@ function deriveThreadId(conversationId: string | undefined, userId: string): str
     return `conv-${conversationId}`;
   }
   return `user-${userId}-ephemeral`;
-}
-
-const ARTIFACT_TAG_PATTERN = /<artifact\b/i;
-
-function conversationHasPriorArtifacts(messages: Message[]): boolean {
-  for (const message of messages) {
-    if (message.role !== "assistant") continue;
-    const text = extractTextFromMessage(message.content);
-    if (text && ARTIFACT_TAG_PATTERN.test(text)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export function createOrchestratorStreamHandler(options: OrchestratorStreamOptions) {
@@ -208,9 +195,11 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         const connectedToolkits = await getConnectedToolkits(userId);
 
         const queryText = extractTextFromMessage(lastUserMessage);
-        const bypassSemanticCache =
-          shouldBypassSemanticCacheForToolIntent(queryText, connectedToolkits) ||
-          conversationHasPriorArtifacts(messages);
+        const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(
+          messages,
+          queryText,
+          connectedToolkits,
+        );
         if (queryText && !bypassSemanticCache && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId);

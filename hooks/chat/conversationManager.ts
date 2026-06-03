@@ -1,12 +1,25 @@
-import { type Attachment, type MessageContentPart, type Message, type MessageMetadata, MessageRole } from "@/lib/schemas/chat";
+import {
+  type Attachment,
+  type MessageContentPart,
+  type Message,
+  type MessageMetadata,
+  MessageRole,
+} from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
-import { extractTextFromContent, generateTitle as generateTitleUtil } from "@/lib/contentUtils";
+import {
+  extractTextFromContent,
+  buildModelContentWithImageAttachments,
+  generateTitle as generateTitleUtil,
+} from "@/lib/contentUtils";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { orderConversationMessagesDesc } from "@/lib/conversationMessageOrder";
 import { saveUserMessage, saveAssistantMessage } from "./messageApi";
 import type { ConversationResult } from "@/types/chat";
 import { OPENAI_MODELS } from "@/constants/openai-models";
-import { extractTextQuery, isReferentialQuery as isReferentialTextQuery } from "@/lib/chat/referentialQuery";
+import {
+  extractTextQuery,
+  isReferentialQuery as isReferentialTextQuery,
+} from "@/lib/chat/referentialQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiRoutes } from "@/lib/routes";
 import type { ArtifactMetadata } from "@/types/artifact";
@@ -20,14 +33,18 @@ function isReferentialQuery(content: string | MessageContentPart[]): boolean {
   return isReferentialTextQuery(extractTextQuery(content));
 }
 
-function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): boolean {
+function hasRecentAttachments(
+  messages: Message[],
+  lookbackCount: number = 3,
+): boolean {
   const recentMessages = messages.slice(-lookbackCount);
-  return recentMessages.some(msg => {
+  return recentMessages.some((msg) => {
     if (msg.attachments && msg.attachments.length > 0) return true;
-    
+
     if (Array.isArray(msg.content)) {
-      return msg.content.some(part => 
-        typeof part === 'object' && part !== null && 'image_url' in part
+      return msg.content.some(
+        (part) =>
+          typeof part === "object" && part !== null && "image_url" in part,
       );
     }
     return false;
@@ -36,14 +53,18 @@ function hasRecentAttachments(messages: Message[], lookbackCount: number = 3): b
 
 const MAX_CONTEXT_MESSAGES = 20;
 const DOCUMENT_CONTEXT_MESSAGES = 12;
-const APPROX_IMAGE_TOKENS = 850;
-export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT = "Awaiting your response.";
-export const ARTIFACT_ONLY_ASSISTANT_CONTENT = "[[__artifact_only_assistant_content_v1__]]";
-export const STREAM_STOPPED_BY_USER_MARKER = "[[__stream_stopped_by_user_v1__]]";
+
+const APPROX_IMAGE_TOKENS = 1105;
+export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT =
+  "Awaiting your response.";
+export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
+  "[[__artifact_only_assistant_content_v1__]]";
+export const STREAM_STOPPED_BY_USER_MARKER =
+  "[[__stream_stopped_by_user_v1__]]";
 
 export function getPersistableAssistantContent(
   assistantContent: string,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
 ): string | null {
   if (assistantContent.trim()) {
     return assistantContent;
@@ -53,7 +74,10 @@ export function getPersistableAssistantContent(
     return ARTIFACT_ONLY_ASSISTANT_CONTENT;
   }
 
-  if (metadata?.humanInTheLoopStatus === "pending" && metadata.humanInTheLoopRequest) {
+  if (
+    metadata?.humanInTheLoopStatus === "pending" &&
+    metadata.humanInTheLoopRequest
+  ) {
     return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
   }
 
@@ -64,8 +88,12 @@ function formatArtifactForModelContext(artifact: ArtifactMetadata): string {
   const attrs = [
     `type="${artifact.type}"`,
     `title="${escapeArtifactAttribute(artifact.title)}"`,
-    artifact.language ? `language="${escapeArtifactAttribute(artifact.language)}"` : null,
-  ].filter(Boolean).join(" ");
+    artifact.language
+      ? `language="${escapeArtifactAttribute(artifact.language)}"`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return `<artifact ${attrs}>\n${escapeArtifactBody(artifact.content)}\n</artifact>`;
 }
@@ -87,35 +115,52 @@ function escapeArtifactBody(value: string): string {
 
 function buildAssistantContentForAPI(message: Message): string {
   const text = extractTextFromContent(message.content);
-  const visibleText = (text === ARTIFACT_ONLY_ASSISTANT_CONTENT || text === STREAM_STOPPED_BY_USER_MARKER) ? "" : text;
+  const visibleText =
+    text === ARTIFACT_ONLY_ASSISTANT_CONTENT ||
+    text === STREAM_STOPPED_BY_USER_MARKER
+      ? ""
+      : text;
   const artifacts = message.metadata?.artifacts ?? [];
 
   if (artifacts.length === 0) {
     return visibleText;
   }
 
-  const artifactContext = artifacts.map(formatArtifactForModelContext).join("\n\n");
-  return [visibleText, artifactContext].filter((part) => part.trim()).join("\n\n");
+  const artifactContext = artifacts
+    .map(formatArtifactForModelContext)
+    .join("\n\n");
+  return [visibleText, artifactContext]
+    .filter((part) => part.trim())
+    .join("\n\n");
 }
 
-function getMessageContentForAPI(message: Message): string | MessageContentPart[] {
+function getMessageContentForAPI(
+  message: Message,
+): string | MessageContentPart[] {
   if (message.role === MessageRole.ASSISTANT) {
     return buildAssistantContentForAPI(message);
+  }
+
+  if (message.role === MessageRole.USER) {
+    return buildModelContentWithImageAttachments(
+      message.content,
+      message.attachments,
+    );
   }
 
   return message.content;
 }
 
 function estimateMessageTokens(content: string | MessageContentPart[]): number {
-  if (typeof content === 'string') {
+  if (typeof content === "string") {
     return Math.ceil(content.length / 4) + 4;
   }
 
   return content.reduce((total, part) => {
-    if (part.type === 'text') {
+    if (part.type === "text") {
       return total + Math.ceil(part.text.length / 4);
     }
-    if (part.type === 'image_url') {
+    if (part.type === "image_url") {
       return total + APPROX_IMAGE_TOKENS;
     }
     return total;
@@ -123,18 +168,33 @@ function estimateMessageTokens(content: string | MessageContentPart[]): number {
 }
 
 function trimMessagesByApproximateTokenBudget(
-  messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>,
-  model: string
+  messages: Array<{
+    role: MessageRole;
+    content: string | MessageContentPart[];
+  }>,
+  model: string,
 ): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
-  const contextWindow = OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ?? 128000;
+  const contextWindow =
+    OPENAI_MODELS.find((candidate) => candidate.id === model)?.contextWindow ??
+    128000;
   const inputBudget = Math.max(4000, Math.floor(contextWindow * 0.8));
-  const systemMessages = messages.filter((message) => message.role === MessageRole.SYSTEM);
-  const nonSystemMessages = messages.filter((message) => message.role !== MessageRole.SYSTEM);
+  const systemMessages = messages.filter(
+    (message) => message.role === MessageRole.SYSTEM,
+  );
+  const nonSystemMessages = messages.filter(
+    (message) => message.role !== MessageRole.SYSTEM,
+  );
 
   const workingMessages = [...nonSystemMessages];
   let estimatedTokens =
-    systemMessages.reduce((total, message) => total + estimateMessageTokens(message.content), 0) +
-    workingMessages.reduce((total, message) => total + estimateMessageTokens(message.content), 0);
+    systemMessages.reduce(
+      (total, message) => total + estimateMessageTokens(message.content),
+      0,
+    ) +
+    workingMessages.reduce(
+      (total, message) => total + estimateMessageTokens(message.content),
+      0,
+    );
 
   while (workingMessages.length > 2 && estimatedTokens > inputBudget) {
     const removed = workingMessages.shift();
@@ -152,55 +212,74 @@ export function buildMessagesForAPI(
   newContent: string | MessageContentPart[],
   systemPrompt: string,
   model: string,
-  currentAttachments?: { fileType: string }[]
+  currentAttachments?: Attachment[],
 ): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
-  const hasCurrentDocumentAttachment = currentAttachments?.some(att =>
-    !att.fileType.startsWith('image/')
-  ) ?? false;
+  const hasCurrentDocumentAttachment =
+    currentAttachments?.some((att) => !att.fileType.startsWith("image/")) ??
+    false;
 
-  if ((isReferential && hasAttachmentsInContext) || hasCurrentDocumentAttachment) {
+  if (
+    (isReferential && hasAttachmentsInContext) ||
+    hasCurrentDocumentAttachment
+  ) {
     const recentMessages = messages.slice(-DOCUMENT_CONTEXT_MESSAGES);
-    
-    return trimMessagesByApproximateTokenBudget([
-      {
-        role: MessageRole.SYSTEM,
-        content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
-      },
-      ...recentMessages
-        .flatMap((message) => {
+
+    return trimMessagesByApproximateTokenBudget(
+      [
+        {
+          role: MessageRole.SYSTEM,
+          content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
+        },
+        ...recentMessages.flatMap((message) => {
           const content = getMessageContentForAPI(message);
-          if (content === "" || (Array.isArray(content) && content.length === 0)) return [];
+          if (
+            content === "" ||
+            (Array.isArray(content) && content.length === 0)
+          )
+            return [];
           return [{ role: message.role as MessageRole, content }];
         }),
-      {
-        role: MessageRole.USER,
-        content: newContent,
-      },
-    ], model);
+        {
+          role: MessageRole.USER,
+          content: buildModelContentWithImageAttachments(
+            newContent,
+            currentAttachments,
+          ),
+        },
+      ],
+      model,
+    );
   }
 
-  const contextMessages = messages.length > MAX_CONTEXT_MESSAGES 
-    ? messages.slice(-MAX_CONTEXT_MESSAGES)
-    : messages;
+  const contextMessages =
+    messages.length > MAX_CONTEXT_MESSAGES
+      ? messages.slice(-MAX_CONTEXT_MESSAGES)
+      : messages;
 
-  return trimMessagesByApproximateTokenBudget([
-    {
-      role: MessageRole.SYSTEM,
-      content: systemPrompt,
-    },
-    ...contextMessages
-      .flatMap((message) => {
+  return trimMessagesByApproximateTokenBudget(
+    [
+      {
+        role: MessageRole.SYSTEM,
+        content: systemPrompt,
+      },
+      ...contextMessages.flatMap((message) => {
         const content = getMessageContentForAPI(message);
-        if (content === "" || (Array.isArray(content) && content.length === 0)) return [];
+        if (content === "" || (Array.isArray(content) && content.length === 0))
+          return [];
         return [{ role: message.role as MessageRole, content }];
       }),
-    {
-      role: MessageRole.USER,
-      content: newContent,
-    },
-  ], model);
+      {
+        role: MessageRole.USER,
+        content: buildModelContentWithImageAttachments(
+          newContent,
+          currentAttachments,
+        ),
+      },
+    ],
+    model,
+  );
 }
 
 async function createNewConversation(
@@ -210,7 +289,7 @@ async function createNewConversation(
   earlyCreate: boolean = false,
   signal?: AbortSignal,
   metadata?: MessageMetadata,
-  onConversationIdReady?: (conversationId: string) => void
+  onConversationIdReady?: (conversationId: string) => void,
 ): Promise<ConversationResult | null> {
   try {
     const title = generateTitle(userContent);
@@ -228,22 +307,34 @@ async function createNewConversation(
 
     onConversationIdReady?.(conversationId);
 
-    const userMessageId = await saveUserMessage(conversationId, userContent, attachments, signal);
-    
+    const userMessageId = await saveUserMessage(
+      conversationId,
+      userContent,
+      attachments,
+      signal,
+    );
+
     if (!userMessageId) {
       return null;
     }
 
     if (earlyCreate) {
-      return { conversationId, userMessageId, assistantMessageId: '' };
+      return { conversationId, userMessageId, assistantMessageId: "" };
     }
-    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+    const persistableAssistantContent = getPersistableAssistantContent(
+      assistantContent,
+      metadata,
+    );
 
     if (!persistableAssistantContent) {
-      return { conversationId, userMessageId, assistantMessageId: '' };
+      return { conversationId, userMessageId, assistantMessageId: "" };
     }
 
-    const assistantMessageId = await saveAssistantMessage(conversationId, persistableAssistantContent, metadata);
+    const assistantMessageId = await saveAssistantMessage(
+      conversationId,
+      persistableAssistantContent,
+      metadata,
+    );
 
     if (!assistantMessageId) {
       return null;
@@ -251,7 +342,7 @@ async function createNewConversation(
 
     return { conversationId, userMessageId, assistantMessageId };
   } catch (err) {
-    if ((err as Error).name === 'AbortError') {
+    if ((err as Error).name === "AbortError") {
       throw err;
     }
     logger.error("Failed to create conversation:", err);
@@ -265,7 +356,7 @@ function updateQueryCacheWithUserMessage(
   userContent: string | MessageContentPart[],
   userMessageId: string,
   userTimestamp: number,
-  attachments?: Attachment[]
+  attachments?: Attachment[],
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
@@ -288,20 +379,22 @@ function updateQueryCacheWithUserMessage(
   ]);
 
   queryClient.setQueryData(queryKeys.conversation(conversationId), {
-    pages: [{
-      conversation: {
-        id: conversationId,
-        title,
-        isPublic: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    pages: [
+      {
+        conversation: {
+          id: conversationId,
+          title,
+          isPublic: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        messages: {
+          items: messages,
+          nextCursor: undefined,
+        },
+        tokenUsage: undefined,
       },
-      messages: {
-        items: messages,
-        nextCursor: undefined,
-      },
-      tokenUsage: undefined,
-    }],
+    ],
     pageParams: [undefined],
   });
 }
@@ -315,7 +408,7 @@ function updateQueryCache(
   assistantMessageId: string,
   userTimestamp: number,
   attachments?: Attachment[],
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
 ): void {
   const title = generateTitle(userContent);
   const textContent = extractTextFromContent(userContent);
@@ -337,20 +430,22 @@ function updateQueryCache(
   ]);
 
   queryClient.setQueryData(queryKeys.conversation(conversationId), {
-    pages: [{
-      conversation: {
-        id: conversationId,
-        title,
-        isPublic: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    pages: [
+      {
+        conversation: {
+          id: conversationId,
+          title,
+          isPublic: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        messages: {
+          items: messages,
+          nextCursor: undefined,
+        },
+        tokenUsage: undefined,
       },
-      messages: {
-        items: messages,
-        nextCursor: undefined,
-      },
-      tokenUsage: undefined,
-    }],
+    ],
     pageParams: [undefined],
   });
   queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
@@ -368,10 +463,18 @@ export async function handleConversationSaving(
   earlyCreate: boolean = false,
   signal?: AbortSignal,
   metadata?: MessageMetadata,
-  onConversationIdReady?: (conversationId: string) => void
+  onConversationIdReady?: (conversationId: string) => void,
 ): Promise<void> {
   if (isNewConversation) {
-    const result = await createNewConversation(userContent, assistantContent, attachments, earlyCreate, signal, metadata, onConversationIdReady);
+    const result = await createNewConversation(
+      userContent,
+      assistantContent,
+      attachments,
+      earlyCreate,
+      signal,
+      metadata,
+      onConversationIdReady,
+    );
 
     if (result && onConversationCreated) {
       if (earlyCreate) {
@@ -381,10 +484,13 @@ export async function handleConversationSaving(
           userContent,
           result.userMessageId,
           userTimestamp,
-          attachments
+          attachments,
         );
       } else {
-        const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+        const persistableAssistantContent = getPersistableAssistantContent(
+          assistantContent,
+          metadata,
+        );
         if (!persistableAssistantContent) {
           onConversationCreated(result);
           return;
@@ -398,28 +504,37 @@ export async function handleConversationSaving(
           result.assistantMessageId,
           userTimestamp,
           attachments,
-          metadata
+          metadata,
         );
       }
       onConversationCreated(result);
     }
   } else if (currentConversationId) {
-    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, metadata);
+    const persistableAssistantContent = getPersistableAssistantContent(
+      assistantContent,
+      metadata,
+    );
 
     if (!persistableAssistantContent) {
       return;
     }
 
-    const assistantMessageId = await saveAssistantMessage(currentConversationId, persistableAssistantContent, metadata);
+    const assistantMessageId = await saveAssistantMessage(
+      currentConversationId,
+      persistableAssistantContent,
+      metadata,
+    );
     if (assistantMessageId) {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversation(currentConversationId) });
-      
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversation(currentConversationId),
+      });
+
       if (onConversationCreated) {
         onConversationCreated({
           conversationId: currentConversationId,
-          userMessageId: '',
-          assistantMessageId
+          userMessageId: "",
+          assistantMessageId,
         });
       }
     }

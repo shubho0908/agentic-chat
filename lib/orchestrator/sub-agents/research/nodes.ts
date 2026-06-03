@@ -47,6 +47,7 @@ const stringArraySchema = z.array(z.string());
 
 const evaluationSchema = z.object({
   sufficient: z.boolean().optional(),
+  coveredSubQuestions: z.array(z.string()).optional(),
   gaps: z.array(z.string()).optional(),
   followUpQueries: z.array(z.string()).optional(),
 });
@@ -61,6 +62,7 @@ const reflexionSchema = z.object({
   passed: z.boolean().optional(),
   claims: z.array(claimSchema).optional(),
   issues: z.array(z.string()).optional(),
+  suggestion: z.string().optional(),
 });
 
 async function scrapeWithTimeout(
@@ -375,7 +377,7 @@ export function evaluateNode(apiKey: string, model: string) {
         schema: evaluationSchema,
         fallback: { sufficient: true },
         schemaDescription:
-          '{"sufficient": boolean, "gaps": string[], "followUpQueries": string[]}',
+          '{"sufficient": boolean, "coveredSubQuestions": string[], "gaps": string[], "followUpQueries": string[]}',
       }
     );
 
@@ -476,7 +478,7 @@ export function reflexionNode(apiKey: string, model: string) {
         schema: reflexionSchema,
         fallback: { passed: true },
         schemaDescription:
-          '{"passed": boolean, "claims": [{"claim": string, "supportedBy": number[], "confidence": "high|medium|low|unsupported"}], "issues": string[]}',
+          '{"passed": boolean, "claims": [{"claim": string, "supportedBy": number[], "confidence": "high|medium|low|unsupported"}], "issues": string[], "suggestion": string}',
       }
     );
 
