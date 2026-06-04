@@ -80,7 +80,7 @@ Artifact runtime contracts:
 - svg: Produce valid standalone SVG with a viewBox, explicit dimensions, accessible title/desc when meaningful, and no broken external references.
 - mermaid: Output only Mermaid syntax inside the artifact, no code fences.
 - code: Produce a complete runnable single file with the language attribute set accurately. Include setup notes outside the artifact only when necessary.
-- markdown: Produce a polished complete document with clear structure, useful headings, and no draft placeholders.
+- markdown: Produce a polished complete document with clear structure, useful headings, GitHub Flavored Markdown tables/lists/task lists when helpful, LaTeX math when useful, fenced Mermaid diagrams when useful, and no draft placeholders.
 
 Artifact quality bar:
 - Every artifact must be complete, functional, and runnable/renderable as-is. No placeholders, TODOs, "rest of code", lorem ipsum, empty handlers, fake imports, undefined variables, or missing assets.

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { COMPLETE_CODE_FENCE_PATTERN } from "@/components/ai-elements/response/constants";
 import { isMermaidCodeBlock, shouldRenderMarkdownContent } from "@/lib/markdown/rendering";
 
 test("detects common markdown syntax", () => {
@@ -33,7 +34,24 @@ test("does not misclassify currency as markdown", () => {
 test("detects mermaid fences", () => {
   assert.equal(isMermaidCodeBlock("language-mermaid"), true);
   assert.equal(isMermaidCodeBlock("language-mermaidjs"), true);
+  assert.equal(isMermaidCodeBlock("language-mmd"), true);
+  assert.equal(isMermaidCodeBlock("mermaid"), true);
   assert.equal(isMermaidCodeBlock("hljs language-mermaid"), true);
   assert.equal(isMermaidCodeBlock("language-mermaid hljs"), true);
   assert.equal(isMermaidCodeBlock("language-js"), false);
+});
+
+test("detects complete backtick and tilde code fences", () => {
+  assert.equal(
+    COMPLETE_CODE_FENCE_PATTERN.test("```ts\nconst value = 1;\n```"),
+    true,
+  );
+  assert.equal(
+    COMPLETE_CODE_FENCE_PATTERN.test("~~~mermaid\nflowchart TD\nA-->B\n~~~  \n"),
+    true,
+  );
+  assert.equal(
+    COMPLETE_CODE_FENCE_PATTERN.test("```ts\nconst value = 1;"),
+    false,
+  );
 });

@@ -21,6 +21,8 @@ test("artifact quality contract encodes renderer-safe runtime limits", () => {
   assert.match(ARTIFACT_QUALITY_PROMPT, /Do not import unsupported packages/);
   assert.match(ARTIFACT_QUALITY_PROMPT, /lucide, shadcn\/ui, Radix/);
   assert.match(ARTIFACT_QUALITY_PROMPT, /Mermaid syntax inside the artifact, no code fences/);
+  assert.match(ARTIFACT_QUALITY_PROMPT, /GitHub Flavored Markdown tables\/lists\/task lists/);
+  assert.match(ARTIFACT_QUALITY_PROMPT, /fenced Mermaid diagrams/);
 });
 
 test("artifact quality contract requires complete polished artifacts", () => {

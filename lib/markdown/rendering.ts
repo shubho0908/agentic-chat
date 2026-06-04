@@ -2,7 +2,7 @@ const MARKDOWN_SYNTAX_PATTERN =
   /(^|\n)\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>\s)|\*\*|__|~~|`|\[[^\]]*\]\([^)]*\)|\|/;
 const BLOCK_MATH_PATTERN = /(^|[^\\])\$\$[\s\S]+?\$\$/;
 const INLINE_MATH_PATTERN = /(^|[^\\])\$(?![\s$])(?:\\.|[^$\n\\])+?\$(?!\d)/;
-const MERMAID_LANGUAGE_PATTERN = /(?:^|\s)language-mermaid(?:js)?(?:\s|$)/i;
+const MERMAID_LANGUAGE_PATTERN = /(?:^|\s)(?:language-)?(?:mermaid(?:js)?|mmd)(?:\s|$)/i;
 
 export function shouldRenderMarkdownContent(content: string): boolean {
   return (
