@@ -15,25 +15,11 @@ interface OpenAIModel {
 }
 
 /**
- * Models available in this app as of 2026-09-03.
- *
- * Curated to the latest two OpenAI generations — GPT-5.6 and GPT-5.5 — and
- * their reasoning/Pro variants. Older GPT-5.x families (5.4, 5.2, 5.0) and
- * pre-GPT-5 models are intentionally excluded because:
- *
- *   • GPT-5.0/o3 snapshots are scheduled for shutdown on 2026-12-11
- *     (https://platform.openai.com/docs/deprecations).
- *   • GPT-5.4 has been superseded by GPT-5.5 and GPT-5.6 (cheaper, larger
- *     context windows, more recent knowledge cutoff).
- *   • Pre-GPT-5 chat/audio/realtime families were retired in mid-2026.
- *
- * GPT-5.6 Sol/Terra/Luna are the current OpenAI-recommended lineup.
- * GPT-5.5 + GPT-5.5 Pro are kept for users who prefer the previous
- * generation. Specialized aliases (e.g. gpt-5.6-cyber, gpt-5.6-chat-latest,
- * codex variants, audio/realtime) are out of scope for this chat surface.
+ * Models available as of 2026-09-03 — latest two OpenAI generations only.
+ * Older families are deprecated or superseded:
+ * https://platform.openai.com/docs/deprecations
  */
 export const OPENAI_MODELS: OpenAIModel[] = [
-  // ─── GPT-5.6 (current flagship, Feb 16 2026 knowledge cutoff) ───────────
   {
     id: "gpt-5.6-sol",
     name: "GPT-5.6 Sol",
@@ -68,8 +54,6 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     hasReasoning: true,
     pricing: { input: 0.2, output: 1.2 },
   },
-
-  // ─── GPT-5.5 (previous flagship, Dec 1 2025 knowledge cutoff) ────────────
   {
     id: "gpt-5.5",
     name: "GPT-5.5",
