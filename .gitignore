@@ -11,7 +11,7 @@
 *.pem
 
 npm-debug.log*
-.bun-debug.log*
+pnpm-debug.log*
 
 .env
 
@@ -23,3 +23,6 @@ next-env.d.ts
 /lib/generated/prisma
 .claude
 .env*.local
+
+# evidence-driven-testing artifacts (never commit)
+.artifacts/

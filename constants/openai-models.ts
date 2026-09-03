@@ -14,104 +14,67 @@ interface OpenAIModel {
   pricing?: { input: number; output: number };
 }
 
+/**
+ * Models available as of 2026-09-03 — latest two OpenAI generations only.
+ * Older families are deprecated or superseded:
+ * https://platform.openai.com/docs/deprecations
+ */
 export const OPENAI_MODELS: OpenAIModel[] = [
   {
-    id: "gpt-5.5",
-    name: "GPT-5.5",
+    id: "gpt-5.6-sol",
+    name: "GPT-5.6 Sol",
     description:
-      "Most capable model for complex reasoning, coding, and professional tasks",
+      "Flagship GPT-5.6 model for complex reasoning, coding, and professional tasks",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
     recommended: true,
-    pricing: { input: 5.0, output: 30.0 },
+    pricing: { input: 4.0, output: 20.0 },
   },
   {
-    id: "gpt-5.4",
-    name: "GPT-5.4",
+    id: "gpt-5.6-terra",
+    name: "GPT-5.6 Terra",
     description:
-      "Best intelligence at scale for agentic, coding, and professional workflows",
+      "GPT-5.6 model that balances intelligence and cost for everyday workloads",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 2.5, output: 15.0 },
+    pricing: { input: 2.0, output: 12.0 },
   },
   {
-    id: "gpt-5.4-mini",
-    name: "GPT-5.4 Mini",
+    id: "gpt-5.6-luna",
+    name: "GPT-5.6 Luna",
     description:
-      "Strongest mini model for coding, computer use, and subagents at lower cost",
-    contextWindow: 400000,
+      "Cost-optimised GPT-5.6 model for high-volume, latency-sensitive workloads",
+    contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 0.75, output: 4.5 },
+    pricing: { input: 0.2, output: 1.2 },
   },
   {
-    id: "gpt-5.4-nano",
-    name: "GPT-5.4 Nano",
-    description: "Fastest, cheapest GPT-5.4 model for simple high-volume tasks",
-    contextWindow: 400000,
-    category: "reasoning",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 0.2, output: 1.25 },
-  },
-
-  {
-    id: "gpt-5.2",
-    name: "GPT-5.2",
-    description: "Previous frontier GPT-5 model for complex professional work",
-    contextWindow: 400000,
-    category: "reasoning",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 2.5, output: 15.0 },
-  },
-  {
-    id: "gpt-5.2-codex",
-    name: "GPT-5.2 Codex",
+    id: "gpt-5.5",
+    name: "GPT-5.5",
     description:
-      "Specialized GPT-5 model for long-horizon, agentic coding tasks",
-    contextWindow: 400000,
+      "Previous-generation flagship for coding and professional work",
+    contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 1.75, output: 14.0 },
-  },
-
-  {
-    id: "gpt-5",
-    name: "GPT-5",
-    description: "Previous GPT-5 reasoning model for coding and agentic tasks",
-    contextWindow: 400000,
-    category: "legacy",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 1.25, output: 10.0 },
+    pricing: { input: 5.0, output: 30.0 },
   },
   {
-    id: "gpt-5-mini",
-    name: "GPT-5 Mini",
-    description: "Near-frontier GPT-5 model for lower latency and cost",
-    contextWindow: 400000,
-    category: "legacy",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 0.25, output: 2.0 },
-  },
-  {
-    id: "gpt-5-nano",
-    name: "GPT-5 Nano",
+    id: "gpt-5.5-pro",
+    name: "GPT-5.5 Pro",
     description:
-      "Fastest, cheapest GPT-5 model for classification and summarization",
-    contextWindow: 400000,
-    category: "legacy",
+      "Higher-compute GPT-5.5 for the hardest problems (slower, more precise)",
+    contextWindow: 1050000,
+    category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 0.05, output: 0.4 },
+    pricing: { input: 30.0, output: 180.0 },
   },
 ];
 
