@@ -14,104 +14,83 @@ interface OpenAIModel {
   pricing?: { input: number; output: number };
 }
 
+/**
+ * Models available in this app as of 2026-09-03.
+ *
+ * Curated to the latest two OpenAI generations — GPT-5.6 and GPT-5.5 — and
+ * their reasoning/Pro variants. Older GPT-5.x families (5.4, 5.2, 5.0) and
+ * pre-GPT-5 models are intentionally excluded because:
+ *
+ *   • GPT-5.0/o3 snapshots are scheduled for shutdown on 2026-12-11
+ *     (https://platform.openai.com/docs/deprecations).
+ *   • GPT-5.4 has been superseded by GPT-5.5 and GPT-5.6 (cheaper, larger
+ *     context windows, more recent knowledge cutoff).
+ *   • Pre-GPT-5 chat/audio/realtime families were retired in mid-2026.
+ *
+ * GPT-5.6 Sol/Terra/Luna are the current OpenAI-recommended lineup.
+ * GPT-5.5 + GPT-5.5 Pro are kept for users who prefer the previous
+ * generation. Specialized aliases (e.g. gpt-5.6-cyber, gpt-5.6-chat-latest,
+ * codex variants, audio/realtime) are out of scope for this chat surface.
+ */
 export const OPENAI_MODELS: OpenAIModel[] = [
+  // ─── GPT-5.6 (current flagship, Feb 16 2026 knowledge cutoff) ───────────
   {
-    id: "gpt-5.5",
-    name: "GPT-5.5",
+    id: "gpt-5.6-sol",
+    name: "GPT-5.6 Sol",
     description:
-      "Most capable model for complex reasoning, coding, and professional tasks",
+      "Flagship GPT-5.6 model for complex reasoning, coding, and professional tasks",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
     recommended: true,
-    pricing: { input: 5.0, output: 30.0 },
+    pricing: { input: 4.0, output: 20.0 },
   },
   {
-    id: "gpt-5.4",
-    name: "GPT-5.4",
+    id: "gpt-5.6-terra",
+    name: "GPT-5.6 Terra",
     description:
-      "Best intelligence at scale for agentic, coding, and professional workflows",
+      "GPT-5.6 model that balances intelligence and cost for everyday workloads",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 2.5, output: 15.0 },
+    pricing: { input: 2.0, output: 12.0 },
   },
   {
-    id: "gpt-5.4-mini",
-    name: "GPT-5.4 Mini",
+    id: "gpt-5.6-luna",
+    name: "GPT-5.6 Luna",
     description:
-      "Strongest mini model for coding, computer use, and subagents at lower cost",
-    contextWindow: 400000,
+      "Cost-optimised GPT-5.6 model for high-volume, latency-sensitive workloads",
+    contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 0.75, output: 4.5 },
-  },
-  {
-    id: "gpt-5.4-nano",
-    name: "GPT-5.4 Nano",
-    description: "Fastest, cheapest GPT-5.4 model for simple high-volume tasks",
-    contextWindow: 400000,
-    category: "reasoning",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 0.2, output: 1.25 },
+    pricing: { input: 0.2, output: 1.2 },
   },
 
+  // ─── GPT-5.5 (previous flagship, Dec 1 2025 knowledge cutoff) ────────────
   {
-    id: "gpt-5.2",
-    name: "GPT-5.2",
-    description: "Previous frontier GPT-5 model for complex professional work",
-    contextWindow: 400000,
+    id: "gpt-5.5",
+    name: "GPT-5.5",
+    description:
+      "Previous-generation flagship for coding and professional work",
+    contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 2.5, output: 15.0 },
+    pricing: { input: 5.0, output: 30.0 },
   },
   {
-    id: "gpt-5.2-codex",
-    name: "GPT-5.2 Codex",
+    id: "gpt-5.5-pro",
+    name: "GPT-5.5 Pro",
     description:
-      "Specialized GPT-5 model for long-horizon, agentic coding tasks",
-    contextWindow: 400000,
+      "Higher-compute GPT-5.5 for the hardest problems (slower, more precise)",
+    contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
     hasReasoning: true,
-    pricing: { input: 1.75, output: 14.0 },
-  },
-
-  {
-    id: "gpt-5",
-    name: "GPT-5",
-    description: "Previous GPT-5 reasoning model for coding and agentic tasks",
-    contextWindow: 400000,
-    category: "legacy",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 1.25, output: 10.0 },
-  },
-  {
-    id: "gpt-5-mini",
-    name: "GPT-5 Mini",
-    description: "Near-frontier GPT-5 model for lower latency and cost",
-    contextWindow: 400000,
-    category: "legacy",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 0.25, output: 2.0 },
-  },
-  {
-    id: "gpt-5-nano",
-    name: "GPT-5 Nano",
-    description:
-      "Fastest, cheapest GPT-5 model for classification and summarization",
-    contextWindow: 400000,
-    category: "legacy",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    pricing: { input: 0.05, output: 0.4 },
+    pricing: { input: 30.0, output: 180.0 },
   },
 ];
 

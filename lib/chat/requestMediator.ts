@@ -5,7 +5,10 @@ import { getSupportedTemperature } from "@/lib/modelPolicy";
 import { JSON_ONLY_RESPONSE_PROMPT, joinPromptSections } from "@/lib/prompts";
 
 import { logger } from "@/lib/logger";
-const CLASSIFIER_MODEL = "gpt-5-nano";
+// Lightweight intent classifier. Pinned to the cheapest current-generation
+// reasoning model (GPT-5.6 Luna) — `gpt-5-nano` is scheduled for shutdown on
+// 2026-12-11 (https://platform.openai.com/docs/deprecations).
+const CLASSIFIER_MODEL = "gpt-5.6-luna";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_SIZE = 500;
 
