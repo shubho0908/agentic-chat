@@ -2,11 +2,12 @@
   "name": "agentic-chat",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.25.0",
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "NODE_OPTIONS='--use-openssl-ca' next dev",
     "clean:next": "node scripts/clean-next.mjs",
-    "build": "prisma generate && bun run clean:next && NODE_OPTIONS='--max-old-space-size=4096 --use-openssl-ca' next build",
+    "build": "prisma generate && node scripts/clean-next.mjs && NODE_OPTIONS='--max-old-space-size=4096 --use-openssl-ca' next build",
     "start": "NODE_OPTIONS='--use-openssl-ca' next start",
     "lint": "eslint .",
     "doctor": "react-doctor . --verbose --diff",
@@ -15,8 +16,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:audit": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test:audit": "node --import tsx --test \"tests/**/*.test.ts\"",
     "test:doc": "tsx scripts/test-doc-loader.ts",
     "test:mime": "tsx scripts/test-mime-detection.ts",
     "prepare": "husky"
@@ -112,17 +113,6 @@
     "tsx": "^4.22.3",
     "tw-animate-css": "^1.4.0",
     "typescript": "^6.0.3"
-  },
-  "overrides": {
-    "kysely": "0.28.17",
-    "@browserbasehq/stagehand": {
-      "zod": "$zod",
-      "openai": "$openai",
-      "dotenv": "$dotenv"
-    },
-    "zod-to-json-schema": {
-      "zod": "$zod"
-    }
   },
   "knip": {
     "ignoreDependencies": [
