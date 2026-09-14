@@ -19,7 +19,7 @@ concurrency:
 jobs:
   quality:
     name: quality
-    runs-on: ubuntu-latest
+    runs-on: avrea-ubuntu-latest-2-vcpu
     timeout-minutes: 20
 
     steps:
@@ -52,7 +52,7 @@ jobs:
 
   test:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: avrea-ubuntu-latest-2-vcpu
     timeout-minutes: 15
     needs: quality
 
@@ -80,7 +80,7 @@ jobs:
 
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: avrea-ubuntu-latest-2-vcpu
     timeout-minutes: 30
     needs: [quality, test]
 
