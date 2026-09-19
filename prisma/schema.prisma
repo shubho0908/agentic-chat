@@ -175,6 +175,29 @@ model SemanticCache {
   @@map("semantic_cache")
 }
 
+model JevDecision {
+  id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  checkpoint     String
+  schemaVersion  String   @map("schema_version")
+  modelVersion   String   @map("model_version")
+  mode           String
+  outcome        String
+  probabilities  Json?
+  confidence     Float?
+  fallbackUsed   Boolean  @map("fallback_used")
+  fallbackReason String?  @map("fallback_reason")
+  inputTokens    Int?     @map("input_tokens")
+  outputTokens   Int?     @map("output_tokens")
+  latencyMs      Int      @map("latency_ms")
+  requestId      String?  @map("request_id")
+  conversationId String?  @map("conversation_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([checkpoint, createdAt(sort: Desc)], map: "jev_decisions_checkpoint_created_idx")
+  @@index([createdAt], map: "jev_decisions_created_at_idx")
+  @@map("jev_decisions")
+}
+
 model OrchestrationJob {
   id              String    @id
   type            String
