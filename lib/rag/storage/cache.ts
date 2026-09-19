@@ -40,16 +40,25 @@ export async function generateEmbedding(text: string, userId: string): Promise<n
   }
 }
 
-export async function searchSemanticCache(queryEmbedding: number[], userId: string, conversationId?: string): Promise<string | null> {
+export interface SemanticCacheEntry {
+  answer: string;
+  score: number;
+  createdAt: Date;
+  conversationId: string | null;
+}
+
+export async function searchSemanticCacheEntry(queryEmbedding: number[], userId: string, conversationId?: string): Promise<SemanticCacheEntry | null> {
   try {
     const vectorType = getVectorType();
     const cutoffTimestamp = new Date(Date.now() - (CACHE_TTL_SECONDS * 1000));
     const embeddingStr = JSON.stringify(queryEmbedding);
 
-    const results = await prisma.$queryRawUnsafe<Array<{ answer: string; score: number }>>(
+    const results = await prisma.$queryRawUnsafe<Array<{ answer: string; score: number; created_at: Date; conversation_id: string | null }>>(
       `SELECT
         answer,
-        1 - (embedding <=> $1::${vectorType}) AS score
+        1 - (embedding <=> $1::${vectorType}) AS score,
+        created_at,
+        conversation_id
        FROM semantic_cache
        WHERE user_id = $2
          AND ($4::text IS NULL OR conversation_id = $4 OR conversation_id IS NULL)
@@ -60,7 +69,13 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
     );
 
     if (results.length > 0 && results[0].score >= SIMILARITY_THRESHOLD) {
-      return results[0].answer;
+      const row = results[0];
+      return {
+        answer: row.answer,
+        score: row.score,
+        createdAt: row.created_at,
+        conversationId: row.conversation_id,
+      };
     }
 
     return null;
@@ -71,6 +86,11 @@ export async function searchSemanticCache(queryEmbedding: number[], userId: stri
       error
     );
   }
+}
+
+export async function searchSemanticCache(queryEmbedding: number[], userId: string, conversationId?: string): Promise<string | null> {
+  const entry = await searchSemanticCacheEntry(queryEmbedding, userId, conversationId);
+  return entry ? entry.answer : null;
 }
 
 export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userId: string, conversationId?: string): Promise<void> {

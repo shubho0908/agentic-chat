@@ -18,9 +18,19 @@ const attachmentSchema = z.object({
 
 export const attachmentInputSchema = z.object({
   fileUrl: z.url(),
-  fileName: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH),
-  fileType: z.string().min(1).max(VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH),
-  fileSize: z.number().int().min(0).max(VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE),
+  fileName: z
+    .string()
+    .min(1)
+    .max(VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH),
+  fileType: z
+    .string()
+    .min(1)
+    .max(VALIDATION_LIMITS.ATTACHMENT_FILE_TYPE_MAX_LENGTH),
+  fileSize: z
+    .number()
+    .int()
+    .min(0)
+    .max(VALIDATION_LIMITS.ATTACHMENT_MAX_FILE_SIZE),
 });
 
 const messageContentPartSchema = z.union([
@@ -37,12 +47,7 @@ const messageContentPartSchema = z.union([
 ]);
 
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -52,7 +57,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.null(),
     z.array(jsonValueSchema),
     z.record(z.string(), jsonValueSchema),
-  ])
+  ]),
 );
 
 const messageHistoryEntrySchema = z.object({
@@ -65,13 +70,16 @@ const toolActivitySchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
   status: toolStatusSchema,
-  args: z.record(z.string(), z.union([
+  args: z.record(
     z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(z.union([z.string(), z.number(), z.boolean()])),
-  ])),
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.null(),
+      z.array(z.union([z.string(), z.number(), z.boolean()])),
+    ]),
+  ),
   result: jsonValueSchema.optional(),
   error: z.string().optional(),
   timestamp: z.number(),
@@ -96,52 +104,81 @@ const artifactMetadataSchema = z.object({
 const messageMetadataBaseSchema = z.object({
   thinking: z.string().optional(),
   thinkingDurationMs: z.number().optional(),
-  citations: z.array(z.object({
-    id: z.string(),
-    source: z.string(),
-    author: z.string().optional(),
-    year: z.string().optional(),
-    url: z.string().optional(),
-    relevance: z.string(),
-  })).optional(),
+  citations: z
+    .array(
+      z.object({
+        id: z.string(),
+        source: z.string(),
+        author: z.string().optional(),
+        year: z.string().optional(),
+        url: z.string().optional(),
+        relevance: z.string(),
+        score: z.number().optional(),
+        page: z.number().int().positive().optional(),
+      }),
+    )
+    .optional(),
   followUpQuestions: z.array(z.string()).optional(),
-  sources: z.array(z.object({
-    position: z.number().optional(),
-    title: z.string(),
-    url: z.string(),
-    domain: z.string(),
-    snippet: z.string().optional(),
-    score: z.number().optional(),
-    searchIndex: z.number().optional(),
-    searchQuery: z.string().optional(),
-  })).optional(),
-  images: z.array(z.object({
-    url: z.string(),
-    description: z.string().optional(),
-    searchIndex: z.number().optional(),
-    searchQuery: z.string().optional(),
-  })).optional(),
-  humanInTheLoopRequest: z.object({
-    type: z.literal(HUMAN_IN_THE_LOOP_REQUEST_TYPE).optional(),
-    requestKind: z.enum([HumanInTheLoopRequestKind.APPROVAL, HumanInTheLoopRequestKind.ASK_USER]).optional(),
-    requestId: z.string().optional(),
-    threadId: z.string().optional(),
-    toolCallId: z.string().optional(),
-    question: z.string().optional(),
-    reason: z.string().optional(),
-    title: z.string().optional(),
-    context: z.string().optional(),
-    options: z.array(z.object({
-      label: z.string(),
-      description: z.string(),
-    })).optional(),
-    recommendation: z.string().optional(),
-    toolCalls: z.array(z.object({
-      id: z.string().optional(),
-      name: z.string(),
-      args: z.record(z.string(), jsonValueSchema).optional(),
-    })).optional(),
-  }).optional(),
+  sources: z
+    .array(
+      z.object({
+        position: z.number().optional(),
+        title: z.string(),
+        url: z.string(),
+        domain: z.string(),
+        snippet: z.string().optional(),
+        score: z.number().optional(),
+        searchIndex: z.number().optional(),
+        searchQuery: z.string().optional(),
+      }),
+    )
+    .optional(),
+  images: z
+    .array(
+      z.object({
+        url: z.string(),
+        description: z.string().optional(),
+        searchIndex: z.number().optional(),
+        searchQuery: z.string().optional(),
+      }),
+    )
+    .optional(),
+  humanInTheLoopRequest: z
+    .object({
+      type: z.literal(HUMAN_IN_THE_LOOP_REQUEST_TYPE).optional(),
+      requestKind: z
+        .enum([
+          HumanInTheLoopRequestKind.APPROVAL,
+          HumanInTheLoopRequestKind.ASK_USER,
+        ])
+        .optional(),
+      requestId: z.string().optional(),
+      threadId: z.string().optional(),
+      toolCallId: z.string().optional(),
+      question: z.string().optional(),
+      reason: z.string().optional(),
+      title: z.string().optional(),
+      context: z.string().optional(),
+      options: z
+        .array(
+          z.object({
+            label: z.string(),
+            description: z.string(),
+          }),
+        )
+        .optional(),
+      recommendation: z.string().optional(),
+      toolCalls: z
+        .array(
+          z.object({
+            id: z.string().optional(),
+            name: z.string(),
+            args: z.record(z.string(), jsonValueSchema).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   humanInTheLoopStatus: z.enum(["pending", "approved", "denied"]).optional(),
   toolActivities: z.array(toolActivitySchema).optional(),
   artifacts: z.array(artifactMetadataSchema).optional(),
@@ -182,16 +219,17 @@ export type Message = z.infer<typeof messageSchema>;
 export type MessageMetadata = z.infer<typeof messageMetadataBaseSchema>;
 
 export const MessageRole = {
-  USER: 'user' as const,
-  ASSISTANT: 'assistant' as const,
-  SYSTEM: 'system' as const,
+  USER: "user" as const,
+  ASSISTANT: "assistant" as const,
+  SYSTEM: "system" as const,
 } as const;
 
 export const ToolStatus = {
-  Calling: 'calling' as const,
-  Completed: 'completed' as const,
-  Error: 'error' as const,
+  Calling: "calling" as const,
+  Completed: "completed" as const,
+  Error: "error" as const,
 } as const;
 
-type ToolArgValue = string | number | boolean | null | Array<string | number | boolean>;
+type ToolArgValue =
+  string | number | boolean | null | Array<string | number | boolean>;
 export type ToolArgs = Record<string, ToolArgValue>;

@@ -65,8 +65,6 @@ export const API_ERROR_MESSAGES = {
   ATTACHMENT_UNAUTHORIZED: "Unauthorized access to attachment",
   RAG_MISSING_ENV_VARS: "Missing required environment variables",
   RAG_INVALID_EMBEDDING_DIMENSIONS: "EMBEDDING_DIMENSIONS must be a positive integer",
-  RERANK_API_ERROR: "Reranking API error",
-  RERANK_MISSING_API_KEY: "Cohere API key not configured for reranking",
 } as const;
 
 export const TOAST_ERROR_MESSAGES = {
@@ -156,19 +154,6 @@ export const HOOK_ERROR_MESSAGES = {
   FAILED_MEMORY_SEARCH: "Failed to search memories",
   UNKNOWN_ERROR: "Unknown error",
   UNKNOWN_ERROR_OCCURRED: "Unknown error occurred",
-} as const;
-
-export const TOOL_ERROR_MESSAGES = {
-  WEB_SEARCH: {
-    NOT_CONFIGURED: 'Web search is not configured. Please set EXA_API_KEY environment variable.',
-    NO_RESULTS: (query: string) => `No results found for "${query}". Try rephrasing your search query.`,
-    SEARCH_FAILED: (error: string) => `Failed to perform web search: ${error}`,
-    ABORTED: 'Search was aborted, please try again later.',
-    FAILED_FALLBACK: 'Search failed, continuing without web results...',
-  },
-  GENERAL: {
-    REQUEST_ABORTED: 'Request was aborted, please try again later.',
-  },
 } as const;
 
 export const HTTP_STATUS = {

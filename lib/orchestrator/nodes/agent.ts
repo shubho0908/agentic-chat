@@ -13,6 +13,7 @@ import {
 import { getAnyMentionedComposioToolkits, selectToolsForAgentStep, hasWebActionIntent } from "../tools";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
+import { resolveJevHitlVerdict } from "../jevHitl";
 import {
   ARTIFACT_QUALITY_PROMPT,
   PROMPT_CONTEXT_BOUNDARY,
@@ -343,6 +344,20 @@ export function createAgentNode(
         signal: config?.signal,
       }
     );
-    return { messages: [response] };
+
+    // Jev HITL escalation (default off): shadow/ab only log a comparison
+    // against the deterministic blocklist; active can add human review.
+    // The verdict rides in graph state so the tools node replays the same
+    // branch across an interrupt resume.
+    const responseMessage = response as AIMessage;
+    const toolCalls = responseMessage.tool_calls ?? [];
+    const jevHitlEscalation = await resolveJevHitlVerdict(
+      toolCalls,
+      state.conversationId,
+    ).catch((error) => {
+      logger.warn("[Agent] Jev HITL escalation resolution failed:", error);
+      return null;
+    });
+    return { messages: [response], jevHitlEscalation };
   };
 }

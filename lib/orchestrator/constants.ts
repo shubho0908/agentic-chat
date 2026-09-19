@@ -12,6 +12,7 @@ export const GraphNode = {
   PLANNER: "planner",
   AGENT: "agent",
   TOOLS: "tools",
+  RECOVERY: "recovery",
 } as const;
 
 export const PlanComplexity = {

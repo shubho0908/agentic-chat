@@ -6,8 +6,7 @@ import {
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
-
-const MIN_CACHEABLE_QUERY_LENGTH = 80;
+import { MIN_CACHEABLE_QUERY_LENGTH } from "@/lib/orchestrator/constants";
 
 interface CacheCheckContext {
   messages: Message[];

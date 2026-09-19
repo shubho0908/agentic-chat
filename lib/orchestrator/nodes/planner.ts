@@ -14,6 +14,16 @@ import {
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
 import { JSON_ONLY_RESPONSE_PROMPT } from "@/lib/prompts";
+import {
+  evaluatePlannerWithJev,
+  mapJevPlannerResult,
+  type JevPlannerState,
+} from "@/lib/jev/planner";
+import { getJevMode } from "@/lib/jev/config";
+import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient } from "@/lib/jev/client";
+import { logJevDecision } from "@/lib/jev/telemetry";
+import { createRequestId } from "@/lib/observability";
 
 export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
 
@@ -40,6 +50,135 @@ Rules:
 
 const MIN_PLANNABLE_LENGTH = 10;
 const PLANNER_TIMEOUT_MS = 15_000;
+const JEV_SHADOW_TAIL_TURNS = 4;
+const JEV_SHADOW_TAIL_CONTENT_CHARS = 500;
+
+const jevClient = JevDecisionClient.createIfConfigured();
+
+export function extractText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join(" ");
+  }
+  return JSON.stringify(content);
+}
+
+function buildShadowState(
+  messages: AgentStateType["messages"],
+  latestMessage: string,
+  connectedServices: string[],
+): JevPlannerState {
+  return {
+    latestMessage,
+    conversationTail: messages
+      .slice(-(JEV_SHADOW_TAIL_TURNS + 1), -1)
+      .map((m) => ({
+        role: m._getType() === "human" ? ("user" as const) : ("assistant" as const),
+        content: extractText(m.content).slice(0, JEV_SHADOW_TAIL_CONTENT_CHARS),
+      }))
+      .filter((m) => m.content.length > 0),
+    connectedToolkits: connectedServices,
+  };
+}
+
+/** Runs Jev alongside the current planner and logs a redacted comparison
+ * record. Shadow-only: never throws, never affects the production plan. */
+async function runJevPlannerShadow(
+  state: JevPlannerState,
+  productionPlan: AgentToolPlan | null,
+  conversationId: string | undefined,
+): Promise<void> {
+  if (!jevClient) return;
+  const requestId = createRequestId("jev_planner");
+  const startedAt = Date.now();
+  try {
+    const result = await evaluatePlannerWithJev(jevClient, state, {
+      requestId,
+      conversationId,
+    });
+    const decision = mapJevPlannerResult(result);
+    if (!decision) {
+      logJevDecision({
+        checkpoint: JevCheckpoint.PLANNER,
+        schemaVersion: "1.0.0",
+        modelVersion: result.modelVersion,
+        mode: JevMode.SHADOW,
+        latencyMs: Date.now() - startedAt,
+        outcome: "invalid_response",
+        fallbackUsed: true,
+        fallbackReason: JevFallbackReason.INVALID,
+        requestId,
+        conversationId,
+      });
+      return;
+    }
+
+    const productionComplexity = productionPlan?.complexity ?? null;
+    logJevDecision({
+      checkpoint: JevCheckpoint.PLANNER,
+      schemaVersion: "1.0.0",
+      modelVersion: result.modelVersion,
+      mode: JevMode.SHADOW,
+      latencyMs: result.latencyMs,
+      outcome:
+        productionComplexity === null
+          ? "no_production_baseline"
+          : decision.complexity === productionComplexity
+            ? "agree"
+            : "disagree",
+      probabilities: decision.complexityProbabilities,
+      confidence: decision.complexityConfidence,
+      fallbackUsed: false,
+      inputTokens: result.usage?.input_tokens,
+      outputTokens: result.usage?.output_tokens,
+      requestId,
+      conversationId,
+    });
+  } catch (error) {
+    logJevDecision({
+      checkpoint: JevCheckpoint.PLANNER,
+      schemaVersion: "1.0.0",
+      modelVersion: "unknown",
+      mode: JevMode.SHADOW,
+      latencyMs: Date.now() - startedAt,
+      outcome: "error",
+      fallbackUsed: true,
+      fallbackReason:
+        error instanceof Error && error.name === "AbortError"
+          ? JevFallbackReason.TIMEOUT
+          : JevFallbackReason.ERROR,
+      requestId,
+      conversationId,
+    });
+  }
+}
+
+
+/** Fire-and-forget wrapper. Building the shadow state runs outside the
+ * async function, so this catches sync throws too and the planner never
+ * depends on shadow. */
+function queueJevPlannerShadow(
+  messages: AgentStateType["messages"],
+  latestMessage: string,
+  connectedServices: string[],
+  productionPlan: AgentToolPlan | null,
+  conversationId: string | undefined,
+): void {
+  try {
+    void runJevPlannerShadow(
+      buildShadowState(messages, latestMessage, connectedServices),
+      productionPlan,
+      conversationId,
+    ).catch((error) =>
+      logger.warn("[Planner] Jev shadow evaluation failed:", error),
+    );
+  } catch (error) {
+    logger.warn("[Planner] Jev shadow evaluation failed:", error);
+  }
+}
 
 const plannerResponseSchema = z.object({
   complexity: z.string().optional(),
@@ -101,6 +240,8 @@ export function createPlannerNode(
       return { messages: [] };
     }
 
+    const jevShadow = getJevMode(JevCheckpoint.PLANNER) === JevMode.SHADOW;
+
     try {
       const connected = state.connectedServices ?? [];
       const connectedContext =
@@ -143,6 +284,16 @@ export function createPlannerNode(
         plan: typeof parsed.plan === "string" ? parsed.plan : "",
       };
 
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          connected,
+          plan,
+          state.conversationId,
+        );
+      }
+
       await dispatchCustomEvent(
         CustomEventName.PLANNING,
         { plan },
@@ -162,6 +313,15 @@ export function createPlannerNode(
 
       return { messages: [], toolPlan: plan };
     } catch (error) {
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          state.connectedServices ?? [],
+          null,
+          state.conversationId,
+        );
+      }
       logger.warn(
         "[Planner] Failed to produce a valid plan; continuing without planner hint:",
         error,

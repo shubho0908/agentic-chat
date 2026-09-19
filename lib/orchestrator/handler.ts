@@ -20,7 +20,9 @@ import { isGraphInterrupt } from "@langchain/langgraph";
 import { RECURSION_LIMIT, MIN_CACHEABLE_QUERY_LENGTH } from "./constants";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
-import { generateEmbedding, searchSemanticCache } from "@/lib/rag/storage/cache";
+import { generateEmbedding, searchSemanticCacheEntry } from "@/lib/rag/storage/cache";
+import { SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "@/lib/rag/storage/pgvectorClient";
+import { gateCacheHit } from "@/lib/jev/cacheGate";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
 
 interface OrchestratorStreamOptions {
@@ -193,15 +195,38 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           queryText,
           connectedToolkits,
         );
-        if (queryText && !bypassSemanticCache && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
+        if (queryText && !bypassSemanticCache && queryText.trim().length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId);
-            const cached = await searchSemanticCache(embedding, userId, conversationId);
-            if (cached) {
-              logger.log("[Orchestrator] Semantic cache HIT");
-              stream.enqueue(encodeChatChunk(cached));
-              closeStream();
-              return;
+            const entry = await searchSemanticCacheEntry(embedding, userId, conversationId);
+            if (entry) {
+              // Jev cache gate (structural signals only): shadow logs and
+              // serves, active can veto a confident no-serve verdict, and
+              // every failure path fails open to serving the hit.
+              const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
+              const gate = await gateCacheHit(
+                {
+                  similarityScore: round4(entry.score),
+                  similarityThreshold: SIMILARITY_THRESHOLD,
+                  scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
+                  cacheAgeSeconds: Math.max(
+                    0,
+                    Math.round((Date.now() - entry.createdAt.getTime()) / 1000),
+                  ),
+                  cacheTtlSeconds: CACHE_TTL_SECONDS,
+                  entryScopedToConversation: entry.conversationId !== null,
+                  queryLengthChars: queryText.length,
+                  answerLengthChars: entry.answer.length,
+                },
+                conversationId,
+              );
+              if (gate.serve) {
+                logger.log("[Orchestrator] Semantic cache HIT");
+                stream.enqueue(encodeChatChunk(entry.answer));
+                closeStream();
+                return;
+              }
+              logger.log("[Orchestrator] Semantic cache HIT vetoed by Jev gate");
             }
           } catch (cacheErr) {
             logger.warn("[Orchestrator] Cache check failed, proceeding:", cacheErr);
