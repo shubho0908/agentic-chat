@@ -39,8 +39,7 @@ test("rerankDocuments passes through original order when nothing is configured",
     {
       COHERE_API_KEY: undefined,
       JEV_RERANK_MODE: undefined,
-      CLOUDFLARE_ACCOUNT_ID: undefined,
-      CLOUDFLARE_API_TOKEN: undefined,
+      TYPESAFE_API_KEY: undefined,
     },
     () => {},
   );

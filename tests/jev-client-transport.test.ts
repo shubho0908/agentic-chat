@@ -126,31 +126,3 @@ test("evaluate sends the correct request shape", async () => {
     globalThis.fetch = original;
   }
 });
-
-test("evaluate sends Cloudflare-shaped request when provider is cloudflare", async () => {
-  const client = new JevDecisionClient({
-    provider: "cloudflare",
-    accountId: "acct-1",
-    apiKey: "tok-1",
-  });
-  const original = globalThis.fetch;
-  let capturedUrl = "";
-  let capturedInit: RequestInit | undefined;
-  globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
-    capturedUrl = String(url);
-    capturedInit = init;
-    return jsonResponse({
-      model: "jev-1.13.0",
-      answers: { q: { type: "noul", noul: 0.9 } },
-    });
-  }) as typeof fetch;
-  try {
-    await client.evaluate(evalInput());
-    assert.ok(capturedUrl.includes("accounts/acct-1/ai/run"));
-    const body = JSON.parse(String(capturedInit?.body));
-    assert.equal(body.model, "typesafe/jev");
-    assert.deepEqual(body.input.state, { msg: "hello" });
-  } finally {
-    globalThis.fetch = original;
-  }
-});
