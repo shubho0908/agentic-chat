@@ -23,7 +23,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 test("evaluate validates response shape and returns model version", async () => {
-  const client = new JevDecisionClient({ accountId: "a", apiToken: "t" });
+  const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () =>
     jsonResponse({
@@ -42,7 +42,7 @@ test("evaluate validates response shape and returns model version", async () => 
 });
 
 test("evaluate rejects malformed answers (noul out of range)", async () => {
-  const client = new JevDecisionClient({ accountId: "a", apiToken: "t" });
+  const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () =>
     jsonResponse({
@@ -60,7 +60,7 @@ test("evaluate rejects malformed answers (noul out of range)", async () => {
 });
 
 test("evaluate rejects empty answers object", async () => {
-  const client = new JevDecisionClient({ accountId: "a", apiToken: "t" });
+  const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () =>
     jsonResponse({ model: "jev-1.13.0", answers: {} })) as typeof fetch;
@@ -75,7 +75,7 @@ test("evaluate rejects empty answers object", async () => {
 });
 
 test("evaluate rejects non-object response", async () => {
-  const client = new JevDecisionClient({ accountId: "a", apiToken: "t" });
+  const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () => jsonResponse("nope")) as typeof fetch;
   try {
@@ -89,7 +89,7 @@ test("evaluate rejects non-object response", async () => {
 });
 
 test("evaluate surfaces HTTP errors", async () => {
-  const client = new JevDecisionClient({ accountId: "a", apiToken: "t" });
+  const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () =>
     new Response("rate limited", { status: 429 })) as typeof fetch;
@@ -101,7 +101,38 @@ test("evaluate surfaces HTTP errors", async () => {
 });
 
 test("evaluate sends the correct request shape", async () => {
-  const client = new JevDecisionClient({ accountId: "acct-1", apiToken: "tok-1" });
+  const client = new JevDecisionClient({ apiKey: "tok-1" });
+  const original = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = (async (url: unknown, init?: RequestInit) => {
+    capturedUrl = String(url);
+    capturedInit = init;
+    return jsonResponse({
+      model: "jev-latest",
+      answers: { q: { type: "noul", noul: 0.9 } },
+    });
+  }) as typeof fetch;
+  try {
+    await client.evaluate(evalInput());
+    assert.equal(capturedUrl, "https://api.typesafe.ai/v1/systemone");
+    const headers = capturedInit?.headers as Record<string, string>;
+    assert.equal(headers.Authorization, "Bearer tok-1");
+    const body = JSON.parse(String(capturedInit?.body));
+    assert.equal(body.model, "jev-latest");
+    assert.deepEqual(body.state, { msg: "hello" });
+    assert.equal(body.questions.q.type, "noul");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("evaluate sends Cloudflare-shaped request when provider is cloudflare", async () => {
+  const client = new JevDecisionClient({
+    provider: "cloudflare",
+    accountId: "acct-1",
+    apiKey: "tok-1",
+  });
   const original = globalThis.fetch;
   let capturedUrl = "";
   let capturedInit: RequestInit | undefined;
@@ -116,12 +147,9 @@ test("evaluate sends the correct request shape", async () => {
   try {
     await client.evaluate(evalInput());
     assert.ok(capturedUrl.includes("accounts/acct-1/ai/run"));
-    const headers = capturedInit?.headers as Record<string, string>;
-    assert.equal(headers.Authorization, "Bearer tok-1");
     const body = JSON.parse(String(capturedInit?.body));
     assert.equal(body.model, "typesafe/jev");
     assert.deepEqual(body.input.state, { msg: "hello" });
-    assert.equal(body.input.questions.q.type, "noul");
   } finally {
     globalThis.fetch = original;
   }

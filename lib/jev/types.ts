@@ -107,6 +107,12 @@ export type JevAnswers = Record<string, JevAnswer>;
 export type JevUsage = z.infer<typeof jevUsageSchema>;
 export type JevRawResponse = z.infer<typeof jevRawResponseSchema>;
 
+export const JevProvider = {
+  TYPESAFE: "typesafe",
+  CLOUDFLARE: "cloudflare",
+} as const;
+export type JevProviderName = (typeof JevProvider)[keyof typeof JevProvider];
+
 export interface JevTraceContext {
   requestId: string;
   conversationId?: string;

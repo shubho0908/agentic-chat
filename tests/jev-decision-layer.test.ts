@@ -58,7 +58,7 @@ test("getJevMode reads valid modes and rejects garbage", () => {
 
 test("JevDecisionClient throws without credentials", () => {
   withEnv(
-    { CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined },
+    { TYPESAFE_API_KEY: undefined },
     () => {
       assert.throws(() => new JevDecisionClient(), JevConfigurationError);
     },
@@ -67,7 +67,7 @@ test("JevDecisionClient throws without credentials", () => {
 
 test("JevDecisionClient.createIfConfigured returns null without credentials", () => {
   withEnv(
-    { CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined },
+    { TYPESAFE_API_KEY: undefined },
     () => {
       assert.equal(JevDecisionClient.createIfConfigured(), null);
     },
@@ -75,7 +75,7 @@ test("JevDecisionClient.createIfConfigured returns null without credentials", ()
 });
 
 test("JevDecisionClient accepts explicit credentials", () => {
-  const client = new JevDecisionClient({ accountId: "acct", apiToken: "tok" });
+  const client = new JevDecisionClient({ apiKey: "tok" });
   assert.ok(client instanceof JevDecisionClient);
 });
 
