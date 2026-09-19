@@ -1,14 +1,18 @@
-import { NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { headers } from 'next/headers';
-import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtils';
-import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId } from '@/lib/validation';
-import type { ExportConversation } from '@/types/export';
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import {
+  getAuthenticatedUser,
+  errorResponse,
+  jsonResponse,
+} from "@/lib/apiUtils";
+import { API_ERROR_MESSAGES, HTTP_STATUS } from "@/constants/errors";
+import { isValidConversationId } from "@/lib/validation";
+import type { ExportConversation } from "@/types/export";
 
 export async function GET(
   _request: NextRequest,
-  context: RouteContext<"/api/conversations/[id]/export">
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
     const { params } = context;
@@ -21,7 +25,7 @@ export async function GET(
       return errorResponse(
         API_ERROR_MESSAGES.INVALID_CONVERSATION_ID,
         undefined,
-        HTTP_STATUS.BAD_REQUEST
+        HTTP_STATUS.BAD_REQUEST,
       );
     }
 
@@ -46,7 +50,7 @@ export async function GET(
             parentMessageId: null,
             isDeleted: false,
           },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
             id: true,
             role: true,
@@ -67,7 +71,7 @@ export async function GET(
                 conversationId,
                 isDeleted: false,
               },
-              orderBy: { siblingIndex: 'asc' },
+              orderBy: { siblingIndex: "asc" },
               select: {
                 id: true,
                 role: true,
@@ -94,7 +98,7 @@ export async function GET(
       return errorResponse(
         API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND,
         undefined,
-        HTTP_STATUS.NOT_FOUND
+        HTTP_STATUS.NOT_FOUND,
       );
     }
 
@@ -104,7 +108,7 @@ export async function GET(
       createdAt: conversation.createdAt.toISOString(),
       updatedAt: conversation.updatedAt.toISOString(),
       exportedAt: new Date().toISOString(),
-      version: '1.0',
+      version: "1.0",
       user: conversation.user,
       messages: conversation.messages.map((msg) => ({
         id: msg.id,
@@ -141,7 +145,7 @@ export async function GET(
     return errorResponse(
       API_ERROR_MESSAGES.FAILED_FETCH_CONVERSATION,
       error instanceof Error ? error.message : undefined,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
     );
   }
 }

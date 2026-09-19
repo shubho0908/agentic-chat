@@ -1,13 +1,18 @@
-import { NextRequest } from 'next/server';
-import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
-import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, isValidMessageId } from '@/lib/validation';
-import { deleteMessagesAfter } from '@/lib/messageVersioning';
+import { NextRequest } from "next/server";
+import { headers } from "next/headers";
+import {
+  getAuthenticatedUser,
+  verifyConversationOwnership,
+  errorResponse,
+  jsonResponse,
+} from "@/lib/apiUtils";
+import { API_ERROR_MESSAGES, HTTP_STATUS } from "@/constants/errors";
+import { isValidConversationId, isValidMessageId } from "@/lib/validation";
+import { deleteMessagesAfter } from "@/lib/messageVersioning";
 
 export async function POST(
   request: NextRequest,
-  context: RouteContext<"/api/conversations/[id]/messages/delete-after">
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
     const { params } = context;
@@ -17,45 +22,71 @@ export async function POST(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        API_ERROR_MESSAGES.INVALID_CONVERSATION_ID,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     let body;
     try {
       body = await request.json();
     } catch {
-      return errorResponse('Invalid JSON body', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Invalid JSON body",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
-    
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return errorResponse(
+        "Invalid request body",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
-    
+
     let { messageId } = body;
 
-    if (typeof messageId !== 'string') {
-      return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
+    if (typeof messageId !== "string") {
+      return errorResponse(
+        "Invalid messageId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
     messageId = messageId.trim();
     if (!isValidMessageId(messageId)) {
-      return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Invalid messageId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
+    const { error: convError } = await verifyConversationOwnership(
+      conversationId,
+      user.id,
+    );
     if (convError) return convError;
 
     const result = await deleteMessagesAfter(conversationId, messageId);
 
-    return jsonResponse({ 
-      deleted: result.total,
-      deletedSiblings: result.deletedSiblings,
-      message: `Deleted ${result.total} sibling version(s)`
-    }, HTTP_STATUS.OK);
+    return jsonResponse(
+      {
+        deleted: result.total,
+        deletedSiblings: result.deletedSiblings,
+        message: `Deleted ${result.total} sibling version(s)`,
+      },
+      HTTP_STATUS.OK,
+    );
   } catch (error) {
     return errorResponse(
-      'Failed to delete messages',
+      "Failed to delete messages",
       error instanceof Error ? error.message : undefined,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
     );
   }
 }
