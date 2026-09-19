@@ -8,7 +8,7 @@ export const isValidApiKey = (key: string): boolean => {
 
 export function ModelIcon() {
   return (
-    <span className="inline-flex items-center justify-center p-1.5 rounded-full bg-gray-900 dark:bg-gray-100">
+    <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-gray-900 dark:bg-gray-100">
       <OpenAIIcon className="size-3.5 text-white dark:text-gray-900" />
     </span>
   );
