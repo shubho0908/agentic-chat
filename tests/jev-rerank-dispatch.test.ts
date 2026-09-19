@@ -31,5 +31,4 @@ test("rerankDocuments passes through original order when nothing is configured",
   assert.equal(result.length, 3);
   assert.equal(result[0].content, "a");
   assert.equal(result[0].score, 0.9);
-  assert.equal(result[0].originalScore, 0.9);
 });

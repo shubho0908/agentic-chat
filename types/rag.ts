@@ -1,4 +1,4 @@
-import type { ProcessingStatus } from '@prisma/client';
+import type { ProcessingStatus } from "@prisma/client";
 
 export interface AttachmentStatus {
   id: string;
@@ -20,6 +20,7 @@ export interface RAGContextOptions {
   scoreThreshold?: number;
   waitForProcessing?: boolean;
   processingTimeoutMs?: number;
+  queryVariants?: string[];
 }
 
 export interface RAGContextResult {
@@ -30,6 +31,7 @@ export interface RAGContextResult {
     id: string;
     source: string;
     relevance: string;
+    score?: number;
     page?: number;
   }>;
 }
@@ -41,16 +43,19 @@ export interface RerankDocument {
     attachmentId: string;
     fileName: string;
     page?: number;
+    chunkId?: string;
+    charStart?: number;
   };
 }
 
 export interface RerankResult {
   content: string;
   score: number;
-  originalScore: number;
   metadata: {
     attachmentId: string;
     fileName: string;
     page?: number;
+    chunkId?: string;
+    charStart?: number;
   };
 }

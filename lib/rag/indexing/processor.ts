@@ -1,17 +1,17 @@
-import { prisma } from '@/lib/prisma';
-import { loadDocument } from './loader';
-import { isSupportedForRAG } from '../utils';
-import { chunkDocuments, getOptimalChunkSize } from './chunker';
-import { deleteDocumentChunks, addDocumentsToPgVector } from './store';
-import { RAGError, RAGErrorCode, logRAGError } from '../common/errors';
-import type { ProcessingStatus } from '@prisma/client';
-import { safeFetch } from '@/lib/network/safeFetch';
+import { prisma } from "@/lib/prisma";
+import { loadDocument } from "./loader";
+import { isSupportedForRAG } from "../utils";
+import { chunkDocuments, getOptimalChunkSize } from "./chunker";
+import { deleteDocumentChunks, replaceDocumentsInPgVector } from "./store";
+import { RAGError, RAGErrorCode, logRAGError } from "../common/errors";
+import type { ProcessingStatus } from "@prisma/client";
+import { safeFetch } from "@/lib/network/safeFetch";
 import {
   logDocumentProcessingFinish,
   logDocumentProcessingStart,
   logError,
   measureLatencyMs,
-} from '@/lib/observability';
+} from "@/lib/observability";
 
 interface ProcessDocumentResult {
   success: boolean;
@@ -36,13 +36,16 @@ async function downloadFile(fileUrl: string, mimeType?: string): Promise<Blob> {
   }
 
   const arrayBuffer = await response.arrayBuffer();
-  const contentType = mimeType || response.headers.get('content-type') || 'application/octet-stream';
+  const contentType =
+    mimeType ||
+    response.headers.get("content-type") ||
+    "application/octet-stream";
   return new Blob([arrayBuffer], { type: contentType });
 }
 
 export async function processDocument(
   attachmentId: string,
-  userId: string
+  userId: string,
 ): Promise<ProcessDocumentResult> {
   const startedAt = Date.now();
   let canMutateAttachment = false;
@@ -68,11 +71,11 @@ export async function processDocument(
     });
 
     if (!attachment) {
-      throw new RAGError('Attachment not found', RAGErrorCode.NOT_FOUND);
+      throw new RAGError("Attachment not found", RAGErrorCode.NOT_FOUND);
     }
 
     if (attachment.message.conversation.userId !== userId) {
-      throw new RAGError('Unauthorized', RAGErrorCode.UNAUTHORIZED);
+      throw new RAGError("Unauthorized", RAGErrorCode.UNAUTHORIZED);
     }
 
     canMutateAttachment = true;
@@ -92,7 +95,7 @@ export async function processDocument(
       await prisma.attachment.update({
         where: { id: attachmentId },
         data: {
-          processingStatus: 'FAILED' as ProcessingStatus,
+          processingStatus: "FAILED" as ProcessingStatus,
           processingError: `Unsupported file type: ${attachment.fileType}`,
         },
       });
@@ -118,37 +121,47 @@ export async function processDocument(
     await prisma.attachment.update({
       where: { id: attachmentId },
       data: {
-        processingStatus: 'PROCESSING' as ProcessingStatus,
+        processingStatus: "PROCESSING" as ProcessingStatus,
       },
     });
 
-    const fileBlob = await downloadFile(attachment.fileUrl, attachment.fileType);
+    const fileBlob = await downloadFile(
+      attachment.fileUrl,
+      attachment.fileType,
+    );
 
-    const loadResult = await loadDocument(fileBlob, attachment.fileType, attachment.fileName);
-    
+    const loadResult = await loadDocument(
+      fileBlob,
+      attachment.fileType,
+      attachment.fileName,
+    );
+
     if (!loadResult.success || !loadResult.documents) {
-      throw new Error(loadResult.error || 'Failed to load document');
+      throw new Error(loadResult.error || "Failed to load document");
     }
 
-    const chunkConfig = getOptimalChunkSize(attachment.fileSize, attachment.fileType);
+    const chunkConfig = getOptimalChunkSize(
+      attachment.fileSize,
+      attachment.fileType,
+    );
     const chunkResult = await chunkDocuments(loadResult.documents, chunkConfig);
-    
+
     if (!chunkResult.success || !chunkResult.chunks) {
-      throw new Error(chunkResult.error || 'Failed to chunk document');
+      throw new Error(chunkResult.error || "Failed to chunk document");
     }
 
-    const langchainDocs = chunkResult.chunks.map(chunk => ({
+    const langchainDocs = chunkResult.chunks.map((chunk) => ({
       pageContent: chunk.content,
       metadata: chunk.metadata ?? {},
     }));
-    
-    await addDocumentsToPgVector(
+
+    await replaceDocumentsInPgVector(
       langchainDocs,
       attachmentId,
       userId,
       attachment.fileName,
       conversationId,
-      attachment.fileType
+      attachment.fileType,
     );
 
     try {
@@ -156,20 +169,21 @@ export async function processDocument(
         DELETE FROM semantic_cache WHERE user_id = ${userId} AND conversation_id = ${conversationId}`;
     } catch (cacheInvalidationError) {
       logError({
-        event: 'document_processing_cache_invalidation_failed',
+        event: "document_processing_cache_invalidation_failed",
         attachmentId,
         userId,
         conversationId,
-        error: cacheInvalidationError instanceof Error
-          ? cacheInvalidationError.message
-          : String(cacheInvalidationError),
+        error:
+          cacheInvalidationError instanceof Error
+            ? cacheInvalidationError.message
+            : String(cacheInvalidationError),
       });
     }
 
     await prisma.attachment.update({
       where: { id: attachmentId },
       data: {
-        processingStatus: 'COMPLETED' as ProcessingStatus,
+        processingStatus: "COMPLETED" as ProcessingStatus,
         processedAt: new Date(),
         processingError: null,
         chunkCount: chunkResult.stats?.totalChunks || 0,
@@ -197,9 +211,9 @@ export async function processDocument(
       },
     };
   } catch (error) {
-    let errorMessage = 'Unknown error';
+    let errorMessage = "Unknown error";
     if (error instanceof RAGError) {
-      logRAGError(error, 'processDocument');
+      logRAGError(error, "processDocument");
       errorMessage = error.message;
     } else if (error instanceof Error) {
       errorMessage = error.message;
@@ -210,17 +224,20 @@ export async function processDocument(
         await prisma.attachment.updateMany({
           where: { id: attachmentId },
           data: {
-            processingStatus: 'FAILED' as ProcessingStatus,
+            processingStatus: "FAILED" as ProcessingStatus,
             processingError: errorMessage,
           },
         });
       }
     } catch (statusUpdateError) {
       logError({
-        event: 'document_processing_failure_status_persist_failed',
+        event: "document_processing_failure_status_persist_failed",
         attachmentId,
         userId,
-        error: statusUpdateError instanceof Error ? statusUpdateError.message : String(statusUpdateError),
+        error:
+          statusUpdateError instanceof Error
+            ? statusUpdateError.message
+            : String(statusUpdateError),
       });
     }
 
@@ -230,10 +247,13 @@ export async function processDocument(
       }
     } catch (cleanupError) {
       logError({
-        event: 'document_processing_cleanup_failed',
+        event: "document_processing_cleanup_failed",
         attachmentId,
         userId,
-        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        error:
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : String(cleanupError),
       });
     }
 
