@@ -10,23 +10,7 @@ import {
 import { mapJevPlannerResult } from "@/lib/jev/planner";
 import { mapJevRerankScore } from "@/lib/jev/reranker";
 import type { JevEvaluateResult } from "@/lib/jev/client";
-
-function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of Object.keys(vars)) {
-    saved[key] = process.env[key];
-    if (vars[key] === undefined) delete process.env[key];
-    else process.env[key] = vars[key];
-  }
-  try {
-    fn();
-  } finally {
-    for (const key of Object.keys(vars)) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
-  }
-}
+import { withEnv } from "@/tests/helpers";
 
 function fakeResult(answers: Record<string, unknown>): JevEvaluateResult {
   return {

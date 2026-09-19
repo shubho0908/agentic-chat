@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { CohereClientV2 } from 'cohere-ai';
 import { RAG_CONFIG } from '../config';
 import type { RerankDocument, RerankResult } from '@/types/rag';
@@ -13,6 +14,14 @@ import {
 } from '@/lib/jev';
 
 const jevClient = JevDecisionClient.createIfConfigured();
+
+/** Deterministic 50/50 bucket for A/B mode. Same key always lands in the
+ * same arm so treatment and control stay comparable. Empty keys stay on
+ * control so unkeyed traffic never changes behavior. */
+export function isJevRerankCohort(cohortKey: string): boolean {
+  if (!cohortKey) return false;
+  return createHash('sha256').update(cohortKey).digest()[0] < 128;
+}
 
 function passthrough(documents: RerankDocument[]): RerankResult[] {
   return documents.map(doc => ({
@@ -61,6 +70,7 @@ export async function rerankDocuments(
   documents: RerankDocument[],
   options: {
     topN?: number;
+    conversationId?: string;
   } = {}
 ): Promise<RerankResult[]> {
   const apiKey = process.env.COHERE_API_KEY;
@@ -71,22 +81,54 @@ export async function rerankDocuments(
     return [];
   }
 
-  if ((mode === JevMode.ACTIVE || mode === JevMode.AB) && jevClient) {
+  const cohortKey = options.conversationId
+    ? `${options.conversationId}\n${query}`
+    : query;
+  const conversationScope = options.conversationId
+    ? { conversationId: options.conversationId }
+    : {};
+  const inJevCohort =
+    mode === JevMode.ACTIVE ||
+    (mode === JevMode.AB && isJevRerankCohort(cohortKey));
+
+  if (mode === JevMode.AB && !inJevCohort) {
+    const requestId = createRequestId('jev_rerank');
+    logJevDecision({
+      checkpoint: JevCheckpoint.RERANK,
+      schemaVersion: '1.0.0',
+      modelVersion: `cohere/${RAG_CONFIG.rerank.model}`,
+      mode,
+      latencyMs: 0,
+      outcome: 'control_cohere',
+      fallbackUsed: false,
+      requestId,
+      ...conversationScope,
+    });
+  }
+
+  if (inJevCohort && jevClient) {
     const requestId = createRequestId('jev_rerank');
     const startedAt = Date.now();
     try {
-      const results = await rerankWithJev(jevClient, query, documents, {
-        requestId,
-      });
+      const { results, modelVersion } = await rerankWithJev(
+        jevClient,
+        query,
+        documents,
+        {
+          requestId,
+          ...conversationScope,
+        },
+      );
       logJevDecision({
         checkpoint: JevCheckpoint.RERANK,
         schemaVersion: '1.0.0',
-        modelVersion: 'typesafe/jev',
+        modelVersion,
         mode,
         latencyMs: Date.now() - startedAt,
         outcome: `reranked_${results.length}`,
         fallbackUsed: false,
         requestId,
+        ...conversationScope,
       });
       return results.slice(0, topN);
     } catch (error) {
@@ -109,6 +151,7 @@ export async function rerankDocuments(
             ? JevFallbackReason.TIMEOUT
             : JevFallbackReason.ERROR,
         requestId,
+        ...conversationScope,
       });
     }
   }

@@ -31,12 +31,18 @@ async function mapWithConcurrencyLimit<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
+  let failed = false;
   const workers = Array.from(
     { length: Math.min(limit, items.length) },
     async () => {
-      while (next < items.length) {
+      while (!failed && next < items.length) {
         const index = next++;
-        results[index] = await fn(items[index]);
+        try {
+          results[index] = await fn(items[index]);
+        } catch (error) {
+          failed = true;
+          throw error;
+        }
       }
     },
   );
@@ -48,12 +54,20 @@ async function mapWithConcurrencyLimit<T, R>(
 /** Scores the bounded shortlist; throws if any candidate fails or returns an
  * invalid score so callers fall back to Cohere for the whole shortlist instead
  * of mixing incomparable score scales in one ranking. */
+export interface JevRerankOutcome {
+  results: RerankResult[];
+  /** Model reported by the service. First non-unknown response wins;
+   * requests use one model so any response is representative. */
+  modelVersion: string;
+}
+
 export async function rerankWithJev(
   client: JevDecisionClient,
   query: string,
   documents: RerankDocument[],
   traceContext: { requestId: string; conversationId?: string },
-): Promise<RerankResult[]> {
+): Promise<JevRerankOutcome> {
+  let modelVersion: string | null = null;
   const scored = await mapWithConcurrencyLimit(
     documents,
     JEV_RERANK_MAX_CONCURRENCY,
@@ -69,6 +83,9 @@ export async function rerankWithJev(
         timeoutMs: JEV_RERANK_TIMEOUT_MS,
         traceContext,
       });
+      if (modelVersion === null || modelVersion === "unknown") {
+        modelVersion = result.modelVersion;
+      }
       const score = mapJevRerankScore(result);
       if (score === null) {
         throw new Error("Jev rerank returned an invalid score");
@@ -82,5 +99,8 @@ export async function rerankWithJev(
     },
   );
 
-  return scored.sort((a, b) => b.score - a.score);
+  return {
+    results: scored.sort((a, b) => b.score - a.score),
+    modelVersion: modelVersion ?? "unknown",
+  };
 }

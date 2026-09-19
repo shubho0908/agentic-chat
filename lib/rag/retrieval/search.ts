@@ -186,6 +186,7 @@ export async function searchDocumentChunks(
         preRerankPool.length,
         Math.max(limit, RAG_CONFIG.search.rerankTopNCap)
       ),
+      ...(conversationId ? { conversationId } : {}),
     });
 
     const rerankedCandidates: RetrievalCandidate[] = rerankedResults.map((result) => ({

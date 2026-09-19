@@ -14,6 +14,26 @@ const CIRCUIT_BREAKER_NAME = "jev-decision-client";
 const DEFAULT_TIMEOUT_MS = 2_000;
 const MAX_RETRIES = 1;
 
+let legacyProviderWarned = false;
+
+/** Cloudflare transport was removed before merge. Warn once when legacy
+ * vars are still set so the fallback to disabled Jev is never silent. */
+function warnOnLegacyProviderVars(): void {
+  if (legacyProviderWarned) return;
+  if (
+    process.env.JEV_PROVIDER ??
+    process.env.CLOUDFLARE_ACCOUNT_ID ??
+    process.env.CLOUDFLARE_API_TOKEN
+  ) {
+    legacyProviderWarned = true;
+    logWarn({
+      event: "jev_legacy_provider_ignored",
+      message:
+        "Cloudflare Jev provider is removed; set TYPESAFE_API_KEY for the direct TypeSafe API",
+    });
+  }
+}
+
 export class JevConfigurationError extends Error {
   constructor() {
     super("Jev is not configured: TYPESAFE_API_KEY is required");
@@ -66,6 +86,7 @@ export class JevDecisionClient {
   private readonly apiKey: string;
 
   constructor(options?: { apiKey?: string }) {
+    warnOnLegacyProviderVars();
     const apiKey = options?.apiKey ?? process.env.TYPESAFE_API_KEY;
     if (!apiKey) {
       throw new JevConfigurationError();
@@ -94,11 +115,20 @@ export class JevDecisionClient {
     }
 
     const startedAt = Date.now();
+    const deadlineMs =
+      input.timeoutMs > 0 ? input.timeoutMs : DEFAULT_TIMEOUT_MS;
+    const deadlineController = new AbortController();
+    const deadlineTimer = setTimeout(() => {
+      const timeoutError = new Error("Jev evaluation timed out");
+      timeoutError.name = "AbortError";
+      deadlineController.abort(timeoutError);
+    }, deadlineMs);
     try {
       const raw = await withRetry((signal) => this.invoke(input, signal), {
         retries: MAX_RETRIES,
         initialDelayMs: 300,
-        timeoutMs: input.timeoutMs > 0 ? input.timeoutMs : DEFAULT_TIMEOUT_MS,
+        timeoutMs: deadlineMs,
+        signal: deadlineController.signal,
       });
       const validated = parseResponse(raw);
       breaker.recordSuccess();
@@ -115,6 +145,8 @@ export class JevDecisionClient {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    } finally {
+      clearTimeout(deadlineTimer);
     }
   }
 

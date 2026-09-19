@@ -159,6 +159,29 @@ async function runJevPlannerShadow(
 }
 
 
+/** Fire-and-forget wrapper. Building the shadow state runs outside the
+ * async function, so this catches sync throws too and the planner never
+ * depends on shadow. */
+function queueJevPlannerShadow(
+  messages: AgentStateType["messages"],
+  latestMessage: string,
+  connectedServices: string[],
+  productionPlan: AgentToolPlan | null,
+  conversationId: string | undefined,
+): void {
+  try {
+    void runJevPlannerShadow(
+      buildShadowState(messages, latestMessage, connectedServices),
+      productionPlan,
+      conversationId,
+    ).catch((error) =>
+      logger.warn("[Planner] Jev shadow evaluation failed:", error),
+    );
+  } catch (error) {
+    logger.warn("[Planner] Jev shadow evaluation failed:", error);
+  }
+}
+
 const plannerResponseSchema = z.object({
   complexity: z.string().optional(),
   tools_needed: z.array(z.string()).optional(),
@@ -219,6 +242,8 @@ export function createPlannerNode(
       return { messages: [] };
     }
 
+    const jevShadow = getJevMode(JevCheckpoint.PLANNER) === JevMode.SHADOW;
+
     try {
       const connected = state.connectedServices ?? [];
       const connectedContext =
@@ -261,13 +286,13 @@ export function createPlannerNode(
         plan: typeof parsed.plan === "string" ? parsed.plan : "",
       };
 
-      if (getJevMode(JevCheckpoint.PLANNER) === JevMode.SHADOW) {
-        void runJevPlannerShadow(
-          buildShadowState(state.messages, content, connected),
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          connected,
           plan,
           state.conversationId,
-        ).catch((error) =>
-          logger.warn("[Planner] Jev shadow evaluation failed:", error),
         );
       }
 
@@ -290,6 +315,15 @@ export function createPlannerNode(
 
       return { messages: [], toolPlan: plan };
     } catch (error) {
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          state.connectedServices ?? [],
+          null,
+          state.conversationId,
+        );
+      }
       logger.warn(
         "[Planner] Failed to produce a valid plan; continuing without planner hint:",
         error,

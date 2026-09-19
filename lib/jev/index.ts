@@ -23,4 +23,5 @@ export {
   JEV_RERANK_MAX_CONCURRENCY,
   mapJevRerankScore,
   rerankWithJev,
+  type JevRerankOutcome,
 } from "./reranker";

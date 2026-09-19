@@ -1,6 +1,6 @@
 import { MessageRole, type Message } from "@/lib/schemas/chat";
 
-export const PENDING_ASSISTANT_PREFIX = "assistant-pending-";
+const PENDING_ASSISTANT_PREFIX = "assistant-pending-";
 
 export function getPendingAssistantMessageId(scope: string): string {
   return `${PENDING_ASSISTANT_PREFIX}${scope}`;
