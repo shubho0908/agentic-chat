@@ -26,6 +26,7 @@ function passthrough(documents: RerankDocument[]): RerankResult[] {
 export function mapProviderRerankResults(
   documents: RerankDocument[],
   results: Array<{ index: number; relevanceScore: number }>,
+  topN = documents.length,
 ): RerankResult[] {
   const seen = new Set<number>();
   const mapped: RerankResult[] = [];
@@ -46,7 +47,16 @@ export function mapProviderRerankResults(
       metadata: original.metadata,
     });
   }
-  return mapped.length ? mapped : passthrough(documents);
+  if (!mapped.length) return passthrough(documents).slice(0, topN);
+  for (
+    let index = 0;
+    index < documents.length && mapped.length < topN;
+    index++
+  ) {
+    if (seen.has(index)) continue;
+    mapped.push({ ...documents[index] });
+  }
+  return mapped;
 }
 
 export async function rerankWithCohere(
@@ -72,7 +82,7 @@ export async function rerankWithCohere(
     return passthrough(documents);
   }
 
-  return mapProviderRerankResults(documents, response.results);
+  return mapProviderRerankResults(documents, response.results, topN);
 }
 
 export async function rerankDocuments(

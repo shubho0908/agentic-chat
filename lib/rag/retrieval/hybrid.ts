@@ -1,6 +1,8 @@
 export interface RetrievalCandidate {
   content: string;
   score: number;
+  /** Score used only to order fused rankings; citations keep `score`. */
+  rankScore?: number;
   metadata: {
     attachmentId: string;
     fileName: string;
@@ -118,7 +120,12 @@ export function reciprocalRankFuse(
   const k = options.k ?? 60;
   const byKey = new Map<
     string,
-    { candidate: RetrievalCandidate; score: number; bestRank: number }
+    {
+      candidate: RetrievalCandidate;
+      score: number;
+      bestRank: number;
+      evidenceScore: number;
+    }
   >();
   for (const ranking of rankings) {
     dedupeCandidates(ranking).forEach((candidate, index) => {
@@ -128,8 +135,17 @@ export function reciprocalRankFuse(
       if (current) {
         current.score += contribution;
         current.bestRank = Math.min(current.bestRank, index);
+        current.evidenceScore = Math.max(
+          current.evidenceScore,
+          candidate.score,
+        );
       } else {
-        byKey.set(key, { candidate, score: contribution, bestRank: index });
+        byKey.set(key, {
+          candidate,
+          score: contribution,
+          bestRank: index,
+          evidenceScore: candidate.score,
+        });
       }
     });
   }
@@ -141,13 +157,19 @@ export function reciprocalRankFuse(
         candidateKey(a.candidate).localeCompare(candidateKey(b.candidate)),
     )
     .slice(0, options.limit)
-    .map(({ candidate, score }) => ({ ...candidate, score }));
+    .map(({ candidate, score, evidenceScore }) => ({
+      ...candidate,
+      score: evidenceScore,
+      rankScore: score,
+    }));
 }
 
 function sortByScoreDesc(
   candidates: RetrievalCandidate[],
 ): RetrievalCandidate[] {
-  return candidates.toSorted((a, b) => b.score - a.score);
+  return candidates.toSorted(
+    (a, b) => (b.rankScore ?? b.score) - (a.rankScore ?? a.score),
+  );
 }
 
 export function diversifyCandidates(

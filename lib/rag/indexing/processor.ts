@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { loadDocument } from "./loader";
 import { isSupportedForRAG } from "../utils";
 import { chunkDocuments, getOptimalChunkSize } from "./chunker";
-import { deleteDocumentChunks, replaceDocumentsInPgVector } from "./store";
+import { replaceDocumentsInPgVector } from "./store";
 import { RAGError, RAGErrorCode, logRAGError } from "../common/errors";
 import type { ProcessingStatus } from "@prisma/client";
 import { safeFetch } from "@/lib/network/safeFetch";
@@ -241,21 +241,9 @@ export async function processDocument(
       });
     }
 
-    try {
-      if (canMutateAttachment) {
-        await deleteDocumentChunks(attachmentId, userId);
-      }
-    } catch (cleanupError) {
-      logError({
-        event: "document_processing_cleanup_failed",
-        attachmentId,
-        userId,
-        error:
-          cleanupError instanceof Error
-            ? cleanupError.message
-            : String(cleanupError),
-      });
-    }
+    // Preserve the last successfully published index. Replacement owns
+    // staging cleanup and its SQL transaction is atomic; deleting here would
+    // turn a transient reprocessing failure into document data loss.
 
     logDocumentProcessingFinish({
       attachmentId,

@@ -125,21 +125,3 @@ export async function replaceDocumentsInPgVector(
     },
   );
 }
-
-export async function deleteDocumentChunks(
-  attachmentId: string,
-  userId: string,
-): Promise<void> {
-  try {
-    await prisma.$executeRaw`
-      DELETE FROM document_chunk
-      WHERE metadata->>'attachmentId' = ${attachmentId}
-        AND metadata->>'userId' = ${userId}`;
-  } catch (error) {
-    throw new RAGError(
-      `Error deleting document chunks: ${error instanceof Error ? error.message : String(error)}`,
-      RAGErrorCode.DATABASE_DELETE_FAILED,
-      error,
-    );
-  }
-}

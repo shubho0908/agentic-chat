@@ -238,6 +238,7 @@ export async function searchDocumentChunks(
       reranked.map((result) => ({
         content: result.content,
         score: result.score,
+        rankScore: result.score,
         metadata: result.metadata,
       })),
       {

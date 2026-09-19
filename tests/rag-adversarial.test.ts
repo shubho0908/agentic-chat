@@ -66,6 +66,15 @@ test("RRF handles empty, one-item, duplicate, and 10k rankings deterministically
   );
 });
 
+test("RRF preserves evidence score separately from fusion rank score", () => {
+  const shared = reciprocalRankFuse([
+    [candidate("x", "a", 0.91)],
+    [candidate("x", "a", 0.73)],
+  ])[0];
+  assert.equal(shared.score, 0.91);
+  assert.ok((shared.rankScore ?? 0) > 0 && (shared.rankScore ?? 0) < 0.1);
+});
+
 test("neighbor merge preserves ranked hits and source coverage, removes duplicates, and hard-caps context", () => {
   const hits = [
     candidate("h1", "a", 0.9),
@@ -137,7 +146,7 @@ test("rerank provider output tolerates partial, duplicate, malformed, and empty 
   ]);
   assert.deepEqual(
     partial.map((x) => x.metadata.chunkId),
-    ["b"],
+    ["b", "a", "c"],
   );
   assert.deepEqual(
     mapProviderRerankResults(docs, []).map((x) => x.metadata.chunkId),
