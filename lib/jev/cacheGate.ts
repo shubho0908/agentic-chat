@@ -77,6 +77,16 @@ export interface CacheGateOutcome {
   serve: boolean;
 }
 
+/** In active mode the client pre-check must not serve or veto on its own:
+ * the request falls through to the orchestrator, which performs the single
+ * authoritative gated lookup. Two independent Jev evaluations of the same
+ * entry can disagree, and a first-path veto overridden by a second-path
+ * serve (or a fail-open) would make the gate meaningless. Shadow/ab keep
+ * the fast path because they never change behavior. */
+export function cacheGateDefersToOrchestrator(): boolean {
+  return getJevMode(JevCheckpoint.CACHE_GATE) === JevMode.ACTIVE;
+}
+
 /** Default is off. Shadow and ab record the decision but always serve the
  * hit. Active vetoes only confident no-serve decisions and fails open on
  * provider errors: a Jev outage can never turn cache hits into misses. */

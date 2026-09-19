@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  cacheGateDefersToOrchestrator,
   gateCacheHit,
   mapJevCacheGateResult,
   shouldServeCachedAnswer,
@@ -90,6 +91,17 @@ test("Phase 5 checkpoints default to off and read valid modes", () => {
   withEnv({ JEV_CACHE_GATE_MODE: "BANANA" }, () => {
     assert.equal(getJevMode(JevCheckpoint.CACHE_GATE), "off");
   });
+});
+
+test("cache gate defers the pre-check to the orchestrator only in active mode", () => {
+  withEnv({ JEV_CACHE_GATE_MODE: "active" }, () => {
+    assert.equal(cacheGateDefersToOrchestrator(), true);
+  });
+  for (const mode of [undefined, "off", "shadow", "ab"]) {
+    withEnv({ JEV_CACHE_GATE_MODE: mode }, () => {
+      assert.equal(cacheGateDefersToOrchestrator(), false);
+    });
+  }
 });
 
 // ---------- cache gate mapping ----------

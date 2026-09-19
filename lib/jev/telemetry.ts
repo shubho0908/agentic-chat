@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { logInfo, logMetric, logWarn } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
 import type { JevDecisionRecord } from "./types";
@@ -27,15 +28,28 @@ async function persistJevDecision(record: JevDecisionRecord): Promise<void> {
 }
 
 export function logJevDecision(record: JevDecisionRecord): void {
-  if (process.env.DATABASE_URL && process.env.NODE_ENV !== "test") {
-    void persistJevDecision(record).catch((error) =>
-      logWarn({
-        event: "jev_decision_persist_failed",
-        checkpoint: record.checkpoint,
-        requestId: record.requestId,
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    );
+  if (!process.env.DATABASE_URL || process.env.NODE_ENV === "test") {
+    // Logging still runs below; only durable persistence is gated.
+  } else {
+    const persist = () =>
+      persistJevDecision(record).catch((error) =>
+        logWarn({
+          event: "jev_decision_persist_failed",
+          checkpoint: record.checkpoint,
+          requestId: record.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    try {
+      // Serverless: an untracked promise can be dropped when the invocation
+      // ends with the response. Registering with the request lifecycle keeps
+      // the runtime alive until the insert settles; failures stay non-fatal.
+      after(() => persist());
+    } catch {
+      // Outside a request context (scripts, evals) after() has no store;
+      // fall back to the best-effort untracked promise.
+      void persist();
+    }
   }
 
   logInfo({

@@ -4,7 +4,7 @@ import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCacheEntry, addToSemanticCache } from './cache';
 import { SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from './pgvectorClient';
-import { gateCacheHit, type JevCacheGateState } from '@/lib/jev/cacheGate';
+import { cacheGateDefersToOrchestrator, gateCacheHit, type JevCacheGateState } from '@/lib/jev/cacheGate';
 import { MIN_CACHEABLE_QUERY_LENGTH } from '@/lib/orchestrator/constants';
 import { logger } from '@/lib/logger';
 
@@ -46,6 +46,18 @@ export async function checkSemanticCacheAction(query: string, conversationId?: s
     }
 
     if (!shouldUseSemanticCache(query)) {
+      return {
+        cached: false,
+        latency: Date.now() - startTime,
+      };
+    }
+
+    // Active mode: defer to the orchestrator's single gated lookup so each
+    // entry is evaluated exactly once. Serving here after an orchestrator
+    // veto (or vetoing here and being overridden there) would make the
+    // gate meaningless. Shadow/ab keep this fast path; they never change
+    // behavior. Skips the embedding call entirely.
+    if (cacheGateDefersToOrchestrator()) {
       return {
         cached: false,
         latency: Date.now() - startTime,
