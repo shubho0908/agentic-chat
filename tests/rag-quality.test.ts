@@ -58,3 +58,36 @@ test("passage gate blocks prompt injection and keeps contradiction evidence", ()
     true,
   );
 });
+
+test("fusion never lets a raw lexical rank pose as the displayable evidence score", () => {
+  const semantic = { ...c("shared", 0.62), scoreOrigin: "semantic" as const };
+  const lexical = { ...c("shared", 1.42), scoreOrigin: "lexical" as const };
+  const fused = reciprocalRankFuse([
+    [semantic],
+    [lexical, { ...c("lex-only", 1.31), scoreOrigin: "lexical" as const }],
+  ]);
+  const shared = fused.find((x) => x.metadata.chunkId === "shared");
+  assert.equal(shared?.score, 0.62);
+  assert.equal(shared?.scoreOrigin, "semantic");
+  const lexicalOnly = fused.find((x) => x.metadata.chunkId === "lex-only");
+  assert.equal(lexicalOnly?.score, 1.31);
+  assert.equal(lexicalOnly?.scoreOrigin, "lexical");
+});
+
+test("citations omit the match percentage for lexical-only evidence", () => {
+  const lexicalOnly = formatRetrievedContext([
+    { ...c("lex", 1.42), scoreOrigin: "lexical" as const },
+  ]);
+  assert.equal(lexicalOnly.citations?.[0].score, undefined);
+  assert.equal(lexicalOnly.citations?.[0].relevance, "unknown");
+  const semantic = formatRetrievedContext([
+    { ...c("sem", 0.62), scoreOrigin: "semantic" as const },
+  ]);
+  assert.equal(semantic.citations?.[0].score, 0.62);
+  assert.equal(semantic.citations?.[0].relevance, "medium");
+  const reranked = formatRetrievedContext([
+    { ...c("rerank", 0.93), scoreOrigin: "rerank" as const },
+  ]);
+  assert.equal(reranked.citations?.[0].score, 0.93);
+  assert.equal(reranked.citations?.[0].relevance, "high");
+});

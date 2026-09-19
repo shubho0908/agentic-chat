@@ -1,6 +1,7 @@
 import type { RetrievalCandidate } from "@/lib/rag/retrieval/hybrid";
 import { createRequestId, logWarn } from "@/lib/observability";
 import { JevDecisionClient } from "./client";
+import { mapWithConcurrencyLimit } from "./concurrency";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
@@ -13,6 +14,9 @@ import {
 export const JEV_PASSAGE_GATE_SCHEMA_VERSION = "1.0.0";
 const TIMEOUT_MS = 2_000;
 const MAX_CANDIDATES = 24;
+/** Bounded fan-out, same shape as the Jev reranker: a slow or failing
+ * provider never faces a 24-request burst from one retrieval. */
+export const JEV_PASSAGE_GATE_MAX_CONCURRENCY = 4;
 const QUESTIONS: JevQuestions = {
   relevant: {
     type: "noul",
@@ -66,11 +70,16 @@ export async function gatePassages(
   const mode = getJevMode(JevCheckpoint.PASSAGE_GATE);
   const client = dependency ?? JevDecisionClient.createIfConfigured();
   if (mode === JevMode.OFF || !client || !candidates.length) return candidates;
-  const evaluated = await Promise.all(
-    candidates.slice(0, MAX_CANDIDATES).map(async (candidate) => {
-      const requestId = createRequestId("jev_passage");
-      const started = Date.now();
-      try {
+  let evaluated: Array<{ candidate: RetrievalCandidate; keep: boolean }>;
+  const batchRequestId = createRequestId("jev_passage");
+  const batchStarted = Date.now();
+  try {
+    evaluated = await mapWithConcurrencyLimit(
+      candidates.slice(0, MAX_CANDIDATES),
+      JEV_PASSAGE_GATE_MAX_CONCURRENCY,
+      async (candidate, signal) => {
+        const requestId = createRequestId("jev_passage");
+        const started = Date.now();
         const result = await client.evaluate({
           checkpoint: JevCheckpoint.PASSAGE_GATE,
           schemaVersion: JEV_PASSAGE_GATE_SCHEMA_VERSION,
@@ -78,6 +87,7 @@ export async function gatePassages(
           questions: QUESTIONS,
           timeoutMs: TIMEOUT_MS,
           traceContext: { requestId, conversationId },
+          signal,
         });
         const values = [
           probability(result.answers, "relevant"),
@@ -114,32 +124,35 @@ export async function gatePassages(
           outputTokens: result.usage?.output_tokens,
         });
         return { candidate, keep };
-      } catch (error) {
-        logWarn({
-          event: "jev_passage_gate_fallback",
-          message: "Passage gate failed open",
-          error: error instanceof Error ? error.message : String(error),
-          requestId,
-        });
-        logJevDecision({
-          checkpoint: JevCheckpoint.PASSAGE_GATE,
-          schemaVersion: JEV_PASSAGE_GATE_SCHEMA_VERSION,
-          modelVersion: "unknown",
-          mode,
-          latencyMs: Date.now() - started,
-          outcome: "error_keep",
-          fallbackUsed: true,
-          fallbackReason:
-            error instanceof Error && error.name === "AbortError"
-              ? JevFallbackReason.TIMEOUT
-              : JevFallbackReason.ERROR,
-          requestId,
-          conversationId,
-        });
-        return { candidate, keep: true };
-      }
-    }),
-  );
+      },
+    );
+  } catch (error) {
+    // Fail-fast: the first failure already aborted every sibling in flight,
+    // and the gate fails open for the whole batch instead of dripping out
+    // partial filtering behind a degraded provider.
+    logWarn({
+      event: "jev_passage_gate_fallback",
+      message: "Passage gate failed open",
+      error: error instanceof Error ? error.message : String(error),
+      requestId: batchRequestId,
+    });
+    logJevDecision({
+      checkpoint: JevCheckpoint.PASSAGE_GATE,
+      schemaVersion: JEV_PASSAGE_GATE_SCHEMA_VERSION,
+      modelVersion: "unknown",
+      mode,
+      latencyMs: Date.now() - batchStarted,
+      outcome: "error_keep",
+      fallbackUsed: true,
+      fallbackReason:
+        error instanceof Error && error.name === "AbortError"
+          ? JevFallbackReason.TIMEOUT
+          : JevFallbackReason.ERROR,
+      requestId: batchRequestId,
+      conversationId,
+    });
+    return candidates;
+  }
   if (mode === JevMode.SHADOW || mode === JevMode.AB) return candidates;
   const decisions = new Map(
     evaluated.map((value) => [

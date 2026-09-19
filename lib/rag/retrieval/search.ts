@@ -54,6 +54,7 @@ function fromMetadata(
   return {
     content,
     score,
+    scoreOrigin: "semantic",
     metadata: {
       attachmentId: text(metadata.attachmentId),
       fileName: text(metadata.fileName),
@@ -127,9 +128,12 @@ async function lexicalSearch(params: {
         AND (${params.fileType ?? null}::text IS NULL OR metadata->>'fileType'=${params.fileType ?? null})
         AND to_tsvector(${RAG_CONFIG.search.lexicalLanguage}::regconfig, content) @@ websearch_to_tsquery(${RAG_CONFIG.search.lexicalLanguage}::regconfig, ${query})
       ORDER BY lexical_rank DESC, id ASC LIMIT ${params.limit}`;
+    // Raw ts_rank_cd values are unbounded ordering signals, not normalized
+    // probabilities; tag them so citations never show them as match %.
     return rows.map((row) => ({
       content: row.content,
       score: Number(row.lexical_rank),
+      scoreOrigin: "lexical" as const,
       metadata: {
         attachmentId: row.attachment_id,
         fileName: row.file_name,
@@ -238,6 +242,7 @@ export async function searchDocumentChunks(
       reranked.map((result) => ({
         content: result.content,
         score: result.score,
+        scoreOrigin: result.scoreOrigin,
         rankScore: result.score,
         metadata: result.metadata,
       })),

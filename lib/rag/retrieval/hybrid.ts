@@ -1,6 +1,11 @@
+import type { RetrievalScoreOrigin } from "@/types/rag";
+
 export interface RetrievalCandidate {
   content: string;
   score: number;
+  /** Origin of `score`. Raw lexical ranks ("lexical") are unbounded ordering
+   * signals and must never be shown as calibrated match percentages. */
+  scoreOrigin?: RetrievalScoreOrigin;
   /** Score used only to order fused rankings; citations keep `score`. */
   rankScore?: number;
   metadata: {
@@ -111,6 +116,20 @@ export function dedupeCandidates(
   return deduped;
 }
 
+/** Display precedence for evidence scores from different origins. Raw scores
+ * from different sources are not comparable, so a bounded semantic similarity
+ * always beats an unbounded lexical rank for citation display, and a reranker
+ * relevance score beats both; within one origin the higher score wins. */
+const SCORE_ORIGIN_PRECEDENCE: Record<RetrievalScoreOrigin, number> = {
+  rerank: 3,
+  semantic: 2,
+  lexical: 1,
+};
+
+function scoreOriginPrecedence(origin: RetrievalScoreOrigin | undefined): number {
+  return origin ? SCORE_ORIGIN_PRECEDENCE[origin] : 0;
+}
+
 /** Reciprocal-rank fusion combines rankings without pretending their raw scores
  * are calibrated. A candidate appearing in several lists accumulates evidence. */
 export function reciprocalRankFuse(
@@ -125,6 +144,7 @@ export function reciprocalRankFuse(
       score: number;
       bestRank: number;
       evidenceScore: number;
+      evidenceOrigin: RetrievalScoreOrigin | undefined;
     }
   >();
   for (const ranking of rankings) {
@@ -135,16 +155,23 @@ export function reciprocalRankFuse(
       if (current) {
         current.score += contribution;
         current.bestRank = Math.min(current.bestRank, index);
-        current.evidenceScore = Math.max(
-          current.evidenceScore,
-          candidate.score,
-        );
+        const candidatePrecedence = scoreOriginPrecedence(candidate.scoreOrigin);
+        const currentPrecedence = scoreOriginPrecedence(current.evidenceOrigin);
+        if (
+          candidatePrecedence > currentPrecedence ||
+          (candidatePrecedence === currentPrecedence &&
+            candidate.score > current.evidenceScore)
+        ) {
+          current.evidenceScore = candidate.score;
+          current.evidenceOrigin = candidate.scoreOrigin;
+        }
       } else {
         byKey.set(key, {
           candidate,
           score: contribution,
           bestRank: index,
           evidenceScore: candidate.score,
+          evidenceOrigin: candidate.scoreOrigin,
         });
       }
     });
@@ -157,9 +184,10 @@ export function reciprocalRankFuse(
         candidateKey(a.candidate).localeCompare(candidateKey(b.candidate)),
     )
     .slice(0, options.limit)
-    .map(({ candidate, score, evidenceScore }) => ({
+    .map(({ candidate, score, evidenceScore, evidenceOrigin }) => ({
       ...candidate,
       score: evidenceScore,
+      scoreOrigin: evidenceOrigin,
       rankScore: score,
     }));
 }

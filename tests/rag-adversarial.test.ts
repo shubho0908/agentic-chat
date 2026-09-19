@@ -335,6 +335,78 @@ test("Jev passage gate timeout and provider error both fail open promptly", asyn
   }
 });
 
+test("Jev passage gate bounds in-flight evaluations instead of bursting", async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  let calls = 0;
+  const fake = {
+    evaluate(): Promise<JevEvaluateResult> {
+      calls += 1;
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      return new Promise((resolve) =>
+        setTimeout(() => {
+          inFlight -= 1;
+          resolve({
+            answers: {
+              relevant: { type: "noul", noul: 0.9 },
+              usable_evidence: { type: "noul", noul: 0.9 },
+              contradiction: { type: "noul", noul: 0 },
+              prompt_injection: { type: "noul", noul: 0 },
+            },
+            modelVersion: "test",
+            latencyMs: 1,
+          });
+        }, 15),
+      );
+    },
+  } as unknown as JevDecisionClient;
+  const candidates = Array.from({ length: 12 }, (_, i) =>
+    candidate(`p${i}`),
+  );
+  const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "shadow" }, () =>
+    gatePassages("q", candidates, undefined, fake),
+  );
+  assert.equal(result.length, 12);
+  assert.equal(calls, 12);
+  assert.ok(maxInFlight <= 4, `max in-flight was ${maxInFlight}`);
+});
+
+test("Jev passage gate fails fast: first failure cancels siblings and fails open", async () => {
+  let calls = 0;
+  let cancelled = 0;
+  const fake = {
+    evaluate(input: JevEvaluateInput): Promise<JevEvaluateResult> {
+      calls += 1;
+      const passage = (input.state as { passage: string }).passage;
+      if (passage.includes("bad")) {
+        return new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("provider down")), 10),
+        );
+      }
+      return new Promise((_, reject) => {
+        input.signal?.addEventListener("abort", () => {
+          cancelled += 1;
+          reject(new Error("cancelled"));
+        });
+      });
+    },
+  } as unknown as JevDecisionClient;
+  const candidates = [
+    candidate("bad"),
+    ...Array.from({ length: 11 }, (_, i) => candidate(`ok${i}`)),
+  ];
+  const started = performance.now();
+  const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "active" }, () =>
+    gatePassages("q", candidates, undefined, fake),
+  );
+  const elapsed = performance.now() - started;
+  assert.equal(result.length, 12);
+  assert.ok(elapsed < 500, `gate took ${elapsed}ms`);
+  assert.ok(calls <= 4, `burst reached ${calls} calls`);
+  assert.ok(cancelled >= 1, "in-flight siblings were not cancelled");
+});
+
 test("Cohere provider failure falls back to original ranking promptly", async () => {
   const docs = [candidate("a"), candidate("b")];
   const started = performance.now();

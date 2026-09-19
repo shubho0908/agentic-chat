@@ -44,6 +44,7 @@ export function mapProviderRerankResults(
     mapped.push({
       content: original.content,
       score: result.relevanceScore,
+      scoreOrigin: "rerank",
       metadata: original.metadata,
     });
   }

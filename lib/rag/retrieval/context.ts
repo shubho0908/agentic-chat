@@ -74,6 +74,14 @@ export function formatRetrievedContext(
     const id = result.metadata.chunkId ?? candidateKey(result);
     if (seen.has(id)) return [];
     seen.add(id);
+    // Raw lexical ranks are unbounded ordering signals, not normalized
+    // probabilities, so lexical-only evidence gets no match percentage
+    // instead of a clamped "100%". Bounded semantic similarities and
+    // reranker relevance scores stay displayable.
+    const displayScore =
+      kind === "coverage" || result.scoreOrigin === "lexical"
+        ? undefined
+        : result.score;
     return [
       {
         id,
@@ -81,8 +89,8 @@ export function formatRetrievedContext(
         relevance:
           kind === "coverage"
             ? "coverage-sample"
-            : relevanceForScore(result.score),
-        score: kind === "coverage" ? undefined : result.score,
+            : relevanceForScore(displayScore),
+        score: displayScore,
         page: result.metadata.page,
       },
     ];
@@ -377,6 +385,7 @@ export function mergeNeighborCandidates(
     values.push({
       content: row.content,
       score: parent.score,
+      scoreOrigin: parent.scoreOrigin,
       metadata: {
         attachmentId: row.attachment_id,
         fileName: row.file_name,

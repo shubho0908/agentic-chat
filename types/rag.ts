@@ -36,9 +36,15 @@ export interface RAGContextResult {
   }>;
 }
 
+/** Where a retrieval score came from. Only bounded similarity ("semantic")
+ * and reranker relevance ("rerank") values are honest to display as match
+ * percentages; raw lexical ranks are ordering signals, not probabilities. */
+export type RetrievalScoreOrigin = "semantic" | "lexical" | "rerank";
+
 export interface RerankDocument {
   content: string;
   score: number;
+  scoreOrigin?: RetrievalScoreOrigin;
   metadata: {
     attachmentId: string;
     fileName: string;
@@ -51,6 +57,7 @@ export interface RerankDocument {
 export interface RerankResult {
   content: string;
   score: number;
+  scoreOrigin?: RetrievalScoreOrigin;
   metadata: {
     attachmentId: string;
     fileName: string;

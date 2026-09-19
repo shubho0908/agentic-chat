@@ -1,5 +1,6 @@
 import type { RerankDocument, RerankResult } from "@/types/rag";
 import type { JevDecisionClient, JevEvaluateResult } from "./client";
+import { mapWithConcurrencyLimit } from "./concurrency";
 import { JevCheckpoint, type JevQuestions } from "./types";
 
 export const JEV_RERANK_SCHEMA_VERSION = "1.0.0";
@@ -22,39 +23,6 @@ const RERANK_QUESTIONS: JevQuestions = {
 export function mapJevRerankScore(result: JevEvaluateResult): number | null {
   const answer = result.answers.answers_query;
   return answer?.type === "noul" ? answer.noul : null;
-}
-
-/** Bounded fan-out with fail-fast cancellation: the first rejection aborts
- * every sibling in flight and stops new work, so an abandoned request never
- * keeps hitting the provider behind the caller's fallback. */
-async function mapWithConcurrencyLimit<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T, signal: AbortSignal) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  const abortController = new AbortController();
-  let next = 0;
-  let failed = false;
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (!failed && next < items.length) {
-        const index = next++;
-        try {
-          results[index] = await fn(items[index], abortController.signal);
-        } catch (error) {
-          failed = true;
-          abortController.abort(
-            error instanceof Error ? error : new Error(String(error)),
-          );
-          throw error;
-        }
-      }
-    },
-  );
-  await Promise.all(workers);
-  return results;
 }
 
 /** Scores the bounded shortlist; throws if any candidate fails or returns an
@@ -100,6 +68,7 @@ export async function rerankWithJev(
       return {
         content: doc.content,
         score,
+        scoreOrigin: "rerank" as const,
         metadata: doc.metadata,
       };
     },
