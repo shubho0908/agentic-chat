@@ -193,7 +193,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           queryText,
           connectedToolkits,
         );
-        if (queryText && !bypassSemanticCache && queryText.length >= MIN_CACHEABLE_QUERY_LENGTH) {
+        if (queryText && !bypassSemanticCache && queryText.trim().length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId);
             const cached = await searchSemanticCache(embedding, userId, conversationId);

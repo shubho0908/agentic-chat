@@ -3,6 +3,7 @@
 import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
 import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
+import { MIN_CACHEABLE_QUERY_LENGTH } from '@/lib/orchestrator/constants';
 import { logger } from '@/lib/logger';
 
 async function auth() {
@@ -22,8 +23,6 @@ interface CacheSaveResult {
   success: boolean;
   error?: string;
 }
-
-const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
 function shouldUseSemanticCache(query: string): boolean {
   return query.trim().length >= MIN_CACHEABLE_QUERY_LENGTH;

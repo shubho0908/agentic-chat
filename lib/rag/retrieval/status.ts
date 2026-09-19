@@ -43,20 +43,14 @@ export async function waitForDocumentProcessing(
   } = options;
 
   let currentInterval = pollInterval;
-  let previousCompletedCount = 0;
   const startedAt = Date.now();
 
   while (true) {
     const statuses = await getAttachmentStatuses(attachmentIds, options.userId);
     const partitioned = partitionByStatus(statuses);
-    
+
     const completedIds = extractIds(partitioned.completed);
     const stillProcessing = [...partitioned.processing, ...partitioned.pending];
-    const currentCompletedCount = completedIds.length;
-
-    if (currentCompletedCount > previousCompletedCount) {
-      previousCompletedCount = currentCompletedCount;
-    }
 
     if (stillProcessing.length === 0) {
       return completedIds;

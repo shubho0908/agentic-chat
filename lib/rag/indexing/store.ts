@@ -80,10 +80,12 @@ export async function addDocumentsToPgVector(
   );
 }
 
-export async function deleteDocumentChunks(attachmentId: string): Promise<void> {
+export async function deleteDocumentChunks(attachmentId: string, userId: string): Promise<void> {
   try {
     await prisma.$executeRaw`
-      DELETE FROM document_chunk WHERE metadata->>'attachmentId' = ${attachmentId}`;
+      DELETE FROM document_chunk
+      WHERE metadata->>'attachmentId' = ${attachmentId}
+        AND metadata->>'userId' = ${userId}`;
   } catch (error) {
     throw new RAGError(
       `Error deleting document chunks: ${error instanceof Error ? error.message : String(error)}`,

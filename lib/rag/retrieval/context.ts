@@ -39,8 +39,17 @@ function selectOverviewRows<T>(rows: T[], maxPerAttachment: number): T[] {
   return orderedIndexes.map((index) => rows[index]);
 }
 
+/** Honest citation bands from retrieval scores. Neighbors inherit their
+ * source result's score, so adjacency never invents relevance. */
+export function relevanceForScore(score: number | undefined): string {
+  if (score === undefined) return 'unknown';
+  if (score >= 0.8) return 'high';
+  if (score >= 0.5) return 'medium';
+  return 'low';
+}
+
 function formatRetrievedContext(
-  results: Array<{ content: string; metadata: { fileName: string; page?: number; attachmentId: string } }>
+  results: Array<{ content: string; score?: number; metadata: { fileName: string; page?: number; attachmentId: string } }>
 ): RAGContextResult {
   const usedAttachmentIds = Array.from(
     new Set(results.map((result) => result.metadata.attachmentId))
@@ -63,7 +72,7 @@ function formatRetrievedContext(
       return {
         id: `rag-${index}`,
         source: result.metadata.fileName,
-        relevance: 'high',
+        relevance: relevanceForScore(result.score),
         page: result.metadata.page,
       };
     })
@@ -77,6 +86,56 @@ function formatRetrievedContext(
     usedAttachmentIds,
     citations,
   };
+}
+
+/** Resets failed attachments, kicks their processing jobs, and waits for
+ * completion. Single home for the retry-and-wait sequence both scope
+ * resolutions share. Returns completed ids, never throws for missing work. */
+async function ensureAttachmentsProcessed(
+  attachmentIds: string[],
+  userId: string,
+  options: { processingTimeoutMs?: number; kickScope: string },
+): Promise<string[]> {
+  const statuses = await getAttachmentStatuses(attachmentIds, userId);
+  const partitioned = partitionByStatus(statuses);
+  const alreadyCompleted = extractIds(partitioned.completed);
+
+  const failedIds = extractIds(partitioned.failed);
+  if (failedIds.length > 0) {
+    await prisma.attachment.updateMany({
+      where: { id: { in: failedIds } },
+      data: { processingStatus: 'PENDING', processingError: null },
+    });
+    await prisma.$executeRaw`
+      DELETE FROM orchestration_job
+      WHERE type = 'document_process'
+        AND dedupe_key = ANY(${failedIds}::text[])
+        AND status = 'failed'`;
+  }
+
+  const retryableIds = extractIds([...partitioned.pending, ...partitioned.failed]);
+  if (retryableIds.length > 0) {
+    await Promise.allSettled(
+      retryableIds.map((attachmentId) =>
+        runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
+          logger.warn(`[RAG] Failed to kick off ${options.kickScope} document processing:`, {
+            attachmentId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        })
+      )
+    );
+  }
+
+  const needProcessing = extractIds([...partitioned.processing, ...partitioned.pending, ...partitioned.failed]);
+  if (needProcessing.length === 0) {
+    return alreadyCompleted;
+  }
+  const newlyCompleted = await waitForDocumentProcessing(needProcessing, {
+    timeoutMs: options.processingTimeoutMs,
+    userId,
+  });
+  return [...alreadyCompleted, ...newlyCompleted];
 }
 
 async function resolveCompletedAttachmentScope(
@@ -122,37 +181,11 @@ async function resolveCompletedAttachmentScope(
     const processingIds = extractIds([...partitioned.processing, ...partitioned.pending, ...partitioned.failed]);
 
     if (processingIds.length > 0 && waitForProcessing) {
-      const retryableIds = extractIds([...partitioned.pending, ...partitioned.failed]);
-      if (retryableIds.length > 0) {
-        const failedIds = extractIds(partitioned.failed);
-        if (failedIds.length > 0) {
-          await prisma.attachment.updateMany({
-            where: { id: { in: failedIds } },
-            data: { processingStatus: 'PENDING', processingError: null },
-          });
-          await prisma.$executeRaw`
-            DELETE FROM orchestration_job
-            WHERE type = 'document_process'
-              AND dedupe_key = ANY(${failedIds}::text[])
-              AND status = 'failed'`;
-        }
-        await Promise.allSettled(
-          retryableIds.map((attachmentId) =>
-            runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-              logger.warn('[RAG] Failed to kick off pending document processing:', {
-                attachmentId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            })
-          )
-        );
-      }
-
-      const newlyCompleted = await waitForDocumentProcessing(processingIds, {
-        timeoutMs: options.processingTimeoutMs,
-        userId,
+      const ensured = await ensureAttachmentsProcessed(processingIds, userId, {
+        processingTimeoutMs: options.processingTimeoutMs,
+        kickScope: 'pending',
       });
-      attachmentIds = [...completedIds, ...newlyCompleted];
+      attachmentIds = Array.from(new Set([...completedIds, ...ensured]));
     } else {
       attachmentIds = completedIds;
     }
@@ -172,37 +205,10 @@ async function resolveCompletedAttachmentScope(
     const alreadyCompleted = extractIds(partitioned.completed);
 
     if (needProcessing.length > 0) {
-      const retryableIds = extractIds([...partitioned.pending, ...partitioned.failed]);
-      if (retryableIds.length > 0) {
-        const failedIds = extractIds(partitioned.failed);
-        if (failedIds.length > 0) {
-          await prisma.attachment.updateMany({
-            where: { id: { in: failedIds } },
-            data: { processingStatus: 'PENDING', processingError: null },
-          });
-          await prisma.$executeRaw`
-            DELETE FROM orchestration_job
-            WHERE type = 'document_process'
-              AND dedupe_key = ANY(${failedIds}::text[])
-              AND status = 'failed'`;
-        }
-        await Promise.allSettled(
-          retryableIds.map((attachmentId) =>
-            runOrQueueDocumentProcessingJob(attachmentId, userId).catch((error) => {
-              logger.warn('[RAG] Failed to kick off provided document processing:', {
-                attachmentId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            })
-          )
-        );
-      }
-
-      const newlyCompleted = await waitForDocumentProcessing(needProcessing, {
-        timeoutMs: options.processingTimeoutMs,
-        userId,
+      completedAttachmentIds = await ensureAttachmentsProcessed(needProcessing, userId, {
+        processingTimeoutMs: options.processingTimeoutMs,
+        kickScope: 'provided',
       });
-      completedAttachmentIds = [...alreadyCompleted, ...newlyCompleted];
     } else {
       completedAttachmentIds = alreadyCompleted;
     }
@@ -308,10 +314,10 @@ export async function getDocumentOverviewContext(
 async function enrichWithNeighborChunks(
   results: Array<{ content: string; score: number; metadata: { attachmentId: string; fileName: string; page?: number } }>,
   userId: string
-): Promise<Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }>> {
+): Promise<Array<{ content: string; score: number; metadata: { attachmentId: string; fileName: string; page?: number } }>> {
   if (results.length === 0) return [];
 
-  const enriched: Array<{ content: string; metadata: { attachmentId: string; fileName: string; page?: number } }> = [];
+  const enriched: Array<{ content: string; score: number; metadata: { attachmentId: string; fileName: string; page?: number } }> = [];
   const seenContent = new Set<string>();
   const requestedTargets = results
     .flatMap((result, index) => {
@@ -403,6 +409,9 @@ async function enrichWithNeighborChunks(
     matchedOrds.add(row.ord);
     enriched.push({
       content: row.content,
+      // Neighbors inherit the score of the result they surround; adjacency
+      // is a proximity signal, not a fresh relevance judgment.
+      score: results[row.ord]?.score ?? 0,
       metadata: {
         attachmentId: row.attachment_id,
         fileName: row.file_name,
@@ -418,7 +427,7 @@ async function enrichWithNeighborChunks(
       const key = `${original.metadata.attachmentId}:${original.content.slice(0, 100)}`;
       if (!seenContent.has(key)) {
         seenContent.add(key);
-        enriched.push({ content: original.content, metadata: original.metadata });
+        enriched.push({ content: original.content, score: original.score, metadata: original.metadata });
       }
     }
   }

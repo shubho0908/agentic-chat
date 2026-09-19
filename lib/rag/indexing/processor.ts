@@ -226,7 +226,7 @@ export async function processDocument(
 
     try {
       if (canMutateAttachment) {
-        await deleteDocumentChunks(attachmentId);
+        await deleteDocumentChunks(attachmentId, userId);
       }
     } catch (cleanupError) {
       logError({
