@@ -35,6 +35,7 @@ import {
   mapJevDiagnosisResult,
   previewToolArgs,
 } from "@/lib/jev/toolRouter";
+import { jevHitlSignature } from "../jevHitl";
 
 type ToolCall = NonNullable<AIMessage["tool_calls"]>[number];
 
@@ -308,11 +309,27 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
 
     const dangerousCalls = toolCalls.filter((tc) => isDangerousAction(tc.name));
 
-    if (dangerousCalls.length > 0) {
+    // Jev HITL escalation (default off): the agent node evaluated this exact
+    // tool-call set in active mode and stored the verdict in graph state,
+    // keyed by signature, so this branch is identical across an interrupt
+    // resume and a denial can never be skipped. Jev can ADD human review;
+    // it can never suppress the deterministic blocklist.
+    let escalatedCalls = dangerousCalls;
+    if (escalatedCalls.length === 0) {
+      const verdict = state.jevHitlEscalation;
+      if (
+        verdict?.escalate &&
+        verdict.signature === jevHitlSignature(toolCalls)
+      ) {
+        escalatedCalls = [...toolCalls];
+      }
+    }
+
+    if (escalatedCalls.length > 0) {
       const approval: unknown = interrupt({
         type: HUMAN_IN_THE_LOOP_REQUEST_TYPE,
         requestKind: HumanInTheLoopRequestKind.APPROVAL,
-        toolCalls: dangerousCalls.map((tc) => ({
+        toolCalls: escalatedCalls.map((tc) => ({
           id: toolCallResultId(tc, toolCalls.indexOf(tc)),
           name: tc.name,
           args: tc.args,
@@ -325,7 +342,7 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
             (tc, index) =>
               new ToolMessage({
                 tool_call_id: toolCallResultId(tc, index),
-                content: dangerousCalls.some((dangerousCall) => dangerousCall === tc)
+                content: escalatedCalls.some((escalatedCall) => escalatedCall === tc)
                   ? `Action ${approval === HUMAN_IN_THE_LOOP_DENIED ? "denied" : "rejected"} by user.`
                   : "Skipped because another requested action was not approved.",
               })

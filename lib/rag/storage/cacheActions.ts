@@ -2,7 +2,9 @@
 
 import { headers } from 'next/headers';
 import { getAuthenticatedUser } from '@/lib/apiUtils';
-import { generateEmbedding, searchSemanticCache, addToSemanticCache } from './cache';
+import { generateEmbedding, searchSemanticCacheEntry, addToSemanticCache } from './cache';
+import { SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from './pgvectorClient';
+import { gateCacheHit, type JevCacheGateState } from '@/lib/jev/cacheGate';
 import { MIN_CACHEABLE_QUERY_LENGTH } from '@/lib/orchestrator/constants';
 import { logger } from '@/lib/logger';
 
@@ -51,15 +53,37 @@ export async function checkSemanticCacheAction(query: string, conversationId?: s
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);
-    const cachedResponse = await searchSemanticCache(queryEmbedding, user.id, conversationId);
+    const entry = await searchSemanticCacheEntry(queryEmbedding, user.id, conversationId);
 
     const latency = Date.now() - startTime;
 
-    if (cachedResponse) {
+    if (entry) {
+      // Jev cache gate: structural signals only, never query/answer content.
+      // Shadow logs and serves; active can veto a confident no-serve verdict;
+      // every failure path fails open to serving the hit.
+      const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
+      const gateState: JevCacheGateState = {
+        similarityScore: round4(entry.score),
+        similarityThreshold: SIMILARITY_THRESHOLD,
+        scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
+        cacheAgeSeconds: Math.max(
+          0,
+          Math.round((Date.now() - entry.createdAt.getTime()) / 1000),
+        ),
+        cacheTtlSeconds: CACHE_TTL_SECONDS,
+        entryScopedToConversation: entry.conversationId !== null,
+        queryLengthChars: query.length,
+        answerLengthChars: entry.answer.length,
+      };
+      const gate = await gateCacheHit(gateState, conversationId);
+      if (!gate.serve) {
+        logger.log(`[Cache] HIT vetoed by Jev gate in ${latency}ms`);
+        return { cached: false, latency };
+      }
       logger.log(`[Cache] HIT in ${latency}ms`);
       return {
         cached: true,
-        response: cachedResponse,
+        response: entry.answer,
         latency
       };
     }
