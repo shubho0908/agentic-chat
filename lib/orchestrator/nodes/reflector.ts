@@ -211,9 +211,18 @@ export function routeAfterAgent(state: AgentStateType): ToolRoute {
 
 const MAX_RECOVERY_ERROR_CHARS = 160;
 
-function firstLine(text: string): string {
-  const line = text.split("\n").find((l) => l.trim().length > 0) ?? "";
-  return line.trim().slice(0, MAX_RECOVERY_ERROR_CHARS);
+/** First line of a tool result that means something to the user. Skips the
+ * machine-readable failure envelope header and hint lines so internal
+ * markers never surface as the "error" of a guard-stopped turn. */
+function usefulErrorLine(text: string): string | null {
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("[tool-failure:")) continue;
+    if (line.startsWith("Hint:")) continue;
+    return line.slice(0, MAX_RECOVERY_ERROR_CHARS);
+  }
+  return null;
 }
 
 /** Deterministic closing message for a turn the guards stopped. Names the
@@ -238,8 +247,7 @@ export function buildRecoveryMessage(messages: BaseMessage[]): string {
     if (msg.type === "tool" && lastError === null) {
       const content = (msg as { content?: unknown }).content;
       if (typeof content === "string") {
-        const line = firstLine(content);
-        if (line) lastError = line;
+        lastError = usefulErrorLine(content);
       }
     }
   }

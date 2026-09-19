@@ -528,6 +528,36 @@ test("recovery message names pending tools and the last error", () => {
   assert.ok(text.includes("Tool execution failed: boom"));
 });
 
+test("recovery message shows the real error, never the failure-envelope marker", () => {
+  const enveloped = (callId: string) => [
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: callId, name: "get_refund", args: { id: "1" } }],
+    }),
+    new ToolMessage({
+      content:
+        "[tool-failure:unknown|retryable]\nTool execution failed: boom\nHint: Retry once. If it fails again, try a different call.",
+      tool_call_id: callId,
+      status: "error",
+    }),
+  ];
+  const messages = [
+    new HumanMessage("refund order 1"),
+    ...enveloped("c1"),
+    ...enveloped("c2"),
+    ...enveloped("c3"),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("Tool execution failed: boom"));
+  assert.ok(!text.includes("[tool-failure:"), "no internal marker");
+  assert.ok(!text.includes("Hint:"), "no hint line");
+});
+
 test("recovery message for the round limit mentions the step limit", () => {
   const messages = [
     new HumanMessage("do something"),
