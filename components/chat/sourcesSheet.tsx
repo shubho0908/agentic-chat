@@ -21,6 +21,32 @@ interface Citation {
   year?: string | number | null;
   url?: string | null;
   relevance?: string | null;
+  score?: number | null;
+  page?: number | null;
+}
+
+export function formatCitationScore(score?: number | null): string | null {
+  if (typeof score !== "number" || !Number.isFinite(score) || score < 0)
+    return null;
+  return `${Math.round(Math.min(1, score) * 100)}%`;
+}
+
+export function citationDetails(citation: Citation): {
+  score: string | null;
+  page: string | null;
+} {
+  return {
+    score:
+      citation.relevance === "coverage-sample"
+        ? null
+        : formatCitationScore(citation.score),
+    page:
+      typeof citation.page === "number" &&
+      Number.isInteger(citation.page) &&
+      citation.page > 0
+        ? `Page ${citation.page}`
+        : null,
+  };
 }
 
 interface SourcesSheetProps {
@@ -44,7 +70,7 @@ function SourcesSheetComponent({ citations, trigger }: SourcesSheetProps) {
             className="cursor-pointer hover:bg-secondary/80 transition-colors gap-1.5 focus:outline-none focus-visible:ring-0"
           >
             <BookOpen className="size-3" />
-            {citations.length} {citations.length === 1 ? 'Source' : 'Sources'}
+            {citations.length} {citations.length === 1 ? "Source" : "Sources"}
           </Badge>
         )}
       </SheetTrigger>
@@ -58,87 +84,107 @@ function SourcesSheetComponent({ citations, trigger }: SourcesSheetProps) {
               <span className="truncate">References & Sources</span>
             </SheetTitle>
             <SheetDescription className="text-xs sm:text-sm pt-1">
-              {citations.length} {citations.length === 1 ? 'citation' : 'citations'} from this search
+              {citations.length}{" "}
+              {citations.length === 1 ? "citation" : "citations"} from this
+              search
             </SheetDescription>
           </SheetHeader>
-          
+
           <ScrollArea className="flex-1 overflow-y-auto">
             <div className="px-4 sm:px-6 py-4 space-y-3">
-              {citations.map((citation, index) => (
-                <div
-                  key={citation.id || index}
-                  className="group relative rounded-xl border border-black/5 dark:border-white/10 shadow-sm bg-card/30 backdrop-blur-sm transition-all duration-200 ease-out hover:border-primary/30 hover:bg-card/50 hover:shadow-lg hover:-translate-y-0.5"
-                >
-                  <div className="flex gap-3 sm:gap-4 p-3 sm:p-4">
-                    <div className="flex-shrink-0 flex items-start pt-0.5">
-                      <div className="flex size-6 sm:size-7 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-xs sm:text-sm font-semibold text-primary ring-1 ring-primary/10">
-                        {index + 1}
+              {citations.map((citation, index) => {
+                const details = citationDetails(citation);
+                return (
+                  <div
+                    key={citation.id || index}
+                    className="group relative rounded-xl border border-black/5 dark:border-white/10 shadow-sm bg-card/30 backdrop-blur-sm transition-all duration-200 ease-out hover:border-primary/30 hover:bg-card/50 hover:shadow-lg hover:-translate-y-0.5"
+                  >
+                    <div className="flex gap-3 sm:gap-4 p-3 sm:p-4">
+                      <div className="flex-shrink-0 flex items-start pt-0.5">
+                        <div className="flex size-6 sm:size-7 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-xs sm:text-sm font-semibold text-primary ring-1 ring-primary/10">
+                          {index + 1}
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0 space-y-2.5 overflow-hidden">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
-                          <h4 className="text-sm sm:text-[15px] font-semibold leading-snug text-foreground tracking-tight break-words pr-1">
-                            {citation.source}
-                          </h4>
-                          
-                          {(citation.author || citation.year) && (
-                            <div className="flex items-center gap-2 text-xs sm:text-[13px] text-muted-foreground flex-wrap">
-                              {citation.author && (
-                                <span className="font-medium text-foreground/60 break-words">
-                                  {citation.author}
-                                </span>
-                              )}
-                              {citation.author && citation.year && (
-                                <span className="text-muted-foreground/40">•</span>
-                              )}
-                              {citation.year && (
-                                <span className="text-muted-foreground/80">{citation.year}</span>
-                              )}
-                            </div>
+
+                      <div className="flex-1 min-w-0 space-y-2.5 overflow-hidden">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
+                            <h4 className="text-sm sm:text-[15px] font-semibold leading-snug text-foreground tracking-tight break-words pr-1">
+                              {citation.source}
+                            </h4>
+
+                            {(citation.author || citation.year) && (
+                              <div className="flex items-center gap-2 text-xs sm:text-[13px] text-muted-foreground flex-wrap">
+                                {citation.author && (
+                                  <span className="font-medium text-foreground/60 break-words">
+                                    {citation.author}
+                                  </span>
+                                )}
+                                {citation.author && citation.year && (
+                                  <span className="text-muted-foreground/40">
+                                    •
+                                  </span>
+                                )}
+                                {citation.year && (
+                                  <span className="text-muted-foreground/80">
+                                    {citation.year}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {citation.url && (
+                            <Link
+                              href={citation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-shrink-0 flex items-center justify-center size-8 sm:size-9 rounded-lg border border-border/50 bg-background/50 text-primary transition-all duration-200 ease-out hover:bg-primary/10 hover:border-primary/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Open source"
+                            >
+                              <ExternalLink className="size-3.5 sm:size-4" />
+                            </Link>
                           )}
                         </div>
-                        
+
+                        {citation.relevance && (
+                          <div className="flex gap-2 sm:gap-2.5 items-start rounded-lg bg-muted/30 px-2.5 sm:px-3 py-2 sm:py-2.5 border border-border/30 overflow-hidden">
+                            <FileText className="size-3 sm:size-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
+                            <p className="text-xs sm:text-[13px] text-muted-foreground/90 leading-relaxed break-words">
+                              {citation.relevance}
+                            </p>
+                          </div>
+                        )}
+                        {(details.score || details.page) && (
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+                            {details.score && (
+                              <span>{details.score} match</span>
+                            )}
+                            {details.score && details.page && (
+                              <span aria-hidden="true">•</span>
+                            )}
+                            {details.page && <span>{details.page}</span>}
+                          </div>
+                        )}
+
                         {citation.url && (
-                          <Link
-                            href={citation.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-shrink-0 flex items-center justify-center size-8 sm:size-9 rounded-lg border border-border/50 bg-background/50 text-primary transition-all duration-200 ease-out hover:bg-primary/10 hover:border-primary/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label="Open source"
-                          >
-                            <ExternalLink className="size-3.5 sm:size-4" />
-                          </Link>
+                          <div className="pt-0.5 overflow-hidden">
+                            <Link
+                              href={citation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] sm:text-[12px] text-primary/60 hover:text-primary transition-colors block font-mono focus:outline-none focus-visible:underline break-all"
+                            >
+                              {citation.url}
+                            </Link>
+                          </div>
                         )}
                       </div>
-                      
-                      {citation.relevance && (
-                        <div className="flex gap-2 sm:gap-2.5 items-start rounded-lg bg-muted/30 px-2.5 sm:px-3 py-2 sm:py-2.5 border border-border/30 overflow-hidden">
-                          <FileText className="size-3 sm:size-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
-                          <p className="text-xs sm:text-[13px] text-muted-foreground/90 leading-relaxed break-words">
-                            {citation.relevance}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {citation.url && (
-                        <div className="pt-0.5 overflow-hidden">
-                          <Link
-                            href={citation.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] sm:text-[12px] text-primary/60 hover:text-primary transition-colors block font-mono focus:outline-none focus-visible:underline break-all"
-                          >
-                            {citation.url}
-                          </Link>
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         </div>

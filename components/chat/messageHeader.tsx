@@ -8,6 +8,8 @@ interface Citation {
   year?: string | number | null;
   url?: string | null;
   relevance?: string | null;
+  score?: number | null;
+  page?: number | null;
 }
 
 const EMPTY_CITATIONS: Citation[] = [];
@@ -52,10 +54,8 @@ export function MessageHeader({
           </span>
         )}
       </div>
-      
-      {hasCitations && (
-        <SourcesSheet citations={citations} />
-      )}
+
+      {hasCitations && <SourcesSheet citations={citations} />}
     </div>
   );
 }

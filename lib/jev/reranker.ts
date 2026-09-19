@@ -57,7 +57,6 @@ async function mapWithConcurrencyLimit<T, R>(
   return results;
 }
 
-
 /** Scores the bounded shortlist; throws if any candidate fails or returns an
  * invalid score so callers fall back to Cohere for the whole shortlist instead
  * of mixing incomparable score scales in one ranking. */
@@ -101,7 +100,6 @@ export async function rerankWithJev(
       return {
         content: doc.content,
         score,
-        originalScore: doc.score,
         metadata: doc.metadata,
       };
     },

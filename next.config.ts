@@ -24,7 +24,6 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: [
     "pdf-parse",
-    "mammoth",
     "tiktoken",
     "@langchain/community",
     "@langchain/textsplitters",
