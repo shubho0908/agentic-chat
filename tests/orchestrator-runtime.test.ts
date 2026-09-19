@@ -119,7 +119,10 @@ test("connector tool auth failures normalize per toolkit", async () => {
     ],
   }));
 
-  assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
+  assert.equal(
+    result.messages[0].content,
+    `[tool-failure:auth|terminal]\n${notConnectedMessage("gmail")}\nHint: Do not retry. Tell the user which account to reconnect.`
+  );
 });
 
 test("successful connector payloads with auth-like substrings are not rewritten as disconnected", async () => {
@@ -174,7 +177,10 @@ test("failed connector envelope with an auth error normalizes to a not-connected
     ],
   }));
 
-  assert.equal(result.messages[0].content, notConnectedMessage("github"));
+  assert.equal(
+    result.messages[0].content,
+    `[tool-failure:auth|terminal]\n${notConnectedMessage("github")}\nHint: Do not retry. Tell the user which account to reconnect.`
+  );
 });
 
 test("failed connector envelope with a non-auth error is passed through verbatim", async () => {
@@ -359,6 +365,119 @@ test("tool routing ignores tool calls from prior turns (before last HumanMessage
   ];
 
   // Only 1 tool round in current turn — should continue
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+function createFailingRound(callId: string, name: string, args: unknown): Array<AIMessage | ToolMessage> {
+  return [
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: callId, name, args: args as Record<string, unknown> },
+      ],
+    }),
+    new ToolMessage({
+      content: "Tool execution failed: boom",
+      tool_call_id: callId,
+      status: "error",
+    }),
+  ];
+}
+
+test("tool routing ends on three identical consecutive failures", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+});
+
+test("tool routing continues under the repeat threshold", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c3", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing ignores successes when counting repeats", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c2", name: "get_refund", args: { id: "1" } }],
+    }),
+    new ToolMessage({ content: "ok", tool_call_id: "c2" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing ends after three total-failure rounds", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "tool_a", {}),
+    ...createFailingRound("c2", "tool_b", {}),
+    ...createFailingRound("c3", "tool_c", {}),
+    createToolCallingMessage("c4"),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+});
+
+test("tool routing resets the streak on mixed rounds", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "tool_a", {}),
+    ...createFailingRound("c2", "tool_b", {}),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c3", name: "tool_c", args: {} }],
+    }),
+    new ToolMessage({ content: "ok", tool_call_id: "c3" }),
+    ...createFailingRound("c4", "tool_d", {}),
+    createToolCallingMessage("c5"),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing scopes failure guards to the current turn", () => {
+  const prior = [
+    ...createFailingRound("old-1", "get_refund", { id: "1" }),
+    ...createFailingRound("old-2", "get_refund", { id: "1" }),
+    ...createFailingRound("old-3", "get_refund", { id: "1" }),
+    ...createFailingRound("old-4", "get_refund", { id: "1" }),
+  ];
+  const messages = [
+    new HumanMessage("old question"),
+    ...prior,
+    new HumanMessage("new question"),
+    ...createFailingRound("new-1", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "new-2", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
   assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
 });
 

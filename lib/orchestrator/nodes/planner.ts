@@ -16,15 +16,13 @@ import { withRetry } from "@/lib/retry";
 import { JSON_ONLY_RESPONSE_PROMPT } from "@/lib/prompts";
 import {
   evaluatePlannerWithJev,
-  getJevMode,
-  JevCheckpoint,
-  JevDecisionClient,
-  JevFallbackReason,
-  JevMode,
-  logJevDecision,
   mapJevPlannerResult,
   type JevPlannerState,
-} from "@/lib/jev";
+} from "@/lib/jev/planner";
+import { getJevMode } from "@/lib/jev/config";
+import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient } from "@/lib/jev/client";
+import { logJevDecision } from "@/lib/jev/telemetry";
 import { createRequestId } from "@/lib/observability";
 
 export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
@@ -57,7 +55,7 @@ const JEV_SHADOW_TAIL_CONTENT_CHARS = 500;
 
 const jevClient = JevDecisionClient.createIfConfigured();
 
-function extractText(content: unknown): string {
+export function extractText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content

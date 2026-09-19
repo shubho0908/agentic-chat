@@ -3,15 +3,11 @@ import { CohereClientV2 } from 'cohere-ai';
 import { RAG_CONFIG } from '../config';
 import type { RerankDocument, RerankResult } from '@/types/rag';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import {
-  JevCheckpoint,
-  JevDecisionClient,
-  JevFallbackReason,
-  JevMode,
-  getJevMode,
-  logJevDecision,
-  rerankWithJev,
-} from '@/lib/jev';
+import { JevCheckpoint, JevFallbackReason, JevMode } from '@/lib/jev/types';
+import { JevDecisionClient } from '@/lib/jev/client';
+import { getJevMode } from '@/lib/jev/config';
+import { logJevDecision } from '@/lib/jev/telemetry';
+import { rerankWithJev } from '@/lib/jev/reranker';
 
 const jevClient = JevDecisionClient.createIfConfigured();
 
