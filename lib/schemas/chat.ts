@@ -114,6 +114,7 @@ const messageMetadataBaseSchema = z.object({
         url: z.string().optional(),
         relevance: z.string(),
         score: z.number().optional(),
+        page: z.number().int().positive().optional(),
       }),
     )
     .optional(),

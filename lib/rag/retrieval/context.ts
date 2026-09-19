@@ -356,6 +356,51 @@ export async function getDocumentOverviewContext(
   );
 }
 
+export function mergeNeighborCandidates(
+  results: RetrievalCandidate[],
+  neighborRows: Array<{
+    id: string;
+    content: string;
+    attachment_id: string;
+    file_name: string;
+    page: number | null;
+    char_start: number | null;
+    ord: number;
+  }>,
+  limit = RAG_CONFIG.search.maxEnrichedChunks,
+): RetrievalCandidate[] {
+  const grouped = new Map<number, RetrievalCandidate[]>();
+  for (const row of neighborRows) {
+    const parent = results[row.ord];
+    if (!parent) continue;
+    const values = grouped.get(row.ord) ?? [];
+    values.push({
+      content: row.content,
+      score: parent.score,
+      metadata: {
+        attachmentId: row.attachment_id,
+        fileName: row.file_name,
+        page: row.page ?? undefined,
+        charStart: row.char_start ?? undefined,
+        chunkId: row.id,
+      },
+    });
+    grouped.set(row.ord, values);
+  }
+  const ordered: RetrievalCandidate[] = [];
+  const seen = new Set<string>();
+  const append = (candidate: RetrievalCandidate) => {
+    const key = candidateKey(candidate);
+    if (!seen.has(key)) {
+      seen.add(key);
+      ordered.push(candidate);
+    }
+  };
+  results.forEach(append);
+  results.forEach((_, index) => (grouped.get(index) ?? []).forEach(append));
+  return ordered.slice(0, limit);
+}
+
 export async function enrichWithNeighborChunks(
   results: RetrievalCandidate[],
   userId: string,
@@ -382,38 +427,9 @@ export async function enrichWithNeighborChunks(
     ranked AS (SELECT COALESCE(chunk.metadata->>'chunkId', chunk.id::text) AS id,chunk.content,chunk.metadata->>'attachmentId' attachment_id,chunk.metadata->>'fileName' file_name,CASE WHEN chunk.metadata->>'page' ~ '^[0-9]+$' THEN (chunk.metadata->>'page')::int END page,CASE WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$' THEN (chunk.metadata->>'charStart')::int END char_start,target.ord,ABS((chunk.metadata->>'charStart')::int-target.target_start) distance,ROW_NUMBER() OVER(PARTITION BY target.ord ORDER BY ABS((chunk.metadata->>'charStart')::int-target.target_start),chunk.id) row_num FROM target JOIN document_chunk chunk ON chunk.metadata->>'attachmentId'=target.attachment_id AND chunk.metadata->>'userId'=${userId} WHERE chunk.metadata->>'charStart' ~ '^[0-9]+$')
     SELECT id,content,attachment_id,file_name,page,char_start,ord,distance FROM ranked WHERE row_num<=${RAG_CONFIG.search.neighborChunksPerHit + 1} ORDER BY ord,row_num`
     : [];
-  const grouped = new Map<number, RetrievalCandidate[]>();
-  for (const row of neighbors) {
-    const parent = results[row.ord];
-    const values = grouped.get(row.ord) ?? [];
-    values.push({
-      content: row.content,
-      score: parent.score,
-      metadata: {
-        attachmentId: row.attachment_id,
-        fileName: row.file_name,
-        page: row.page ?? undefined,
-        charStart: row.char_start ?? undefined,
-        chunkId: row.id,
-      },
-    });
-    grouped.set(row.ord, values);
-  }
-  const ordered: RetrievalCandidate[] = [];
-  const seen = new Set<string>();
-  const append = (candidate: RetrievalCandidate) => {
-    const key = candidateKey(candidate);
-    if (!seen.has(key)) {
-      seen.add(key);
-      ordered.push(candidate);
-    }
-  };
-  // Ranked hits always lead, preserving retrieval order and source coverage.
-  // Neighbors are appended afterward in parent-rank order, so one hit cannot
-  // consume the context budget before lower-ranked sources are represented.
-  results.forEach(append);
-  results.forEach((_, index) => (grouped.get(index) ?? []).forEach(append));
-  return ordered.slice(0, RAG_CONFIG.search.maxEnrichedChunks);
+  // Ranked hits lead; neighbors follow in parent-rank order. The pure helper
+  // makes ordering, de-duplication, and the hard cap independently testable.
+  return mergeNeighborCandidates(results, neighbors);
 }
 
 export async function getRAGContext(

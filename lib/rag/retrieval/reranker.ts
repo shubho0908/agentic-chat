@@ -9,8 +9,6 @@ import { getJevMode } from "@/lib/jev/config";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import { rerankWithJev } from "@/lib/jev/reranker";
 
-const jevClient = JevDecisionClient.createIfConfigured();
-
 /** Deterministic 50/50 bucket for A/B mode. Same key always lands in the
  * same arm so treatment and control stay comparable. Empty keys stay on
  * control so unkeyed traffic never changes behavior. */
@@ -25,7 +23,33 @@ function passthrough(documents: RerankDocument[]): RerankResult[] {
   }));
 }
 
-async function rerankWithCohere(
+export function mapProviderRerankResults(
+  documents: RerankDocument[],
+  results: Array<{ index: number; relevanceScore: number }>,
+): RerankResult[] {
+  const seen = new Set<number>();
+  const mapped: RerankResult[] = [];
+  for (const result of results) {
+    if (
+      !Number.isInteger(result.index) ||
+      result.index < 0 ||
+      result.index >= documents.length ||
+      seen.has(result.index) ||
+      !Number.isFinite(result.relevanceScore)
+    )
+      continue;
+    seen.add(result.index);
+    const original = documents[result.index];
+    mapped.push({
+      content: original.content,
+      score: result.relevanceScore,
+      metadata: original.metadata,
+    });
+  }
+  return mapped.length ? mapped : passthrough(documents);
+}
+
+export async function rerankWithCohere(
   apiKey: string,
   query: string,
   documents: RerankDocument[],
@@ -48,14 +72,7 @@ async function rerankWithCohere(
     return passthrough(documents);
   }
 
-  return response.results.map((result) => {
-    const originalDoc = documents[result.index];
-    return {
-      content: originalDoc.content,
-      score: result.relevanceScore,
-      metadata: originalDoc.metadata,
-    };
-  });
+  return mapProviderRerankResults(documents, response.results);
 }
 
 export async function rerankDocuments(
@@ -64,9 +81,11 @@ export async function rerankDocuments(
   options: {
     topN?: number;
     conversationId?: string;
+    cohereRerank?: typeof rerankWithCohere;
   } = {},
 ): Promise<RerankResult[]> {
   const apiKey = process.env.COHERE_API_KEY;
+  const jevClient = JevDecisionClient.createIfConfigured();
   const mode = getJevMode(JevCheckpoint.RERANK);
   const topN = Math.min(options.topN ?? documents.length, documents.length);
 
@@ -158,7 +177,12 @@ export async function rerankDocuments(
   }
 
   try {
-    return await rerankWithCohere(apiKey, query, documents, topN);
+    return await (options.cohereRerank ?? rerankWithCohere)(
+      apiKey,
+      query,
+      documents,
+      topN,
+    );
   } catch (error) {
     logError({
       event: "reranker_failed",

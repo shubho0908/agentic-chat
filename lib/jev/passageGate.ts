@@ -61,9 +61,10 @@ export async function gatePassages(
   query: string,
   candidates: RetrievalCandidate[],
   conversationId?: string,
+  dependency?: JevDecisionClient,
 ): Promise<RetrievalCandidate[]> {
   const mode = getJevMode(JevCheckpoint.PASSAGE_GATE);
-  const client = JevDecisionClient.createIfConfigured();
+  const client = dependency ?? JevDecisionClient.createIfConfigured();
   if (mode === JevMode.OFF || !client || !candidates.length) return candidates;
   const evaluated = await Promise.all(
     candidates.slice(0, MAX_CANDIDATES).map(async (candidate) => {

@@ -30,6 +30,35 @@ function getVectorStoreConfig() {
   };
 }
 
+export function buildStagedDocuments(
+  documents: Document[],
+  params: {
+    attachmentId: string;
+    userId: string;
+    stagingUserId: string;
+    indexingRunId: string;
+    fileName: string;
+    conversationId: string;
+    fileType?: string;
+  },
+): Document[] {
+  return documents.map((doc, index) => ({
+    ...doc,
+    metadata: {
+      ...doc.metadata,
+      chunkId: `${params.attachmentId}:${index}`,
+      attachmentId: params.attachmentId,
+      userId: params.stagingUserId,
+      targetUserId: params.userId,
+      indexingRunId: params.indexingRunId,
+      fileName: params.fileName,
+      fileType: params.fileType,
+      conversationId: params.conversationId,
+      timestamp: new Date().toISOString(),
+    },
+  }));
+}
+
 export async function replaceDocumentsInPgVector(
   documents: Document[],
   attachmentId: string,
@@ -44,21 +73,15 @@ export async function replaceDocumentsInPgVector(
     "rag-document-indexing",
     async () => {
       try {
-        const docsWithMetadata = documents.map((doc, index) => ({
-          ...doc,
-          metadata: {
-            ...doc.metadata,
-            chunkId: `${attachmentId}:${index}`,
-            attachmentId,
-            userId: stagingUserId,
-            targetUserId: userId,
-            indexingRunId,
-            fileName,
-            fileType,
-            conversationId,
-            timestamp: new Date().toISOString(),
-          },
-        }));
+        const docsWithMetadata = buildStagedDocuments(documents, {
+          attachmentId,
+          userId,
+          stagingUserId,
+          indexingRunId,
+          fileName,
+          conversationId,
+          fileType,
+        });
         const embeddings = await getEmbeddings(userId);
         await PGVectorStore.fromDocuments(
           docsWithMetadata,
