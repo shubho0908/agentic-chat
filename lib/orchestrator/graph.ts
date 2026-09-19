@@ -4,7 +4,7 @@ import { AgentState } from "./state";
 import { createAgentNode } from "./nodes/agent";
 import { createToolNode } from "./nodes/tools";
 import { createPlannerNode } from "./nodes/planner";
-import { routeAfterAgent } from "./nodes/reflector";
+import { routeAfterAgent, createRecoveryNode } from "./nodes/reflector";
 import { getCheckpointer } from "./checkpointer";
 import { getToolsForRequest } from "./tools";
 import { DEFAULT_MODEL } from "@/constants/openai-models";
@@ -32,10 +32,16 @@ export async function createAgentGraph(
     .addNode(GraphNode.PLANNER, createPlannerNode(tools, apiKey, model))
     .addNode(GraphNode.AGENT, createAgentNode(tools, apiKey, model, { thinkingEnabled }))
     .addNode(GraphNode.TOOLS, createToolNode(tools))
+    .addNode(GraphNode.RECOVERY, createRecoveryNode())
     .addEdge("__start__", GraphNode.PLANNER)
     .addEdge(GraphNode.PLANNER, GraphNode.AGENT)
-    .addConditionalEdges(GraphNode.AGENT, routeAfterAgent, { tools: GraphNode.TOOLS, [END]: END })
+    .addConditionalEdges(GraphNode.AGENT, routeAfterAgent, {
+      tools: GraphNode.TOOLS,
+      recovery: GraphNode.RECOVERY,
+      [END]: END,
+    })
     .addEdge(GraphNode.TOOLS, GraphNode.AGENT)
+    .addEdge(GraphNode.RECOVERY, END)
     .compile({ checkpointer });
 
   return graph;

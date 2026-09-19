@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { END } from "@langchain/langgraph";
 import { z } from "zod";
 
 import { toJsonValue } from "@/lib/json";
@@ -11,7 +10,11 @@ import { parsePaginationInteger } from "@/lib/pagination";
 import { encodeToolResult } from "@/lib/chat/streamingHelpers";
 import { reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
 import { createToolNode } from "@/lib/orchestrator/nodes/tools";
-import { routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
+import {
+  buildRecoveryMessage,
+  createRecoveryNode,
+  routeAfterAgent,
+} from "@/lib/orchestrator/nodes/reflector";
 import {
   ASK_USER_TOOL_NAME,
   filterToolsForContext,
@@ -349,7 +352,7 @@ test("tool routing stops after the configured number of request rounds", () => {
     createToolCallingMessage("call-final"),
   ];
 
-  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
 });
 
 test("tool routing ignores tool calls from prior turns (before last HumanMessage)", () => {
@@ -395,7 +398,7 @@ test("tool routing ends on three identical consecutive failures", () => {
     }),
   ];
 
-  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
 });
 
 test("tool routing continues under the repeat threshold", () => {
@@ -440,7 +443,7 @@ test("tool routing ends after three total-failure rounds", () => {
     createToolCallingMessage("c4"),
   ];
 
-  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
 });
 
 test("tool routing resets the streak on mixed rounds", () => {
@@ -479,6 +482,63 @@ test("tool routing scopes failure guards to the current turn", () => {
   ];
 
   assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("guard-stopped turns close with a resolved assistant message, not dangling tool calls", async () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
+
+  const node = createRecoveryNode();
+  const update = await node({ messages } as AgentStateType);
+  const finalMessage = update.messages[0] as AIMessage;
+  assert.equal(finalMessage.type, "ai");
+  assert.equal((finalMessage.tool_calls ?? []).length, 0);
+  const text = String(finalMessage.content);
+  assert.ok(text.includes("get_refund"), "names the failing tool");
+  assert.ok(
+    text.toLowerCase().includes("failing"),
+    "explains the stop to the user",
+  );
+});
+
+test("recovery message names pending tools and the last error", () => {
+  const messages = [
+    new HumanMessage("refund order 1"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("get_refund"));
+  assert.ok(text.includes("Tool execution failed: boom"));
+});
+
+test("recovery message for the round limit mentions the step limit", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...Array.from({ length: 15 }, (_, index) =>
+      createToolCallingMessage(`call-${index}`)
+    ),
+    createToolCallingMessage("call-final"),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("step limit"));
 });
 
 test("toJsonValue preserves metadata without throwing on circular or non-JSON values", () => {

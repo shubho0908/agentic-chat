@@ -123,6 +123,19 @@ export class JevDecisionClient {
       timeoutError.name = "AbortError";
       deadlineController.abort(timeoutError);
     }, deadlineMs);
+    const externalSignal = input.signal;
+    const onExternalAbort = () => {
+      const cancelError = new Error("Jev evaluation cancelled by caller");
+      cancelError.name = "AbortError";
+      deadlineController.abort(cancelError);
+    };
+    if (externalSignal?.aborted) {
+      onExternalAbort();
+    } else {
+      externalSignal?.addEventListener("abort", onExternalAbort, {
+        once: true,
+      });
+    }
     try {
       const raw = await withRetry((signal) => this.invoke(input, signal), {
         retries: MAX_RETRIES,
@@ -134,7 +147,10 @@ export class JevDecisionClient {
       breaker.recordSuccess();
       return { ...validated, latencyMs: Date.now() - startedAt };
     } catch (error) {
-      if (!(error instanceof JevInvalidResponseError)) {
+      // Caller-cancelled work says nothing about provider health; counting it
+      // would let one abandoned fan-out poison the breaker for later calls.
+      const externallyCancelled = externalSignal?.aborted === true;
+      if (!(error instanceof JevInvalidResponseError) && !externallyCancelled) {
         breaker.recordFailure();
       }
       logError({
@@ -147,6 +163,7 @@ export class JevDecisionClient {
       throw error;
     } finally {
       clearTimeout(deadlineTimer);
+      externalSignal?.removeEventListener("abort", onExternalAbort);
     }
   }
 

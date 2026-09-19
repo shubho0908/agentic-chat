@@ -119,6 +119,10 @@ export interface JevEvaluateInput {
   questions: JevQuestions;
   timeoutMs: number;
   traceContext: JevTraceContext;
+  /** Caller-side cancellation (e.g. a sibling fan-out call already failed).
+   * A call cancelled this way is not a provider failure: it does not count
+   * against the circuit breaker. */
+  signal?: AbortSignal;
 }
 
 /** Redacted envelope for shadow evaluation. Never carries raw state content. */

@@ -27,6 +27,41 @@ export interface JevToolRouterDecision {
   loopRisk: number;
 }
 
+/** Diagnosis preview that can never carry user content: argument keys are
+ * kept, every value is replaced by its type (strings by length only). Tool
+ * args for email, messaging, docs and sheets hold user-provided content, so
+ * the external diagnosis API gets the shape of the call, never the payload. */
+function previewValue(value: unknown, depth: number): unknown {
+  if (value === null || value === undefined) return "null";
+  if (Array.isArray(value)) return `array(${value.length})`;
+  switch (typeof value) {
+    case "string":
+      return `string(${value.length})`;
+    case "number":
+    case "boolean":
+      return typeof value;
+    case "object": {
+      if (depth >= 2) return "object";
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, v]) => [
+          key,
+          previewValue(v, depth + 1),
+        ]),
+      );
+    }
+    default:
+      return typeof value;
+  }
+}
+
+export function previewToolArgs(args: unknown): string {
+  try {
+    return (JSON.stringify(previewValue(args, 0)) ?? "null").slice(0, 200);
+  } catch {
+    return "unserializable";
+  }
+}
+
 export interface JevToolDiagnosisState {
   toolName: string;
   argsPreview: string;

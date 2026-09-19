@@ -205,10 +205,14 @@ async function resolveCompletedAttachmentScope(
     const alreadyCompleted = extractIds(partitioned.completed);
 
     if (needProcessing.length > 0) {
-      completedAttachmentIds = await ensureAttachmentsProcessed(needProcessing, userId, {
+      const ensured = await ensureAttachmentsProcessed(needProcessing, userId, {
         processingTimeoutMs: options.processingTimeoutMs,
         kickScope: 'provided',
       });
+      // Final scope is every completed id: files that were already done stay
+      // in scope alongside newly processed ones. Dropping either side
+      // silently excludes finished documents from retrieval.
+      completedAttachmentIds = Array.from(new Set([...alreadyCompleted, ...ensured]));
     } else {
       completedAttachmentIds = alreadyCompleted;
     }

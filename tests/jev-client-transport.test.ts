@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { JevDecisionClient, JevInvalidResponseError } from "@/lib/jev/client";
+import { getCircuitBreaker } from "@/lib/circuitBreaker";
 import { JevCheckpoint } from "@/lib/jev/types";
 
 function evalInput() {
@@ -122,6 +123,77 @@ test("evaluate sends the correct request shape", async () => {
     assert.equal(body.model, "jev-latest");
     assert.deepEqual(body.state, { msg: "hello" });
     assert.equal(body.questions.q.type, "noul");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("caller-cancelled evaluate rejects fast without counting against the breaker", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const breaker = getCircuitBreaker("jev-decision-client");
+
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    // Reset breaker accounting, then succeed.
+    return jsonResponse({
+      model: "jev-1.13.0",
+      answers: { q: { type: "noul", noul: 0.5 } },
+    });
+  }) as typeof fetch;
+
+  try {
+    // A success first so the failure counter starts at zero.
+    await client.evaluate(evalInput());
+    assert.ok(breaker.canAttempt());
+
+    const controller = new AbortController();
+    controller.abort();
+    fetchCalls = 0;
+    for (let i = 0; i < 5; i++) {
+      await assert.rejects(
+        client.evaluate({ ...evalInput(), signal: controller.signal }),
+        (error: unknown) =>
+          error instanceof Error && error.name === "AbortError",
+      );
+    }
+    assert.equal(fetchCalls, 0, "pre-cancelled calls never hit the network");
+    assert.ok(
+      breaker.canAttempt(),
+      "five caller-cancelled calls must not open the breaker (threshold is 5)",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("an abort arriving mid-flight cancels the request", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = ((input: unknown, init?: RequestInit) =>
+    new Promise<Response>((_, reject) => {
+      init?.signal?.addEventListener(
+        "abort",
+        () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        },
+        { once: true },
+      );
+    })) as unknown as typeof fetch;
+
+  try {
+    const controller = new AbortController();
+    const pending = client.evaluate({
+      ...evalInput(),
+      signal: controller.signal,
+    });
+    controller.abort();
+    await assert.rejects(pending, (error: unknown) =>
+      error instanceof Error && error.name === "AbortError",
+    );
   } finally {
     globalThis.fetch = original;
   }

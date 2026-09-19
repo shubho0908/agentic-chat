@@ -1,5 +1,7 @@
 import { END } from "@langchain/langgraph";
+import { AIMessage as AIMessageClass } from "@langchain/core/messages";
 import type { AIMessage, BaseMessage } from "@langchain/core/messages";
+import { GraphNode } from "../constants";
 import type { AgentStateType } from "../state";
 import { logger } from "@/lib/logger";
 import { createRequestId } from "@/lib/observability";
@@ -21,7 +23,7 @@ import { JevDecisionClient } from "@/lib/jev/client";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import { extractText } from "./planner";
 
-const MAX_TOOL_ROUNDS = 15;
+export const MAX_TOOL_ROUNDS = 15;
 
 const jevClient = JevDecisionClient.createIfConfigured();
 
@@ -160,7 +162,13 @@ function queueJevToolRouterShadow(
   }
 }
 
-export function routeAfterAgent(state: AgentStateType): "tools" | typeof END {
+type ToolRoute = "tools" | typeof GraphNode.RECOVERY | typeof END;
+
+/** The graph must never terminate on an AI message whose tool_calls went
+ * nowhere: the user would get silence instead of an answer. Every guard that
+ * stops tool execution routes to the recovery node, which closes the turn
+ * with a deterministic user-facing explanation. */
+export function routeAfterAgent(state: AgentStateType): ToolRoute {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage | undefined;
 
   if (!lastMessage?.tool_calls || lastMessage.tool_calls.length === 0) {
@@ -168,21 +176,24 @@ export function routeAfterAgent(state: AgentStateType): "tools" | typeof END {
   }
 
   const roundNumber = countToolRoundsSinceLastHuman(state.messages);
-  let route: "tools" | typeof END = "tools";
+  let route: ToolRoute = "tools";
   if (roundNumber >= MAX_TOOL_ROUNDS) {
-    route = END;
+    logger.warn("[ToolRouter] Round limit reached; recovering turn", {
+      roundNumber,
+    });
+    route = GraphNode.RECOVERY;
   } else {
     const rounds = failureRoundsSinceLastHuman(state.messages);
     if (hasIdenticalFailureLoop(rounds)) {
-      logger.warn("[ToolRouter] Identical failure loop; ending turn", {
+      logger.warn("[ToolRouter] Identical failure loop; recovering turn", {
         roundNumber,
       });
-      route = END;
+      route = GraphNode.RECOVERY;
     } else if (hasConsecutiveErrorStreak(rounds)) {
-      logger.warn("[ToolRouter] Consecutive error streak; ending turn", {
+      logger.warn("[ToolRouter] Consecutive error streak; recovering turn", {
         roundNumber,
       });
-      route = END;
+      route = GraphNode.RECOVERY;
     }
   }
 
@@ -190,10 +201,72 @@ export function routeAfterAgent(state: AgentStateType): "tools" | typeof END {
     queueJevToolRouterShadow(
       state.messages,
       roundNumber,
-      route,
+      route === "tools" ? "tools" : END,
       state.conversationId,
     );
   }
 
   return route;
+}
+
+const MAX_RECOVERY_ERROR_CHARS = 160;
+
+function firstLine(text: string): string {
+  const line = text.split("\n").find((l) => l.trim().length > 0) ?? "";
+  return line.trim().slice(0, MAX_RECOVERY_ERROR_CHARS);
+}
+
+/** Deterministic closing message for a turn the guards stopped. Names the
+ * work left pending and the last failure so the user knows what happened
+ * and how to proceed; no LLM call, so the recovery path can never fail. */
+export function buildRecoveryMessage(messages: BaseMessage[]): string {
+  const roundNumber = countToolRoundsSinceLastHuman(messages);
+
+  let pendingTools: string[] = [];
+  let lastError: string | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.type === "human") break;
+    if (msg.type === "ai" && pendingTools.length === 0) {
+      const toolCalls = (msg as AIMessage).tool_calls ?? [];
+      if (toolCalls.length > 0) {
+        pendingTools = toolCalls.map((tc) =>
+          typeof tc.name === "string" && tc.name ? tc.name : "a tool",
+        );
+      }
+    }
+    if (msg.type === "tool" && lastError === null) {
+      const content = (msg as { content?: unknown }).content;
+      if (typeof content === "string") {
+        const line = firstLine(content);
+        if (line) lastError = line;
+      }
+    }
+  }
+
+  const toolList =
+    pendingTools.length > 0 ? pendingTools.join(", ") : "the required tools";
+
+  if (roundNumber >= MAX_TOOL_ROUNDS) {
+    return (
+      `I hit the step limit for a single turn while working on this, with ${toolList} still pending, ` +
+      "so I stopped instead of churning. Ask me to continue and I will take it in smaller steps."
+    );
+  }
+
+  return (
+    `I could not complete this: ${toolList} kept failing across several attempts, so I stopped rather than loop forever.` +
+    (lastError ? ` Last error: ${lastError}.` : "") +
+    " Rephrase the request or ask me to try again."
+  );
+}
+
+/** Terminal node for guard-stopped turns: appends a plain assistant answer
+ * (no tool_calls) so every graph termination ends on a resolved message. */
+export function createRecoveryNode() {
+  return async (state: AgentStateType) => ({
+    messages: [
+      new AIMessageClass({ content: buildRecoveryMessage(state.messages) }),
+    ],
+  });
 }

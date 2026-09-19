@@ -33,6 +33,7 @@ import { logJevDecision } from "@/lib/jev/telemetry";
 import {
   evaluateToolDiagnosisWithJev,
   mapJevDiagnosisResult,
+  previewToolArgs,
 } from "@/lib/jev/toolRouter";
 
 type ToolCall = NonNullable<AIMessage["tool_calls"]>[number];
@@ -95,26 +96,16 @@ function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMes
   );
 }
 
-function previewArgs(args: unknown): string {
-  try {
-    return (JSON.stringify(args) ?? "null").slice(0, 200);
-  } catch {
-    return typeof args;
-  }
-}
-
-/** Best-effort Jev note on the first failure of the round. Runs only in
- * shadow mode and only for retryable kinds, bounded by the diagnosis
- * timeout. Terminal kinds and every failure path keep the deterministic
- * envelope untouched. */
-async function appendJevDiagnosis(
+/** Best-effort Jev note on the first failure of the round. Shadow is
+ * observe-only by contract: it never mutates the tool messages the agent
+ * will read, never throws, and its result lives only in decision telemetry. */
+async function runJevToolDiagnosis(
   toolCalls: ToolCall[],
   messages: ToolMessage[],
   history: AgentStateType["messages"],
   conversationId: string | undefined,
 ): Promise<void> {
   if (!jevClient) return;
-  if (getJevMode(JevCheckpoint.TOOL_ROUTER) !== JevMode.SHADOW) return;
 
   const byId = new Map(messages.map((m) => [m.tool_call_id, m]));
   const first = toolCalls
@@ -148,7 +139,7 @@ async function appendJevDiagnosis(
           typeof first.tc.name === "string" && first.tc.name
             ? first.tc.name
             : "tool",
-        argsPreview: previewArgs(first.tc.args),
+        argsPreview: previewToolArgs(first.tc.args),
         failureKind: kind,
         identicalFailureCount: trailingIdenticalFailureCount(
           failureRoundsSinceLastHuman(history),
@@ -173,16 +164,13 @@ async function appendJevDiagnosis(
       });
       return;
     }
-    target.content =
-      `${target.content} [jev: retry ${advice.retryWorthwhile < 0.5 ? "unlikely" : "likely"} ` +
-      `(${advice.retryWorthwhile.toFixed(2)}), suggested: ${advice.fixDirection}]`;
     logJevDecision({
       checkpoint: JevCheckpoint.TOOL_ROUTER,
       schemaVersion: "1.0.0",
       modelVersion: result.modelVersion,
       mode: JevMode.SHADOW,
       latencyMs: result.latencyMs,
-      outcome: `diagnosed_${advice.fixDirection}`,
+      outcome: `diagnosed_${advice.fixDirection}_retry_${advice.retryWorthwhile.toFixed(2)}`,
       fallbackUsed: false,
       inputTokens: result.usage?.input_tokens,
       outputTokens: result.usage?.output_tokens,
@@ -205,6 +193,30 @@ async function appendJevDiagnosis(
       requestId,
       conversationId,
     });
+  }
+}
+
+/** Fire-and-forget wrapper. A shadow diagnosis must never delay the tool
+ * node or change what the agent sees, so it is queued, never awaited, and
+ * every failure path is swallowed into telemetry. */
+function queueJevToolDiagnosis(
+  toolCalls: ToolCall[],
+  messages: ToolMessage[],
+  history: AgentStateType["messages"],
+  conversationId: string | undefined,
+): void {
+  if (getJevMode(JevCheckpoint.TOOL_ROUTER) !== JevMode.SHADOW) return;
+  try {
+    void runJevToolDiagnosis(
+      toolCalls,
+      messages,
+      history,
+      conversationId,
+    ).catch((error) =>
+      logger.warn("[ToolNode] Jev diagnosis failed:", error),
+    );
+  } catch (error) {
+    logger.warn("[ToolNode] Jev diagnosis failed:", error);
   }
 }
 /** Single choke point: every failure result leaving this node carries a
@@ -352,7 +364,7 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
       });
 
       const enveloped = [...sanitized, ...missing].map(wrapFailureEnvelope);
-      await appendJevDiagnosis(
+      queueJevToolDiagnosis(
         toolCalls,
         enveloped,
         state.messages,

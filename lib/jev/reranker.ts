@@ -24,12 +24,16 @@ export function mapJevRerankScore(result: JevEvaluateResult): number | null {
   return answer?.type === "noul" ? answer.noul : null;
 }
 
+/** Bounded fan-out with fail-fast cancellation: the first rejection aborts
+ * every sibling in flight and stops new work, so an abandoned request never
+ * keeps hitting the provider behind the caller's fallback. */
 async function mapWithConcurrencyLimit<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<R>,
+  fn: (item: T, signal: AbortSignal) => Promise<R>,
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
+  const abortController = new AbortController();
   let next = 0;
   let failed = false;
   const workers = Array.from(
@@ -38,9 +42,12 @@ async function mapWithConcurrencyLimit<T, R>(
       while (!failed && next < items.length) {
         const index = next++;
         try {
-          results[index] = await fn(items[index]);
+          results[index] = await fn(items[index], abortController.signal);
         } catch (error) {
           failed = true;
+          abortController.abort(
+            error instanceof Error ? error : new Error(String(error)),
+          );
           throw error;
         }
       }
@@ -71,7 +78,7 @@ export async function rerankWithJev(
   const scored = await mapWithConcurrencyLimit(
     documents,
     JEV_RERANK_MAX_CONCURRENCY,
-    async (doc): Promise<RerankResult> => {
+    async (doc, signal): Promise<RerankResult> => {
       const result = await client.evaluate({
         checkpoint: JevCheckpoint.RERANK,
         schemaVersion: JEV_RERANK_SCHEMA_VERSION,
@@ -82,6 +89,7 @@ export async function rerankWithJev(
         questions: RERANK_QUESTIONS,
         timeoutMs: JEV_RERANK_TIMEOUT_MS,
         traceContext,
+        signal,
       });
       if (modelVersion === null || modelVersion === "unknown") {
         modelVersion = result.modelVersion;

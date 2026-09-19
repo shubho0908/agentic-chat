@@ -6,6 +6,7 @@ import {
   JEV_TOOL_DIAGNOSIS_QUESTIONS,
   mapJevDiagnosisResult,
   mapJevToolRouterResult,
+  previewToolArgs,
 } from "@/lib/jev/toolRouter";
 import type { JevEvaluateResult } from "@/lib/jev/client";
 
@@ -98,4 +99,35 @@ test("mapJevDiagnosisResult maps valid advice and rejects the rest", () => {
     null,
   );
   assert.equal(mapJevDiagnosisResult(fakeResult({})), null);
+});
+
+test("previewToolArgs keeps shape but never leaks user content", () => {
+  const preview = previewToolArgs({
+    to: "secret.person@example.com",
+    subject: "Confidential: layoffs plan",
+    body: "x".repeat(500),
+    count: 3,
+    draft: true,
+    nested: { html: "<p>do not leak</p>", items: [1, 2, 3] },
+  });
+
+  assert.ok(preview.length <= 200);
+  assert.ok(preview.includes('"to":"string(25)"'));
+  assert.ok(preview.includes('"body":"string(500)"'));
+  assert.ok(preview.includes('"count":"number"'));
+  assert.ok(preview.includes('"items":"array(3)"'));
+  for (const leaked of [
+    "secret.person",
+    "layoffs",
+    "xxxx",
+    "do not leak",
+  ]) {
+    assert.ok(!preview.includes(leaked), `must not contain: ${leaked}`);
+  }
+});
+
+test("previewToolArgs collapses deep objects so circular input cannot recurse", () => {
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+  assert.equal(previewToolArgs(circular), '{"self":{"self":"object"}}');
 });
