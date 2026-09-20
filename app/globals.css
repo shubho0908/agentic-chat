@@ -301,6 +301,27 @@
     }
   }
 
+  @keyframes pixel-on {
+    0%, 100% {
+      opacity: 0.15;
+    }
+    18%, 42% {
+      opacity: 1;
+    }
+    62% {
+      opacity: 0.15;
+    }
+  }
+
+  @keyframes shimmer-text {
+    from {
+      background-position: 150% center;
+    }
+    to {
+      background-position: -50% center;
+    }
+  }
+
   @keyframes gradient-shift {
     0%, 100% {
       background-position: 0% 50%;
