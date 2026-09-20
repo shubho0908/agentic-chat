@@ -77,7 +77,7 @@ export function ConnectorsSubmenuContent({ onActionComplete, filter }: Connector
             disabled={isStatusLoading || isMutating}
           >
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-black/10 bg-white dark:border-border/40 dark:bg-background">
                 <Icon className="size-4" />
               </span>
               <span className="font-medium text-sm truncate">

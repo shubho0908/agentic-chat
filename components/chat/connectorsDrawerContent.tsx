@@ -61,7 +61,7 @@ export function ConnectorsDrawerContent() {
               "relative flex flex-col items-center gap-2.5 p-3.5 rounded-xl border transition-all duration-200",
               isConnected
                 ? "border-primary/20 bg-primary/5"
-                : "border-border/50 bg-card"
+                : "border-black/10 bg-white dark:border-border/50 dark:bg-card"
             )}
           >
             {isConnected && (
@@ -72,7 +72,7 @@ export function ConnectorsDrawerContent() {
               "flex size-10 items-center justify-center rounded-lg",
               isConnected
                 ? "bg-primary/10"
-                : "bg-muted/40"
+                : "bg-black/[0.05] dark:bg-muted/40"
             )}>
               <Icon className="size-5" />
             </div>

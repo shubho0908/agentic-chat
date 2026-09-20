@@ -102,10 +102,9 @@ export function ModelPicker({
                 disabled={disabled}
                 aria-label="Select model"
                 className={cn(
-                  "group flex h-9 items-center gap-1.5 rounded-full border border-black/5 bg-black/[0.04] px-3",
-                  "dark:border-white/10 dark:bg-white/[0.06]",
+                  "group flex h-9 items-center gap-1.5 rounded-full bg-transparent px-2",
                   "text-[13px] font-medium text-foreground/80 transition-colors",
-                  "hover:bg-black/[0.07] hover:text-foreground dark:hover:bg-white/[0.1]",
+                  "hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.08]",
                   "active:scale-[0.97] transition-transform",
                   "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
@@ -125,7 +124,7 @@ export function ModelPicker({
       </TooltipProvider>
 
       <DropdownMenuContent
-        className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/40 bg-background/95 p-1.5 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+        className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-[rgb(244_244_247)] dark:border-border/40 dark:bg-background/95 p-1.5 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
         align="end"
         side="top"
         sideOffset={8}
@@ -152,19 +151,21 @@ export function ModelPicker({
                 className={cn(
                   "mb-1 flex items-center gap-3 rounded-xl px-2.5 py-2.5 last:mb-0",
                   "transition-colors",
-                  isSelected ? "bg-muted/80 shadow-sm" : "hover:bg-muted/40"
+                  isSelected
+                    ? "bg-black/[0.06] shadow-sm dark:bg-muted/80"
+                    : "hover:bg-black/[0.05] has-[[data-highlighted]]:bg-black/[0.05] dark:hover:bg-muted/40 dark:has-[[data-highlighted]]:bg-muted/40"
                 )}
               >
                 <DropdownMenuItem
                   onSelect={() => onModelSelect(model.id)}
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-0 py-0 text-left text-[13px] outline-none focus:bg-transparent focus:text-inherit focus-visible:ring-1 focus-visible:ring-ring"
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-0 py-0 text-left text-[13px] outline-none focus:bg-transparent focus:text-inherit"
                 >
                   <div
                     className={cn(
                       "flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors",
                       isSelected
-                        ? "border-border/60 bg-background text-foreground shadow-sm"
-                        : "border-border/20 bg-background/50 text-muted-foreground"
+                        ? "border-black/15 bg-white text-foreground shadow-sm dark:border-border/60 dark:bg-background"
+                        : "border-black/10 bg-white text-muted-foreground dark:border-border/20 dark:bg-background/50"
                     )}
                   >
                     <OpenAIIcon className="size-3.5" />
@@ -214,8 +215,8 @@ export function ModelPicker({
                     className={cn(
                       "flex h-7 shrink-0 cursor-pointer items-center gap-0.5 rounded-lg px-2",
                       "text-[12px] font-medium text-muted-foreground/80",
-                      "transition-colors hover:bg-muted hover:text-foreground",
-                      "data-[state=open]:bg-muted data-[state=open]:text-foreground",
+                      "transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-muted",
+                      "data-[state=open]:bg-black/[0.06] data-[state=open]:text-foreground dark:data-[state=open]:bg-muted",
                       "[&>svg]:!size-3 [&>svg]:opacity-50 [&>svg]:ml-0.5"
                     )}
                   >
@@ -223,7 +224,7 @@ export function ModelPicker({
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent
-                      className="w-[min(240px,calc(100vw-2rem))] rounded-2xl border-border/40 bg-background/95 p-1.5 shadow-xl backdrop-blur-xl"
+                      className="w-[min(240px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-[rgb(244_244_247)] dark:border-border/40 dark:bg-background/95 p-1.5 shadow-xl backdrop-blur-xl"
                       sideOffset={6}
                       collisionPadding={12}
                     >
@@ -242,8 +243,8 @@ export function ModelPicker({
                               "mb-0.5 flex items-center gap-3 rounded-xl p-2.5 last:mb-0",
                               "cursor-pointer transition-colors outline-none",
                               isEffortSelected
-                                ? "bg-muted/80 text-foreground shadow-sm"
-                                : "hover:bg-muted/40 focus:bg-muted/40"
+                                ? "bg-black/[0.06] text-foreground shadow-sm dark:bg-muted/80"
+                                : "hover:bg-black/[0.05] focus:bg-black/[0.05] dark:hover:bg-muted/40 dark:focus:bg-muted/40"
                             )}
                           >
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">

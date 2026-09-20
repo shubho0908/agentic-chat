@@ -54,7 +54,7 @@ const DrawerContent = ({
       className={cn(
         "fixed inset-x-0 bottom-0 z-50 flex h-auto flex-col",
         variant === "default" &&
-          "mt-24 rounded-t-3xl border border-black/5 bg-background/95 shadow-[var(--shadow-apple)] supports-[backdrop-filter]:bg-background/80 backdrop-blur-2xl dark:border-white/10",
+          "mt-24 rounded-t-3xl border border-black/10 bg-[rgb(244_244_247)] shadow-[var(--shadow-apple)] supports-[backdrop-filter]:bg-[rgb(244_244_247)]/90 backdrop-blur-2xl dark:border-white/10 dark:bg-background/95 dark:supports-[backdrop-filter]:bg-background/80",
         variant === "bare" && "inset-y-0",
         className
       )}

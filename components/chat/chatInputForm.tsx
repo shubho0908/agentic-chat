@@ -117,8 +117,8 @@ export function ChatInputForm({
   const isOverLimit = input.length >= maxLength;
 
   const textareaClassName = centered
-    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[17px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
-    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[7px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground";
+    ? "min-h-[60px] max-h-[280px] w-full resize-none border-0 bg-transparent shadow-none px-2 py-[17px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0"
+    : "min-h-[40px] max-h-[280px] w-full resize-none border-0 bg-transparent shadow-none px-2 py-[7px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0";
 
   const buttonSize = centered ? "large" : "default";
 
@@ -174,18 +174,30 @@ export function ChatInputForm({
                 fileCount={selectedFiles.length}
               />
             </div>
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => onInputChange(e.target.value)}
-              onKeyDown={onKeyDown}
-              onInput={onInput}
-              onPaste={onPaste}
-              placeholder={placeholder}
-              disabled={disabled || isLoading || isUploading || isSending}
-              rows={1}
-              className={textareaClassName}
-            />
+            <div className="relative min-w-0 flex-1">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                onInput={onInput}
+                onPaste={onPaste}
+                aria-label={placeholder}
+                disabled={disabled || isLoading || isUploading || isSending}
+                rows={1}
+                className={textareaClassName}
+              />
+              {input.length === 0 && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-2"
+                >
+                  <span className="block w-full truncate text-base leading-relaxed text-muted-foreground">
+                    {placeholder}
+                  </span>
+                </span>
+              )}
+            </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <ModelPicker
                 selectedModel={selectedModel}
