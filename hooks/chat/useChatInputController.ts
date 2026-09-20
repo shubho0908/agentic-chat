@@ -163,7 +163,6 @@ export function useChatInputController({
     setInput,
     textareaRef,
     handleKeyDown,
-    handleInput,
     clearInput,
   } = useChatTextarea(sendMessage);
 
@@ -445,7 +444,6 @@ export function useChatInputController({
         }
       },
       onKeyDown: handleKeyDown,
-      onInput: handleInput,
       onPaste: handlePaste,
       onRemoveFile: handleRemoveFile,
       onRemoveSnippet: removeTextSnippet,
