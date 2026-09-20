@@ -255,6 +255,11 @@ export async function handleRegenerateResponse(
 
     if (responseIncomplete) {
       messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
+        )
+      );
     }
 
     const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);

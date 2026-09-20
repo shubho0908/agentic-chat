@@ -282,6 +282,11 @@ export async function handleEditMessage(
 
     if (responseIncomplete) {
       messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+        )
+      );
     }
 
     const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
