@@ -4,11 +4,27 @@
 # Without --yes it only shows what WOULD be deleted (dry-run).
 set -euo pipefail
 
-PROJECT="${1:-agentic-chat}"
-CONFIRM="${2:-}"
+PROJECT="agentic-chat"
+CONFIRM=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --yes) CONFIRM="--yes" ;;
+    -h|--help)
+      sed -n '2,4p' "$0"
+      exit 0
+      ;;
+    *) PROJECT="$arg" ;;
+  esac
+done
 
 echo "Fetching previews for $PROJECT (newest first)..."
-OUT=$(vercel list "$PROJECT" --yes 2>&1 | grep -v ExperimentalWarning | grep -v trace-warnings || true)
+if ! OUT=$(vercel list "$PROJECT" --yes 2>&1); then
+  echo "ERROR: 'vercel list $PROJECT' failed (auth, network, or unknown project?). Aborting." >&2
+  echo "$OUT" | grep -v ExperimentalWarning | grep -v trace-warnings || true >&2
+  exit 1
+fi
+OUT=$(echo "$OUT" | grep -v ExperimentalWarning | grep -v trace-warnings || true)
 
 # Extract preview URLs in order, newest first
 PREVIEWS=$(echo "$OUT" | awk '/vercel\.app/ && /Preview/ && !/Age/ {for(i=1;i<=NF;i++) if ($i ~ /^https:\/\/.*vercel\.app$/) print $i}' | awk '!seen[$0]++')
@@ -35,10 +51,26 @@ if [ "$CONFIRM" != "--yes" ]; then
   exit 0
 fi
 
-echo "$DELETE" | while read -r url; do
+FAILED=0
+while IFS= read -r url; do
   [ -z "$url" ] && continue
   echo "rm $url"
-  vercel rm "$url" --safe --yes 2>&1 | grep -v ExperimentalWarning | grep -v trace-warnings || echo "  SKIP (aliased/protected)"
+  RM_OUT=$(vercel rm "$url" --safe --yes 2>&1)
+  RM_STATUS=$?
+  echo "$RM_OUT" | grep -v ExperimentalWarning | grep -v trace-warnings || true
+  if [ "$RM_STATUS" -eq 0 ]; then
+    echo "  OK"
+  elif echo "$RM_OUT" | grep -q "Could not find unaliased"; then
+    echo "  SKIP (has active alias, protected by --safe)"
+  else
+    echo "  FAILED (exit $RM_STATUS)"
+    FAILED=$((FAILED + 1))
+  fi
   sleep 1
-done
+done <<< "$DELETE"
+
+if [ "$FAILED" -gt 0 ]; then
+  echo "Done with $FAILED failure(s) - storage may not be fully reclaimed." >&2
+  exit 1
+fi
 echo "Done."
