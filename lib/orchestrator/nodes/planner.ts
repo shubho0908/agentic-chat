@@ -7,6 +7,7 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { PlanComplexity, CustomEventName } from "../constants";
 import type { PlanComplexityValue } from "../constants";
 import { logger } from "@/lib/logger";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   getChatReasoningEffort,
   getSupportedTemperature,
@@ -198,24 +199,32 @@ export function createPlannerNode(
   tools: DynamicStructuredTool[],
   apiKey: string,
   model: string,
+  options: { reasoningEffort?: ReasoningEffortLevel | null } = {},
 ) {
   const toolNames = tools.map((t) => t.name);
   const toolNameSet = new Set(toolNames);
 
-  const reasoningEffort = getChatReasoningEffort(model, false);
+  const resolvedEffort = getChatReasoningEffort(model, options.reasoningEffort);
   const supportedTemperature = getSupportedTemperature(model, 0);
+
+  // Reasoning models count reasoning tokens against max_completion_tokens,
+  // so leave headroom when the planner is asked to think.
+  const plannerMaxTokens =
+    resolvedEffort && resolvedEffort !== "none" && resolvedEffort !== "minimal"
+      ? 1024
+      : 150;
 
   const llm = new ChatOpenAI({
     modelName: model,
     apiKey,
-    maxTokens: 150,
+    maxTokens: plannerMaxTokens,
     timeout: PLANNER_TIMEOUT_MS,
     ...(supportedTemperature !== undefined
       ? { temperature: supportedTemperature }
       : {}),
-    ...(reasoningEffort && reasoningEffort !== "none"
-      ? { reasoning: { effort: reasoningEffort } }
-      : reasoningEffort === "none"
+    ...(resolvedEffort && resolvedEffort !== "none"
+      ? { reasoning: { effort: resolvedEffort } }
+      : resolvedEffort === "none"
         ? { reasoningEffort: "none" }
         : {}),
   });

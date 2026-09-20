@@ -6,12 +6,13 @@ import {
 } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
-import { FileUploadButton } from "./fileUploadButton";
 import { ToolsMenu } from "./toolsMenu";
+import { ModelPicker } from "./modelPicker";
 import { FilePreview } from "./filePreview";
 import { TextSnippetPreview, type TextSnippet } from "./textSnippetPreview";
 import { DropZone } from "./dropZone";
-import type { ToolId } from "@/lib/tools/config";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
+import type { ReasoningEffortMap } from "@/lib/storage";
 import type { DragState } from "@/hooks/useDragAndDrop";
 import type { UploadPhase } from "@/hooks/useChatFileUpload";
 import { VALIDATION_LIMITS } from "@/constants/validation";
@@ -26,9 +27,9 @@ interface FormState {
   getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
   disabled: boolean;
-  activeTool: ToolId | null;
   memoryEnabled: boolean;
-  thinkingEnabled: boolean;
+  effortByModel: ReasoningEffortMap;
+  selectedModel: string;
 }
 
 interface FormHandlers {
@@ -39,12 +40,11 @@ interface FormHandlers {
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
-  onToolSelected: (toolId: ToolId) => void;
   onMemoryToggle: (enabled: boolean) => void;
-  onThinkingToggle?: (enabled: boolean) => void;
+  onReasoningEffortChange: (modelId: string, effort: ReasoningEffortLevel) => void;
+  onModelSelect: (modelId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
-  onAuthRequired?: () => void;
 }
 
 interface ChatInputFormProps {
@@ -87,9 +87,9 @@ export function ChatInputForm({
     getFilePreviewUrl,
     isSending,
     disabled,
-    activeTool,
     memoryEnabled,
-    thinkingEnabled,
+    effortByModel,
+    selectedModel,
   } = state;
   const {
     onSubmit,
@@ -99,12 +99,11 @@ export function ChatInputForm({
     onPaste,
     onRemoveFile,
     onRemoveSnippet,
-    onToolSelected,
     onMemoryToggle,
-    onThinkingToggle,
+    onReasoningEffortChange,
+    onModelSelect,
     onFilesSelected,
     onStop,
-    onAuthRequired,
   } = handlers;
 
   const visibleFiles = useMemo(() => {
@@ -122,11 +121,10 @@ export function ChatInputForm({
   const isOverLimit = input.length >= maxLength;
 
   const textareaClassName = centered
-    ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
-    : "min-h-[88px] max-h-[280px] resize-none border-0 bg-transparent px-5 py-4 pr-24 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
+    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-2.5 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
 
   const buttonSize = centered ? "large" : "default";
-  const buttonPosition = centered ? "bottom-3 right-3" : "bottom-2 right-2";
 
   return (
     <form onSubmit={onSubmit} className="relative">
@@ -152,70 +150,64 @@ export function ChatInputForm({
             disabled={isSending}
             isUploading={isUploading}
           />
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            onInput={onInput}
-            onPaste={onPaste}
-            placeholder={placeholder}
-            disabled={disabled || isLoading || isUploading || isSending}
-            rows={1}
-            className={textareaClassName}
-          />
-
           {showCounter && (
             <div
-              className={`px-5 pb-1 text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}
+              className={`px-5 pb-1 text-right text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}
             >
               {input.length.toLocaleString()} / {maxLength.toLocaleString()}
             </div>
           )}
 
-          <div className={`absolute ${buttonPosition} flex items-center gap-1`}>
-            <div className="hidden md:block">
-              <FileUploadButton
-                disabled={
-                  disabled ||
-                  isLoading ||
-                  isUploading ||
-                  isSending ||
-                  maxFilesReached
-                }
-                onFilesSelected={onFilesSelected}
-                fileCount={selectedFiles.length}
-              />
-            </div>
-            <div className="mr-1">
+          <div
+            className={`flex items-end gap-1 ${
+              centered ? "px-3 pb-3 pt-1" : "px-2.5 pb-2.5 pt-1"
+            }`}
+          >
+            <div className="shrink-0">
               <ToolsMenu
                 disabled={disabled || isLoading || isUploading || isSending}
-                onToolSelected={onToolSelected}
-                activeTool={activeTool}
                 memoryEnabled={memoryEnabled}
                 onMemoryToggle={onMemoryToggle}
-                thinkingEnabled={thinkingEnabled}
-                onThinkingToggle={onThinkingToggle}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
-                onAuthRequired={onAuthRequired}
               />
             </div>
-            <ActionButtons
-              status={
-                isLoading
-                  ? "loading"
-                  : isUploading
-                    ? "uploading"
-                    : isSending
-                      ? "sending"
-                      : "idle"
-              }
-              disabled={disabled}
-              hasInput={!!input.trim() || textSnippets.length > 0}
-              onStop={onStop}
-              size={buttonSize}
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              onInput={onInput}
+              onPaste={onPaste}
+              placeholder={placeholder}
+              disabled={disabled || isLoading || isUploading || isSending}
+              rows={1}
+              className={textareaClassName}
             />
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ModelPicker
+                selectedModel={selectedModel}
+                effortByModel={effortByModel}
+                onModelSelect={onModelSelect}
+                onEffortChange={onReasoningEffortChange}
+                disabled={disabled || isLoading || isUploading || isSending}
+              />
+              <ActionButtons
+                status={
+                  isLoading
+                    ? "loading"
+                    : isUploading
+                      ? "uploading"
+                      : isSending
+                        ? "sending"
+                        : "idle"
+                }
+                disabled={disabled}
+                hasInput={!!input.trim() || textSnippets.length > 0}
+                onStop={onStop}
+                size={buttonSize}
+              />
+            </div>
           </div>
         </div>
       </DropZone>

@@ -1,4 +1,5 @@
 import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
@@ -27,7 +28,7 @@ export async function handleEditMessage(
   context: EditMessageContext,
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -227,7 +228,7 @@ export async function handleEditMessage(
         }
       },
       memoryEnabled: memoryEnabled ?? true,
-      thinkingEnabled,
+      reasoningEffort,
       onThinking: (delta) => {
         thinkingBuffer += delta;
         onMessagesUpdate((prev) =>

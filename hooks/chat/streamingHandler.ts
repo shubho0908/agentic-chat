@@ -1,4 +1,5 @@
 import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
 import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
@@ -32,7 +33,7 @@ interface StreamingContext {
   session?: { user: { id: string } };
   activeTool?: string | null;
   memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
 }
 
@@ -115,7 +116,7 @@ export async function handleStreamingResponse(
     session,
     activeTool,
     memoryEnabled = true,
-    thinkingEnabled = false,
+    reasoningEffort,
     existingAssistantMessageId,
   } = context;
 
@@ -335,7 +336,7 @@ export async function handleStreamingResponse(
         }
       },
       memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
       onHumanInTheLoopRequest: (request) => {
         humanInTheLoopPending = true;
         messageMetadata = {

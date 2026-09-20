@@ -1,6 +1,6 @@
 "use client";
 
-import { Paperclip, Settings2 } from "lucide-react";
+import { Paperclip, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/buttonVariants";
 import { Badge } from "@/components/ui/badge";
@@ -14,19 +14,15 @@ import {
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MemoryToggle } from "./memoryToggle";
-import { ThinkingToggle } from "./thinkingToggle";
 import { ConnectorsDrawerContent } from "./connectorsDrawerContent";
 
 interface ToolsDrawerProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   disabled?: boolean;
-  hasActiveTool: boolean;
   fileCount?: number;
   memoryEnabled?: boolean;
   onMemoryToggle?: (enabled: boolean) => void;
-  thinkingEnabled?: boolean;
-  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
@@ -35,12 +31,9 @@ export function ToolsDrawer({
   isOpen,
   onOpenChange,
   disabled,
-  hasActiveTool,
   fileCount = 0,
   memoryEnabled = true,
   onMemoryToggle,
-  thinkingEnabled = false,
-  onThinkingToggle,
   onFilesSelected,
   fileInputRef,
 }: ToolsDrawerProps) {
@@ -51,17 +44,14 @@ export function ToolsDrawer({
       variant="ghost"
       className={cn(
         buttonVariants({ variant: "ghost", size: "icon" }),
-        "size-10 rounded-lg active:scale-95 transition-transform p-1",
-        hasActiveTool
-          ? 'bg-primary/10 hover:bg-primary/15'
-          : 'hover:bg-accent'
+        "size-9 rounded-full active:scale-95 transition-transform p-1 hover:bg-accent"
       )}
-      aria-label="Tools"
+      aria-label="Add files, tools and connectors"
     >
-      <Settings2
-        className={`size-4 transition-all duration-75 ${hasActiveTool ? 'text-primary' : ''}`}
+      <Plus
+        className="size-4.5 transition-transform duration-200"
         style={{
-          transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
+          transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)'
         }}
       />
     </Button>
@@ -78,7 +68,7 @@ export function ToolsDrawer({
               </DrawerTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" align="center">
-              <p>{hasActiveTool ? 'Deactivate tool' : 'Tools'}</p>
+              <p>Files, tools & connectors</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -94,7 +84,7 @@ export function ToolsDrawer({
 
       <DrawerContent className="max-h-[80vh]">
         <DrawerHeader>
-          <DrawerTitle>Tools & Settings</DrawerTitle>
+          <DrawerTitle>Files, tools & connectors</DrawerTitle>
         </DrawerHeader>
         <div className="overflow-y-auto px-4 pb-6">
           <div className="space-y-2">
@@ -128,10 +118,6 @@ export function ToolsDrawer({
 
             <div className="px-2">
               <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
-            </div>
-
-            <div className="px-2 mt-2">
-              <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
             </div>
 
             <div className="h-px bg-border my-3" />

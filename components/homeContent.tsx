@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
 import { ChatContainer } from "@/components/chat/chatContainer";
@@ -114,7 +115,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, reasoningEffort?: ReasoningEffortLevel) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -134,7 +135,7 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
+    return sendMessage({ content, session, attachments, memoryEnabled, reasoningEffort });
   };
 
   const handleFollowUpQuestion = async (question: string) => {

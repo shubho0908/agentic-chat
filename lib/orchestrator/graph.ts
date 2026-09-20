@@ -7,12 +7,12 @@ import { createPlannerNode } from "./nodes/planner";
 import { routeAfterAgent, createRecoveryNode } from "./nodes/reflector";
 import { getCheckpointer } from "./checkpointer";
 import { getToolsForRequest } from "./tools";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
+import { DEFAULT_MODEL, type ReasoningEffortLevel } from "@/constants/openai-models";
 import { GraphNode } from "./constants";
 import type { ComposioToolkit } from "@/lib/tools/composio/config";
 
 interface CreateAgentGraphOptions {
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel | null;
   connectedToolkits?: ComposioToolkit[];
 }
 
@@ -22,15 +22,15 @@ export async function createAgentGraph(
   model = DEFAULT_MODEL,
   options: CreateAgentGraphOptions = {}
 ) {
-  const { thinkingEnabled = false, connectedToolkits } = options;
+  const { reasoningEffort, connectedToolkits } = options;
 
-  const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits, { apiKey, model });
+  const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits, { apiKey, model, reasoningEffort });
   const tools = allTools;
   const checkpointer = await getCheckpointer();
 
   const graph = new StateGraph(AgentState)
-    .addNode(GraphNode.PLANNER, createPlannerNode(tools, apiKey, model))
-    .addNode(GraphNode.AGENT, createAgentNode(tools, apiKey, model, { thinkingEnabled }))
+    .addNode(GraphNode.PLANNER, createPlannerNode(tools, apiKey, model, { reasoningEffort }))
+    .addNode(GraphNode.AGENT, createAgentNode(tools, apiKey, model, { reasoningEffort }))
     .addNode(GraphNode.TOOLS, createToolNode(tools))
     .addNode(GraphNode.RECOVERY, createRecoveryNode())
     .addEdge("__start__", GraphNode.PLANNER)

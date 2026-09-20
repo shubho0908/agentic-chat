@@ -270,7 +270,7 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, conversationId, documentAttachmentIds, memoryEnabled, thinkingEnabled } = config;
+  const { messages, model, signal, conversationId, documentAttachmentIds, memoryEnabled, reasoningEffort } = config;
 
   const requestPayload: Record<string, unknown> = {
     model,
@@ -288,8 +288,8 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   if (memoryEnabled !== undefined && memoryEnabled !== true) {
     requestPayload.memoryEnabled = memoryEnabled;
   }
-  if (thinkingEnabled) {
-    requestPayload.thinkingEnabled = thinkingEnabled;
+  if (reasoningEffort) {
+    requestPayload.reasoningEffort = reasoningEffort;
   }
 
   const response = await fetch(apiRoutes.chatCompletions, {
@@ -303,12 +303,12 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 }
 
 export async function streamChatApproval(config: ApprovalStreamConfig): Promise<string> {
-  const { conversationId, threadId, model, approved, response: userResponse, signal } = config;
+  const { conversationId, threadId, model, approved, response: userResponse, signal, reasoningEffort } = config;
 
   const response = await fetch(apiRoutes.chatApprove, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ conversationId, threadId, model, approved, response: userResponse }),
+    body: JSON.stringify({ conversationId, threadId, model, approved, response: userResponse, reasoningEffort }),
     signal,
   });
 

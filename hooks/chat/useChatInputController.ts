@@ -27,9 +27,17 @@ import {
 import {
   getMemoryEnabled as getStoredMemoryEnabled,
   setMemoryEnabled as storeMemoryEnabled,
-  getThinkingEnabled as getStoredThinkingEnabled,
-  setThinkingEnabled as storeThinkingEnabled,
+  getReasoningEffortMap as getStoredReasoningEffortMap,
+  setReasoningEffortForModel as storeReasoningEffortForModel,
+  getModel as getStoredModel,
+  saveModel as storeModel,
+  type ReasoningEffortMap,
 } from "@/lib/storage";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_REASONING_EFFORT,
+  type ReasoningEffortLevel,
+} from "@/constants/openai-models";
 import type { TextSnippet } from "@/components/chat/textSnippetPreview";
 import type { UploadAttachment } from "@/lib/attachmentUtils";
 
@@ -62,7 +70,8 @@ interface UseChatInputControllerProps {
 interface ChatInputUiState {
   isSending: boolean;
   memoryEnabled: boolean;
-  thinkingEnabled: boolean;
+  effortByModel: ReasoningEffortMap;
+  selectedModel: string;
 }
 
 type ChatInputUiAction =
@@ -70,12 +79,14 @@ type ChatInputUiAction =
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
   | { type: "set-memory"; enabled: boolean }
-  | { type: "set-thinking"; enabled: boolean };
+  | { type: "set-reasoning-effort"; model: string; effort: ReasoningEffortLevel }
+  | { type: "set-model"; model: string };
 
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
   memoryEnabled: false,
-  thinkingEnabled: false,
+  effortByModel: {},
+  selectedModel: DEFAULT_MODEL,
 };
 
 interface InputSnapshot {
@@ -97,14 +108,21 @@ function chatInputUiReducer(
       return {
         ...state,
         memoryEnabled: false,
-        thinkingEnabled: false,
       };
     case "set-sending":
       return { ...state, isSending: action.isSending };
     case "set-memory":
       return { ...state, memoryEnabled: action.enabled };
-    case "set-thinking":
-      return { ...state, thinkingEnabled: action.enabled };
+    case "set-reasoning-effort":
+      return {
+        ...state,
+        effortByModel: {
+          ...state.effortByModel,
+          [action.model]: action.effort,
+        },
+      };
+    case "set-model":
+      return { ...state, selectedModel: action.model };
     default:
       return state;
   }
@@ -124,7 +142,9 @@ export function useChatInputController({
     chatInputUiReducer,
     INITIAL_CHAT_INPUT_UI_STATE,
   );
-  const { isSending, memoryEnabled, thinkingEnabled } = uiState;
+  const { isSending, memoryEnabled, effortByModel, selectedModel } = uiState;
+  const reasoningEffort =
+    effortByModel[selectedModel] ?? DEFAULT_REASONING_EFFORT;
 
   const { data: session, isPending } = useSession();
 
@@ -196,7 +216,6 @@ export function useChatInputController({
           type: "hydrate",
           payload: {
             memoryEnabled: getStoredMemoryEnabled(),
-            thinkingEnabled: getStoredThinkingEnabled(),
           },
         });
       } else {
@@ -204,6 +223,17 @@ export function useChatInputController({
       }
     }
   }, [session, isPending]);
+
+  // Model and reasoning effort are device-level preferences, hydrated once.
+  useEffect(() => {
+    dispatchUi({
+      type: "hydrate",
+      payload: {
+        selectedModel: getStoredModel() ?? DEFAULT_MODEL,
+        effortByModel: getStoredReasoningEffortMap(),
+      },
+    });
+  }, []);
 
   const maxFilesReached = selectedFiles.length >= MAX_FILE_ATTACHMENTS;
   const isContextBlocked =
@@ -307,7 +337,7 @@ export function useChatInputController({
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         null,
         !!session && memoryEnabled,
-        thinkingEnabled,
+        reasoningEffort,
       );
 
       if (!result.success) {
@@ -395,9 +425,14 @@ export function useChatInputController({
     );
   }
 
-  function handleThinkingToggle(enabled: boolean) {
-    dispatchUi({ type: "set-thinking", enabled });
-    storeThinkingEnabled(enabled);
+  function handleReasoningEffortChange(model: string, effort: ReasoningEffortLevel) {
+    dispatchUi({ type: "set-reasoning-effort", model, effort });
+    storeReasoningEffortForModel(model, effort);
+  }
+
+  function handleModelSelect(model: string) {
+    dispatchUi({ type: "set-model", model });
+    storeModel(model);
   }
 
   return {
@@ -423,7 +458,9 @@ export function useChatInputController({
       disabled: disabled || !!isContextBlocked,
       activeTool: null,
       memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
+      effortByModel,
+      selectedModel,
     },
     formHandlers: {
       onSubmit: (e: React.FormEvent) => {
@@ -442,7 +479,8 @@ export function useChatInputController({
       onRemoveSnippet: removeTextSnippet,
       onToolSelected: () => {},
       onMemoryToggle: handleMemoryToggle,
-      onThinkingToggle: handleThinkingToggle,
+      onReasoningEffortChange: handleReasoningEffortChange,
+      onModelSelect: handleModelSelect,
       onFilesSelected: handleFilesSelectedWithAuth,
       onStop,
       onAuthRequired,

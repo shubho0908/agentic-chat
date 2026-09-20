@@ -12,7 +12,7 @@ import {
 } from "@/lib/tools/composio/config";
 import { createDeepResearchTool } from "./sub-agents";
 import { MAX_TOOLS } from "./constants";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
+import { DEFAULT_MODEL, type ReasoningEffortLevel } from "@/constants/openai-models";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
 import { RoutingDecision } from "@/types/chat";
@@ -510,7 +510,7 @@ export function shouldBypassSemanticCacheForMessageContext(
 export async function getToolsForRequest(
   userId: string,
   connectedToolkits?: ComposioToolkit[],
-  options?: { apiKey?: string; model?: string },
+  options?: { apiKey?: string; model?: string; reasoningEffort?: ReasoningEffortLevel | null },
 ): Promise<DynamicStructuredTool[]> {
   const baseTools: DynamicStructuredTool[] = [
     askUserTool,
@@ -528,6 +528,7 @@ export async function getToolsForRequest(
         options.apiKey,
         options.model ?? DEFAULT_MODEL,
         userId,
+        options.reasoningEffort,
       ),
     );
   }

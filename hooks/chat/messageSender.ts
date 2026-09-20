@@ -1,4 +1,5 @@
 import type { Message, Attachment, MessageContentPart } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { MessageRole } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
 import { toast } from "sonner";
@@ -22,7 +23,7 @@ export async function continueIncompleteConversation(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -69,7 +70,7 @@ export async function continueIncompleteConversation(
       session,
       activeTool,
       memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
       existingAssistantMessageId,
     },
     {
@@ -150,7 +151,7 @@ export async function handleSendMessage(
   session?: { user: { id: string } },
   activeTool?: string | null,
   memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -253,7 +254,7 @@ export async function handleSendMessage(
         session,
         activeTool,
         memoryEnabled,
-        thinkingEnabled,
+        reasoningEffort,
         existingAssistantMessageId: placeholderAssistantId,
       },
       {

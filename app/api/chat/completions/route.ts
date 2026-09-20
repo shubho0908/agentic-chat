@@ -52,7 +52,7 @@ const BASE_MEMORY_STATUS: MemoryStatus = {
 import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel, getChatReasoningEffort } from '@/lib/modelPolicy';
+import { validateRequestedModel, getChatReasoningEffort, parseReasoningEffortParam } from '@/lib/modelPolicy';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { logger } from "@/lib/logger";
@@ -150,6 +150,17 @@ export async function POST(request: NextRequest) {
     }
     const thinkingEnabled = thinkingEnabledResult.value;
 
+    let reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
+    if (body.reasoningEffort !== undefined && reasoningEffort === null) {
+      return errorResponse(
+        "reasoningEffort must be one of: none, low, medium, high",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+    // Legacy clients only send thinkingEnabled: ON maps to "high".
+    reasoningEffort = reasoningEffort ?? (thinkingEnabled ? 'high' : null);
+
     if (typeof model !== 'string' || !model.trim()) {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
@@ -206,7 +217,7 @@ export async function POST(request: NextRequest) {
             conversationId,
             documentAttachmentIds,
             memoryEnabled,
-            thinkingEnabled,
+            reasoningEffort,
             abortSignal: abortController.signal,
           })
         : createChatStreamHandler({
@@ -220,7 +231,7 @@ export async function POST(request: NextRequest) {
             userId: authUser.id,
             conversationId,
             requestId,
-            thinkingEnabled,
+            reasoningEffort,
           });
 
       const readableStream = new ReadableStream({
@@ -318,7 +329,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const reasoningEffort = getChatReasoningEffort(validatedModel, thinkingEnabled);
+      const resolvedReasoningEffort = getChatReasoningEffort(validatedModel, reasoningEffort);
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(
@@ -326,7 +337,7 @@ export async function POST(request: NextRequest) {
               model: validatedModel,
               messages: toOpenAIChatMessages(enhancedMessages),
               stream: false,
-              ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+              ...(resolvedReasoningEffort ? { reasoning_effort: resolvedReasoningEffort } : {}),
             },
             { signal: request.signal }
           ),

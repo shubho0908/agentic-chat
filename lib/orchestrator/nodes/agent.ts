@@ -5,6 +5,7 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentStateType } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { MAX_RESPONSE_TOKENS, PlanComplexity } from "../constants";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import {
   TOOLKIT_DISPLAY_NAMES,
@@ -276,7 +277,7 @@ function getLatestHumanText(messages: BaseMessage[]): string {
 
 
 interface AgentNodeOptions {
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel | null;
   temperature?: number;
 }
 
@@ -286,9 +287,9 @@ export function createAgentNode(
   model: string,
   options: AgentNodeOptions = {}
 ) {
-  const { thinkingEnabled = false, temperature } = options;
+  const { reasoningEffort, temperature } = options;
 
-  const reasoningEffort = getChatReasoningEffort(model, thinkingEnabled);
+  const resolvedEffort = getChatReasoningEffort(model, reasoningEffort);
   const supportedTemperature = getSupportedTemperature(model, temperature);
 
   const llm = new ChatOpenAI({
@@ -297,8 +298,8 @@ export function createAgentNode(
     streaming: true,
     maxTokens: MAX_RESPONSE_TOKENS,
     ...(supportedTemperature !== undefined ? { temperature: supportedTemperature } : {}),
-    ...(reasoningEffort
-      ? { reasoning: { effort: reasoningEffort, summary: "detailed" as const } }
+    ...(resolvedEffort
+      ? { reasoning: { effort: resolvedEffort, summary: "detailed" as const } }
       : {}),
   });
 

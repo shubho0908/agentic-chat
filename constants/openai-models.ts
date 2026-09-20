@@ -114,3 +114,48 @@ export function formatCostMultiplier(multiplier: number): string {
   if (multiplier >= 1.05) return `${multiplier.toFixed(1)}x`;
   return "1x";
 }
+
+/**
+ * Reasoning effort levels offered in the composer. "none" answers directly
+ * without a reasoning pass; the rest map 1:1 onto OpenAI reasoning effort.
+ */
+import { z } from "zod";
+
+export const REASONING_EFFORTS = ["none", "low", "medium", "high"] as const;
+
+export const reasoningEffortSchema = z.enum(REASONING_EFFORTS);
+
+export type ReasoningEffortLevel = (typeof REASONING_EFFORTS)[number];
+
+export const DEFAULT_REASONING_EFFORT: ReasoningEffortLevel = "none";
+
+export const REASONING_EFFORT_META: Record<
+  ReasoningEffortLevel,
+  { label: string; description: string }
+> = {
+  none: {
+    label: "None",
+    description: "Responds directly without reasoning. Fastest.",
+  },
+  low: {
+    label: "Low",
+    description: "Light reasoning for simple questions.",
+  },
+  medium: {
+    label: "Medium",
+    description: "Balanced reasoning for most tasks.",
+  },
+  high: {
+    label: "High",
+    description: "Deep reasoning for the hardest problems.",
+  },
+};
+
+export function isReasoningEffortLevel(
+  value: unknown
+): value is ReasoningEffortLevel {
+  return (
+    typeof value === "string" &&
+    (REASONING_EFFORTS as readonly string[]).includes(value)
+  );
+}

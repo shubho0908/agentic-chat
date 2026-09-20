@@ -11,7 +11,7 @@ import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrato
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
 import { DEFAULT_MODEL } from "@/constants/openai-models";
-import { validateRequestedModel } from "@/lib/modelPolicy";
+import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { isRecord } from "@/lib/typeGuards";
@@ -70,9 +70,18 @@ export async function POST(request: NextRequest) {
     }
     const threadId = expectedThreadId;
 
+    const reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
+    if (body.reasoningEffort !== undefined && reasoningEffort === null) {
+      return errorResponse(
+        "reasoningEffort must be one of: none, low, medium, high",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
     const apiKey = await getUserApiKey(user.id);
     const connectedToolkits = await getConnectedToolkits(user.id);
-    const graph = await createAgentGraph(user.id, apiKey, model, { thinkingEnabled: true, connectedToolkits });
+    const graph = await createAgentGraph(user.id, apiKey, model, { reasoningEffort, connectedToolkits });
 
     const existingState = await graph.getState({ configurable: { thread_id: threadId } });
     const hasPendingInterrupt = (existingState.tasks ?? []).some(
