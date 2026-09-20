@@ -121,8 +121,8 @@ export function ChatInputForm({
   const isOverLimit = input.length >= maxLength;
 
   const textareaClassName = centered
-    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[17px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
-    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[7px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
+    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[17px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
+    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent shadow-none px-2 py-[7px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground";
 
   const buttonSize = centered ? "large" : "default";
 
