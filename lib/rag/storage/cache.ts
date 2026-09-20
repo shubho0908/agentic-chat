@@ -90,11 +90,6 @@ export async function searchSemanticCacheEntry(queryEmbedding: number[], userId:
   }
 }
 
-export async function searchSemanticCache(queryEmbedding: number[], userId: string, conversationId: string | undefined, model: string, reasoningEffort: string | null): Promise<string | null> {
-  const entry = await searchSemanticCacheEntry(queryEmbedding, userId, conversationId, model, reasoningEffort);
-  return entry ? entry.answer : null;
-}
-
 export async function addToSemanticCache(userQuery: string, answer: string, queryEmbedding: number[], userId: string, conversationId: string | undefined, model: string, reasoningEffort: string | null): Promise<void> {
   try {
     const vectorType = getVectorType();
