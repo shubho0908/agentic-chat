@@ -36,6 +36,7 @@ type StreamCallbacks = Pick<
   | "onUsageUpdated"
   | "onThinking"
   | "onArtifact"
+  | "onResponseIncomplete"
 >;
 
 async function assertOkResponse(response: Response): Promise<void> {
@@ -85,7 +86,7 @@ function normalizeHumanInTheLoopRequest(parsed: Record<string, unknown>): HumanI
   };
 }
 
-async function readChatStream(response: Response, callbacks: StreamCallbacks): Promise<string> {
+export async function readChatStream(response: Response, callbacks: StreamCallbacks): Promise<string> {
   await assertOkResponse(response);
   const reader = response.body?.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: false });
@@ -106,7 +107,9 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     onUsageUpdated,
     onThinking,
     onArtifact,
+    onResponseIncomplete,
   } = callbacks;
+  let receivedDone = false;
 
   function optionalString(value: unknown): string | undefined {
     return typeof value === "string" ? value : undefined;
@@ -193,6 +196,10 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
       });
     }
 
+    if (parsedType === 'response_incomplete' && parsed.reason === 'length') {
+      onResponseIncomplete?.('length');
+    }
+
     if ((parsedType === ArtifactEventType.START || parsedType === ArtifactEventType.CHUNK || parsedType === ArtifactEventType.END) && onArtifact) {
       onArtifact(parsed as unknown as ArtifactEvent);
     }
@@ -218,7 +225,10 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
         if (!trimmed || !trimmed.startsWith(SSE_DATA_PREFIX)) continue;
 
         const data = trimmed.slice(SSE_DATA_PREFIX.length).trim();
-        if (data === '[DONE]') continue;
+        if (data === '[DONE]') {
+          receivedDone = true;
+          continue;
+        }
 
         try {
           processParsedEvent(JSON.parse(data));
@@ -232,7 +242,9 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     const trailing = buffer.trim();
     if (trailing.startsWith(SSE_DATA_PREFIX)) {
       const data = trailing.slice(SSE_DATA_PREFIX.length).trim();
-      if (data !== '[DONE]') {
+      if (data === '[DONE]') {
+        receivedDone = true;
+      } else {
         try {
           processParsedEvent(JSON.parse(data));
         } catch (err) {
@@ -248,6 +260,10 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
       }
     });
     throw error;
+  }
+
+  if (!receivedDone) {
+    throw new Error('The response stream ended before completion.');
   }
 
   return contentParts.join('');

@@ -31,6 +31,7 @@ export const CustomEventName = {
 
 export const StreamEventType = {
   CHAT_MODEL_STREAM: "on_chat_model_stream",
+  CHAT_MODEL_END: "on_chat_model_end",
   TOOL_START: "on_tool_start",
   TOOL_END: "on_tool_end",
   CUSTOM_EVENT: "on_custom_event",

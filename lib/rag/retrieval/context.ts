@@ -112,7 +112,7 @@ export function formatRetrievedContext(
 async function ensureAttachmentsProcessed(
   attachmentIds: string[],
   userId: string,
-  options: { processingTimeoutMs?: number; kickScope: string },
+  options: { processingTimeoutMs?: number; kickScope: string; signal?: AbortSignal },
 ): Promise<string[]> {
   const statuses = await getAttachmentStatuses(attachmentIds, userId);
   const partitioned = partitionByStatus(statuses);
@@ -162,6 +162,7 @@ async function ensureAttachmentsProcessed(
   const newlyCompleted = await waitForDocumentProcessing(needProcessing, {
     timeoutMs: options.processingTimeoutMs,
     userId,
+    signal: options.signal,
   });
   return [...alreadyCompleted, ...newlyCompleted];
 }
@@ -216,6 +217,7 @@ async function resolveCompletedAttachmentScope(
       const ensured = await ensureAttachmentsProcessed(processingIds, userId, {
         processingTimeoutMs: options.processingTimeoutMs,
         kickScope: "pending",
+        signal: options.signal,
       });
       attachmentIds = Array.from(new Set([...completedIds, ...ensured]));
     } else {
@@ -244,6 +246,7 @@ async function resolveCompletedAttachmentScope(
       const ensured = await ensureAttachmentsProcessed(needProcessing, userId, {
         processingTimeoutMs: options.processingTimeoutMs,
         kickScope: "provided",
+        signal: options.signal,
       });
       // Final scope is every completed id: files that were already done stay
       // in scope alongside newly processed ones. Dropping either side
@@ -480,6 +483,7 @@ export async function getRAGContext(
               scoreThreshold,
               conversationId,
               attachmentIds: scope.attachmentIds,
+              signal: options.signal,
             }),
           ),
         );
@@ -499,6 +503,7 @@ export async function getRAGContext(
         if (!gatedResults.length) return null;
         return formatRetrievedContext(gatedResults);
       } catch (error) {
+        if (options.signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
         logger.error("[RAG] Context retrieval failed:", error);
         return null;
       }

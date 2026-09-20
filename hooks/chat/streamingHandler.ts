@@ -6,6 +6,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
 import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
+import { saveAssistantMessage } from "./messageApi";
+import { logger } from "@/lib/logger";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
@@ -127,6 +129,7 @@ export async function handleStreamingResponse(
   let thinkingContent = "";
   let thinkingStartTime = 0;
   let humanInTheLoopPending = false;
+  let responseIncompleteReason: "length" | undefined;
   const artifactCollector = createArtifactMetadataCollector();
 
   const replaceAssistantMessageId = (savedAssistantMessageId: string, metadata?: MessageMetadata) => {
@@ -378,6 +381,9 @@ export async function handleStreamingResponse(
           });
         }
       },
+      onResponseIncomplete: (reason) => {
+        responseIncompleteReason = reason;
+      },
       onArtifact: (event) => {
         const eventWithMessage = { ...event, messageId: assistantMessageId };
         artifactCollector.push(eventWithMessage);
@@ -409,6 +415,10 @@ export async function handleStreamingResponse(
 
     if (toolActivities.length > 0) {
       messageMetadata = { ...messageMetadata, toolActivities };
+    }
+
+    if (responseIncompleteReason === "length") {
+      messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
     }
 
     if (artifacts.length > 0) {
@@ -492,7 +502,15 @@ export async function handleStreamingResponse(
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
-    if (messageCreated) {
+    if (messageCreated && assistantContent.trim()) {
+      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: assistantContent, metadata: messageMetadata });
+      if (conversationId && !abortSignal.aborted) {
+        void saveAssistantMessage(conversationId, assistantContent, messageMetadata).catch((saveError) => {
+          logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
+        });
+      }
+    } else if (messageCreated) {
       onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
     }
     return { success: false, error: errorMessage };

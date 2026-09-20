@@ -1,9 +1,9 @@
 import { getMemoryContextResult } from "./memory";
 import {
   getRAGContext,
-  getDocumentOverviewContext,
 } from "./rag/retrieval/context";
 import type { Message } from "@/lib/schemas/chat";
+import { selectDocumentAttachmentsForTurn } from "./chat/attachmentRouting";
 import { MessageRole } from "@/lib/schemas/chat";
 import { RoutingDecision } from "@/types/chat";
 import { prisma } from "./prisma";
@@ -50,6 +50,7 @@ function sanitizeAttachedFileName(name: string): string {
 async function tryInlineAttachmentContent(
   attachmentIds: string[],
   userId: string,
+  signal?: AbortSignal,
 ): Promise<{ context: string; documentCount: number } | null> {
   try {
     const attachments = await prisma.attachment.findMany({
@@ -81,6 +82,7 @@ async function tryInlineAttachmentContent(
         const res = await safeFetch(att.fileUrl, {
           timeoutMs: 10000,
           maxResponseBytes: INLINE_ATTACHMENT_MAX_BYTES,
+          signal,
         });
         if (!res.ok) return null;
         const text = await res.text();
@@ -97,6 +99,7 @@ async function tryInlineAttachmentContent(
 
     return { context, documentCount: validContents.length };
   } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
     logger.warn("[Context Router] Inline attachment fetch failed:", error);
     return null;
   }
@@ -211,6 +214,7 @@ async function resolveDocumentContext(
     attachmentIds?: string[];
     waitForProcessing?: boolean;
     processingTimeoutMs?: number;
+    signal?: AbortSignal;
   },
 ) {
   if (!queries.length) return null;
@@ -225,8 +229,10 @@ async function resolveDocumentContext(
       waitForProcessing: options.waitForProcessing,
       processingTimeoutMs: options.processingTimeoutMs,
       queryVariants: queries.slice(1),
+      signal: options.signal,
     });
   } catch (error) {
+    if (options.signal?.aborted) throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
     logger.warn("[Context Router] RAG multi-query retrieval failed:", error);
     return null;
   }
@@ -266,6 +272,7 @@ function logMissingDocumentRetrieval(params: {
 async function getAttachmentInfo(
   conversationId: string,
   userId: string,
+  currentTurnOnly: boolean,
 ): Promise<{
   hasDocuments: boolean;
   documentCount: number;
@@ -280,6 +287,7 @@ async function getAttachmentInfo(
         },
         isDeleted: false,
       },
+      ...(currentTurnOnly ? { orderBy: { createdAt: "desc" as const }, take: 1 } : {}),
       select: {
         attachments: {
           select: {
@@ -291,7 +299,10 @@ async function getAttachmentInfo(
       },
     });
 
-    const allAttachments = messages.flatMap((m) => m.attachments);
+    const allAttachments = selectDocumentAttachmentsForTurn(
+      messages,
+      !currentTurnOnly,
+    );
 
     if (allAttachments.length === 0) {
       return {
@@ -310,9 +321,9 @@ async function getAttachmentInfo(
     return {
       hasDocuments: retrievableDocumentAttachments.length > 0,
       documentCount: uiDocumentAttachments.length,
-      documentAttachmentIds: retrievableDocumentAttachments.map(
-        (attachment) => attachment.id,
-      ),
+      documentAttachmentIds: retrievableDocumentAttachments
+        .map((attachment) => attachment.id)
+        .filter((id): id is string => Boolean(id)),
     };
   } catch (error) {
     logger.warn("[Context Router] Failed to get attachment info:", error);
@@ -331,6 +342,7 @@ export async function routeContext(
   memoryEnabled: boolean = false,
   options?: {
     apiKey?: string;
+    signal?: AbortSignal;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -369,23 +381,23 @@ export async function routeContext(
   }
 
   const attachmentInfo = conversationId
-    ? await getAttachmentInfo(conversationId, userId)
+    ? await getAttachmentInfo(conversationId, userId, !isReferential)
     : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
     if (attachmentInfo.hasDocuments) {
       const inlineResult = await tryInlineAttachmentContent(
         attachmentInfo.documentAttachmentIds,
         userId,
+        options?.signal,
       );
 
       if (inlineResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = inlineResult.documentCount;
-        if (hasImages) metadata.routingDecision = RoutingDecision.Hybrid;
+        metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
         return { context: inlineResult.context, metadata };
       }
 
@@ -394,12 +406,14 @@ export async function routeContext(
         attachmentIds: attachmentInfo.documentAttachmentIds,
         waitForProcessing: true,
         processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+        signal: options?.signal,
       });
 
       if (ragResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = ragResult.documentCount;
         metadata.citations = ragResult.citations;
+        metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
 
         if (hasImages) {
           metadata.routingDecision = RoutingDecision.Hybrid;
@@ -410,18 +424,6 @@ export async function routeContext(
       }
 
       metadata.documentCount = attachmentInfo.documentCount;
-      const overviewContext = await getDocumentOverviewContext(userId, {
-        conversationId,
-        attachmentIds: attachmentInfo.documentAttachmentIds,
-        waitForProcessing: false,
-      });
-
-      if (overviewContext) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = overviewContext.documentCount;
-        return { context: overviewContext.context, metadata };
-      }
-
       metadata.hasDocuments = true;
       logMissingDocumentRetrieval({
         userId,
@@ -477,21 +479,8 @@ export async function routeContext(
       return { context: ragResult.context, metadata };
     }
 
-    metadata.skippedMemory = true;
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
-    metadata.hasDocuments = true;
+    // No relevant document evidence was used for this turn.
     metadata.documentCount = attachmentInfo.documentCount;
-
-    const overviewContext = await getDocumentOverviewContext(userId, {
-      conversationId,
-      attachmentIds: attachmentInfo.documentAttachmentIds,
-      waitForProcessing: false,
-    });
-
-    if (overviewContext) {
-      metadata.documentCount = overviewContext.documentCount;
-      return { context: overviewContext.context, metadata };
-    }
 
     logMissingDocumentRetrieval({
       userId,
@@ -500,7 +489,7 @@ export async function routeContext(
       documentCount: attachmentInfo.documentCount,
       isReferential,
     });
-    return { context: buildMissingDocumentContext(textQuery), metadata };
+    // Continue with normal memory routing after a relevance miss.
   }
 
   if (hasImages) {

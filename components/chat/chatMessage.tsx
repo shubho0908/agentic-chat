@@ -22,6 +22,7 @@ import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
 import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
+import { Button } from "@/components/ui/button";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -102,6 +103,7 @@ interface MessageContentSurfaceProps {
   memoryStatus?: MemoryStatus;
   humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
+  onSendMessage?: (content: string) => void;
   renderUserTextContent: (text: string) => ReactNode;
 }
 
@@ -113,6 +115,7 @@ function MessageContentSurface({
   memoryStatus,
   humanInTheLoopRequest,
   onHumanInTheLoopDecision,
+  onSendMessage,
   renderUserTextContent,
 }: MessageContentSurfaceProps) {
   const isUser = variant === MessageRole.USER;
@@ -170,6 +173,14 @@ function MessageContentSurface({
           isLoading={isLoading}
           onDecision={onHumanInTheLoopDecision}
         />
+      )}
+
+      {!isUser && displayedMessage.metadata?.streamStatus && (
+        <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
+          <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
+          <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
+          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue</Button>}
+        </div>
       )}
 
       {!hidePlaceholderContent && textContent ? (
@@ -406,6 +417,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                   memoryStatus={memoryStatus}
                   humanInTheLoopRequest={humanInTheLoopRequest}
                   onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+                  onSendMessage={onSendMessage}
                   renderUserTextContent={renderUserTextContent}
                 />
 

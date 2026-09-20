@@ -75,6 +75,10 @@ export function encodeThinkingChunk(content: string): Uint8Array {
   return encodeSSEMessage({ type: 'thinking', content });
 }
 
+export function encodeResponseIncomplete(reason: "length"): Uint8Array {
+  return encodeSSEMessage({ type: "response_incomplete", reason });
+}
+
 export function encodeError(message: string): Uint8Array {
   return encodeSSEMessage({ error: message });
 }
