@@ -202,7 +202,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         if (queryText && !bypassSemanticCache && queryText.trim().length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId, abortSignal);
-            const entry = await searchSemanticCacheEntry(embedding, userId, conversationId);
+            const entry = await searchSemanticCacheEntry(embedding, userId, conversationId, model, reasoningEffort ?? null);
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
               // serves, active can veto a confident no-serve verdict, and

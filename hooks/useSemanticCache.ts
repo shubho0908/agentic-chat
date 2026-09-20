@@ -7,14 +7,16 @@ import { logger } from "@/lib/logger";
 interface CacheSavePayload {
   query: string;
   response: string;
+  model: string;
+  reasoningEffort?: string | null;
 }
 
 export function useSaveToCache() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ query, response }: CacheSavePayload) => {
-      const result = await saveToSemanticCacheAction(query, response);
+    mutationFn: async ({ query, response, model, reasoningEffort }: CacheSavePayload) => {
+      const result = await saveToSemanticCacheAction(query, response, undefined, model, reasoningEffort ?? null);
 
       if (!result.success) {
         throw new Error(result.error || HOOK_ERROR_MESSAGES.FAILED_SAVE_CACHE);

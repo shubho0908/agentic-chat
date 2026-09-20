@@ -31,7 +31,7 @@ export async function createAgentGraph(
   const graph = new StateGraph(AgentState)
     .addNode(GraphNode.PLANNER, createPlannerNode(tools, apiKey, model, { reasoningEffort }))
     .addNode(GraphNode.AGENT, createAgentNode(tools, apiKey, model, { reasoningEffort }))
-    .addNode(GraphNode.TOOLS, createToolNode(tools))
+    .addNode(GraphNode.TOOLS, createToolNode(tools, { model, reasoningEffort }))
     .addNode(GraphNode.RECOVERY, createRecoveryNode())
     .addEdge("__start__", GraphNode.PLANNER)
     .addEdge(GraphNode.PLANNER, GraphNode.AGENT)

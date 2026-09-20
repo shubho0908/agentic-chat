@@ -39,7 +39,7 @@ interface StreamingContext {
 
 interface StreamingCallbacks {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
+  saveToCacheMutate: (data: { query: string; response: string; model: string; reasoningEffort?: ReasoningEffortLevel | null }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
   onArtifact?: (event: ArtifactEvent) => void;
 }
@@ -177,6 +177,8 @@ export async function handleStreamingResponse(
       attachments: userAttachments,
       abortSignal,
       activeTool,
+      model,
+      reasoningEffort,
     });
 
     if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
@@ -446,6 +448,8 @@ export async function handleStreamingResponse(
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
+          model,
+          reasoningEffort,
         });
       }
 

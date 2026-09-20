@@ -30,7 +30,7 @@ function shouldUseSemanticCache(query: string): boolean {
   return query.trim().length >= MIN_CACHEABLE_QUERY_LENGTH;
 }
 
-export async function checkSemanticCacheAction(query: string, conversationId?: string): Promise<CacheCheckResult> {
+export async function checkSemanticCacheAction(query: string, conversationId: string | undefined, model: string, reasoningEffort?: string | null): Promise<CacheCheckResult> {
   const user = await auth();
 
   const startTime = Date.now();
@@ -45,7 +45,7 @@ export async function checkSemanticCacheAction(query: string, conversationId?: s
       };
     }
 
-    if (!shouldUseSemanticCache(query)) {
+    if (!shouldUseSemanticCache(query) || !model) {
       return {
         cached: false,
         latency: Date.now() - startTime,
@@ -65,7 +65,7 @@ export async function checkSemanticCacheAction(query: string, conversationId?: s
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);
-    const entry = await searchSemanticCacheEntry(queryEmbedding, user.id, conversationId);
+    const entry = await searchSemanticCacheEntry(queryEmbedding, user.id, conversationId, model, reasoningEffort ?? null);
 
     const latency = Date.now() - startTime;
 
@@ -117,7 +117,9 @@ export async function checkSemanticCacheAction(query: string, conversationId?: s
 export async function saveToSemanticCacheAction(
   query: string,
   response: string,
-  conversationId?: string
+  conversationId: string | undefined,
+  model: string,
+  reasoningEffort?: string | null
 ): Promise<CacheSaveResult> {
   const user = await auth();
 
@@ -129,12 +131,12 @@ export async function saveToSemanticCacheAction(
     if (!response || response.trim().length === 0) {
       return { success: false, error: 'Response is required' };
     }
-    if (!shouldUseSemanticCache(query)) {
+    if (!shouldUseSemanticCache(query) || !model) {
       return { success: true };
     }
 
     const queryEmbedding = await generateEmbedding(query, user.id);
-    await addToSemanticCache(query, response, queryEmbedding, user.id, conversationId);
+    await addToSemanticCache(query, response, queryEmbedding, user.id, conversationId, model, reasoningEffort ?? null);
 
     logger.log('[Cache] Saved successfully');
     return { success: true };

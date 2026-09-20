@@ -111,7 +111,7 @@ test("connector tool auth failures normalize per toolkit", async () => {
         throw new Error("401 unauthorized");
       },
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -141,7 +141,7 @@ test("successful connector payloads with auth-like substrings are not rewritten 
       schema: z.object({}),
       func: async () => successEnvelope,
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -169,7 +169,7 @@ test("failed connector envelope with an auth error normalizes to a not-connected
           successful: false,
         }),
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -199,7 +199,7 @@ test("failed connector envelope with a non-auth error is passed through verbatim
       schema: z.object({}),
       func: async () => errorEnvelope,
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [

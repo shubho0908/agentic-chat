@@ -307,6 +307,8 @@ export async function handleEditMessage(
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
+          model,
+          reasoningEffort,
         });
       }
 

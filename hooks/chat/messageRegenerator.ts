@@ -280,6 +280,8 @@ export async function handleRegenerateResponse(
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
+          model,
+          reasoningEffort,
         });
       }
 

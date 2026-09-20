@@ -3,6 +3,7 @@ import {
   type Attachment,
   type MessageContentPart,
 } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
@@ -14,6 +15,8 @@ interface CacheCheckContext {
   attachments?: Attachment[];
   abortSignal: AbortSignal;
   activeTool?: string | null;
+  model: string;
+  reasoningEffort?: ReasoningEffortLevel | null;
 }
 
 export function shouldUseSemanticCache(
@@ -83,6 +86,8 @@ export function buildCacheQuery(
 async function checkCache(
   query: string,
   signal: AbortSignal,
+  model: string,
+  reasoningEffort?: ReasoningEffortLevel | null,
 ): Promise<CacheCheckResult> {
   try {
     if (signal.aborted) {
@@ -107,7 +112,7 @@ async function checkCache(
       }, CACHE_TIMEOUT_MS);
     });
 
-    const cachePromise = checkSemanticCacheAction(query);
+    const cachePromise = checkSemanticCacheAction(query, undefined, model, reasoningEffort ?? null);
     const result = await Promise.race([
       cachePromise,
       timeoutPromise,
@@ -142,7 +147,7 @@ async function checkCache(
 export async function performCacheCheck(
   context: CacheCheckContext,
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
-  const { messages, content, attachments, abortSignal, activeTool } = context;
+  const { messages, content, attachments, abortSignal, activeTool, model, reasoningEffort } = context;
 
   const useCaching = shouldUseSemanticCache(messages, attachments, activeTool);
   let cacheQuery = "";
@@ -154,7 +159,7 @@ export async function performCacheCheck(
       return { cacheQuery: "", cacheData: { cached: false } };
     }
     cacheQuery = buildCacheQuery(messages, content);
-    cacheData = await checkCache(cacheQuery, abortSignal);
+    cacheData = await checkCache(cacheQuery, abortSignal, model, reasoningEffort);
   }
 
   return { cacheQuery, cacheData };
