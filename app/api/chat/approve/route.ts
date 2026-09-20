@@ -6,6 +6,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { Command } from "@langchain/langgraph";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
+import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
@@ -104,41 +105,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resume with the model/effort that created the interrupt, persisted in
-    // its payload - not the picker's current values. Changing either while
-    // approval is pending must not alter the run the user reviewed.
-    const persistedConfig = (existingState.tasks ?? [])
-      .flatMap((task) => task.interrupts ?? [])
-      .map((pending) => pending.value)
-      .filter(isRecord)
-      .find((value) => typeof value.model === "string");
-
-    let resumeModel = model;
-    let resumeReasoningEffort = reasoningEffort;
-    if (persistedConfig) {
-      const persistedModel = validateRequestedModel(persistedConfig.model as string);
-      if (persistedModel) {
-        resumeModel = persistedModel;
-        resumeReasoningEffort =
-          typeof persistedConfig.reasoningEffort === "string"
-            ? parseReasoningEffortParam(persistedConfig.reasoningEffort)
-            : null;
-      }
-    }
-    if (resumeModel !== model || resumeReasoningEffort !== reasoningEffort) {
+    const resumeConfig = resolveResumeConfig(
+      model,
+      reasoningEffort,
+      (existingState.tasks ?? [])
+        .flatMap((task) => task.interrupts ?? [])
+        .map((pending) => pending.value),
+    );
+    if (resumeConfig.usedPersisted && (resumeConfig.model !== model || resumeConfig.reasoningEffort !== reasoningEffort)) {
       logger.log("[Approve] Resuming with interrupt-created config over picker config", {
         requestId,
         pickerModel: model,
-        resumeModel,
+        resumeModel: resumeConfig.model,
         pickerReasoningEffort: reasoningEffort,
-        resumeReasoningEffort,
+        resumeReasoningEffort: resumeConfig.reasoningEffort,
       });
     }
     const resumeGraph =
-      resumeModel === model && resumeReasoningEffort === reasoningEffort
+      resumeConfig.model === model && resumeConfig.reasoningEffort === reasoningEffort
         ? graph
-        : await createAgentGraph(user.id, apiKey, resumeModel, {
-            reasoningEffort: resumeReasoningEffort,
+        : await createAgentGraph(user.id, apiKey, resumeConfig.model, {
+            reasoningEffort: resumeConfig.reasoningEffort,
             connectedToolkits,
           });
 
