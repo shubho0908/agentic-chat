@@ -110,7 +110,7 @@ export function ModelPicker({
                   "disabled:cursor-not-allowed disabled:opacity-50"
                 )}
               >
-                <OpenAIIcon className="size-3.5 shrink-0 opacity-80" />
+                <OpenAIIcon className="size-4 shrink-0" />
                 <span className="hidden sm:inline sm:max-w-none">
                   {selectedModelData?.name ?? "Select model"}
                 </span>

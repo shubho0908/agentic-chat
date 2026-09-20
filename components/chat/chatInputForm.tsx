@@ -134,7 +134,7 @@ export function ChatInputForm({
         dropZoneRef={dropZoneRef}
         handlers={dragHandlers}
       >
-        <div className="relative isolate overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out focus-within:border-black/15 focus-within:ring-1 focus-within:ring-black/8 dark:border-white/[0.08] dark:bg-[hsl(0_0%_9%)] dark:shadow-[0_8px_28px_rgba(0,0,0,0.45)] dark:focus-within:border-white/[0.16] dark:focus-within:ring-white/10 group">
+        <div className="relative isolate overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out focus-within:border-black/15 focus-within:ring-1 focus-within:ring-black/8 dark:border-white/[0.1] dark:bg-[hsl(0_0%_5%)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] dark:focus-within:border-white/[0.16] dark:focus-within:ring-white/10 group">
           <FilePreview
             files={visibleFiles}
             getFileKey={getFileId}
