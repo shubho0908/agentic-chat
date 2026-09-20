@@ -1,4 +1,5 @@
 import { ToolNode } from "@langchain/langgraph/prebuilt";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { interrupt } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
@@ -260,7 +261,12 @@ function sanitizeToolMessage(message: ToolMessage): ToolMessage {
   });
 }
 
-export function createToolNode(tools: DynamicStructuredTool[]) {
+export interface ToolNodeConfig {
+  model: string;
+  reasoningEffort?: ReasoningEffortLevel | null;
+}
+
+export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolNodeConfig) {
   const toolNode = new ToolNode(tools);
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
@@ -280,6 +286,8 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
       const response: unknown = interrupt({
         type: HUMAN_IN_THE_LOOP_REQUEST_TYPE,
         requestKind: HumanInTheLoopRequestKind.ASK_USER,
+        model: nodeConfig.model,
+        reasoningEffort: nodeConfig.reasoningEffort ?? null,
         toolCallId: primaryCallId,
         question: typeof args.question === "string" ? args.question : "Can you clarify how to proceed?",
         reason: typeof args.reason === "string" ? args.reason : undefined,
@@ -329,6 +337,8 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
       const approval: unknown = interrupt({
         type: HUMAN_IN_THE_LOOP_REQUEST_TYPE,
         requestKind: HumanInTheLoopRequestKind.APPROVAL,
+        model: nodeConfig.model,
+        reasoningEffort: nodeConfig.reasoningEffort ?? null,
         toolCalls: escalatedCalls.map((tc) => ({
           id: toolCallResultId(tc, toolCalls.indexOf(tc)),
           name: tc.name,

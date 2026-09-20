@@ -1,4 +1,5 @@
 import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
 import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
@@ -31,14 +32,13 @@ interface StreamingContext {
   queryClient: QueryClient;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
 }
 
 interface StreamingCallbacks {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
+  saveToCacheMutate: (data: { query: string; response: string; model: string; reasoningEffort?: ReasoningEffortLevel | null }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
   onArtifact?: (event: ArtifactEvent) => void;
 }
@@ -114,8 +114,7 @@ export async function handleStreamingResponse(
     queryClient,
     session,
     activeTool,
-    memoryEnabled = true,
-    thinkingEnabled = false,
+    reasoningEffort,
     existingAssistantMessageId,
   } = context;
 
@@ -176,6 +175,8 @@ export async function handleStreamingResponse(
       attachments: userAttachments,
       abortSignal,
       activeTool,
+      model,
+      reasoningEffort,
     });
 
     if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
@@ -217,7 +218,6 @@ export async function handleStreamingResponse(
         userMessageContent,
         assistantContent,
         userId: session?.user?.id,
-        memoryEnabled,
         activeTool,
         userAttachments,
         flow: "send",
@@ -334,8 +334,7 @@ export async function handleStreamingResponse(
           messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
-      memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
       onHumanInTheLoopRequest: (request) => {
         humanInTheLoopPending = true;
         messageMetadata = {
@@ -445,6 +444,8 @@ export async function handleStreamingResponse(
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
+          model,
+          reasoningEffort,
         });
       }
 
@@ -475,7 +476,6 @@ export async function handleStreamingResponse(
           userMessageContent,
           assistantContent: persistableAssistantContent,
           userId: session?.user?.id,
-          memoryEnabled,
           activeTool,
           userAttachments,
           memoryStatus: currentMemoryStatus,

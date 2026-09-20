@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Settings2, Paperclip } from "lucide-react";
+import { Plus, Paperclip, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,12 +12,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdownMenu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AVAILABLE_TOOLS, type ToolId, type ToolConfig } from "@/lib/tools/config";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
-import { useSession } from "@/lib/authClient";
 import { useIsMobile } from "@/hooks/useMobile";
-import { MemoryToggle } from "./memoryToggle";
-import { ThinkingToggle } from "./thinkingToggle";
 import { ToolsDrawer } from "./toolsDrawer";
 import { ConnectorsSubmenuContent } from "./connectorsSubmenu";
 
@@ -28,45 +24,20 @@ const ACCEPTED_FILE_TYPES = [
 ].join(',');
 
 interface ToolsMenuProps {
-  onToolSelected?: (toolId: ToolId) => void;
   disabled?: boolean;
-  activeTool?: ToolId | null;
-  memoryEnabled?: boolean;
-  onMemoryToggle?: (enabled: boolean) => void;
-  thinkingEnabled?: boolean;
-  onThinkingToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
-  onAuthRequired?: () => void;
 }
 
 export function ToolsMenu({
-  onToolSelected,
   disabled,
-  activeTool = null,
-  memoryEnabled = true,
-  onMemoryToggle,
-  thinkingEnabled = false,
-  onThinkingToggle,
   onFilesSelected,
   fileCount = 0,
-  onAuthRequired,
 }: ToolsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { data: session } = useSession();
   const isMobile = useIsMobile();
-
-  const handleToolSelect = (toolId: ToolId) => {
-    if (!session) {
-      onAuthRequired?.();
-      setIsOpen(false);
-      return;
-    }
-
-    onToolSelected?.(toolId);
-    setIsOpen(false);
-  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -76,62 +47,21 @@ export function ToolsMenu({
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+    setSearch("");
     setIsOpen(false);
   };
 
-  const hasActiveTool = activeTool !== null;
-  const showToolIcon = hasActiveTool;
-
-  const handleButtonClick = (e: React.MouseEvent) => {
-    if (disabled) return;
-    if (showToolIcon && activeTool) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleToolSelect(activeTool);
-    }
+  const handleOpenChange = (open: boolean) => {
+    if (!open) setSearch("");
+    setIsOpen(open);
   };
 
-  if (showToolIcon) {
-    const toolConfig = activeTool ? (AVAILABLE_TOOLS as Record<string, ToolConfig>)[activeTool] : null;
-    if (!toolConfig) return null;
-    const ActiveToolIcon = toolConfig.icon;
-
-    return (
-      <TooltipProvider>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              onClick={handleButtonClick}
-              disabled={disabled}
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-full animate-in fade-in-0 zoom-in-95 duration-200 hover:opacity-80 transition-opacity"
-              style={{
-                background: `linear-gradient(135deg, ${toolConfig.gradientColors.from}33, ${toolConfig.gradientColors.via}53, ${toolConfig.gradientColors.to}33)`,
-              }}
-              aria-label={`${toolConfig.name} (click to deactivate)`}
-              onMouseEnter={(e) => {
-                if (!disabled) {
-                  e.currentTarget.style.background = `linear-gradient(135deg, ${toolConfig.gradientColors.from}4D, ${toolConfig.gradientColors.via}4D, ${toolConfig.gradientColors.to}4D)`;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!disabled) {
-                  e.currentTarget.style.background = `linear-gradient(135deg, ${toolConfig.gradientColors.from}33, ${toolConfig.gradientColors.via}53, ${toolConfig.gradientColors.to}33)`;
-                }
-              }}
-            >
-              <ActiveToolIcon className={`size-4 ${toolConfig.iconColorClass} animate-in spin-in-180 zoom-in-0 duration-300`} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center">
-            <p>{toolConfig.name}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
+  const query = search.trim().toLowerCase();
+  const showAttach =
+    !query ||
+    "add photos & files".includes(query) ||
+    "upload from your computer".includes(query);
+  const showMemory = !query || "memory".includes(query);
 
   return (
     <>
@@ -149,19 +79,14 @@ export function ToolsMenu({
       {isMobile ? (
         <ToolsDrawer
           isOpen={isOpen}
-          onOpenChange={setIsOpen}
+          onOpenChange={handleOpenChange}
           disabled={disabled}
-          hasActiveTool={hasActiveTool}
           fileCount={fileCount}
-          memoryEnabled={memoryEnabled}
-          onMemoryToggle={onMemoryToggle}
-          thinkingEnabled={thinkingEnabled}
-          onThinkingToggle={onThinkingToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
         />
       ) : (
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
           <div className="relative">
             <TooltipProvider>
               <Tooltip delayDuration={300}>
@@ -172,20 +97,20 @@ export function ToolsMenu({
                       disabled={disabled}
                       variant="ghost"
                       size="icon"
-                      className="size-8 rounded-full active:scale-95 transition-transform hover:bg-black/5 dark:hover:bg-white/5"
-                      aria-label="Tools"
+                      className="size-9 rounded-full active:scale-95 transition-transform hover:bg-black/5 dark:hover:bg-white/5"
+                      aria-label="Add files, tools and connectors"
                     >
-                      <Settings2
-                        className="size-4 transition-transform duration-200"
+                      <Plus
+                        className="size-4.5 transition-transform duration-200"
                         style={{
-                          transform: isOpen ? 'scaleX(-1)' : 'scaleX(1)'
+                          transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)'
                         }}
                       />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center">
-                  <p>{hasActiveTool ? 'Deactivate tool' : 'Tools'}</p>
+                  <p>Files, tools & connectors</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -202,38 +127,54 @@ export function ToolsMenu({
           <DropdownMenuContent
             align="start"
             side="top"
-            className="w-56 border-muted/50 shadow-xl md:w-64 animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+            className="w-[min(320px,calc(100vw-2rem))] rounded-2xl border-border/40 bg-background/95 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200 p-1.5"
             sideOffset={8}
+            collisionPadding={12}
           >
-            {onFilesSelected && (
-              <>
-                <div className="md:hidden">
-                  <DropdownMenuItem
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={disabled}
-                    className="cursor-pointer gap-3 py-2.5"
-                  >
-                    <Paperclip className="size-4 text-muted-foreground" />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-medium">Attach Files</span>
-                      <span className="text-xs text-muted-foreground">
-                        {fileCount > 0 ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected` : 'Images and documents'}
-                      </span>
-                    </div>
-                  </DropdownMenuItem>
+            {showAttach && onFilesSelected && (
+              <DropdownMenuItem
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                className="cursor-pointer gap-3 rounded-xl p-2.5"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background">
+                  <Paperclip className="size-4 text-muted-foreground" />
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-[13px] font-medium">Add photos & files</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {fileCount > 0
+                      ? `${fileCount} file${fileCount > 1 ? 's' : ''} selected`
+                      : 'Upload from your computer'}
+                  </span>
                 </div>
-                <DropdownMenuSeparator className="md:hidden" />
-              </>
+              </DropdownMenuItem>
             )}
 
-            <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
+            {showMemory && (
+              <div className="px-0.5">
+              </div>
+            )}
 
-            <ThinkingToggle enabled={thinkingEnabled} onToggle={onThinkingToggle} />
+            <DropdownMenuSeparator className="my-1.5" />
 
-            <DropdownMenuSeparator />
+            <div className="max-h-[260px] overflow-y-auto px-0.5">
+              <ConnectorsSubmenuContent
+                filter={query}
+                onActionComplete={() => handleOpenChange(false)}
+              />
+            </div>
 
-            <div className="max-h-[240px] overflow-y-auto">
-              <ConnectorsSubmenuContent onActionComplete={() => setIsOpen(false)} />
+            <div className="mt-1.5 flex items-center gap-2 border-t border-border/40 px-2.5 pt-2.5 pb-1">
+              <Search className="size-3.5 shrink-0 text-muted-foreground/60" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Type to search sources & files"
+                className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
+              />
             </div>
           </DropdownMenuContent>
         </DropdownMenu>

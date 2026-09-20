@@ -1,4 +1,5 @@
 import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -23,8 +24,7 @@ export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
   activeTool?: string | null,
-  memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -199,8 +199,7 @@ export async function handleRegenerateResponse(
           }
         }
       },
-      memoryEnabled: memoryEnabled ?? true,
-      thinkingEnabled,
+      reasoningEffort,
       onThinking: (delta) => {
         thinkingBuffer += delta;
         onMessagesUpdate((prev) =>
@@ -279,6 +278,8 @@ export async function handleRegenerateResponse(
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
+          model,
+          reasoningEffort,
         });
       }
 
@@ -321,7 +322,6 @@ export async function handleRegenerateResponse(
         userMessageContent: previousUserMessage.content,
         assistantContent: persistableAssistantContent,
         userId: context.session?.user?.id,
-        memoryEnabled: memoryEnabled ?? true,
         activeTool,
         userAttachments: previousUserMessage.attachments,
         memoryStatus: currentMemoryStatus,

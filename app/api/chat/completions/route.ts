@@ -52,7 +52,8 @@ const BASE_MEMORY_STATUS: MemoryStatus = {
 import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel, getChatReasoningEffort } from '@/lib/modelPolicy';
+import { validateRequestedModel, getChatReasoningEffort, parseReasoningEffortParam } from '@/lib/modelPolicy';
+import { REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from '@/constants/openai-models';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { logger } from "@/lib/logger";
@@ -137,12 +138,13 @@ export async function POST(request: NextRequest) {
     }
     const stream = streamResult.value;
 
+    // Memory is server-owned and always available for authenticated users. The
+    // removed client boolean is honored only when false for external API clients.
+    // The first-party UI no longer reads or sends the old localStorage setting.
     const memoryEnabledResult = parseOptionalBoolean(body.memoryEnabled, 'memoryEnabled', true);
-    if (!memoryEnabledResult.success) {
-      return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-
-    const memoryEnabled = memoryEnabledResult.value;
+    if (!memoryEnabledResult.success) return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    const legacyMemoryOptOut = memoryEnabledResult.value === false;
+    const memoryEnabled = process.env.MEMORY_ENABLED !== 'false' && !legacyMemoryOptOut;
 
     const thinkingEnabledResult = parseOptionalBoolean(body.thinkingEnabled, 'thinkingEnabled', false);
     if (!thinkingEnabledResult.success) {
@@ -150,12 +152,31 @@ export async function POST(request: NextRequest) {
     }
     const thinkingEnabled = thinkingEnabledResult.value;
 
+    let reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
+    if (body.reasoningEffort !== undefined && reasoningEffort === null) {
+      return errorResponse(
+        `reasoningEffort must be one of: ${REASONING_EFFORTS.join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+    // Legacy clients only send thinkingEnabled: ON maps to "high".
+    reasoningEffort = reasoningEffort ?? (thinkingEnabled ? 'high' : null);
+
     if (typeof model !== 'string' || !model.trim()) {
       return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
     }
     const validatedModel = validateRequestedModel(model.trim());
     if (!validatedModel) {
       return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (reasoningEffort && !isReasoningEffortSupported(validatedModel, reasoningEffort)) {
+      return errorResponse(
+        `reasoningEffort "${reasoningEffort}" is not supported by ${validatedModel}. Supported: ${getSupportedReasoningEfforts(validatedModel).join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const validation = validateChatMessages(messages);
@@ -206,7 +227,7 @@ export async function POST(request: NextRequest) {
             conversationId,
             documentAttachmentIds,
             memoryEnabled,
-            thinkingEnabled,
+            reasoningEffort,
             abortSignal: abortController.signal,
           })
         : createChatStreamHandler({
@@ -220,7 +241,7 @@ export async function POST(request: NextRequest) {
             userId: authUser.id,
             conversationId,
             requestId,
-            thinkingEnabled,
+            reasoningEffort,
           });
 
       const readableStream = new ReadableStream({
@@ -318,7 +339,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const reasoningEffort = getChatReasoningEffort(validatedModel, thinkingEnabled);
+      const resolvedReasoningEffort = getChatReasoningEffort(validatedModel, reasoningEffort);
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(
@@ -326,7 +347,7 @@ export async function POST(request: NextRequest) {
               model: validatedModel,
               messages: toOpenAIChatMessages(enhancedMessages),
               stream: false,
-              ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+              ...(resolvedReasoningEffort ? { reasoning_effort: resolvedReasoningEffort } : {}),
             },
             { signal: request.signal }
           ),

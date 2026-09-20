@@ -6,12 +6,13 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { Command } from "@langchain/langgraph";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
+import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
-import { validateRequestedModel } from "@/lib/modelPolicy";
+import { DEFAULT_MODEL, REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from "@/constants/openai-models";
+import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { isRecord } from "@/lib/typeGuards";
@@ -70,9 +71,26 @@ export async function POST(request: NextRequest) {
     }
     const threadId = expectedThreadId;
 
+    const reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
+    if (body.reasoningEffort !== undefined && reasoningEffort === null) {
+      return errorResponse(
+        `reasoningEffort must be one of: ${REASONING_EFFORTS.join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
+    if (reasoningEffort && !isReasoningEffortSupported(model, reasoningEffort)) {
+      return errorResponse(
+        `reasoningEffort "${reasoningEffort}" is not supported by ${model}. Supported: ${getSupportedReasoningEfforts(model).join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
     const apiKey = await getUserApiKey(user.id);
     const connectedToolkits = await getConnectedToolkits(user.id);
-    const graph = await createAgentGraph(user.id, apiKey, model, { thinkingEnabled: true, connectedToolkits });
+    const graph = await createAgentGraph(user.id, apiKey, model, { reasoningEffort, connectedToolkits });
 
     const existingState = await graph.getState({ configurable: { thread_id: threadId } });
     const hasPendingInterrupt = (existingState.tasks ?? []).some(
@@ -86,6 +104,30 @@ export async function POST(request: NextRequest) {
         HTTP_STATUS.BAD_REQUEST
       );
     }
+
+    const resumeConfig = resolveResumeConfig(
+      model,
+      reasoningEffort,
+      (existingState.tasks ?? [])
+        .flatMap((task) => task.interrupts ?? [])
+        .map((pending) => pending.value),
+    );
+    if (resumeConfig.usedPersisted && (resumeConfig.model !== model || resumeConfig.reasoningEffort !== reasoningEffort)) {
+      logger.log("[Approve] Resuming with interrupt-created config over picker config", {
+        requestId,
+        pickerModel: model,
+        resumeModel: resumeConfig.model,
+        pickerReasoningEffort: reasoningEffort,
+        resumeReasoningEffort: resumeConfig.reasoningEffort,
+      });
+    }
+    const resumeGraph =
+      resumeConfig.model === model && resumeConfig.reasoningEffort === reasoningEffort
+        ? graph
+        : await createAgentGraph(user.id, apiKey, resumeConfig.model, {
+            reasoningEffort: resumeConfig.reasoningEffort,
+            connectedToolkits,
+          });
 
     const resumeValue = typeof response === "string"
       ? response
@@ -117,7 +159,7 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          const eventStream = await graph.streamEvents(
+          const eventStream = await resumeGraph.streamEvents(
             new Command({ resume: resumeValue }),
             {
               configurable: { thread_id: threadId },
@@ -136,7 +178,7 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          const finalState = await graph.getState({ configurable: { thread_id: threadId } });
+          const finalState = await resumeGraph.getState({ configurable: { thread_id: threadId } });
           const pendingInterrupts = (finalState.tasks ?? [])
             .flatMap((task) => task.interrupts ?? []);
 

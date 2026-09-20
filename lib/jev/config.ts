@@ -12,6 +12,9 @@ const ENV_BY_CHECKPOINT: Record<JevCheckpointName, string> = {
   [JevCheckpoint.PLANNER]: "JEV_PLANNER_MODE",
   [JevCheckpoint.TOOL_ROUTER]: "JEV_TOOL_ROUTER_MODE",
   [JevCheckpoint.HITL_ESCALATION]: "JEV_HITL_ESCALATION_MODE",
+  [JevCheckpoint.MEMORY_GATE]: "JEV_MEMORY_GATE_MODE",
+  [JevCheckpoint.MEMORY_EVIDENCE]: "JEV_MEMORY_EVIDENCE_MODE",
+  [JevCheckpoint.MEMORY_STORAGE]: "JEV_MEMORY_STORAGE_MODE",
 };
 
 const MODE_VALUES = new Set<string>(Object.values(JevMode));

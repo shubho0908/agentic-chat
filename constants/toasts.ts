@@ -10,8 +10,6 @@ export const TOAST_SUCCESS_MESSAGES = {
   CONVERSATION_UNSHARED: "Conversation is now private",
   LOGGED_OUT: "Logged out successfully",
   GENERATION_STOPPED: "Generation stopped",
-  MEMORY_ENABLED: "Memory enabled",
-  MEMORY_DISABLED: "Memory disabled",
 } as const;
 
 export const TOAST_INFO_MESSAGES = {

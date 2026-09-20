@@ -18,7 +18,7 @@ import { handleSendMessage, continueIncompleteConversation } from "./chat/messag
 import { handleEditMessage } from "./chat/messageEditor";
 import { handleRegenerateResponse } from "./chat/messageRegenerator";
 import { useStreaming } from "@/contexts/streaming-context";
-import { getModel } from "@/lib/storage";
+import { getModel, getReasoningEffort } from "@/lib/storage";
 import { streamChatApproval } from "./chat/streamingApi";
 import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, getPersistableAssistantContent } from "./chat/conversationManager";
 import { saveAssistantMessage, updateAssistantMessage as updateSavedAssistantMessage } from "./chat/messageApi";
@@ -75,7 +75,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   }, [initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, thinkingEnabled }: SendMessageOptions) => {
+    async ({ content, session, attachments, activeTool, reasoningEffort }: SendMessageOptions) => {
       if (!content.trim() || isLoading) {
         return { success: false, error: "Unable to send message" };
       }
@@ -108,8 +108,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           session,
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
         return result;
       } catch (error) {
@@ -130,7 +129,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, thinkingEnabled }: EditMessageOptions) => {
+    async ({ messageId, content, attachments, session, activeTool, reasoningEffort }: EditMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -157,8 +156,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onArtifact,
           },
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -176,7 +174,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, session, activeTool, memoryEnabled, thinkingEnabled }: RegenerateMessageOptions) => {
+    async ({ messageId, session, activeTool, reasoningEffort }: RegenerateMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
@@ -201,8 +199,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             onArtifact,
           },
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -220,7 +217,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   );
 
   const continueConversation = useCallback(
-    async ({ userMessage, session, activeTool, memoryEnabled, thinkingEnabled }: ContinueConversationOptions) => {
+    async ({ userMessage, session, activeTool, reasoningEffort }: ContinueConversationOptions) => {
       if (isLoading || !conversationId) return;
 
       setIsLoading(true);
@@ -245,8 +242,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           },
           session,
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
@@ -316,6 +312,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           model,
           approved,
           response,
+          reasoningEffort: getReasoningEffort(),
           signal: requestController.signal,
           onChunk: (delta) => {
             resumedContent += delta;
@@ -477,8 +474,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           userMessage: lastUserMessage,
           session: autoContinue.session,
           activeTool: autoContinue.activeTool ?? null,
-          memoryEnabled: autoContinue.memoryEnabled,
-          thinkingEnabled: autoContinue.thinkingEnabled,
+          reasoningEffort: autoContinue.reasoningEffort,
         });
       }, 0);
       return () => clearTimeout(timerId);

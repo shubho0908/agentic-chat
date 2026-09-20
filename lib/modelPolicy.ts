@@ -1,5 +1,11 @@
 import type { ReasoningEffort } from "openai/resources/shared";
-import { OPENAI_MODELS } from "@/constants/openai-models";
+import {
+  OPENAI_MODELS,
+  getDefaultReasoningEffort,
+  isReasoningEffortSupported,
+  reasoningEffortSchema,
+  type ReasoningEffortLevel,
+} from "@/constants/openai-models";
 
 const ALLOWED_MODELS = new Map(OPENAI_MODELS.map((model) => [model.id, model]));
 
@@ -26,11 +32,31 @@ function getReasoningSeriesMinorVersion(model: string): number | null {
   return match[1] ? Number(match[1]) : 0;
 }
 
-export function getChatReasoningEffort(model: string, thinkingEnabled?: boolean): ReasoningEffort | undefined {
+/**
+ * Validates a client-supplied reasoning effort level. Returns the level or
+ * null when the value is missing/not one of the supported levels.
+ */
+export function parseReasoningEffortParam(value: unknown): ReasoningEffortLevel | null {
+  const parsed = reasoningEffortSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Resolves the reasoning effort to send to OpenAI for a chat model.
+ * Returns undefined for non-reasoning models (parameter must be omitted).
+ * An explicit effort wins when the model supports it; anything else falls
+ * back to the model-aware default ("minimal" on the base GPT-5.0 series,
+ * which does not accept "none").
+ */
+export function getChatReasoningEffort(model: string, effort?: ReasoningEffortLevel | null): ReasoningEffort | undefined {
   const minorVersion = getReasoningSeriesMinorVersion(model);
   if (minorVersion === null) return undefined;
-  if (thinkingEnabled) return "high";
-  return minorVersion >= 1 ? "none" : "minimal";
+  const resolved =
+    effort && isReasoningEffortSupported(model, effort)
+      ? effort
+      : getDefaultReasoningEffort(model);
+  if (resolved === "none") return minorVersion >= 1 ? "none" : "minimal";
+  return resolved;
 }
 
 export function getSupportedTemperature(

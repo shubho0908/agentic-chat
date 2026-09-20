@@ -1,4 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
@@ -119,8 +120,13 @@ function collectImages(sources: ResearchSource[], limit: number): ResearchImage[
   return images;
 }
 
-export function triageNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 256, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
+export function triageNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 256, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.TRIAGE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.userContext) {
@@ -158,8 +164,13 @@ export function triageNode(apiKey: string, model: string) {
   });
 }
 
-export function decomposeNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
+export function decomposeNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.DECOMPOSE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     await emitProgress(ResearchStep.DECOMPOSING, "Breaking down research question...", config);
@@ -191,8 +202,13 @@ export function decomposeNode(apiKey: string, model: string) {
   });
 }
 
-export function planQueriesNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
+export function planQueriesNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 512, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.PLAN_QUERIES, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const queryGroups = await Promise.all(
@@ -347,8 +363,13 @@ export function deepScrapeNode() {
   });
 }
 
-export function evaluateNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 768, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
+export function evaluateNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 768, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.EVALUATE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (state.searchRound >= state.maxRounds || state.sources.length >= Limit.MAX_SOURCES) {
@@ -410,8 +431,13 @@ export function evaluateNode(apiKey: string, model: string) {
   });
 }
 
-export function synthesizeNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0.1), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
+export function synthesizeNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0.1), streaming: false, timeout: LONG_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.SYNTHESIZE, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const images = collectImages(state.sources, Limit.MAX_RESEARCH_IMAGES);
@@ -448,8 +474,13 @@ export function synthesizeNode(apiKey: string, model: string) {
   });
 }
 
-export function reflexionNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 1024, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS });
+export function reflexionNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 1024, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: SHORT_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.REFLEXION, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     if (!state.synthesis.trim()) {
@@ -507,8 +538,13 @@ export function reflexionNode(apiKey: string, model: string) {
   });
 }
 
-export function correctNode(apiKey: string, model: string) {
-  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: LONG_LLM_TIMEOUT_MS });
+export function correctNode(apiKey: string, model: string, reasoningEffort?: ReasoningEffortLevel | null) {
+  const llm = new ChatOpenAI({ modelName: model, apiKey, maxTokens: 4096, temperature: getSupportedTemperature(model, 0), streaming: false, timeout: LONG_LLM_TIMEOUT_MS,
+    ...(reasoningEffort === "none"
+      ? { reasoningEffort: "none" as const }
+      : reasoningEffort
+        ? { reasoning: { effort: reasoningEffort } }
+        : {})});
 
   return withResearchNode(ResearchNode.CORRECT, async (state: ResearchStateType, config?: LangGraphRunnableConfig) => {
     const correctionAttempts = state.correctionAttempts + 1;

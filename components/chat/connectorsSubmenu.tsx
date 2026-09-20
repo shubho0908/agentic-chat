@@ -33,10 +33,18 @@ const TOOLKIT_ICONS: Record<ComposioToolkit, FC<SVGProps<SVGSVGElement>>> = {
 
 interface ConnectorsSubmenuContentProps {
   onActionComplete?: () => void;
+  filter?: string;
 }
 
-export function ConnectorsSubmenuContent({ onActionComplete }: ConnectorsSubmenuContentProps) {
+export function ConnectorsSubmenuContent({ onActionComplete, filter }: ConnectorsSubmenuContentProps) {
   const { services, isLoading: isStatusLoading, connectMutation, disconnectMutation } = useComposioConnectors({ onActionComplete });
+
+  const query = filter?.trim().toLowerCase() ?? "";
+  const visibleToolkits = query
+    ? COMPOSIO_TOOLKITS.filter((toolkit) =>
+        TOOLKIT_DISPLAY_NAMES[toolkit].toLowerCase().includes(query)
+      )
+    : COMPOSIO_TOOLKITS;
 
   return (
     <>
@@ -45,7 +53,12 @@ export function ConnectorsSubmenuContent({ onActionComplete }: ConnectorsSubmenu
           Integrated Apps
         </p>
       </div>
-      {COMPOSIO_TOOLKITS.map((toolkit) => {
+      {visibleToolkits.length === 0 && (
+        <p className="px-2 py-2 text-xs text-muted-foreground">
+          No matching apps
+        </p>
+      )}
+      {visibleToolkits.map((toolkit) => {
         const connection = services.find((s) => s.toolkit === toolkit);
         const isConnected = !!connection;
         const isMutating = connectMutation.isPending && connectMutation.variables === toolkit;

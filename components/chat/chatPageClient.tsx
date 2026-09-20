@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChat } from "@/hooks/useChat";
@@ -20,7 +21,7 @@ import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
 import { convertDbMessagesToFrontend, flattenMessageTree } from "@/lib/messageUtils";
-import { getMemoryEnabled, getThinkingEnabled } from "@/lib/storage";
+import { getReasoningEffort } from "@/lib/storage";
 
 interface ChatPageClientProps {
   conversationId: string;
@@ -63,8 +64,7 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
     onArtifact: handleArtifactEvent,
     autoContinue: session ? {
       session: session as { user: { id: string } },
-      memoryEnabled: getMemoryEnabled(),
-      thinkingEnabled: getThinkingEnabled(),
+      reasoningEffort: getReasoningEffort(),
     } : null,
   });
   const { tokenUsage, mergedMemoryStatus } = useTokenUsageWithMemory({
@@ -94,22 +94,20 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
   const conversationNotFound = !!conversationError;
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const memoryEnabled = getMemoryEnabled();
-    const thinkingEnabled = getThinkingEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled, thinkingEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const memoryEnabled = getMemoryEnabled();
-    const thinkingEnabled = getThinkingEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled, thinkingEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
   };
 
   const handleToggleSharing = (id: string, nextIsPublic: boolean) => {
     toggleSharing({ id, isPublic: nextIsPublic });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, reasoningEffort?: ReasoningEffortLevel) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -128,20 +126,18 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
+    return sendMessage({ content, session, attachments, reasoningEffort });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const memoryEnabled = getMemoryEnabled();
-    const thinkingEnabled = getThinkingEnabled();
+    const reasoningEffort = getReasoningEffort();
     await sendMessage({
       content: question,
       session,
-      memoryEnabled,
-      thinkingEnabled
+      reasoningEffort
     });
   };
 

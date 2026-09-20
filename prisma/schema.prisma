@@ -166,6 +166,8 @@ model SemanticCache {
   question       String                         @db.Text
   answer         String                         @db.Text
   embedding      Unsupported("vector(1536)")?
+  model          String?                        @map("model")
+  reasoningEffort String?                       @map("reasoning_effort")
   createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([userId], map: "semantic_cache_user_id_idx")

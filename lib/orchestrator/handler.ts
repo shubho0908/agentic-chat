@@ -1,4 +1,5 @@
 import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { Message, MessageContentPart } from "@/lib/schemas/chat";
 import type { MemoryStatus } from "@/types/chat";
@@ -33,7 +34,7 @@ interface OrchestratorStreamOptions {
   conversationId?: string;
   documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel | null;
   abortSignal?: AbortSignal;
 }
 
@@ -88,7 +89,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
     conversationId,
     documentAttachmentIds,
     memoryEnabled = true,
-    thinkingEnabled = false,
+    reasoningEffort,
     abortSignal,
   } = options;
 
@@ -201,7 +202,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         if (queryText && !bypassSemanticCache && queryText.trim().length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
             const embedding = await generateEmbedding(queryText, userId, abortSignal);
-            const entry = await searchSemanticCacheEntry(embedding, userId, conversationId);
+            const entry = await searchSemanticCacheEntry(embedding, userId, conversationId, model, reasoningEffort ?? null);
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
               // serves, active can veto a confident no-serve verdict, and
@@ -238,7 +239,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         }
 
         const graph = await createAgentGraph(userId, apiKey, model, {
-          thinkingEnabled,
+          reasoningEffort,
           connectedToolkits,
         });
 
