@@ -1,8 +1,29 @@
 {
   "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' npm run build",
   "functions": {
-    "app/**/*.{ts,tsx}": {
-      "maxDuration": 300
+    "app/api/chat/completions/route.ts": {
+      "maxDuration": 300,
+      "regions": ["iad1"]
+    },
+    "app/api/documents/process/route.ts": {
+      "maxDuration": 300,
+      "regions": ["iad1"]
+    },
+    "app/api/documents/process-batch/route.ts": {
+      "maxDuration": 300,
+      "regions": ["iad1"]
+    },
+    "app/api/internal/orchestration/drain/route.ts": {
+      "maxDuration": 300,
+      "regions": ["iad1"]
+    },
+    "app/api/scrape-url/route.ts": {
+      "maxDuration": 120,
+      "regions": ["iad1"]
+    },
+    "app/api/conversations/[id]/export/route.ts": {
+      "maxDuration": 120,
+      "regions": ["iad1"]
     }
   },
   "crons": [
