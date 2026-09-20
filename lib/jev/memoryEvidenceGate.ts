@@ -33,11 +33,26 @@ export async function gateMemoryEvidence(
   signal?: AbortSignal,
   dependency?: JevDecisionClient,
 ) {
-  const records = z
-    .array(memoryEvidenceSchema)
-    .max(6)
-    .parse(input)
-    .filter((r) => (r.score ?? 0) >= 0.15);
+  // Per-record parse: one malformed row drops only that row, never the batch.
+  const parsed: MemoryEvidence[] = [];
+  const rejected: string[] = [];
+  for (const item of input) {
+    const result = memoryEvidenceSchema.safeParse(item);
+    if (result.success) parsed.push(result.data);
+    else
+      rejected.push(
+        result.error.issues.map((issue) => String(issue.code)).join("+") ||
+          "invalid_record",
+      );
+  }
+  if (rejected.length)
+    logWarn({
+      event: "jev_memory_evidence_rejected",
+      received: input.length,
+      rejected: rejected.length,
+      reasons: [...new Set(rejected)].sort(),
+    });
+  const records = parsed.filter((r) => (r.score ?? 0) >= 0.15);
   if (!records.length) return [];
   const mode = getJevMode(JevCheckpoint.MEMORY_EVIDENCE);
   // One candidate with a strong score is safe to use directly. Multiple

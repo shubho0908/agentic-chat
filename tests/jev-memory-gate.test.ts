@@ -199,18 +199,48 @@ test("memory evidence accepts RFC3339 timestamps with numeric offsets", async ()
   assert.equal(kept[0].updatedAt, "2026-09-20T14:49:43.396+00:00");
 });
 
-test("memory evidence still rejects malformed timestamps", async () => {
+test("memory evidence drops a lone malformed timestamp instead of throwing", async () => {
   const { gateMemoryEvidence } = await import("../lib/jev/memoryEvidenceGate");
-  await assert.rejects(
-    gateMemoryEvidence("my name", [
-      {
-        memory: "The user's name is Shubhajit Bera",
-        score: 0.9,
-        updatedAt: "not-a-date",
-      },
-    ]),
-  );
+  const kept = await gateMemoryEvidence("my name", [
+    {
+      memory: "The user's name is Shubhajit Bera",
+      score: 0.9,
+      updatedAt: "not-a-date",
+    },
+  ]);
+  assert.deepEqual(kept, []);
 });
+
+test("phase0: one malformed row drops only that row, keeps four", () =>
+  withEnv({ JEV_MEMORY_EVIDENCE_MODE: "off" }, async () => {
+    const { gateMemoryEvidence } =
+      await import("../lib/jev/memoryEvidenceGate");
+    const kept = await gateMemoryEvidence("my name", [
+      { memory: "fact one", score: 0.9 },
+      { memory: "fact two", score: 0.9 },
+      { memory: "bad date", score: 0.9, updatedAt: "not-a-date" },
+      { memory: "fact three", score: 0.9 },
+      { memory: "fact four", score: 0.9 },
+    ]);
+    assert.deepEqual(
+      kept.map((value) => value.memory),
+      ["fact one", "fact two", "fact three", "fact four"],
+    );
+  }));
+
+test("phase0: more than six candidates does not throw", () =>
+  withEnv({ JEV_MEMORY_EVIDENCE_MODE: "off" }, async () => {
+    const { gateMemoryEvidence } =
+      await import("../lib/jev/memoryEvidenceGate");
+    const kept = await gateMemoryEvidence(
+      "my stack",
+      Array.from({ length: 7 }, (_, i) => ({
+        memory: `fact ${i}`,
+        score: 0.9,
+      })),
+    );
+    assert.equal(kept.length, 7);
+  }));
 
 test("evidence active mode batches candidates and filters rejected memories", () =>
   withEnv(
