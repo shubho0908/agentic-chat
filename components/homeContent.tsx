@@ -16,7 +16,7 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getMemoryEnabled } from "@/lib/storage";
+import { getMemoryEnabled, getReasoningEffort } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -107,12 +107,14 @@ export function HomeContent({ currentYear }: HomeContentProps) {
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
     const memoryEnabled = getMemoryEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled, reasoningEffort });
   };
 
   const handleRegenerate = (messageId: string) => {
     const memoryEnabled = getMemoryEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled, reasoningEffort });
   };
 
   const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, reasoningEffort?: ReasoningEffortLevel) => {
@@ -143,10 +145,12 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       return;
     }
     const memoryEnabled = getMemoryEnabled();
+    const reasoningEffort = getReasoningEffort();
     await sendMessage({
       content: question,
       session,
       memoryEnabled,
+      reasoningEffort,
     });
   };
 

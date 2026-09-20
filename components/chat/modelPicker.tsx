@@ -52,15 +52,15 @@ function formatContext(tokens: number): string {
 
 function getCostTierStyles(multiplier: number): string {
   if (multiplier >= 30) {
-    return "border-orange-500/30 bg-orange-500/[0.08] text-orange-700 dark:text-orange-400";
+    return "text-orange-700/90 dark:text-orange-400/90";
   }
   if (multiplier >= 10) {
-    return "border-amber-500/25 bg-amber-500/[0.06] text-amber-700 dark:text-amber-400";
+    return "text-amber-700/90 dark:text-amber-400/90";
   }
   if (multiplier >= 3) {
-    return "border-border/50 bg-muted/40 text-foreground/70";
+    return "text-foreground/60";
   }
-  return "border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-700/80 dark:text-emerald-400/85";
+  return "text-emerald-700/80 dark:text-emerald-400/85";
 }
 
 function CostBadge({ multiplier }: { multiplier: number }) {
@@ -69,15 +69,12 @@ function CostBadge({ multiplier }: { multiplier: number }) {
   return (
     <span
       className={cn(
-        "inline-flex items-baseline gap-[3px] rounded-md border px-1.5 py-[2px] text-[10px] font-semibold leading-none tabular-nums tracking-tight transition-colors",
+        "inline-flex items-baseline gap-[2px] text-[10px] font-medium leading-none tabular-nums",
         tierStyles
       )}
       title={`Estimated cost: ${display} the cheapest model (blended input/output, 1:4 ratio)`}
     >
       <span>{display}</span>
-      <span className="text-[8px] font-medium uppercase tracking-[0.06em] opacity-70">
-        usage
-      </span>
     </span>
   );
 }
@@ -114,7 +111,7 @@ export function ModelPicker({
                 )}
               >
                 <OpenAIIcon className="size-3.5 shrink-0 opacity-80" />
-                <span className="max-w-[88px] truncate sm:max-w-none">
+                <span className="hidden sm:inline sm:max-w-none">
                   {selectedModelData?.name ?? "Select model"}
                 </span>
                 <ChevronDown className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -128,7 +125,7 @@ export function ModelPicker({
       </TooltipProvider>
 
       <DropdownMenuContent
-        className="w-[min(340px,calc(100vw-2rem))] rounded-2xl border-border/40 bg-background/95 p-1.5 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+        className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-border/40 bg-background/95 p-1.5 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
         align="end"
         side="top"
         sideOffset={8}
@@ -137,7 +134,7 @@ export function ModelPicker({
         <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
           Model
         </p>
-        <div className="max-h-[340px] overflow-y-auto px-0.5">
+        <div className="max-h-[400px] overflow-y-auto px-0.5">
           {OPENAI_MODELS.map((model) => {
             const isSelected = selectedModel === model.id;
             const costMultiplier = getModelCostMultiplier(model);
@@ -153,19 +150,18 @@ export function ModelPicker({
               <div
                 key={model.id}
                 className={cn(
-                  "mb-0.5 flex items-center gap-2 rounded-xl p-1.5 pl-2 last:mb-0",
+                  "mb-1 flex items-center gap-3 rounded-xl px-2.5 py-2.5 last:mb-0",
                   "transition-colors",
                   isSelected ? "bg-muted/80 shadow-sm" : "hover:bg-muted/40"
                 )}
               >
-                <button
-                  type="button"
-                  onClick={() => onModelSelect(model.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                <DropdownMenuItem
+                  onSelect={() => onModelSelect(model.id)}
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-0 py-0 text-left text-[13px] outline-none focus:bg-transparent focus:text-inherit focus-visible:ring-1 focus-visible:ring-ring"
                 >
                   <div
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full border transition-colors",
+                      "flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors",
                       isSelected
                         ? "border-border/60 bg-background text-foreground shadow-sm"
                         : "border-border/20 bg-background/50 text-muted-foreground"
@@ -174,7 +170,7 @@ export function ModelPicker({
                     <OpenAIIcon className="size-3.5" />
                   </div>
 
-                  <div className="flex min-w-0 flex-1 flex-col gap-px overflow-hidden">
+                  <div className="flex min-w-0 flex-1 flex-col gap-[3px] overflow-hidden">
                     <div className="flex items-center gap-1.5">
                       <span
                         className={cn(
@@ -200,14 +196,17 @@ export function ModelPicker({
                     <span className="block max-w-full truncate text-[11px] leading-snug text-muted-foreground/70">
                       {model.description}
                     </span>
-                    <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">
-                      {formatContext(model.contextWindow)} context
+                    <span className="flex items-center gap-1.5 text-[10px] font-medium leading-none text-muted-foreground/60">
+                      {formatContext(model.contextWindow)} ctx
                       {costMultiplier !== null && (
-                        <CostBadge multiplier={costMultiplier} />
+                        <>
+                          <span className="text-muted-foreground/30">·</span>
+                          <CostBadge multiplier={costMultiplier} />
+                        </>
                       )}
                     </span>
                   </div>
-                </button>
+                </DropdownMenuItem>
 
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger
