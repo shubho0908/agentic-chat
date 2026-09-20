@@ -186,6 +186,32 @@ test("malformed Jev response fails closed", () =>
     },
   ));
 
+test("memory evidence accepts RFC3339 timestamps with numeric offsets", async () => {
+  const { gateMemoryEvidence } = await import("../lib/jev/memoryEvidenceGate");
+  const kept = await gateMemoryEvidence("my name", [
+    {
+      memory: "The user's name is Shubhajit Bera",
+      score: 0.9,
+      updatedAt: "2026-09-20T14:49:43.396+00:00",
+    },
+  ]);
+  assert.equal(kept.length, 1);
+  assert.equal(kept[0].updatedAt, "2026-09-20T14:49:43.396+00:00");
+});
+
+test("memory evidence still rejects malformed timestamps", async () => {
+  const { gateMemoryEvidence } = await import("../lib/jev/memoryEvidenceGate");
+  await assert.rejects(
+    gateMemoryEvidence("my name", [
+      {
+        memory: "The user's name is Shubhajit Bera",
+        score: 0.9,
+        updatedAt: "not-a-date",
+      },
+    ]),
+  );
+});
+
 test("evidence active mode batches candidates and filters rejected memories", () =>
   withEnv(
     { JEV_MEMORY_EVIDENCE_MODE: "active", TYPESAFE_API_KEY: "test" },

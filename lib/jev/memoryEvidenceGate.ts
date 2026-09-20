@@ -15,7 +15,7 @@ const memoryEvidenceSchema = z.object({
   id: z.string().optional(),
   memory: z.string().min(1),
   score: z.number().min(0).max(1).optional(),
-  updatedAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime({ offset: true }).optional(),
 });
 type MemoryEvidence = z.infer<typeof memoryEvidenceSchema>;
 export const safeEvidenceFallback = (r: MemoryEvidence[]) =>
