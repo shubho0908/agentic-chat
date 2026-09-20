@@ -215,6 +215,7 @@ async function resolveDocumentContext(
     waitForProcessing?: boolean;
     processingTimeoutMs?: number;
     signal?: AbortSignal;
+    currentDocumentAttachmentIds?: string[];
   },
 ) {
   if (!queries.length) return null;
@@ -343,6 +344,7 @@ export async function routeContext(
   options?: {
     apiKey?: string;
     signal?: AbortSignal;
+    currentDocumentAttachmentIds?: string[];
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -381,7 +383,13 @@ export async function routeContext(
   }
 
   const attachmentInfo = conversationId
-    ? await getAttachmentInfo(conversationId, userId, !isReferential)
+    ? options?.currentDocumentAttachmentIds?.length && !isReferential
+      ? {
+          hasDocuments: true,
+          documentCount: options.currentDocumentAttachmentIds.length,
+          documentAttachmentIds: options.currentDocumentAttachmentIds,
+        }
+      : await getAttachmentInfo(conversationId, userId, !isReferential)
     : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {
@@ -447,6 +455,7 @@ export async function routeContext(
     const inlineResult = await tryInlineAttachmentContent(
       attachmentInfo.documentAttachmentIds,
       userId,
+      options?.signal,
     );
 
     if (inlineResult) {
@@ -463,6 +472,7 @@ export async function routeContext(
       attachmentIds: attachmentInfo.documentAttachmentIds,
       waitForProcessing: true,
       processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+      signal: options?.signal,
     });
 
     if (ragResult) {

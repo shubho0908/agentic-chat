@@ -31,6 +31,7 @@ interface OrchestratorStreamOptions {
   apiKey: string;
   userId: string;
   conversationId?: string;
+  documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
   thinkingEnabled?: boolean;
   abortSignal?: AbortSignal;
@@ -85,6 +86,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
     apiKey,
     userId,
     conversationId,
+    documentAttachmentIds,
     memoryEnabled = true,
     thinkingEnabled = false,
     abortSignal,
@@ -160,7 +162,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             conversationId,
             null,
             memoryEnabled,
-            { apiKey, signal: abortSignal }
+            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds }
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           if (contextResult.context) {

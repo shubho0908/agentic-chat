@@ -252,6 +252,7 @@ export async function handleStreamingResponse(
         }
       },
       conversationId,
+      documentAttachmentIds: userAttachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -440,7 +441,7 @@ export async function handleStreamingResponse(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent && artifacts.length === 0) {
+      if (cacheQuery && assistantContent && artifacts.length === 0 && !responseIncompleteReason) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,

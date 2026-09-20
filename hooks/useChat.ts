@@ -360,6 +360,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             thinkingAccumulator += delta;
             updateLocalAssistantMessage({ thinking: thinkingAccumulator });
           },
+          onResponseIncomplete: () => {
+            messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+            updateLocalAssistantMessage({ metadata: messageMetadata });
+          },
           onArtifact: (event) => {
             const eventWithMessage = { ...event, messageId: assistantMessageId };
             artifactCollector.push(eventWithMessage);

@@ -270,7 +270,7 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, conversationId, memoryEnabled, thinkingEnabled } = config;
+  const { messages, model, signal, conversationId, documentAttachmentIds, memoryEnabled, thinkingEnabled } = config;
 
   const requestPayload: Record<string, unknown> = {
     model,
@@ -281,6 +281,9 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 
   if (conversationId) {
     requestPayload.conversationId = conversationId;
+  }
+  if (documentAttachmentIds?.length) {
+    requestPayload.documentAttachmentIds = documentAttachmentIds;
   }
   if (memoryEnabled !== undefined && memoryEnabled !== true) {
     requestPayload.memoryEnabled = memoryEnabled;
