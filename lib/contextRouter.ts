@@ -1,7 +1,5 @@
 import { getMemoryContextResult } from "./memory";
-import {
-  getRAGContext,
-} from "./rag/retrieval/context";
+import { getRAGContext } from "./rag/retrieval/context";
 import type { Message } from "@/lib/schemas/chat";
 import { selectDocumentAttachmentsForTurn } from "./chat/attachmentRouting";
 import { MessageRole } from "@/lib/schemas/chat";
@@ -99,7 +97,8 @@ async function tryInlineAttachmentContent(
 
     return { context, documentCount: validContents.length };
   } catch (error) {
-    if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    if (signal?.aborted)
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
     logger.warn("[Context Router] Inline attachment fetch failed:", error);
     return null;
   }
@@ -233,7 +232,8 @@ async function resolveDocumentContext(
       signal: options.signal,
     });
   } catch (error) {
-    if (options.signal?.aborted) throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
+    if (options.signal?.aborted)
+      throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
     logger.warn("[Context Router] RAG multi-query retrieval failed:", error);
     return null;
   }
@@ -288,7 +288,9 @@ async function getAttachmentInfo(
         },
         isDeleted: false,
       },
-      ...(currentTurnOnly ? { orderBy: { createdAt: "desc" as const }, take: 1 } : {}),
+      ...(currentTurnOnly
+        ? { orderBy: { createdAt: "desc" as const }, take: 1 }
+        : {}),
       select: {
         attachments: {
           select: {
@@ -339,8 +341,8 @@ export async function routeContext(
   userId: string,
   messages: Message[],
   conversationId?: string,
-  _activeTool?: string | null,
-  memoryEnabled: boolean = false,
+  activeTool?: string | null,
+  memoryEnabled: boolean = true,
   options?: {
     apiKey?: string;
     signal?: AbortSignal;
@@ -365,7 +367,10 @@ export async function routeContext(
     memoryCount: 0,
     documentCount: 0,
     imageCount,
-    skippedMemory: !memoryEnabled,
+    skippedMemory:
+      !memoryEnabled ||
+      Boolean(activeTool) ||
+      process.env.MEMORY_ENABLED === "false",
     degradedContexts: [],
   };
 
@@ -405,7 +410,9 @@ export async function routeContext(
       if (inlineResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = inlineResult.documentCount;
-        metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+        metadata.routingDecision = hasImages
+          ? RoutingDecision.Hybrid
+          : RoutingDecision.DocumentsOnly;
         return { context: inlineResult.context, metadata };
       }
 
@@ -421,7 +428,9 @@ export async function routeContext(
         metadata.hasDocuments = true;
         metadata.documentCount = ragResult.documentCount;
         metadata.citations = ragResult.citations;
-        metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+        metadata.routingDecision = hasImages
+          ? RoutingDecision.Hybrid
+          : RoutingDecision.DocumentsOnly;
 
         if (hasImages) {
           metadata.routingDecision = RoutingDecision.Hybrid;
@@ -489,9 +498,11 @@ export async function routeContext(
       return { context: ragResult.context, metadata };
     }
 
-    // No relevant document evidence was used for this turn.
+    // A current document was supplied but did not produce usable evidence.
+    // Never substitute personal memory for the user's requested document.
     metadata.documentCount = attachmentInfo.documentCount;
-
+    metadata.hasDocuments = true;
+    metadata.skippedMemory = true;
     logMissingDocumentRetrieval({
       userId,
       conversationId,
@@ -499,7 +510,7 @@ export async function routeContext(
       documentCount: attachmentInfo.documentCount,
       isReferential,
     });
-    // Continue with normal memory routing after a relevance miss.
+    return { context: buildMissingDocumentContext(textQuery), metadata };
   }
 
   if (hasImages) {
@@ -516,7 +527,9 @@ export async function routeContext(
   const memoryDecision = await mediateMemoryIntent({
     messageText: textQuery,
     recentConversation,
-    apiKey: options?.apiKey,
+    userId,
+    conversationId,
+    signal: options?.signal,
   });
 
   if (!memoryDecision.shouldQuery) {
@@ -527,6 +540,8 @@ export async function routeContext(
 
   const memoryContextResult = await getMemoryContextResult(textQuery, userId, {
     recentConversation,
+    conversationId,
+    signal: options?.signal,
   });
 
   if (memoryContextResult.failed) {

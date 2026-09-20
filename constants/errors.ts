@@ -125,11 +125,6 @@ export const TOAST_ERROR_MESSAGES = {
     DEACTIVATED: "Tool deactivated",
     AUTH_REQUIRED_DESCRIPTION: "Please sign in to use tools",
   },
-  MEMORY_UI: {
-    ENABLED: "Memory enabled",
-    DISABLED: "Memory disabled",
-    AUTH_REQUIRED_DESCRIPTION: "Please sign in to use memory features",
-  },
 } as const;
 
 export const ENCRYPTION_ERRORS = {

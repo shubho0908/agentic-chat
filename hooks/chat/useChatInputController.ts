@@ -21,12 +21,9 @@ import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import {
-  TOAST_SUCCESS_MESSAGES,
   TOAST_INFO_MESSAGES,
 } from "@/constants/toasts";
 import {
-  getMemoryEnabled as getStoredMemoryEnabled,
-  setMemoryEnabled as storeMemoryEnabled,
   getReasoningEffortMap as getStoredReasoningEffortMap,
   setReasoningEffortForModel as storeReasoningEffortForModel,
   getModel as getStoredModel,
@@ -70,7 +67,6 @@ interface UseChatInputControllerProps {
 
 interface ChatInputUiState {
   isSending: boolean;
-  memoryEnabled: boolean;
   effortByModel: ReasoningEffortMap;
   selectedModel: string;
 }
@@ -79,13 +75,11 @@ type ChatInputUiAction =
   | { type: "hydrate"; payload: Partial<ChatInputUiState> }
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
-  | { type: "set-memory"; enabled: boolean }
   | { type: "set-reasoning-effort"; model: string; effort: ReasoningEffortLevel }
   | { type: "set-model"; model: string };
 
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
   isSending: false,
-  memoryEnabled: false,
   effortByModel: {},
   selectedModel: DEFAULT_MODEL,
 };
@@ -108,12 +102,9 @@ function chatInputUiReducer(
     case "reset-session":
       return {
         ...state,
-        memoryEnabled: false,
       };
     case "set-sending":
       return { ...state, isSending: action.isSending };
-    case "set-memory":
-      return { ...state, memoryEnabled: action.enabled };
     case "set-reasoning-effort":
       return {
         ...state,
@@ -143,7 +134,7 @@ export function useChatInputController({
     chatInputUiReducer,
     INITIAL_CHAT_INPUT_UI_STATE,
   );
-  const { isSending, memoryEnabled, effortByModel, selectedModel } = uiState;
+  const { isSending, effortByModel, selectedModel } = uiState;
   const storedEffort = effortByModel[selectedModel];
   const reasoningEffort = getSupportedReasoningEfforts(selectedModel).includes(
     storedEffort as ReasoningEffortLevel
@@ -220,7 +211,6 @@ export function useChatInputController({
         dispatchUi({
           type: "hydrate",
           payload: {
-            memoryEnabled: getStoredMemoryEnabled(),
           },
         });
       } else {
@@ -341,7 +331,6 @@ export function useChatInputController({
         messageText,
         attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
         null,
-        !!session && memoryEnabled,
         reasoningEffort,
       );
 
@@ -408,27 +397,6 @@ export function useChatInputController({
     }
   }
 
-  function handleMemoryToggle(enabled: boolean) {
-    if (enabled && !session) {
-      onAuthRequired?.();
-      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.MEMORY_UI.AUTH_REQUIRED_DESCRIPTION,
-        duration: 3000,
-      });
-      return;
-    }
-
-    dispatchUi({ type: "set-memory", enabled });
-    storeMemoryEnabled(enabled);
-    toast.success(
-      enabled
-        ? TOAST_SUCCESS_MESSAGES.MEMORY_ENABLED
-        : TOAST_SUCCESS_MESSAGES.MEMORY_DISABLED,
-      {
-        duration: 2500,
-      },
-    );
-  }
 
   function handleReasoningEffortChange(model: string, effort: ReasoningEffortLevel) {
     dispatchUi({ type: "set-reasoning-effort", model, effort });
@@ -462,7 +430,6 @@ export function useChatInputController({
       isSending,
       disabled: disabled || !!isContextBlocked,
       activeTool: null,
-      memoryEnabled,
       reasoningEffort,
       effortByModel,
       selectedModel,
@@ -483,7 +450,6 @@ export function useChatInputController({
       onRemoveFile: handleRemoveFile,
       onRemoveSnippet: removeTextSnippet,
       onToolSelected: () => {},
-      onMemoryToggle: handleMemoryToggle,
       onReasoningEffortChange: handleReasoningEffortChange,
       onModelSelect: handleModelSelect,
       onFilesSelected: handleFilesSelectedWithAuth,

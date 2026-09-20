@@ -7,6 +7,9 @@ export const JevCheckpoint = {
   PLANNER: "planner",
   TOOL_ROUTER: "tool_router",
   HITL_ESCALATION: "hitl_escalation",
+  MEMORY_GATE: "memory_gate",
+  MEMORY_EVIDENCE: "memory_evidence",
+  MEMORY_STORAGE: "memory_storage",
 } as const;
 export type JevCheckpointName = (typeof JevCheckpoint)[keyof typeof JevCheckpoint];
 

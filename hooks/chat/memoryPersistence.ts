@@ -13,7 +13,6 @@ interface PersistConversationMemoryArgs {
   userMessageContent: string | Message["content"];
   assistantContent: string;
   userId?: string;
-  memoryEnabled?: boolean;
   activeTool?: string | null;
   userAttachments?: Attachment[];
   memoryStatus?: Pick<MemoryStatus, "routingDecision">;
@@ -24,13 +23,12 @@ export function persistConversationMemoryIfEligible({
   userMessageContent,
   assistantContent,
   userId,
-  memoryEnabled = true,
   activeTool,
   userAttachments,
   memoryStatus,
   flow = "send",
 }: PersistConversationMemoryArgs): void {
-  if (!userId || !memoryEnabled) {
+  if (!userId) {
     return;
   }
 

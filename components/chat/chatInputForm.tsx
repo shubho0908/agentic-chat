@@ -27,7 +27,6 @@ interface FormState {
   getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
   disabled: boolean;
-  memoryEnabled: boolean;
   effortByModel: ReasoningEffortMap;
   selectedModel: string;
 }
@@ -40,7 +39,6 @@ interface FormHandlers {
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
-  onMemoryToggle: (enabled: boolean) => void;
   onReasoningEffortChange: (modelId: string, effort: ReasoningEffortLevel) => void;
   onModelSelect: (modelId: string) => void;
   onFilesSelected: (files: File[]) => void;
@@ -87,7 +85,6 @@ export function ChatInputForm({
     getFilePreviewUrl,
     isSending,
     disabled,
-    memoryEnabled,
     effortByModel,
     selectedModel,
   } = state;
@@ -99,7 +96,6 @@ export function ChatInputForm({
     onPaste,
     onRemoveFile,
     onRemoveSnippet,
-    onMemoryToggle,
     onReasoningEffortChange,
     onModelSelect,
     onFilesSelected,
@@ -174,8 +170,6 @@ export function ChatInputForm({
             <div className="shrink-0">
               <ToolsMenu
                 disabled={disabled || isLoading || isUploading || isSending}
-                memoryEnabled={memoryEnabled}
-                onMemoryToggle={onMemoryToggle}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
               />

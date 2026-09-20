@@ -24,7 +24,6 @@ export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
   activeTool?: string | null,
-  memoryEnabled?: boolean,
   reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -200,7 +199,6 @@ export async function handleRegenerateResponse(
           }
         }
       },
-      memoryEnabled: memoryEnabled ?? true,
       reasoningEffort,
       onThinking: (delta) => {
         thinkingBuffer += delta;
@@ -324,7 +322,6 @@ export async function handleRegenerateResponse(
         userMessageContent: previousUserMessage.content,
         assistantContent: persistableAssistantContent,
         userId: context.session?.user?.id,
-        memoryEnabled: memoryEnabled ?? true,
         activeTool,
         userAttachments: previousUserMessage.attachments,
         memoryStatus: currentMemoryStatus,

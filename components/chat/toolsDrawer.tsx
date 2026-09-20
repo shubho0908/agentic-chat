@@ -13,7 +13,6 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { MemoryToggle } from "./memoryToggle";
 import { ConnectorsDrawerContent } from "./connectorsDrawerContent";
 
 interface ToolsDrawerProps {
@@ -21,8 +20,6 @@ interface ToolsDrawerProps {
   onOpenChange: (open: boolean) => void;
   disabled?: boolean;
   fileCount?: number;
-  memoryEnabled?: boolean;
-  onMemoryToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
@@ -32,8 +29,6 @@ export function ToolsDrawer({
   onOpenChange,
   disabled,
   fileCount = 0,
-  memoryEnabled = true,
-  onMemoryToggle,
   onFilesSelected,
   fileInputRef,
 }: ToolsDrawerProps) {
@@ -117,7 +112,6 @@ export function ToolsDrawer({
             )}
 
             <div className="px-2">
-              <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
             </div>
 
             <div className="h-px bg-border my-3" />

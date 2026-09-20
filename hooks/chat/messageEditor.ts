@@ -27,7 +27,6 @@ export async function handleEditMessage(
   attachments: Attachment[] | undefined,
   context: EditMessageContext,
   activeTool?: string | null,
-  memoryEnabled?: boolean,
   reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -227,7 +226,6 @@ export async function handleEditMessage(
           }
         }
       },
-      memoryEnabled: memoryEnabled ?? true,
       reasoningEffort,
       onThinking: (delta) => {
         thinkingBuffer += delta;
@@ -402,7 +400,6 @@ export async function handleEditMessage(
         userMessageContent: messageContent,
         assistantContent: assistantContentForMemory,
         userId: context.session?.user?.id,
-        memoryEnabled: memoryEnabled ?? true,
         activeTool,
         userAttachments: attachments,
         memoryStatus: currentMemoryStatus,

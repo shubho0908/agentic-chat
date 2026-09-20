@@ -16,7 +16,7 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getMemoryEnabled, getReasoningEffort } from "@/lib/storage";
+import { getReasoningEffort } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -106,18 +106,16 @@ export function HomeContent({ currentYear }: HomeContentProps) {
   }
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const memoryEnabled = getMemoryEnabled();
     const reasoningEffort = getReasoningEffort();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled, reasoningEffort });
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const memoryEnabled = getMemoryEnabled();
     const reasoningEffort = getReasoningEffort();
-    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled, reasoningEffort });
+    return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, reasoningEffort?: ReasoningEffortLevel) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, reasoningEffort?: ReasoningEffortLevel) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -137,19 +135,17 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    return sendMessage({ content, session, attachments, memoryEnabled, reasoningEffort });
+    return sendMessage({ content, session, attachments, reasoningEffort });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const memoryEnabled = getMemoryEnabled();
     const reasoningEffort = getReasoningEffort();
     await sendMessage({
       content: question,
       session,
-      memoryEnabled,
       reasoningEffort,
     });
   };

@@ -138,12 +138,13 @@ export async function POST(request: NextRequest) {
     }
     const stream = streamResult.value;
 
+    // Memory is server-owned and always available for authenticated users. The
+    // removed client boolean is honored only when false for external API clients.
+    // The first-party UI no longer reads or sends the old localStorage setting.
     const memoryEnabledResult = parseOptionalBoolean(body.memoryEnabled, 'memoryEnabled', true);
-    if (!memoryEnabledResult.success) {
-      return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
-    }
-
-    const memoryEnabled = memoryEnabledResult.value;
+    if (!memoryEnabledResult.success) return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    const legacyMemoryOptOut = memoryEnabledResult.value === false;
+    const memoryEnabled = process.env.MEMORY_ENABLED !== 'false' && !legacyMemoryOptOut;
 
     const thinkingEnabledResult = parseOptionalBoolean(body.thinkingEnabled, 'thinkingEnabled', false);
     if (!thinkingEnabledResult.success) {

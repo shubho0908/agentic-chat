@@ -32,7 +32,6 @@ interface StreamingContext {
   queryClient: QueryClient;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
 }
@@ -115,7 +114,6 @@ export async function handleStreamingResponse(
     queryClient,
     session,
     activeTool,
-    memoryEnabled = true,
     reasoningEffort,
     existingAssistantMessageId,
   } = context;
@@ -220,7 +218,6 @@ export async function handleStreamingResponse(
         userMessageContent,
         assistantContent,
         userId: session?.user?.id,
-        memoryEnabled,
         activeTool,
         userAttachments,
         flow: "send",
@@ -337,7 +334,6 @@ export async function handleStreamingResponse(
           messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
-      memoryEnabled,
       reasoningEffort,
       onHumanInTheLoopRequest: (request) => {
         humanInTheLoopPending = true;
@@ -480,7 +476,6 @@ export async function handleStreamingResponse(
           userMessageContent,
           assistantContent: persistableAssistantContent,
           userId: session?.user?.id,
-          memoryEnabled,
           activeTool,
           userAttachments,
           memoryStatus: currentMemoryStatus,

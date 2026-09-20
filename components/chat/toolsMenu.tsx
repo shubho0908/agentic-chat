@@ -14,7 +14,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_DOCUMENT_EXTENSIONS } from "@/constants/upload";
 import { useIsMobile } from "@/hooks/useMobile";
-import { MemoryToggle } from "./memoryToggle";
 import { ToolsDrawer } from "./toolsDrawer";
 import { ConnectorsSubmenuContent } from "./connectorsSubmenu";
 
@@ -26,16 +25,12 @@ const ACCEPTED_FILE_TYPES = [
 
 interface ToolsMenuProps {
   disabled?: boolean;
-  memoryEnabled?: boolean;
-  onMemoryToggle?: (enabled: boolean) => void;
   onFilesSelected?: (files: File[]) => void;
   fileCount?: number;
 }
 
 export function ToolsMenu({
   disabled,
-  memoryEnabled = true,
-  onMemoryToggle,
   onFilesSelected,
   fileCount = 0,
 }: ToolsMenuProps) {
@@ -87,8 +82,6 @@ export function ToolsMenu({
           onOpenChange={handleOpenChange}
           disabled={disabled}
           fileCount={fileCount}
-          memoryEnabled={memoryEnabled}
-          onMemoryToggle={onMemoryToggle}
           onFilesSelected={onFilesSelected}
           fileInputRef={fileInputRef}
         />
@@ -160,7 +153,6 @@ export function ToolsMenu({
 
             {showMemory && (
               <div className="px-0.5">
-                <MemoryToggle enabled={memoryEnabled} onToggle={onMemoryToggle} />
               </div>
             )}
 

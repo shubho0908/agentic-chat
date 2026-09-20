@@ -92,7 +92,6 @@ export interface UseChatOptions {
   autoContinue?: {
     session?: { user: { id: string } };
     activeTool?: string | null;
-    memoryEnabled?: boolean;
     reasoningEffort?: ReasoningEffortLevel;
   } | null;
 }
@@ -102,7 +101,6 @@ export interface SendMessageOptions {
   session?: { user: { id: string } };
   attachments?: Attachment[];
   activeTool?: string | null;
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
 }
 
@@ -115,7 +113,6 @@ export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
   activeTool?: string | null,
-  memoryEnabled?: boolean,
   reasoningEffort?: ReasoningEffortLevel
 ) => Promise<MessageSendResult> | MessageSendResult;
 
@@ -125,7 +122,6 @@ export interface EditMessageOptions {
   attachments?: Attachment[];
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
 }
 
@@ -133,7 +129,6 @@ export interface RegenerateMessageOptions {
   messageId: string;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
 }
 
@@ -141,7 +136,6 @@ export interface ContinueConversationOptions {
   userMessage: Message;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
 }
 
@@ -241,7 +235,6 @@ export interface StreamConfig {
   onArtifact?: (event: ArtifactEvent) => void;
   onResponseIncomplete?: (reason: "length") => void;
   documentAttachmentIds?: string[];
-  memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel;
 }
 

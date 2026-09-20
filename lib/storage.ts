@@ -11,7 +11,6 @@ import {
 import { logger } from "@/lib/logger";
 const STORAGE_KEYS = {
   OPENAI_MODEL: 'openai_model',
-  MEMORY_ENABLED: 'agentic-chat-memory-enabled',
   THINKING_ENABLED: 'agentic-chat-thinking-enabled',
   REASONING_EFFORT: 'agentic-chat-reasoning-effort',
 } as const;
@@ -76,30 +75,11 @@ export function removeModel(): void {
   }
 }
 
-export function getMemoryEnabled(): boolean {
-  if (!isLocalStorageAvailable()) return true;
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.MEMORY_ENABLED);
-    return stored === null ? true : stored === 'true';
-  } catch {
-    return true;
-  }
-}
 
-export function setMemoryEnabled(enabled: boolean): boolean {
-  if (!isLocalStorageAvailable()) return false;
-  try {
-    localStorage.setItem(STORAGE_KEYS.MEMORY_ENABLED, String(enabled));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export function clearUserStorage(): void {
   if (!isLocalStorageAvailable()) return;
   try {
-    localStorage.removeItem(STORAGE_KEYS.MEMORY_ENABLED);
     localStorage.removeItem(STORAGE_KEYS.THINKING_ENABLED);
     localStorage.removeItem(STORAGE_KEYS.REASONING_EFFORT);
   } catch (error) {

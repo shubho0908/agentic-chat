@@ -22,7 +22,6 @@ export async function continueIncompleteConversation(
   context: BaseChatContext,
   session?: { user: { id: string } },
   activeTool?: string | null,
-  memoryEnabled?: boolean,
   reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -69,7 +68,6 @@ export async function continueIncompleteConversation(
       queryClient,
       session,
       activeTool,
-      memoryEnabled,
       reasoningEffort,
       existingAssistantMessageId,
     },
@@ -150,7 +148,6 @@ export async function handleSendMessage(
   context: SendMessageContext,
   session?: { user: { id: string } },
   activeTool?: string | null,
-  memoryEnabled?: boolean,
   reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
@@ -253,7 +250,6 @@ export async function handleSendMessage(
         queryClient,
         session,
         activeTool,
-        memoryEnabled,
         reasoningEffort,
         existingAssistantMessageId: placeholderAssistantId,
       },
