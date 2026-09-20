@@ -121,8 +121,8 @@ export function ChatInputForm({
   const isOverLimit = input.length >= maxLength;
 
   const textareaClassName = centered
-    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-2.5 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
-    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
+    ? "min-h-[60px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-[17px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+    : "min-h-[40px] max-h-[280px] flex-1 resize-none border-0 bg-transparent px-2 py-[7px] text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
 
   const buttonSize = centered ? "large" : "default";
 
@@ -134,7 +134,7 @@ export function ChatInputForm({
         dropZoneRef={dropZoneRef}
         handlers={dragHandlers}
       >
-        <div className="relative isolate overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition-all duration-200 ease-out focus-within:border-black/15 focus-within:ring-1 focus-within:ring-black/8 dark:border-white/[0.1] dark:bg-[hsl(0_0%_5%)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)] dark:focus-within:border-white/[0.16] dark:focus-within:ring-white/10 group">
+        <div className="relative isolate overflow-hidden rounded-2xl border border-black/8 bg-[rgb(252_252_253)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus-within:border-black/10 focus-within:ring-1 focus-within:ring-black/6 dark:border-white/10 dark:bg-[rgb(18_18_22)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.18)] dark:focus-within:border-white/[0.14] dark:focus-within:ring-white/10 group">
           <FilePreview
             files={visibleFiles}
             getFileKey={getFileId}
@@ -159,7 +159,7 @@ export function ChatInputForm({
           )}
 
           <div
-            className={`flex items-end gap-1 ${
+            className={`flex items-center gap-1 ${
               centered ? "px-3 pb-3 pt-1" : "px-2.5 pb-2.5 pt-1"
             }`}
           >
