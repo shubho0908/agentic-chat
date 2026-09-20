@@ -35,7 +35,8 @@ import {
 } from "@/lib/storage";
 import {
   DEFAULT_MODEL,
-  DEFAULT_REASONING_EFFORT,
+  getDefaultReasoningEffort,
+  getSupportedReasoningEfforts,
   type ReasoningEffortLevel,
 } from "@/constants/openai-models";
 import type { TextSnippet } from "@/components/chat/textSnippetPreview";
@@ -143,8 +144,12 @@ export function useChatInputController({
     INITIAL_CHAT_INPUT_UI_STATE,
   );
   const { isSending, memoryEnabled, effortByModel, selectedModel } = uiState;
-  const reasoningEffort =
-    effortByModel[selectedModel] ?? DEFAULT_REASONING_EFFORT;
+  const storedEffort = effortByModel[selectedModel];
+  const reasoningEffort = getSupportedReasoningEfforts(selectedModel).includes(
+    storedEffort as ReasoningEffortLevel
+  )
+    ? (storedEffort as ReasoningEffortLevel)
+    : getDefaultReasoningEffort(selectedModel);
 
   const { data: session, isPending } = useSession();
 

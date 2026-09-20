@@ -10,7 +10,7 @@ import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orch
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
+import { DEFAULT_MODEL, REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from "@/constants/openai-models";
 import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
@@ -73,7 +73,15 @@ export async function POST(request: NextRequest) {
     const reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
     if (body.reasoningEffort !== undefined && reasoningEffort === null) {
       return errorResponse(
-        "reasoningEffort must be one of: none, low, medium, high",
+        `reasoningEffort must be one of: ${REASONING_EFFORTS.join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
+    if (reasoningEffort && !isReasoningEffortSupported(model, reasoningEffort)) {
+      return errorResponse(
+        `reasoningEffort "${reasoningEffort}" is not supported by ${model}. Supported: ${getSupportedReasoningEfforts(model).join(", ")}`,
         undefined,
         HTTP_STATUS.BAD_REQUEST,
       );

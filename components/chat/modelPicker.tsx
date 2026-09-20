@@ -21,10 +21,10 @@ import {
 import { cn } from "@/lib/utils";
 import {
   OPENAI_MODELS,
-  DEFAULT_REASONING_EFFORT,
-  REASONING_EFFORTS,
   REASONING_EFFORT_META,
+  getDefaultReasoningEffort,
   getModelCostMultiplier,
+  getSupportedReasoningEfforts,
   formatCostMultiplier,
   type ReasoningEffortLevel,
 } from "@/constants/openai-models";
@@ -141,8 +141,12 @@ export function ModelPicker({
           {OPENAI_MODELS.map((model) => {
             const isSelected = selectedModel === model.id;
             const costMultiplier = getModelCostMultiplier(model);
-            const effort =
-              effortByModel[model.id] ?? DEFAULT_REASONING_EFFORT;
+            const storedEffort = effortByModel[model.id];
+            const effort = getSupportedReasoningEfforts(model.id).includes(
+              storedEffort as ReasoningEffortLevel
+            )
+              ? (storedEffort as ReasoningEffortLevel)
+              : getDefaultReasoningEffort(model.id);
             const effortMeta = REASONING_EFFORT_META[effort];
 
             return (
@@ -227,7 +231,7 @@ export function ModelPicker({
                       <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
                         Reasoning · {model.name}
                       </p>
-                      {REASONING_EFFORTS.map((level) => {
+                      {getSupportedReasoningEfforts(model.id).map((level) => {
                         const meta = REASONING_EFFORT_META[level];
                         const isEffortSelected = effort === level;
 

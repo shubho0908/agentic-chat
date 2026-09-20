@@ -2,6 +2,8 @@ import {
   DEFAULT_MODEL,
   DEFAULT_REASONING_EFFORT,
   OPENAI_MODELS,
+  getDefaultReasoningEffort,
+  isReasoningEffortSupported,
   isReasoningEffortLevel,
   type ReasoningEffortLevel,
 } from '@/constants/openai-models';
@@ -119,7 +121,9 @@ export function getReasoningEffortMap(): ReasoningEffortMap {
     if (stored) {
       if (isReasoningEffortLevel(stored)) {
         const map: ReasoningEffortMap = Object.fromEntries(
-          OPENAI_MODELS.map((m) => [m.id, stored])
+          OPENAI_MODELS.filter((m) => isReasoningEffortSupported(m.id, stored)).map(
+            (m) => [m.id, stored]
+          )
         );
         localStorage.setItem(STORAGE_KEYS.REASONING_EFFORT, JSON.stringify(map));
         return map;
@@ -128,7 +132,7 @@ export function getReasoningEffortMap(): ReasoningEffortMap {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const map: ReasoningEffortMap = {};
         for (const [key, value] of Object.entries(parsed)) {
-          if (isReasoningEffortLevel(value)) {
+          if (isReasoningEffortLevel(value) && isReasoningEffortSupported(key, value)) {
             map[key] = value;
           }
         }
@@ -140,7 +144,9 @@ export function getReasoningEffortMap(): ReasoningEffortMap {
     const migrated: ReasoningEffortLevel =
       legacyThinking === 'true' ? 'high' : DEFAULT_REASONING_EFFORT;
     const map: ReasoningEffortMap = Object.fromEntries(
-      OPENAI_MODELS.map((m) => [m.id, migrated])
+      OPENAI_MODELS.filter((m) => isReasoningEffortSupported(m.id, migrated)).map(
+        (m) => [m.id, migrated]
+      )
     );
     localStorage.setItem(STORAGE_KEYS.REASONING_EFFORT, JSON.stringify(map));
     localStorage.removeItem(STORAGE_KEYS.THINKING_ENABLED);
@@ -151,7 +157,10 @@ export function getReasoningEffortMap(): ReasoningEffortMap {
 }
 
 export function getReasoningEffortForModel(model: string): ReasoningEffortLevel {
-  return getReasoningEffortMap()[model] ?? DEFAULT_REASONING_EFFORT;
+  const stored = getReasoningEffortMap()[model];
+  return stored && isReasoningEffortSupported(model, stored)
+    ? stored
+    : getDefaultReasoningEffort(model);
 }
 
 export function setReasoningEffortForModel(
@@ -159,6 +168,7 @@ export function setReasoningEffortForModel(
   effort: ReasoningEffortLevel
 ): boolean {
   if (!isLocalStorageAvailable()) return false;
+  if (!isReasoningEffortSupported(model, effort)) return false;
   try {
     const map = getReasoningEffortMap();
     map[model] = effort;

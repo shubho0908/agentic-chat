@@ -53,6 +53,7 @@ import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/stream
 import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
 import { createRequestId, logError, logWarn } from '@/lib/observability';
 import { validateRequestedModel, getChatReasoningEffort, parseReasoningEffortParam } from '@/lib/modelPolicy';
+import { REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from '@/constants/openai-models';
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { logger } from "@/lib/logger";
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
     let reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
     if (body.reasoningEffort !== undefined && reasoningEffort === null) {
       return errorResponse(
-        "reasoningEffort must be one of: none, low, medium, high",
+        `reasoningEffort must be one of: ${REASONING_EFFORTS.join(", ")}`,
         undefined,
         HTTP_STATUS.BAD_REQUEST,
       );
@@ -167,6 +168,14 @@ export async function POST(request: NextRequest) {
     const validatedModel = validateRequestedModel(model.trim());
     if (!validatedModel) {
       return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
+    if (reasoningEffort && !isReasoningEffortSupported(validatedModel, reasoningEffort)) {
+      return errorResponse(
+        `reasoningEffort "${reasoningEffort}" is not supported by ${validatedModel}. Supported: ${getSupportedReasoningEfforts(validatedModel).join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const validation = validateChatMessages(messages);
