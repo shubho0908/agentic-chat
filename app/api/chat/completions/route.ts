@@ -164,6 +164,9 @@ export async function POST(request: NextRequest) {
     }
 
     const validatedMessages = validation.messages;
+    const documentAttachmentIds = Array.isArray(body.documentAttachmentIds)
+      ? body.documentAttachmentIds.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, 20)
+      : undefined;
 
     const openai = wrapOpenAIWithLangSmith(getOpenAIClient(apiKey));
 
@@ -201,6 +204,7 @@ export async function POST(request: NextRequest) {
             apiKey,
             userId: authUser.id,
             conversationId,
+            documentAttachmentIds,
             memoryEnabled,
             thinkingEnabled,
             abortSignal: abortController.signal,

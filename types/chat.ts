@@ -238,6 +238,8 @@ export interface StreamConfig {
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
+  onResponseIncomplete?: (reason: "length") => void;
+  documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
   thinkingEnabled?: boolean;
 }
@@ -256,4 +258,5 @@ export interface ApprovalStreamConfig {
   onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
+  onResponseIncomplete?: (reason: "length") => void;
 }

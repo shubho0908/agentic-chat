@@ -31,6 +31,7 @@ interface OrchestratorStreamOptions {
   apiKey: string;
   userId: string;
   conversationId?: string;
+  documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
   thinkingEnabled?: boolean;
   abortSignal?: AbortSignal;
@@ -85,6 +86,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
     apiKey,
     userId,
     conversationId,
+    documentAttachmentIds,
     memoryEnabled = true,
     thinkingEnabled = false,
     abortSignal,
@@ -160,13 +162,14 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             conversationId,
             null,
             memoryEnabled,
-            { apiKey }
+            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds }
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           if (contextResult.context) {
             enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
           }
         } catch (error) {
+          if (abortSignal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
           logger.error("[Orchestrator] Context routing failed:", error);
         }
 
@@ -197,7 +200,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         );
         if (queryText && !bypassSemanticCache && queryText.trim().length >= MIN_CACHEABLE_QUERY_LENGTH) {
           try {
-            const embedding = await generateEmbedding(queryText, userId);
+            const embedding = await generateEmbedding(queryText, userId, abortSignal);
             const entry = await searchSemanticCacheEntry(embedding, userId, conversationId);
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
@@ -229,6 +232,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
               logger.log("[Orchestrator] Semantic cache HIT vetoed by Jev gate");
             }
           } catch (cacheErr) {
+            if (abortSignal?.aborted || (cacheErr instanceof Error && cacheErr.name === "AbortError")) throw cacheErr;
             logger.warn("[Orchestrator] Cache check failed, proceeding:", cacheErr);
           }
         }

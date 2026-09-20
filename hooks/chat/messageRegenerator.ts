@@ -62,6 +62,7 @@ export async function handleRegenerateResponse(
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata | undefined;
   const artifactCollector = createArtifactMetadataCollector();
+  let responseIncomplete = false;
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
@@ -101,6 +102,7 @@ export async function handleRegenerateResponse(
         );
       },
       conversationId,
+      documentAttachmentIds: previousUserMessage.attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -209,6 +211,9 @@ export async function handleRegenerateResponse(
           )
         );
       },
+      onResponseIncomplete: () => {
+        responseIncomplete = true;
+      },
       onArtifact: (event) => {
         const eventWithMessage = { ...event, messageId: assistantMessage.id };
         artifactCollector.push(eventWithMessage);
@@ -248,6 +253,15 @@ export async function handleRegenerateResponse(
       )
     );
 
+    if (responseIncomplete) {
+      messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
+        )
+      );
+    }
+
     const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
 
     if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
@@ -261,7 +275,7 @@ export async function handleRegenerateResponse(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && responseContent && artifacts.length === 0) {
+      if (cacheQuery && responseContent && artifacts.length === 0 && !responseIncomplete) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,

@@ -21,6 +21,7 @@ export interface RAGContextOptions {
   waitForProcessing?: boolean;
   processingTimeoutMs?: number;
   queryVariants?: string[];
+  signal?: AbortSignal;
 }
 
 export interface RAGContextResult {

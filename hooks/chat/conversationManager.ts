@@ -137,16 +137,16 @@ function buildAssistantContentForAPI(message: Message): string {
 
 function getMessageContentForAPI(
   message: Message,
+  includeHistoricalImages = false,
 ): string | MessageContentPart[] {
   if (message.role === MessageRole.ASSISTANT) {
     return buildAssistantContentForAPI(message);
   }
 
   if (message.role === MessageRole.USER) {
-    return buildModelContentWithImageAttachments(
-      message.content,
-      message.attachments,
-    );
+    return includeHistoricalImages
+      ? buildModelContentWithImageAttachments(message.content, message.attachments)
+      : extractTextFromContent(message.content);
   }
 
   return message.content;
@@ -237,7 +237,7 @@ export function buildMessagesForAPI(
           content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
         },
         ...recentMessages.flatMap((message) => {
-          const content = getMessageContentForAPI(message);
+          const content = getMessageContentForAPI(message, isReferential);
           if (
             content === "" ||
             (Array.isArray(content) && content.length === 0)

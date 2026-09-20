@@ -18,7 +18,7 @@ async function getOpenAIClient(userId: string): Promise<OpenAI> {
   return wrapOpenAIWithLangSmith(new OpenAI({ apiKey }));
 }
 
-export async function generateEmbedding(text: string, userId: string): Promise<number[]> {
+export async function generateEmbedding(text: string, userId: string, signal?: AbortSignal): Promise<number[]> {
   try {
     const client = await getOpenAIClient(userId);
     const embeddingResponse = await withRetry(
@@ -26,8 +26,8 @@ export async function generateEmbedding(text: string, userId: string): Promise<n
         client.embeddings.create({
           model: EMBEDDING_MODEL,
           input: text,
-        }),
-      { retries: 2 }
+        }, { signal }),
+      { retries: 2, signal }
     );
 
     return embeddingResponse.data[0].embedding;

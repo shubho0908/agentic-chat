@@ -59,6 +59,7 @@ export async function handleEditMessage(
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata = {};
   const artifactCollector = createArtifactMetadataCollector();
+  let responseIncomplete = false;
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
@@ -128,6 +129,7 @@ export async function handleEditMessage(
         );
       },
       conversationId,
+      documentAttachmentIds: attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -236,6 +238,9 @@ export async function handleEditMessage(
           )
         );
       },
+      onResponseIncomplete: () => {
+        responseIncomplete = true;
+      },
       onArtifact: (event) => {
         const eventWithMessage = { ...event, messageId: placeholderAssistantId };
         artifactCollector.push(eventWithMessage);
@@ -275,6 +280,15 @@ export async function handleEditMessage(
       )
     );
 
+    if (responseIncomplete) {
+      messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+        )
+      );
+    }
+
     const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
 
     if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
@@ -288,7 +302,7 @@ export async function handleEditMessage(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && responseContent && artifacts.length === 0) {
+      if (cacheQuery && responseContent && artifacts.length === 0 && !responseIncomplete) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,

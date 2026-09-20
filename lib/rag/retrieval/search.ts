@@ -160,6 +160,7 @@ export async function searchDocumentChunks(
     conversationId?: string;
     useReranking?: boolean;
     fileType?: string;
+    signal?: AbortSignal;
   } = {},
 ): Promise<RetrievalCandidate[]> {
   const {
@@ -169,6 +170,7 @@ export async function searchDocumentChunks(
     conversationId,
     useReranking = true,
     fileType,
+    signal,
   } = options;
   const filter: Record<string, string | { in: string[] }> = { userId };
   if (conversationId) filter.conversationId = conversationId;
@@ -184,7 +186,7 @@ export async function searchDocumentChunks(
   );
   const raw = await withRetry(
     () => vectorStore.similaritySearchWithScore(query, candidateLimit, filter),
-    { retries: 2, initialDelayMs: 500 },
+    { retries: 2, initialDelayMs: 500, signal },
   );
   const semanticRaw = await hydrateChunkIds(
     raw.map(([doc, distance]) =>
@@ -204,10 +206,9 @@ export async function searchDocumentChunks(
     candidateCount: semanticRaw.length,
     limit,
   });
-  let semantic = semanticRaw.filter(
+  const semantic = semanticRaw.filter(
     (candidate) => candidate.score >= threshold,
   );
-  if (!semantic.length) semantic = semanticRaw.slice(0, limit);
   const lexical = await lexicalSearch({
     terms: extractQueryTerms(query, RAG_CONFIG.search.lexicalQueryMaxTerms),
     userId,

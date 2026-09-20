@@ -182,6 +182,8 @@ const messageMetadataBaseSchema = z.object({
   humanInTheLoopStatus: z.enum(["pending", "approved", "denied"]).optional(),
   toolActivities: z.array(toolActivitySchema).optional(),
   artifacts: z.array(artifactMetadataSchema).optional(),
+  streamStatus: z.enum(["incomplete", "error"]).optional(),
+  streamError: z.string().optional(),
 });
 
 export const messageMetadataSchema = messageMetadataBaseSchema.optional();

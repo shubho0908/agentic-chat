@@ -5,6 +5,7 @@ import {
   encodeToolResult,
   encodeThinkingChunk,
   encodeArtifactEvent,
+  encodeResponseIncomplete,
 } from "@/lib/chat/streamingHelpers";
 import type { StreamWriter } from "@/lib/chat/safeStream";
 
@@ -115,6 +116,18 @@ export function createStreamEventMapper(): StreamEventMapper {
                 emitParsedResults(writer, artifactParser.push(block.text));
               }
             }
+          }
+          break;
+        }
+
+
+        case StreamEventType.CHAT_MODEL_END: {
+          if (getNode(event) !== GraphNode.AGENT) break;
+          const data = event.data as {
+            output?: { response_metadata?: { finish_reason?: unknown } };
+          } | undefined;
+          if (data?.output?.response_metadata?.finish_reason === "length") {
+            writer.enqueue(encodeResponseIncomplete("length"));
           }
           break;
         }

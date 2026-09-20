@@ -34,6 +34,7 @@ export async function waitForDocumentProcessing(
     useExponentialBackoff?: boolean;
     timeoutMs?: number;
     userId?: string;
+    signal?: AbortSignal;
   } = {}
 ): Promise<string[]> {
   const {
@@ -46,6 +47,7 @@ export async function waitForDocumentProcessing(
   const startedAt = Date.now();
 
   while (true) {
+    if (options.signal?.aborted) throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
     const statuses = await getAttachmentStatuses(attachmentIds, options.userId);
     const partitioned = partitionByStatus(statuses);
 
@@ -68,7 +70,13 @@ export async function waitForDocumentProcessing(
       return completedIds;
     }
 
-    await new Promise(resolve => setTimeout(resolve, currentInterval));
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, currentInterval);
+      options.signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(options.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+      }, { once: true });
+    });
 
     if (useExponentialBackoff) {
       currentInterval = Math.min(

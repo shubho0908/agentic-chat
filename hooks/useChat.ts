@@ -80,7 +80,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         return { success: false, error: "Unable to send message" };
       }
 
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
       setIsLoading(true);
       setMemoryStatus(undefined);
       startStreaming(conversationId, abortControllerRef.current);
@@ -92,7 +93,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current!.signal,
+            abortSignal: requestController.signal,
             queryClient,
             onMessagesUpdate: setMessages,
             onConversationIdUpdate: (id: string) => {
@@ -118,9 +119,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         return { success: false, error: "aborted" };
       } finally {
-        setIsLoading(false);
-        stopStreamingContext(false);
-        abortControllerRef.current = null;
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          stopStreamingContext(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [isLoading, saveToCache, conversationId, onArtifact, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]
@@ -132,7 +135,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -144,7 +148,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             session,
             onMessagesUpdate: setMessages,
@@ -161,9 +165,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -175,7 +181,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -185,7 +192,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             session,
             onMessagesUpdate: setMessages,
@@ -202,9 +209,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -216,7 +225,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -226,7 +236,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
@@ -243,9 +253,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -291,7 +303,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         );
       };
 
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
       setIsLoading(true);
       startStreaming(conversationId, abortControllerRef.current);
       updateLocalAssistantMessage({ content: "", metadata: messageMetadata });
@@ -303,7 +316,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           model,
           approved,
           response,
-          signal: abortControllerRef.current.signal,
+          signal: requestController.signal,
           onChunk: (delta) => {
             resumedContent += delta;
             updateLocalAssistantMessage({
@@ -346,6 +359,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onThinking: (delta) => {
             thinkingAccumulator += delta;
             updateLocalAssistantMessage({ thinking: thinkingAccumulator });
+          },
+          onResponseIncomplete: () => {
+            messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+            updateLocalAssistantMessage({ metadata: messageMetadata });
           },
           onArtifact: (event) => {
             const eventWithMessage = { ...event, messageId: assistantMessageId };
@@ -427,9 +444,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           toast.error(toUserFriendlyError(error, "Failed to process your response. Please try again."));
         }
       } finally {
-        setIsLoading(false);
-        stopStreamingContext(false);
-        abortControllerRef.current = null;
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          stopStreamingContext(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [conversationId, isLoading, onArtifact, queryClient, startStreaming, stopStreamingContext]
