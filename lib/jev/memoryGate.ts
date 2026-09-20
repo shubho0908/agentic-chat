@@ -41,11 +41,13 @@ const cache = new Map<string, Cached>();
 const inFlight = new Map<string, Promise<MemoryGateDecision>>();
 const EXPLICIT = [
   /\b(remember|recall|what do you know about me|what have i (told|shared)|my (name|background|preferences)|last time|earlier conversation)\b/i,
+  /\b(who am i|what did i (ask|tell|say|share)|my latest)\b/i,
   /\b(mera|meri|mere)\s+(naam|stack|preference|background|project)\b/i,
   /\b(yaad|pehle (maine|humne)|mere baare mein)\b/i,
+  /\b(kya (tumhe|tumko|tujhe|apko|aapko) yaad|maine (kya )?(pucha|kaha|bola|bataya))\b/i,
 ] as const;
 const LEGACY =
-  /\b(remember|recall|earlier|before|previously|last time|my\s+(name|background|preferences|goals|project)|about me|yaad|mera|meri|mere)\b/i;
+  /\b(remember|recall|earlier|before|previously|last time|yesterday|my\s+(name|background|preferences|goals|project|latest)|about me|yaad|kal|mera|meri|mere)\b/i;
 const QUESTIONS: JevQuestions = {
   useful: {
     type: "noul",

@@ -3,11 +3,11 @@
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { MessageRole } from "@/lib/schemas/chat";
+import { addMemories } from "@mem0/vercel-ai-provider";
 import {
-  addMemories,
-  searchMemories,
-  type Mem0ConfigSettings,
-} from "@mem0/vercel-ai-provider";
+  searchMemoriesWithSignal,
+  type Mem0SearchConfig,
+} from "@/lib/mem0Search";
 import { buildMemoryLookupQueries } from "@/lib/chat/requestMediator";
 import { logError, logMetric, logWarn } from "@/lib/observability";
 import { isRecord } from "@/lib/typeGuards";
@@ -42,12 +42,7 @@ interface MemorySearchRecord {
   updatedAt?: string;
 }
 
-type SearchConfig = Mem0ConfigSettings & {
-  top_k?: number;
-  keyword_search?: boolean;
-  rerank?: boolean;
-  threshold?: number;
-};
+type SearchConfig = Mem0SearchConfig;
 
 function normalizeMemoryText(text: string): string {
   return text.trim().replace(/\s+/g, " ");
@@ -219,7 +214,11 @@ export async function getMemoryContextResult(
     const searchBatch = Promise.allSettled(
       lookupQueries.map(async (lookupQuery) => {
         if (signal.aborted) throw signal.reason;
-        const result = await searchMemories(lookupQuery, searchConfig);
+        const result = await searchMemoriesWithSignal(
+          lookupQuery,
+          searchConfig,
+          signal,
+        );
         if (signal.aborted) throw signal.reason;
         return extractMemorySearchRecords(result);
       }),
