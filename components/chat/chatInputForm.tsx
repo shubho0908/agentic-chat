@@ -126,6 +126,12 @@ export function ChatInputForm({
 
   const buttonSize = centered ? "large" : "default";
 
+  // When nothing renders above the input row, use symmetric vertical padding
+  // (same total as the attachment state) so the row's controls sit on the
+  // container's exact vertical centerline without changing its height.
+  const hasTopContent =
+    visibleFiles.length > 0 || textSnippets.length > 0 || showCounter;
+
   return (
     <form onSubmit={onSubmit} className="relative">
       <DropZone
@@ -160,7 +166,9 @@ export function ChatInputForm({
 
           <div
             className={`flex items-center gap-1 ${
-              centered ? "px-3 pb-3 pt-1" : "px-2.5 pb-2.5 pt-1"
+              centered
+                ? `px-3 ${hasTopContent ? "pb-3 pt-1" : "py-2"}`
+                : `px-2.5 ${hasTopContent ? "pb-2.5 pt-1" : "py-[7px]"}`
             }`}
           >
             <div className="shrink-0">
