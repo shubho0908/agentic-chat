@@ -9,10 +9,8 @@ import { filterDocumentAttachments } from "./rag/retrieval/statusHelpers";
 import { isSupportedDocumentExtension } from "./fileValidation";
 import { extractTextFromMessage } from "./chat/messageContent";
 import { mediateMemoryIntent } from "./chat/requestMediator";
-import {
-  estimateMemoryEntryCount,
-  memoryGateDegradation,
-} from "./chat/memoryPolicy";
+import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
+import { memoryGateDegradation } from "./jev/memoryGate";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { logWarn } from "./observability";
 

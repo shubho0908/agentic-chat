@@ -3,6 +3,7 @@ import { createRequestId, logMetric, logWarn } from "@/lib/observability";
 import { JevDecisionClient, classifyJevFailure } from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
+import { DegradedContextSource } from "@/types/chat";
 import {
   JevCheckpoint,
   JevMode,
@@ -203,4 +204,14 @@ export async function mediateMemoryIntent(
   inFlight.set(k, evaluation);
   const d = await evaluation;
   return mode === JevMode.ACTIVE ? d : old;
+}
+
+export function memoryGateDegradation(
+  decision: MemoryGateDecision,
+): { source: DegradedContextSource; reason: string } | null {
+  if (decision.reasonCode !== MemoryGateReason.PROVIDER_FAILURE) return null;
+  return {
+    source: DegradedContextSource.Memory,
+    reason: "Memory provider check failed; answering without past-chat memory",
+  };
 }

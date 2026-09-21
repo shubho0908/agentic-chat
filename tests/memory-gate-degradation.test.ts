@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { memoryGateDegradation } from "@/lib/chat/memoryPolicy";
-import { MemoryGateReason, type MemoryGateDecision } from "@/lib/jev/memoryGate";
+import {
+  MemoryGateReason,
+  memoryGateDegradation,
+  type MemoryGateDecision,
+} from "@/lib/jev/memoryGate";
 import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { DefaultRAGContext } from "@/components/chat/aiThinkingAnimation/defaultRAGContext";
 
