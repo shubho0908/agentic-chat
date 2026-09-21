@@ -151,12 +151,16 @@ export async function gatePassages(
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - batchStarted,
-      outcome: options.failClosed ? "error_drop" : "error_keep",
+      outcome:
+        options.failClosed && mode === JevMode.ACTIVE
+          ? "error_drop"
+          : "error_keep",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId: batchRequestId,
       conversationId,
     });
+    if (mode === JevMode.SHADOW || mode === JevMode.AB) return candidates;
     return options.failClosed ? [] : candidates;
   }
   if (mode === JevMode.SHADOW || mode === JevMode.AB) return candidates;
