@@ -309,8 +309,6 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    onConversationIdReady?.(conversationId);
-
     const userMessageId = await saveUserMessage(
       conversationId,
       userContent,
@@ -321,6 +319,13 @@ async function createNewConversation(
     if (!userMessageId) {
       return null;
     }
+
+    // Publish the ID only once the opening message is persisted: a row that
+    // exists without its first user message must never become the caller's
+    // active conversation, otherwise the next send is treated as an
+    // existing-conversation send against an empty row the user never
+    // navigated to.
+    onConversationIdReady?.(conversationId);
 
     if (earlyCreate) {
       return { conversationId, userMessageId, assistantMessageId: "" };

@@ -105,11 +105,13 @@ test("new conversation: returns null without onConversationCreated when the user
       }
     );
 
-    // Row exists (ready fired) but the message did not persist: callers must
-    // treat null as failure instead of navigating.
+    // Row exists but the message did not persist: callers must treat null as
+    // failure instead of navigating, and the ID must never be published as the
+    // active conversation (otherwise the next send would be routed to an empty
+    // conversation the user never navigated to).
     assert.equal(result, null);
     assert.equal(created.length, 0);
-    assert.deepEqual(ready, ["conv-1"]);
+    assert.deepEqual(ready, []);
   } finally {
     restore();
   }
