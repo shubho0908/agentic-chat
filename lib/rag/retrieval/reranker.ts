@@ -12,7 +12,7 @@ import { rerankWithJev } from "@/lib/jev/reranker";
 /** Deterministic 50/50 bucket for A/B mode. Same key always lands in the
  * same arm so treatment and control stay comparable. Empty keys stay on
  * control so unkeyed traffic never changes behavior. */
-export function isJevRerankCohort(cohortKey: string): boolean {
+function isJevRerankCohort(cohortKey: string): boolean {
   if (!cohortKey) return false;
   return createHash("sha256").update(cohortKey).digest()[0] < 128;
 }

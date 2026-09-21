@@ -6,6 +6,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
+import { extractMetadataFromProgress } from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
@@ -164,39 +165,7 @@ export async function handleRegenerateResponse(
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
           
-          if (progress.details) {
-            if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
-              const details = progress.details as { sources?: MessageMetadata['sources'] };
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                ...(details.sources && details.sources.length > 0 && { sources: details.sources }),
-              };
-            }
-
-            if ('images' in progress.details && Array.isArray(progress.details.images)) {
-              const details = progress.details as { images?: MessageMetadata['images'] };
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                ...(details.images && details.images.length > 0 && { images: details.images }),
-              };
-            }
-            
-            const details = progress.details as { citations?: MessageMetadata['citations']; followUpQuestions?: string[] };
-            
-            if ('citations' in details && details.citations) {
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                citations: details.citations,
-              };
-            }
-            
-            if ('followUpQuestions' in details && details.followUpQuestions) {
-              messageMetadata = {
-                ...(messageMetadata || {}),
-                followUpQuestions: details.followUpQuestions,
-              };
-            }
-          }
+          messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
       reasoningEffort,

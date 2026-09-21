@@ -49,7 +49,7 @@ interface StreamingResult {
   assistantMessageId?: string;
 }
 
-function extractMetadataFromProgress(
+export function extractMetadataFromProgress(
   progress: { details?: Record<string, unknown> },
   currentMetadata?: MessageMetadata
 ): MessageMetadata | undefined {
@@ -60,7 +60,18 @@ function extractMetadataFromProgress(
   if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
     const details = progress.details as { sources?: MessageMetadata['sources'] };
     if (details.sources && details.sources.length > 0) {
-      metadata = { ...metadata, sources: details.sources };
+      // Union by URL: several searches can run in one turn and a later event
+      // must not drop earlier batches.
+      const seenUrls = new Set((currentMetadata?.sources ?? []).map((source) => source.url));
+      const mergedSources = [...(currentMetadata?.sources ?? [])];
+      for (const source of details.sources) {
+        if (!source.url || seenUrls.has(source.url)) continue;
+        seenUrls.add(source.url);
+        mergedSources.push(source);
+      }
+      if (mergedSources.length > 0) {
+        metadata = { ...metadata, sources: mergedSources };
+      }
     }
   }
 

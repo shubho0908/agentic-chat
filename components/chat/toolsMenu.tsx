@@ -62,6 +62,10 @@ export function ToolsMenu({
     "add photos & files".includes(query) ||
     "upload from your computer".includes(query);
   const showMemory = !query || "memory".includes(query);
+  // Only separate when a visible row sits above; while searching, the attach
+  // row is filtered out and the separator would float at the popover top.
+  // (The memory block renders no visible content, so it is not a gate.)
+  const hasMenuContentAbove = showAttach && !!onFilesSelected;
 
   return (
     <>
@@ -156,7 +160,9 @@ export function ToolsMenu({
               </div>
             )}
 
-            <DropdownMenuSeparator className="my-1.5" />
+            {hasMenuContentAbove && (
+              <DropdownMenuSeparator className="my-1.5" />
+            )}
 
             <div className="max-h-[260px] overflow-y-auto px-0.5">
               <ConnectorsSubmenuContent
@@ -173,6 +179,7 @@ export function ToolsMenu({
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.stopPropagation()}
                 placeholder="Type to search sources & files"
+                aria-label="Search sources and files"
                 className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
               />
             </div>

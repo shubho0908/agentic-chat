@@ -6,7 +6,7 @@ import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/contentUtils";
-import { MessageMeta } from "./messageMeta";
+import { MessageTimestamp, MessageSources } from "./messageMeta";
 import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
@@ -76,7 +76,6 @@ function extractUserUrls(text: string) {
 
 interface ChatMessageProps {
   message: Message;
-  userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
@@ -179,7 +178,7 @@ function MessageContentSurface({
         <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
           <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
           <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
-          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue</Button>}
+          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue response</Button>}
         </div>
       )}
 
@@ -449,7 +448,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                 {!isSharePage && (
                   <div className={cn(
                     "mt-1 flex items-center gap-2",
-                    isUser ? "pr-2" : "pl-1 w-full justify-between"
+                    isUser ? "pr-2" : "pl-1 w-full"
                   )}>
                     <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                       <MessageActions
@@ -460,19 +459,23 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                       />
                     </div>
                     {!isUser && !isThinking && (
-                      <MessageMeta
-                        timestamp={displayedMessage.timestamp}
-                        citations={citations}
-                      />
+                      <div className="ml-auto flex items-center gap-2">
+                        {citations.length > 0 && (
+                          <MessageSources citations={citations} />
+                        )}
+                        <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                      </div>
                     )}
                   </div>
                 )}
                 {isSharePage && !isUser && !isThinking && (
-                  <div className="mt-1 flex w-full justify-end pl-1">
-                    <MessageMeta
-                      timestamp={displayedMessage.timestamp}
-                      citations={citations}
-                    />
+                  <div className="mt-1 flex w-full items-center gap-2 pl-1">
+                    <div className="ml-auto flex items-center gap-2">
+                      {citations.length > 0 && (
+                        <MessageSources citations={citations} />
+                      )}
+                      <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                    </div>
                   </div>
                 )}
               </>

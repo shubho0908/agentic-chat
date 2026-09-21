@@ -14,7 +14,6 @@ import { Button } from "../ui/button";
 interface ChatContainerProps {
   messages: Message[];
   isLoading: boolean;
-  userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
@@ -58,7 +57,6 @@ function getMessageRenderKey(
 export function ChatContainer({
   messages,
   isLoading,
-  userName,
   onEditMessage,
   onRegenerateMessage,
   onSendMessage,
@@ -174,7 +172,6 @@ export function ChatContainer({
             >
               <ChatMessage
                 message={message}
-                userName={userName}
                 onEditMessage={isLoading ? undefined : onEditMessage}
                 onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
                 onSendMessage={onSendMessage}

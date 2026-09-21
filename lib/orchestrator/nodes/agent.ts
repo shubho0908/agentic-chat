@@ -23,6 +23,7 @@ import {
   PROMPT_PRIVATE_ANALYSIS,
   PROMPT_RESPONSE_FORMATTING,
   PROMPT_SECURITY_BOUNDARY,
+  WEB_CITATION_PROMPT,
   joinPromptSections,
 } from "@/lib/prompts";
 
@@ -65,6 +66,7 @@ Helpful AI assistant with tool access. Be concise, direct, and action-oriented.`
   PROMPT_SECURITY_BOUNDARY,
   EXECUTION_BUDGET_PROMPT,
   PROMPT_RESPONSE_FORMATTING,
+  WEB_CITATION_PROMPT,
   ARTIFACT_QUALITY_PROMPT,
 );
 

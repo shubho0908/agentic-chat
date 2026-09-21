@@ -43,57 +43,109 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
   }
 }
 
+function isAbortError(err: unknown): boolean {
+  return (
+    err !== null &&
+    err !== undefined &&
+    typeof err === "object" &&
+    (err as Record<string, unknown>).name === "AbortError"
+  );
+}
+
+function waitBeforeRetry(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export async function saveUserMessage(
   conversationId: string,
   content: string | MessageContentPart[],
   attachments?: Attachment[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  clientMessageId?: string
 ): Promise<string | null> {
-  try {
-    const contentToSave = extractTextFromContent(content);
+  const contentToSave = extractTextFromContent(content);
+  const payload = {
+    role: "USER",
+    content: contentToSave,
+    attachments: attachments || [],
+    ...(clientMessageId && { id: clientMessageId }),
+  };
 
-    const response = await fetch(apiRoutes.conversationMessages(conversationId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        role: "USER",
-        content: contentToSave,
-        attachments: attachments || [],
-      }),
-      signal,
-    });
+  let lastError: unknown = null;
 
-    if (!response.ok) {
-      throw new Error(`Failed to save message: ${response.statusText}`);
-    }
-
-    const savedMessage: SavedMessageWithAttachments = await response.json();
-    
-    if (savedMessage.attachments && savedMessage.attachments.length > 0) {
-      const documentAttachmentIds = savedMessage.attachments
-        .flatMap((att) => isSupportedForRAG(att.fileType) ? [att.id] : []);
-      
-      if (documentAttachmentIds.length > 0) {
-        await processDocumentsAsync(documentAttachmentIds);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      try {
+        await waitBeforeRetry(500, signal);
+      } catch (err) {
+        if (isAbortError(err)) throw err;
       }
     }
-    
-    return savedMessage.id;
-  } catch (err) {
-    const errorName =
-      err !== null && err !== undefined && typeof err === "object"
-        ? (err as Record<string, unknown>).name
-        : undefined;
-    if (errorName === "AbortError") {
-      throw err;
-    }
+
     try {
-      logger.error("Failed to save user message:", err);
-    } catch {
-      // Swallow — logging must never crash the application
+      const response = await fetch(apiRoutes.conversationMessages(conversationId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal,
+      });
+
+      if (!response.ok) {
+        let serverMessage = response.statusText;
+        try {
+          const errorData = await response.json();
+          if (typeof errorData?.message === "string") serverMessage = errorData.message;
+          else if (typeof errorData?.error === "string") serverMessage = errorData.error;
+        } catch {
+          // Non-JSON error body — keep statusText
+        }
+        lastError = new Error(`Failed to save message (${response.status}): ${serverMessage}`);
+        if (response.status < 500) {
+          break;
+        }
+        continue;
+      }
+
+      const savedMessage: SavedMessageWithAttachments = await response.json();
+
+      if (response.status === 201 && savedMessage.attachments && savedMessage.attachments.length > 0) {
+        const documentAttachmentIds = savedMessage.attachments
+          .flatMap((att) => isSupportedForRAG(att.fileType) ? [att.id] : []);
+
+        if (documentAttachmentIds.length > 0) {
+          await processDocumentsAsync(documentAttachmentIds);
+        }
+      }
+
+      return savedMessage.id;
+    } catch (err) {
+      if (isAbortError(err)) {
+        throw err;
+      }
+      lastError = err;
     }
-    return null;
   }
+
+  try {
+    logger.error("Failed to save user message:", lastError);
+  } catch {
+    // Swallow — logging must never crash the application
+  }
+  return null;
 }
 
 export async function saveAssistantMessage(

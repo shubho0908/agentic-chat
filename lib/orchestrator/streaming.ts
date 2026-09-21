@@ -196,6 +196,15 @@ export function createStreamEventMapper(): StreamEventMapper {
               );
             }
           }
+          if (eventName === CustomEventName.SEARCH_SOURCES) {
+            const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;
+            if (sources && sources.length > 0) {
+              const tool = customData?.tool === ToolName.DEEP_RESEARCH ? ToolName.DEEP_RESEARCH : ToolName.WEB_SEARCH;
+              writer.enqueue(
+                encodeToolProgress(tool, ToolStatus.COMPLETED, `Found ${sources.length} source${sources.length === 1 ? "" : "s"}`, { sources })
+              );
+            }
+          }
           break;
         }
       }

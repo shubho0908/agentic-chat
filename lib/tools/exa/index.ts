@@ -127,6 +127,34 @@ const JUNK_IMAGE_PATTERNS = [
   /wp-content\/plugins/i,
 ];
 
+function safeDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+interface EmittableSource {
+  title: string;
+  url: string;
+  snippet: string;
+  domain: string;
+}
+
+async function emitSearchSources(sources: EmittableSource[]): Promise<void> {
+  if (sources.length === 0) return;
+  // Display-only emission: never let it fail the search itself.
+  try {
+    await dispatchCustomEvent(CustomEventName.SEARCH_SOURCES, {
+      tool: ToolName.WEB_SEARCH,
+      sources: sources.slice(0, 8),
+    });
+  } catch (error) {
+    logger.warn("[Exa Search] Failed to emit search sources:", error);
+  }
+}
+
 function isLikelyContentImage(url: string): boolean {
   if (!url || !url.startsWith("http")) return false;
   return !JUNK_IMAGE_PATTERNS.some((p) => p.test(url));
@@ -273,6 +301,15 @@ export const exaSearchTool = new DynamicStructuredTool({
           await dispatchCustomEvent(CustomEventName.SEARCH_IMAGES, { images });
         }
 
+        await emitSearchSources(
+          response.results.map((r) => ({
+            title: r.title || "Untitled",
+            url: r.url,
+            snippet: (r.highlights?.[0] ?? r.text ?? "").slice(0, 300),
+            domain: safeDomain(r.url),
+          }))
+        );
+
         const formatted = response.results
           .map((r, i) => {
             const highlights = r.highlights?.length
@@ -300,6 +337,14 @@ export const exaSearchTool = new DynamicStructuredTool({
         if (!fallbackResults.length) {
           return "No results found for this query.";
         }
+        await emitSearchSources(
+          fallbackResults.map((r) => ({
+            title: r.title || "Untitled",
+            url: r.url,
+            snippet: (r.text ?? "").slice(0, 300),
+            domain: safeDomain(r.url),
+          }))
+        );
         return fallbackResults
           .map((r, i) => `[${i + 1}] ${r.title || "Untitled"}\nURL: ${r.url}\n${r.text.slice(0, 800)}`)
           .join("\n\n---\n\n");

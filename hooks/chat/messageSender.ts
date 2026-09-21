@@ -110,8 +110,7 @@ async function createAndSaveConversation(
   attachments: Attachment[] | undefined,
   abortSignal: AbortSignal,
 ): Promise<string> {
-  let conversationId: string | null = null;
-  await handleConversationSaving(
+  const creationResult = await handleConversationSaving(
     true,
     null,
     messageContent,
@@ -119,7 +118,6 @@ async function createAndSaveConversation(
     userMessage.timestamp ?? Date.now(),
     queryClient,
     (data: ConversationResult) => {
-      conversationId = data.conversationId;
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
@@ -133,13 +131,12 @@ async function createAndSaveConversation(
     abortSignal,
     undefined,
     (id: string) => {
-      conversationId = id;
       onConversationIdUpdate(id);
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
   );
-  if (!conversationId) throw new Error("Failed to create conversation");
-  return conversationId;
+  if (!creationResult) throw new Error("Failed to create conversation");
+  return creationResult.conversationId;
 }
 
 export async function handleSendMessage(
@@ -169,7 +166,7 @@ export async function handleSendMessage(
   }
 
   const messageContent = buildMultimodalContent(content.trim(), attachments);
-  const userMessageId = `user-${Date.now()}`;
+  const userMessageId = crypto.randomUUID();
 
   const userMessage: Message = {
     role: MessageRole.USER,
@@ -217,7 +214,8 @@ export async function handleSendMessage(
         currentConversationId,
         messageContent,
         attachments,
-        abortSignal
+        abortSignal,
+        userMessage.id
       );
 
       if (!savedMsgId) {

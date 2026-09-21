@@ -11,12 +11,12 @@ import {
   type JevQuestions,
 } from "./types";
 
-export const JEV_PASSAGE_GATE_SCHEMA_VERSION = "1.0.0";
+const JEV_PASSAGE_GATE_SCHEMA_VERSION = "1.0.0";
 const TIMEOUT_MS = 2_000;
 const MAX_CANDIDATES = 24;
 /** Bounded fan-out, same shape as the Jev reranker: a slow or failing
  * provider never faces a 24-request burst from one retrieval. */
-export const JEV_PASSAGE_GATE_MAX_CONCURRENCY = 4;
+const JEV_PASSAGE_GATE_MAX_CONCURRENCY = 4;
 const QUESTIONS: JevQuestions = {
   relevant: {
     type: "noul",

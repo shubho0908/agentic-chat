@@ -2,13 +2,13 @@ import { z } from "zod";
 import { JevCheckpoint, type JevQuestions } from "./types";
 import type { JevDecisionClient, JevEvaluateResult } from "./client";
 
-export const JEV_TOOL_ROUTER_SCHEMA_VERSION = "1.0.0";
+const JEV_TOOL_ROUTER_SCHEMA_VERSION = "1.0.0";
 // Shadow runs in background with zero user impact, so the budget covers
 // cold starts (measured live p50 ~0.4s, cold ~1.5-4.4s).
-export const JEV_TOOL_ROUTER_TIMEOUT_MS = 10_000;
+const JEV_TOOL_ROUTER_TIMEOUT_MS = 10_000;
 // Bounded wait on failure rounds only. Covers the warm p50; cold starts
 // miss by design and keep the deterministic envelope.
-export const JEV_TOOL_DIAGNOSIS_TIMEOUT_MS = 2_000;
+const JEV_TOOL_DIAGNOSIS_TIMEOUT_MS = 2_000;
 export const JEV_TOOL_ROUTER_MAX_CONTENT_CHARS = 500;
 export const JEV_TOOL_ROUTER_MAX_TOOL_NAMES = 8;
 

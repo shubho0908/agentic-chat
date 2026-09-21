@@ -43,7 +43,7 @@ interface InvokeJsonOptions<T> extends InvokeResearchLLMOptions {
 
 export type ResearchNodeUpdate = Partial<ResearchStateType>;
 
-export class ResearchTokenBudgetExceededError extends Error {
+class ResearchTokenBudgetExceededError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ResearchTokenBudgetExceededError";

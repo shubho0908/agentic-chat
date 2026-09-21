@@ -27,24 +27,6 @@ interface ResolvedAttachmentScope {
   attachmentCount: number;
 }
 
-function selectOverviewRows<T>(rows: T[], maxPerAttachment: number): T[] {
-  if (rows.length <= maxPerAttachment) {
-    return rows;
-  }
-
-  const selectedIndexes = new Set<number>();
-  selectedIndexes.add(0);
-  selectedIndexes.add(rows.length - 1);
-  selectedIndexes.add(Math.floor((rows.length - 1) / 2));
-
-  const orderedIndexes = Array.from(selectedIndexes)
-    .filter((index) => index >= 0 && index < rows.length)
-    .sort((a, b) => a - b)
-    .slice(0, maxPerAttachment);
-
-  return orderedIndexes.map((index) => rows[index]);
-}
-
 /** Honest citation bands from retrieval scores. Neighbors inherit their
  * source result's score, so adjacency never invents relevance. */
 export function relevanceForScore(score: number | undefined): string {
@@ -274,98 +256,6 @@ async function resolveCompletedAttachmentScope(
   };
 }
 
-export async function getDocumentOverviewContext(
-  userId: string,
-  options: RAGContextOptions = {},
-): Promise<RAGContextResult | null> {
-  return withTrace(
-    "rag-document-overview",
-    async () => {
-      try {
-        const scope = await resolveCompletedAttachmentScope(userId, options);
-        if (!scope) {
-          return null;
-        }
-
-        const rows = await prisma.$queryRaw<
-          Array<{
-            chunk_id: string;
-            content: string;
-            attachment_id: string;
-            file_name: string;
-            page: number | null;
-          }>
-        >`
-          SELECT
-            COALESCE(metadata->>'chunkId', id::text) AS chunk_id,
-            content,
-            metadata->>'attachmentId' AS attachment_id,
-            metadata->>'fileName' AS file_name,
-            CASE
-              WHEN metadata->>'page' ~ '^[0-9]+$'
-                THEN (metadata->>'page')::int
-              ELSE NULL
-            END AS page
-          FROM document_chunk
-          WHERE metadata->>'userId' = ${userId}
-            AND (${options.conversationId ?? null}::text IS NULL OR metadata->>'conversationId' = ${options.conversationId ?? null})
-            AND metadata->>'attachmentId' = ANY(${scope.attachmentIds}::text[])
-          ORDER BY created_at ASC
-          LIMIT 120`;
-
-        if (rows.length === 0) {
-          return null;
-        }
-
-        const perAttachmentBudget = 3;
-        const rowsByAttachment = new Map<string, typeof rows>();
-
-        for (const row of rows) {
-          const attachmentRows = rowsByAttachment.get(row.attachment_id) ?? [];
-          attachmentRows.push(row);
-          rowsByAttachment.set(row.attachment_id, attachmentRows);
-        }
-
-        const selected = Array.from(rowsByAttachment.values()).flatMap(
-          (attachmentRows) =>
-            selectOverviewRows(attachmentRows, perAttachmentBudget),
-        );
-
-        if (selected.length === 0) {
-          return null;
-        }
-
-        const formatted = selected.map((row) => ({
-          content: row.content,
-          score: 0,
-          metadata: {
-            chunkId: row.chunk_id,
-            attachmentId: row.attachment_id,
-            fileName: row.file_name,
-            page: row.page ?? undefined,
-          },
-        }));
-
-        const overviewContext = formatRetrievedContext(formatted, "coverage");
-        return {
-          ...overviewContext,
-          documentCount: scope.attachmentCount,
-        };
-      } catch (error) {
-        logger.error(
-          "[RAG] Document overview context retrieval failed:",
-          error,
-        );
-        return null;
-      }
-    },
-    {
-      userId,
-      conversationId: options.conversationId,
-      providedAttachmentCount: options.attachmentIds?.length || 0,
-    },
-  );
-}
 
 export function mergeNeighborCandidates(
   results: RetrievalCandidate[],
@@ -413,7 +303,7 @@ export function mergeNeighborCandidates(
   return ordered.slice(0, limit);
 }
 
-export async function enrichWithNeighborChunks(
+async function enrichWithNeighborChunks(
   results: RetrievalCandidate[],
   userId: string,
 ): Promise<RetrievalCandidate[]> {
