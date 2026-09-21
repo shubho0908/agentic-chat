@@ -35,6 +35,11 @@ export interface TokenUsage {
   };
 }
 
+export enum DegradedContextSource {
+  Memory = 'memory',
+  ContextRouter = 'context_router',
+}
+
 export interface MemoryStatus {
   hasMemories: boolean;
   attemptedMemory?: boolean;
@@ -47,7 +52,7 @@ export interface MemoryStatus {
   skippedMemory?: boolean;
   activeToolName?: string;
   degradedContexts?: Array<{
-    source: string;
+    source: DegradedContextSource;
     reason: string;
   }>;
   tokenUsage?: TokenUsage;

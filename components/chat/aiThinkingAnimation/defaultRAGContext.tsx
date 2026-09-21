@@ -1,8 +1,13 @@
 import { FileText, Brain } from "lucide-react";
+import { DegradedContextSource } from "@/types/chat";
 import { ContextItem } from "./contextItem";
 import type { MemoryStatusProps } from "./types";
 
 export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
+  const memoryUnavailable =
+    memoryStatus.degradedContexts?.some(
+      (degraded) => degraded.source === DegradedContextSource.Memory,
+    ) ?? false;
   return (
     <>
       {memoryStatus.hasDocuments && (
@@ -29,12 +34,21 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
         />
       )}
 
-      {memoryStatus.attemptedMemory && !memoryStatus.hasMemories && !memoryStatus.skippedMemory && (
+      {memoryStatus.attemptedMemory && !memoryStatus.hasMemories && !memoryStatus.skippedMemory && !memoryUnavailable && (
         <ContextItem
           icon={Brain}
           label="Memories checked"
           note="no relevant match"
           completed
+        />
+      )}
+
+      {memoryUnavailable && (
+        <ContextItem
+          icon={Brain}
+          label="Memories"
+          note="unavailable"
+          skipped
         />
       )}
 

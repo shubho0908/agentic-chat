@@ -37,7 +37,7 @@ function getOpenAIClient(apiKey: string): OpenAI {
 }
 import { isValidConversationId, validateChatMessages } from '@/lib/validation';
 import { parseOpenAIError } from '@/lib/openaiErrors';
-import type { MemoryStatus } from '@/types/chat';
+import { DegradedContextSource, type MemoryStatus } from '@/types/chat';
 
 const BASE_MEMORY_STATUS: MemoryStatus = {
   hasMemories: false,
@@ -301,7 +301,7 @@ export async function POST(request: NextRequest) {
         memoryStatusInfo.degradedContexts = [
           ...(memoryStatusInfo.degradedContexts || []),
           {
-            source: 'context_router',
+            source: DegradedContextSource.ContextRouter,
             reason: error instanceof Error ? error.message : String(error),
           },
         ];

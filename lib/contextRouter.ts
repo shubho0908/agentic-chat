@@ -3,13 +3,16 @@ import { getRAGContext } from "./rag/retrieval/context";
 import type { Message } from "@/lib/schemas/chat";
 import { selectDocumentAttachmentsForTurn } from "./chat/attachmentRouting";
 import { MessageRole } from "@/lib/schemas/chat";
-import { RoutingDecision } from "@/types/chat";
+import { DegradedContextSource, RoutingDecision } from "@/types/chat";
 import { prisma } from "./prisma";
 import { filterDocumentAttachments } from "./rag/retrieval/statusHelpers";
 import { isSupportedDocumentExtension } from "./fileValidation";
 import { extractTextFromMessage } from "./chat/messageContent";
 import { mediateMemoryIntent } from "./chat/requestMediator";
-import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
+import {
+  estimateMemoryEntryCount,
+  memoryGateDegradation,
+} from "./chat/memoryPolicy";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { logWarn } from "./observability";
 
@@ -122,7 +125,7 @@ interface ContextRoutingMetadata {
     page?: number;
   }>;
   degradedContexts?: Array<{
-    source: string;
+    source: DegradedContextSource;
     reason: string;
   }>;
 }
@@ -374,7 +377,7 @@ export async function routeContext(
     degradedContexts: [],
   };
 
-  const addDegradedContext = (source: string, reason: string) => {
+  const addDegradedContext = (source: DegradedContextSource, reason: string) => {
     metadata.degradedContexts = [
       ...(metadata.degradedContexts || []),
       { source, reason },
@@ -533,6 +536,8 @@ export async function routeContext(
   });
 
   if (!memoryDecision.shouldQuery) {
+    const degradation = memoryGateDegradation(memoryDecision);
+    if (degradation) addDegradedContext(degradation.source, degradation.reason);
     return { context: "", metadata };
   }
 
@@ -546,7 +551,7 @@ export async function routeContext(
 
   if (memoryContextResult.failed) {
     addDegradedContext(
-      "memory",
+      DegradedContextSource.Memory,
       memoryContextResult.error || "Memory retrieval failed",
     );
     return { context: "", metadata };

@@ -1,5 +1,10 @@
 import type { Attachment } from "@/lib/schemas/chat";
-import { RoutingDecision, type MemoryStatus } from "@/types/chat";
+import { MemoryGateReason, type MemoryGateDecision } from "@/lib/jev/memoryGate";
+import {
+  DegradedContextSource,
+  RoutingDecision,
+  type MemoryStatus,
+} from "@/types/chat";
 
 export type MemoryPersistenceFlow = "send" | "edit" | "regenerate";
 
@@ -124,4 +129,14 @@ export function estimateMemoryEntryCount(memoryContext: string): number {
   }
 
   return 1;
+}
+
+export function memoryGateDegradation(
+  decision: MemoryGateDecision,
+): { source: DegradedContextSource; reason: string } | null {
+  if (decision.reasonCode !== MemoryGateReason.PROVIDER_FAILURE) return null;
+  return {
+    source: DegradedContextSource.Memory,
+    reason: "Memory provider check failed; answering without past-chat memory",
+  };
 }
