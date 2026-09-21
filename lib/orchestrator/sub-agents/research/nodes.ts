@@ -20,7 +20,7 @@ import { extractDomain } from "@/lib/utils";
 import { exaDeepSearch } from "@/lib/tools/exa";
 import { scrapeContent } from "@/lib/tools/scrape";
 import { getSupportedTemperature } from "@/lib/modelPolicy";
-import { withRetry } from "@/lib/retry";
+import { withRetry, isAbortError } from "@/lib/retry";
 import { logger } from "@/lib/logger";
 import {
   dedupeSearchQueries,
@@ -28,7 +28,6 @@ import {
   getAbortSignal,
   invokeResearchJson,
   invokeResearchLLM,
-  isAbortError,
   mergeTokenUsage,
   normalizeSearchQuery,
   throwIfAborted,

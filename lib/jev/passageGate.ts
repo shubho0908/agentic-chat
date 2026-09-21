@@ -1,12 +1,11 @@
 import type { RetrievalCandidate } from "@/lib/rag/retrieval/hybrid";
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient } from "./client";
+import { JevDecisionClient, classifyJevFailure } from "./client";
 import { mapWithConcurrencyLimit } from "./concurrency";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
-  JevFallbackReason,
   JevMode,
   type JevQuestions,
 } from "./types";
@@ -144,10 +143,7 @@ export async function gatePassages(
       latencyMs: Date.now() - batchStarted,
       outcome: "error_keep",
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId: batchRequestId,
       conversationId,
     });

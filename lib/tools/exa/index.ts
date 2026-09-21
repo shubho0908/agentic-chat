@@ -2,7 +2,7 @@ import Exa from "exa-js";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
-import { withRetry } from "@/lib/retry";
+import { withRetry, isAbortError } from "@/lib/retry";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
 import { getCircuitBreaker, registerCircuitBreaker } from "@/lib/circuitBreaker";
@@ -56,10 +56,6 @@ interface SerperOrganicResult {
 
 interface SerperResponse {
   organic?: SerperOrganicResult[];
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message));
 }
 
 async function serperSearch(

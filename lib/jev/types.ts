@@ -23,12 +23,12 @@ export type JevModeValue = (typeof JevMode)[keyof typeof JevMode];
 
 export const JevFallbackReason = {
   TIMEOUT: "timeout",
+  CANCELLED: "cancelled",
   ERROR: "error",
   INVALID: "invalid",
-  LOW_CONFIDENCE: "low_confidence",
   CIRCUIT_OPEN: "circuit_open",
 } as const;
-type JevFallbackReasonValue =
+export type JevFallbackReasonValue =
   (typeof JevFallbackReason)[keyof typeof JevFallbackReason];
 
 const probabilitySchema = z.number().min(0).max(1);
