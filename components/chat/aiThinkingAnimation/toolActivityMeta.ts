@@ -168,9 +168,9 @@ function clamp(value: string, maxLength: number): string {
 
 function toKeyArg(value: string, isIdentifier: boolean): ToolKeyArg {
   const text = clamp(value, KEY_ARG_MAX_LENGTH);
-  if (/^https?:\/\//i.test(text)) {
+  if (/^https?:\/\//i.test(value)) {
     try {
-      return { text: new URL(text).hostname.replace(/^www\./, ""), href: text, isIdentifier: false };
+      return { text: new URL(value).hostname.replace(/^www\./, ""), href: value, isIdentifier: false };
     } catch {
       return { text, isIdentifier: false };
     }
