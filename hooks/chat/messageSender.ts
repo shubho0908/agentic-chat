@@ -118,7 +118,6 @@ async function createAndSaveConversation(
     userMessage.timestamp ?? Date.now(),
     queryClient,
     (data: ConversationResult) => {
-      conversationId = data.conversationId;
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
