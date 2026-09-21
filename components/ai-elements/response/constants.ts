@@ -7,7 +7,7 @@ export const COMPLETE_CODE_FENCE_PATTERN =
   /(?:^|\n)(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?\n(?:`{3,}|~{3,})[ \t]*(?=\n|$)/;
 export const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [
   remarkGfm,
-  remarkMath,
+  [remarkMath, { singleDollarTextMath: false }],
 ];
 export const URL_PATTERN = /\b((?:https?:\/\/|www\.)[^\s<>{}[\]"]+)/gi;
 export const TRAILING_PUNCTUATION_PATTERN = /[.,!?;:]+$/;
