@@ -15,6 +15,8 @@ import type { AgentStateType } from "../state";
 import { ASK_USER_TOOL_NAME } from "../tools";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 import { sanitizeToolOutput } from "@/lib/sanitize";
+import { screenUntrustedContent } from "@/lib/security/untrustedContent";
+import { blocksPrivateDataLeak, toolOutputOrigin } from "@/lib/security/provenance";
 import { logger } from "@/lib/logger";
 import { createRequestId } from "@/lib/observability";
 import {
@@ -238,29 +240,31 @@ function wrapFailureEnvelope(message: ToolMessage): ToolMessage {
     metadata: message.metadata,
   });
 }
-function sanitizeToolMessage(message: ToolMessage): ToolMessage {
-  if (typeof message.content !== "string") {
-    return message;
-  }
-
-  const content = normalizeConnectorToolContent(message.name, message.content);
+async function sanitizeToolMessage(message: ToolMessage, toolCapable: boolean, conversationId?: string, securityDependency?: JevDecisionClient | null): Promise<ToolMessage> {
+  const serialized = typeof message.content === "string"
+    ? message.content
+    : JSON.stringify(message.content) ?? String(message.content);
+  const content = normalizeConnectorToolContent(message.name, serialized);
+  const origin = toolOutputOrigin(message.name);
+  const screened = await screenUntrustedContent(content, origin, { toolCapable, conversationId, dependency: securityDependency });
 
   return new ToolMessage({
     id: message.id,
     name: message.name,
-    content: sanitizeToolOutput(content),
+    content: screened.content,
     tool_call_id: message.tool_call_id,
     additional_kwargs: message.additional_kwargs,
     response_metadata: message.response_metadata,
     status: message.status,
     artifact: message.artifact,
-    metadata: message.metadata,
+    metadata: { ...(message.metadata ?? {}), security_origin: origin, security_disposition: screened.disposition },
   });
 }
 
 export interface ToolNodeConfig {
   model: string;
   reasoningEffort?: ReasoningEffortLevel | null;
+  securityDependency?: JevDecisionClient | null;
 }
 
 export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolNodeConfig) {
@@ -310,6 +314,10 @@ export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolN
             })
         ),
       };
+    }
+
+    if (await blocksPrivateDataLeak(toolCalls, state.messages, state.conversationId, nodeConfig.securityDependency)) {
+      return { messages: toolCalls.map((tc, index) => new ToolMessage({ tool_call_id: toolCallResultId(tc, index), name: tc.name, content: "Blocked: private connected-account data cannot be sent to an external sink without a safe, explicit data-flow decision.", status: TOOL_ERROR_STATUS })) };
     }
 
     const dangerousCalls = toolCalls.filter((tc) => isDangerousAction(tc.name));
@@ -363,7 +371,7 @@ export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolN
         { ...state, messages: [...state.messages] },
         config
       ) as { messages: ToolMessage[] };
-      const sanitized = result.messages.map(sanitizeToolMessage);
+      const sanitized = await Promise.all(result.messages.map((message) => sanitizeToolMessage(message, tools.length > 0, state.conversationId, nodeConfig.securityDependency)));
 
       const observedCallIds = new Set(
         sanitized.map((m) => m.tool_call_id).filter((id): id is string => typeof id === "string")

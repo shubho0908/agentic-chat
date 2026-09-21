@@ -60,6 +60,8 @@ import { logger } from "@/lib/logger";
 import { buildChatSystemPrompt } from '@/lib/chat/systemPrompt';
 import { MessageRole } from '@/lib/schemas/chat';
 import { isRecord } from '@/lib/typeGuards';
+import { screenAssistantOutput } from '@/lib/security/outputDlp';
+import { getConnectedToolkits } from '@/lib/tools/composio/auth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
@@ -265,6 +267,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       let enhancedMessages = validatedMessages;
+      const connectedToolkits = await getConnectedToolkits(authUser.id);
       let memoryStatusInfo: MemoryStatus = { ...BASE_MEMORY_STATUS };
 
       try {
@@ -282,7 +285,7 @@ export async function POST(request: NextRequest) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey }
+              { apiKey, toolCapable: connectedToolkits.length > 0 }
             );
           },
           {
@@ -371,6 +374,11 @@ export async function POST(request: NextRequest) {
         { signal: request.signal }
       );
 
+      const output = completion.choices[0]?.message?.content;
+      if (typeof output === "string") {
+        const screened = await screenAssistantOutput(output, conversationId);
+        completion.choices[0].message.content = screened.content;
+      }
       return new Response(
         JSON.stringify(completion),
         { headers: { 'Content-Type': 'application/json' } }

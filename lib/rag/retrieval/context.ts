@@ -21,6 +21,7 @@ import {
   type RetrievalCandidate,
 } from "./hybrid";
 import { gatePassages } from "@/lib/jev/passageGate";
+import { screenUntrustedContent, SecurityDisposition, UntrustedOrigin } from "@/lib/security/untrustedContent";
 
 interface ResolvedAttachmentScope {
   attachmentIds: string[];
@@ -392,7 +393,13 @@ export async function getRAGContext(
           { failClosed: options.toolCapable === true },
         );
         if (!gatedResults.length) return null;
-        return formatRetrievedContext(gatedResults);
+        const screenedResults = await Promise.all(gatedResults.map(async (candidate) => {
+          const decision = await screenUntrustedContent(candidate.content, UntrustedOrigin.DOCUMENT, { toolCapable: options.toolCapable === true, conversationId });
+          return decision.disposition === SecurityDisposition.ALLOW ? { ...candidate, content: decision.content } : null;
+        }));
+        const acceptedResults = screenedResults.filter((candidate): candidate is RetrievalCandidate => candidate !== null);
+        if (!acceptedResults.length) return null;
+        return formatRetrievedContext(acceptedResults);
       } catch (error) {
         if (options.signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
         logger.error("[RAG] Context retrieval failed:", error);

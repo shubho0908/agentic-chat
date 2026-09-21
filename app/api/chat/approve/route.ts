@@ -9,7 +9,8 @@ import { createAgentGraph } from "@/lib/orchestrator/graph";
 import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
-import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
+import { screenAssistantOutput } from "@/lib/security/outputDlp";
+import { encodeChatChunk, encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
 import { DEFAULT_MODEL, REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from "@/constants/openai-models";
 import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPolicy";
@@ -151,11 +152,20 @@ export async function POST(request: NextRequest) {
           label: "Approve",
         });
         const mapper = createStreamEventMapper();
-        const finishStream = () => {
-          stream.finish({
-            done: encodeDone(),
-            flush: (writer) => mapper.flush(writer),
-          });
+        const finishStream = async () => {
+          mapper.flush(stream);
+          const output = mapper.takeAssistantOutput();
+          if (output.text || output.artifactText) {
+            const screened = await screenAssistantOutput(`${output.text}
+${output.artifactText}`, conversationId);
+            if (screened.allowed) {
+              if (output.text) stream.enqueue(encodeChatChunk(output.text));
+              for (const chunk of output.artifacts) stream.enqueue(chunk);
+            } else {
+              stream.enqueue(encodeChatChunk(screened.content));
+            }
+          }
+          stream.finish({ done: encodeDone() });
         };
 
         try {
@@ -191,11 +201,11 @@ export async function POST(request: NextRequest) {
               threadId,
             };
             handleGraphInterrupt(stream, interruptData);
-            finishStream();
+            await finishStream();
             return;
           }
 
-          finishStream();
+          await finishStream();
         } catch (err) {
           if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
             logger.warn("[Approve] Stream aborted by client");
@@ -204,7 +214,7 @@ export async function POST(request: NextRequest) {
           }
           logger.error("[Approve] Error resuming graph:", err);
           stream.enqueue(encodeError(toUserFriendlyError(err)));
-          finishStream();
+          await finishStream();
         }
       },
       cancel() {

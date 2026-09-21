@@ -28,6 +28,7 @@ import type { ReasoningEffortLevel } from '@/constants/openai-models';
 import { withRetry } from '@/lib/retry';
 import { createSafeStream } from './safeStream';
 import { buildChatSystemPrompt } from './systemPrompt';
+import { screenAssistantOutput } from '@/lib/security/outputDlp';
 
 import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
@@ -229,6 +230,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
         
         const resolvedEffort = getChatReasoningEffort(model, reasoningEffort);
 
+        let finalResponse = "";
         if (resolvedEffort && resolvedEffort !== 'none' && resolvedEffort !== 'minimal') {
           const responseStream = await withRetry(
             () =>
@@ -251,9 +253,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                 break;
               }
             } else if (event.type === 'response.output_text.delta') {
-              if (!stream.enqueue(encodeChatChunk(event.delta))) {
-                break;
-              }
+              finalResponse += event.delta;
             }
           }
         } else {
@@ -276,11 +276,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             const delta = chunk.choices[0]?.delta;
             const text = delta?.content || '';
 
-            if (text) {
-              if (!stream.enqueue(encodeChatChunk(text))) {
-                break;
-              }
-            }
+            if (text) finalResponse += text;
           }
         }
 
@@ -289,6 +285,8 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           return;
         }
 
+        const screenedOutput = await screenAssistantOutput(finalResponse, conversationId);
+        stream.enqueue(encodeChatChunk(screenedOutput.content));
         finishStream();
       } catch (error) {
         if (

@@ -10,6 +10,8 @@ export const JevCheckpoint = {
   MEMORY_GATE: "memory_gate",
   MEMORY_EVIDENCE: "memory_evidence",
   MEMORY_STORAGE: "memory_storage",
+  UNTRUSTED_CONTENT: "untrusted_content",
+  OUTPUT_DLP: "output_dlp",
 } as const;
 export type JevCheckpointName = (typeof JevCheckpoint)[keyof typeof JevCheckpoint];
 

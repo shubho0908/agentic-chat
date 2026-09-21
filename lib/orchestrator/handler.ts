@@ -9,6 +9,7 @@ import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
 import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
+import { screenAssistantOutput } from "@/lib/security/outputDlp";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -113,11 +114,19 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
       const mapper = createStreamEventMapper();
 
-      const closeStream = () => {
-        stream.finish({
-          done: encodeDone(),
-          flush: (writer) => mapper.flush(writer),
-        });
+      const closeStream = async () => {
+        mapper.flush(stream);
+        const output = mapper.takeAssistantOutput();
+        if (output.text || output.artifactText) {
+          const screened = await screenAssistantOutput(`${output.text}\n${output.artifactText}`, conversationId);
+          if (screened.allowed) {
+            if (output.text) stream.enqueue(encodeChatChunk(output.text));
+            for (const chunk of output.artifacts) stream.enqueue(chunk);
+          } else {
+            stream.enqueue(encodeChatChunk(screened.content));
+          }
+        }
+        stream.finish({ done: encodeDone() });
       };
 
       const failStream = (error: unknown) => {
@@ -139,7 +148,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           : toUserFriendlyError(error);
 
         stream.enqueue(encodeError(friendly));
-        closeStream();
+        void closeStream();
       };
 
       const abortStream = () => {
@@ -193,7 +202,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
         if (!budgetCheck.ok) {
           stream.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
-          closeStream();
+          await closeStream();
           return;
         }
 
@@ -230,8 +239,9 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
               );
               if (gate.serve) {
                 logger.log("[Orchestrator] Semantic cache HIT");
-                stream.enqueue(encodeChatChunk(entry.answer));
-                closeStream();
+                const screenedCache = await screenAssistantOutput(entry.answer, conversationId);
+                stream.enqueue(encodeChatChunk(screenedCache.content));
+                stream.finish({ done: encodeDone() });
                 return;
               }
               logger.log("[Orchestrator] Semantic cache HIT vetoed by Jev gate");
@@ -291,11 +301,11 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             threadId,
           };
           handleGraphInterrupt(stream, interruptData);
-          closeStream();
+          await closeStream();
           return;
         }
 
-        closeStream();
+        await closeStream();
       } catch (error) {
         if (isGraphInterrupt(error)) {
           const interruptValue = (error as { value?: unknown }).value;
@@ -303,7 +313,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             ? { ...interruptValue as Record<string, unknown>, threadId }
             : { threadId };
           handleGraphInterrupt(stream, interruptData);
-          closeStream();
+          await closeStream();
           return;
         }
 

@@ -15,6 +15,7 @@ import { logWarn } from "./observability";
 
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
+import { screenUntrustedContent, SecurityDisposition, UntrustedOrigin } from "@/lib/security/untrustedContent";
 
 const INLINE_ATTACHMENT_MAX_BYTES = 512 * 1024;
 
@@ -49,6 +50,7 @@ async function tryInlineAttachmentContent(
   attachmentIds: string[],
   userId: string,
   signal?: AbortSignal,
+  toolCapable: boolean = false,
 ): Promise<{ context: string; documentCount: number } | null> {
   try {
     const attachments = await prisma.attachment.findMany({
@@ -84,7 +86,9 @@ async function tryInlineAttachmentContent(
         });
         if (!res.ok) return null;
         const text = await res.text();
-        return `<attached_file name="${sanitizeAttachedFileName(att.fileName)}">\n${text}\n</attached_file>`;
+        const screened = await screenUntrustedContent(text, UntrustedOrigin.DOCUMENT, { toolCapable });
+        if (screened.disposition === SecurityDisposition.BLOCK) return null;
+        return `<attached_file name="${sanitizeAttachedFileName(att.fileName)}">\n${screened.content}\n</attached_file>`;
       }),
     );
 
@@ -406,6 +410,7 @@ export async function routeContext(
         attachmentInfo.documentAttachmentIds,
         userId,
         options?.signal,
+        options?.toolCapable === true,
       );
 
       if (inlineResult) {
@@ -553,6 +558,7 @@ export async function routeContext(
     recentConversation,
     conversationId,
     signal: options?.signal,
+    toolCapable: options?.toolCapable,
   });
 
   if (memoryContextResult.failed) {

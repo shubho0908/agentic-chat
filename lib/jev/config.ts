@@ -15,6 +15,8 @@ const ENV_BY_CHECKPOINT: Record<JevCheckpointName, string> = {
   [JevCheckpoint.MEMORY_GATE]: "JEV_MEMORY_GATE_MODE",
   [JevCheckpoint.MEMORY_EVIDENCE]: "JEV_MEMORY_EVIDENCE_MODE",
   [JevCheckpoint.MEMORY_STORAGE]: "JEV_MEMORY_STORAGE_MODE",
+  [JevCheckpoint.UNTRUSTED_CONTENT]: "JEV_UNTRUSTED_CONTENT_MODE",
+  [JevCheckpoint.OUTPUT_DLP]: "JEV_OUTPUT_DLP_MODE",
 };
 
 const MODE_VALUES = new Set<string>(Object.values(JevMode));

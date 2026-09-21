@@ -109,3 +109,11 @@ Use `GET /api/jev/stats?days=30` for all checkpoints or add `&checkpoint=planner
 ## Getting Started
 
 See the [Setup Guide](./SETUP.md) for installation, environment configuration, and database setup.
+
+### Untrusted content boundary
+
+Tool results, connected-account data, retrieved documents, inline attachments, and memories pass through one server-side semantic injection screen before entering model context. The screen uses the Jev decision client directly rather than a client-controlled mode flag. Tool-capable flows fail closed when screening is unavailable, times out, or returns malformed output. Read-only flows keep the bounded content and record the degraded check. The regex sanitizer remains only as a fast, deterministic pre-filter and size bound.
+
+Connected-tool output carries server-owned public/private provenance. Once private connected-account content has entered a graph turn, external queries, URLs, outbound messages, shares, and mutations are blocked unless the semantic data-flow check finds no private-source disclosure. Raw tool results are not streamed to the browser.
+
+Assistant text and generated artifacts are buffered until the complete output passes the output leak check. Known internal prompt markers are always blocked. A configured semantic check also blocks reconstructed hidden instructions, internal context, secrets, and unrelated private data; evaluation failures fail closed.

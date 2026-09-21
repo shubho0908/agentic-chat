@@ -1,8 +1,6 @@
 import {
-  encodeChatChunk,
   encodeToolCall,
   encodeToolProgress,
-  encodeToolResult,
   encodeThinkingChunk,
   encodeArtifactEvent,
   encodeResponseIncomplete,
@@ -40,27 +38,17 @@ function extractToolArgs(input: Record<string, unknown>): Record<string, unknown
   return input;
 }
 
-function extractToolOutput(output: unknown): string | Record<string, unknown> | unknown[] {
-  if (!output) return "";
-  if (typeof output === "string") return output;
-  if (typeof output === "object" && output !== null && !Array.isArray(output)) {
-    const obj = output as Record<string, unknown>;
-    if (obj.kwargs && typeof obj.kwargs === "object" && !Array.isArray(obj.kwargs)) {
-      const kwargs = obj.kwargs as Record<string, unknown>;
-      if (typeof kwargs.content === "string") return kwargs.content;
-    }
-    if (typeof obj.content === "string") return obj.content;
-  }
-  return output as string | Record<string, unknown> | unknown[];
-}
-
 interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   flush(writer: StreamWriter): void;
+  takeAssistantOutput(): { text: string; artifacts: Uint8Array[]; artifactText: string };
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
   let askUserPending = false;
+  let assistantText = "";
+  let artifactText = "";
+  let artifactChunks: Uint8Array[] = [];
   const artifactParser = createArtifactStreamParser();
 
   const getNode = (event: Record<string, unknown>): string | undefined => {
@@ -76,9 +64,10 @@ export function createStreamEventMapper(): StreamEventMapper {
   function emitParsedResults(writer: StreamWriter, results: Array<{ text: string } | { event: ArtifactSSE }>) {
     for (const item of results) {
       if ("text" in item) {
-        writer.enqueue(encodeChatChunk(item.text));
+        assistantText += item.text;
       } else {
-        writer.enqueue(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
+        if (typeof item.event.content === "string") artifactText += item.event.content;
+        artifactChunks.push(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
       }
     }
   }
@@ -154,10 +143,6 @@ export function createStreamEventMapper(): StreamEventMapper {
             break;
           }
           if (isNestedToolEvent(event, name)) break;
-          const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
-          const data = event.data as { output?: unknown } | undefined;
-          const result = extractToolOutput(data?.output);
-          writer.enqueue(encodeToolResult(name, runId, result));
           writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
           break;
         }
@@ -211,6 +196,13 @@ export function createStreamEventMapper(): StreamEventMapper {
     },
     flush(writer) {
       emitParsedResults(writer, artifactParser.flush());
+    },
+    takeAssistantOutput() {
+      const value = { text: assistantText, artifacts: artifactChunks, artifactText };
+      assistantText = "";
+      artifactText = "";
+      artifactChunks = [];
+      return value;
     },
   };
 }

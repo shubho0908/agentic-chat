@@ -16,6 +16,7 @@ import { gateMemoryStorageWorthiness } from "@/lib/jev/memoryStorageGate";
 import { shouldPersistConversationMemory } from "@/lib/chat/memoryPolicy";
 import { containsInjectionPattern } from "@/lib/sanitize";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
+import { screenUntrustedContent, SecurityDisposition, UntrustedOrigin } from "@/lib/security/untrustedContent";
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 
@@ -30,6 +31,7 @@ interface MemoryLookupOptions {
   recentConversation?: string;
   conversationId?: string;
   signal?: AbortSignal;
+  toolCapable?: boolean;
 }
 
 interface MemoryContextResult {
@@ -283,7 +285,7 @@ export async function getMemoryContextResult(
 
     const records = dedupeMemorySearchRecords(searchResults.flat()).slice(0, 6);
     if (records.length > 0) {
-      const accepted = await gateMemoryEvidence(
+      const evidenceAccepted = await gateMemoryEvidence(
         query,
         records.flatMap((record) =>
           record.memory ? [{ ...record, memory: record.memory }] : [],
@@ -291,6 +293,8 @@ export async function getMemoryContextResult(
         options?.conversationId,
         signal,
       );
+      const screened = await Promise.all(evidenceAccepted.map(async (record) => ({ record, decision: await screenUntrustedContent(record.memory ?? "", UntrustedOrigin.MEMORY, { toolCapable: options?.toolCapable === true, conversationId: options?.conversationId }) })));
+      const accepted = screened.filter(({ decision }) => decision.disposition === SecurityDisposition.ALLOW).map(({ record, decision }) => ({ ...record, memory: decision.content }));
       logMetric({
         metric: "memory_retrieval_latency_ms",
         value: Date.now() - retrievalStarted,
