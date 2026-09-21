@@ -135,8 +135,6 @@ async function createAndSaveConversation(
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
   );
-  // The ready-callback above fires right after the row INSERT, so only a
-  // non-null result proves the user message persisted and navigation is safe.
   if (!creationResult) throw new Error("Failed to create conversation");
   return creationResult.conversationId;
 }

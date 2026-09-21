@@ -111,15 +111,9 @@ test("new conversation: returns null without onConversationCreated when the user
       }
     );
 
-    // Row exists but the message did not persist: callers must treat null as
-    // failure instead of navigating, and the ID must never be published as the
-    // active conversation (otherwise the next send would be routed to an empty
-    // conversation the user never navigated to).
     assert.equal(result, null);
     assert.equal(created.length, 0);
     assert.deepEqual(ready, []);
-    // The row was created before the message failed, so it must be discarded
-    // rather than lingering in the conversation list with no messages.
     assert.ok(
       calls.includes("DELETE /api/conversations/conv-1"),
       `expected the empty conversation to be discarded, saw: ${calls.join(", ")}`
@@ -165,7 +159,6 @@ test("new conversation: discards the row when the opening save aborts", async ()
       (err: Error) => err.name === "AbortError"
     );
 
-    // The abort must not publish the ID or leave the empty row behind.
     assert.deepEqual(ready, []);
     assert.ok(
       calls.includes("DELETE /api/conversations/conv-1"),

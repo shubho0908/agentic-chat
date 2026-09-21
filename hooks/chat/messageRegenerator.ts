@@ -165,8 +165,6 @@ export async function handleRegenerateResponse(
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
           
-          // Sources and citations can arrive across several progress events;
-          // reuse the send-path merger so a later batch never drops earlier ones.
           messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },

@@ -286,12 +286,6 @@ export function buildMessagesForAPI(
   );
 }
 
-/**
- * The conversation row is created before its opening message is saved. When
- * that save fails or is aborted the row would otherwise stay in the user's
- * conversation list with no messages, so drop it on a best-effort basis:
- * cleanup must never mask the original failure.
- */
 async function discardEmptyConversation(conversationId: string): Promise<void> {
   try {
     await fetch(apiRoutes.conversation(conversationId), { method: "DELETE" });
@@ -336,23 +330,15 @@ async function createNewConversation(
         signal,
       );
     } catch (err) {
-      // An aborted opening save must not leave an empty conversation behind.
       await discardEmptyConversation(conversationId);
       throw err;
     }
 
     if (!userMessageId) {
-      // Nothing was written to the row, so drop it rather than leaving an
-      // empty conversation in the user's list.
       await discardEmptyConversation(conversationId);
       return null;
     }
 
-    // Publish the ID only once the opening message is persisted: a row that
-    // exists without its first user message must never become the caller's
-    // active conversation, otherwise the next send is treated as an
-    // existing-conversation send against an empty row the user never
-    // navigated to.
     onConversationIdReady?.(conversationId);
 
     if (earlyCreate) {
