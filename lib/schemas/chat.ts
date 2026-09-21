@@ -70,16 +70,10 @@ const toolActivitySchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
   status: toolStatusSchema,
-  args: z.record(
-    z.string(),
-    z.union([
-      z.string(),
-      z.number(),
-      z.boolean(),
-      z.null(),
-      z.array(z.union([z.string(), z.number(), z.boolean()])),
-    ]),
-  ),
+  // Tool inputs are structured JSON. Document tools in particular carry
+  // nested sections/blocks, so restricting args to scalar arrays makes a
+  // successful stream fail later when the assistant message is persisted.
+  args: z.record(z.string(), jsonValueSchema),
   result: jsonValueSchema.optional(),
   error: z.string().optional(),
   timestamp: z.number(),
@@ -243,6 +237,4 @@ export const ToolStatus = {
   Error: "error" as const,
 } as const;
 
-type ToolArgValue =
-  string | number | boolean | null | Array<string | number | boolean>;
-export type ToolArgs = Record<string, ToolArgValue>;
+export type ToolArgs = Record<string, JsonValue>;

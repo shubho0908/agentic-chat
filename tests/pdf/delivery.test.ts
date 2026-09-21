@@ -107,6 +107,8 @@ test("orchestrator stream delivers a PDF card event for a successful create_pdf 
     );
     assert.ok(toolResult, "expected a create_pdf tool result");
     assert.match(toolResult, /PDF created/);
+    assert.match(toolResult, /\"pdf\"/);
+    assert.match(toolResult, /\"url\"/);
   } finally {
     restore();
   }

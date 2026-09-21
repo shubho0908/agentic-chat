@@ -8,6 +8,7 @@ import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
 import { MIN_CACHEABLE_QUERY_LENGTH } from "@/lib/orchestrator/constants";
+import { shouldBypassSemanticCacheForToolIntent } from "@/lib/orchestrator/tools";
 
 interface CacheCheckContext {
   messages: Message[];
@@ -149,12 +150,14 @@ export async function performCacheCheck(
 ): Promise<{ cacheQuery: string; cacheData: CacheCheckResult }> {
   const { messages, content, attachments, abortSignal, activeTool, model, reasoningEffort } = context;
 
-  const useCaching = shouldUseSemanticCache(messages, attachments, activeTool);
+  const rawText = extractTextFromContent(content);
+  const useCaching =
+    shouldUseSemanticCache(messages, attachments, activeTool) &&
+    !shouldBypassSemanticCacheForToolIntent(rawText);
   let cacheQuery = "";
   let cacheData: CacheCheckResult = { cached: false };
 
   if (useCaching) {
-    const rawText = extractTextFromContent(content);
     if (rawText.trim().length < MIN_CACHEABLE_QUERY_LENGTH) {
       return { cacheQuery: "", cacheData: { cached: false } };
     }

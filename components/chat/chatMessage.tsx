@@ -382,10 +382,6 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
               <SearchImages images={images} />
             )}
 
-            {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
-              <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
-            )}
-
             {isEditing ? (
               <MessageEditForm
                 editText={editText}
@@ -420,6 +416,10 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                     messageId={displayedMessageId}
                     onOpenArtifact={onOpenArtifact}
                   />
+                )}
+
+                {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
+                  <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
                 )}
 
                 {isUser && userUrls.length > 0 && (

@@ -7,7 +7,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
-import { extractMetadataFromProgress } from "./streamingHandler";
+import { extractMetadataFromProgress, extractPdfFromToolResult } from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
@@ -155,6 +155,16 @@ export async function handleEditMessage(
         );
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            onMessagesUpdate((prev) => prev.map((msg) =>
+              msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+            ));
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -177,6 +187,10 @@ export async function handleEditMessage(
         }
       },
       onToolProgress: (progress) => {
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata) ?? messageMetadata;
+        onMessagesUpdate((prev) => prev.map((msg) =>
+          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+        ));
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -192,7 +206,6 @@ export async function handleEditMessage(
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
           
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata) ?? messageMetadata;
         }
       },
       reasoningEffort,
@@ -392,7 +405,19 @@ export async function handleEditMessage(
       description: errorMessage,
     });
     
-    onMessagesUpdate(() => originalMessagesState);
+    // A persistence/versioning error after a successful stream must not roll
+    // the generated answer and file card back to the previous branch. Keep the
+    // local result visible and mark it interrupted so the user can retry.
+    if (responseContent || messageMetadata.pdfs?.length || messageMetadata.artifacts?.length) {
+      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
+      onMessagesUpdate((prev) => prev.map((msg) =>
+        msg.id === placeholderAssistantId
+          ? { ...msg, content: getPersistableAssistantContent(responseContent, messageMetadata) ?? responseContent, metadata: messageMetadata }
+          : msg
+      ));
+    } else {
+      onMessagesUpdate(() => originalMessagesState);
+    }
     return { success: false, error: errorMessage };
   }
 }

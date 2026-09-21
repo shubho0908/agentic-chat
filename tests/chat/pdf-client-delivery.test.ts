@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { handleStreamingResponse } from "@/hooks/chat/streamingHandler";
+import { extractPdfFromToolResult, handleStreamingResponse } from "@/hooks/chat/streamingHandler";
 import { getPersistableAssistantContent, PDF_ONLY_ASSISTANT_CONTENT } from "@/hooks/chat/conversationManager";
-import { MessageRole, type Message, type MessageMetadata } from "@/lib/schemas/chat";
+import { messageMetadataSchema, MessageRole, type Message, type MessageMetadata } from "@/lib/schemas/chat";
 
 const PDF_A = { url: "https://utfs.io/f/a.pdf", name: "a.pdf", size: 100, pageCount: 1, title: "A" };
 const PDF_B = { url: "https://utfs.io/f/b.pdf", name: "b.pdf", size: 200, pageCount: 2, title: "B" };
@@ -141,4 +141,33 @@ test("PDF-only messages still persist so the card survives a refresh", () => {
   assert.equal(getPersistableAssistantContent("   ", metadata), PDF_ONLY_ASSISTANT_CONTENT);
   assert.equal(getPersistableAssistantContent("", undefined), null);
   assert.equal(getPersistableAssistantContent("text", undefined), "text");
+});
+
+
+test("PDF metadata can be recovered directly from the create_pdf tool result", () => {
+  assert.deepEqual(extractPdfFromToolResult({ content: "PDF created", pdf: PDF_A }), PDF_A);
+  assert.equal(extractPdfFromToolResult("PDF created"), undefined);
+});
+
+test("nested create_pdf tool args are valid durable message metadata", () => {
+  const parsed = messageMetadataSchema.safeParse({
+    pdfs: [PDF_A],
+    toolActivities: [{
+      toolCallId: "pdf-1",
+      toolName: "create_pdf",
+      status: "completed",
+      args: { title: "Cow", sections: [{ heading: "About", blocks: [{ type: "paragraph", text: "Body" }] }] },
+      result: { content: "PDF created", pdf: PDF_A },
+      timestamp: Date.now(),
+    }],
+  });
+  assert.equal(parsed.success, true);
+});
+
+test("PDF intent bypasses semantic cache even inside a long contextual query", async () => {
+  const { shouldBypassSemanticCacheForToolIntent } = await import("@/lib/orchestrator/tools");
+  assert.equal(
+    shouldBypassSemanticCacheForToolIntent("Bhai, ek aisi PDF banao jisme gaay ke baare mein 500 words likho"),
+    true,
+  );
 });

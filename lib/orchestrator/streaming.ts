@@ -192,12 +192,22 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);
-          writer.enqueue(encodeToolResult(name, runId, result));
+          const artifactPdf = name === ToolName.CREATE_PDF
+            ? extractToolOutputArtifact(data?.output)
+            : undefined;
+          // Keep the file attached to the tool result itself. This is the most
+          // direct delivery channel and prevents a later progress event from
+          // being lost by an adapter or consumer that only retains tool
+          // lifecycle events.
+          writer.enqueue(
+            encodeToolResult(
+              name,
+              runId,
+              artifactPdf ? { content: result, pdf: artifactPdf } : result,
+            ),
+          );
           writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
-          if (name === ToolName.CREATE_PDF) {
-            const artifactPdf = extractToolOutputArtifact(data?.output);
-            if (artifactPdf) emitPdfReady(writer, artifactPdf);
-          }
+          if (artifactPdf) emitPdfReady(writer, artifactPdf);
           break;
         }
 

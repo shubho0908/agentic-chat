@@ -118,6 +118,21 @@ export function extractMetadataFromProgress(
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
+export function extractPdfFromToolResult(result: unknown): NonNullable<MessageMetadata['pdfs']>[number] | undefined {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const raw = (result as Record<string, unknown>).pdf;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.url !== 'string' || typeof record.name !== 'string') return undefined;
+  return {
+    url: record.url,
+    name: record.name,
+    ...(typeof record.title === 'string' ? { title: record.title } : {}),
+    ...(typeof record.size === 'number' ? { size: record.size } : {}),
+    ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+  };
+}
+
 function toHumanInTheLoopMetadata(request: HumanInTheLoopRequestEvent): MessageMetadata["humanInTheLoopRequest"] {
   return toJsonValue(request) as MessageMetadata["humanInTheLoopRequest"];
 }
@@ -329,6 +344,15 @@ export async function handleStreamingResponse(
         }
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata?.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            ensureAssistantMessage();
+            updateAssistantMessage(onMessagesUpdate, assistantMessageId, { metadata: messageMetadata });
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );

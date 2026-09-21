@@ -6,7 +6,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
-import { extractMetadataFromProgress } from "./streamingHandler";
+import { extractMetadataFromProgress, extractPdfFromToolResult } from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
@@ -128,6 +128,16 @@ export async function handleRegenerateResponse(
         );
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata?.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            onMessagesUpdate((prev) => prev.map((msg) =>
+              msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
+            ));
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -150,6 +160,10 @@ export async function handleRegenerateResponse(
         }
       },
       onToolProgress: (progress) => {
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
+        onMessagesUpdate((prev) => prev.map((msg) =>
+          msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
+        ));
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -165,7 +179,6 @@ export async function handleRegenerateResponse(
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
           
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
       reasoningEffort,
@@ -314,7 +327,16 @@ export async function handleRegenerateResponse(
       description: errorMessage,
     });
     
-    onMessagesUpdate(() => originalMessagesState);
+    if (responseContent || messageMetadata?.pdfs?.length || messageMetadata?.artifacts?.length) {
+      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
+      onMessagesUpdate((prev) => prev.map((msg) =>
+        msg.id === assistantMessage.id
+          ? { ...msg, content: getPersistableAssistantContent(responseContent, messageMetadata) ?? responseContent, metadata: messageMetadata }
+          : msg
+      ));
+    } else {
+      onMessagesUpdate(() => originalMessagesState);
+    }
     return { success: false, error: errorMessage };
   }
 }
