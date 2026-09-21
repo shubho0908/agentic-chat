@@ -99,3 +99,35 @@ test("thinking UI keeps the skipped state when memory is off by routing", () => 
   assert.match(html, /skipped/);
   assert.doesNotMatch(html, /unavailable/);
 });
+
+test("chat message memo re-renders when memory degradation or skip state arrives", async () => {
+  const { areChatMessagePropsEqual } = await import("@/components/chat/chatMessage");
+  const message = { id: "m1", role: "assistant", content: "" };
+  const base = status({});
+  const props = (memoryStatus: MemoryStatus) =>
+    ({
+      message,
+      isLastMessage: true,
+      isLoading: false,
+      memoryStatus,
+    }) as unknown as Parameters<typeof areChatMessagePropsEqual>[0];
+
+  assert.equal(areChatMessagePropsEqual(props(base), props(base)), true);
+  assert.equal(
+    areChatMessagePropsEqual(
+      props(base),
+      props(
+        status({
+          degradedContexts: [
+            { source: DegradedContextSource.Memory, reason: "provider down" },
+          ],
+        }),
+      ),
+    ),
+    false,
+  );
+  assert.equal(
+    areChatMessagePropsEqual(props(base), props(status({ skippedMemory: true }))),
+    false,
+  );
+});
