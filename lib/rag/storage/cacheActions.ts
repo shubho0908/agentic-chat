@@ -71,8 +71,8 @@ export async function checkSemanticCacheAction(query: string, conversationId: st
 
     if (entry) {
       // Jev cache gate: structural signals only, never query/answer content.
-      // Shadow logs and serves; active can veto a confident no-serve verdict;
-      // every failure path fails open to serving the hit.
+      // Shadow logs and serves; active vetoes confident no-serve verdicts and
+      // refuses hits the gate could not evaluate.
       const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
       const gateState: JevCacheGateState = {
         similarityScore: round4(entry.score),

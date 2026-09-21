@@ -88,8 +88,9 @@ export function cacheGateDefersToOrchestrator(): boolean {
 }
 
 /** Default is off. Shadow and ab record the decision but always serve the
- * hit. Active vetoes only confident no-serve decisions and fails open on
- * provider errors: a Jev outage can never turn cache hits into misses. */
+ * hit. Active vetoes confident no-serve verdicts and refuses any hit the
+ * gate could not evaluate: an unevaluated entry is never served, so a Jev
+ * outage costs fresh generations instead of stale or off-topic answers. */
 export async function gateCacheHit(
   state: JevCacheGateState,
   conversationId?: string,
@@ -112,13 +113,14 @@ export async function gateCacheHit(
     });
     const decision = mapJevCacheGateResult(result);
     if (!decision) {
+      const serve = mode !== JevMode.ACTIVE;
       logJevDecision({
         checkpoint: JevCheckpoint.CACHE_GATE,
         schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
         modelVersion: result.modelVersion,
         mode,
         latencyMs: Date.now() - startedAt,
-        outcome: "invalid_response_serve",
+        outcome: serve ? "invalid_response_serve" : "invalid_response_veto",
         fallbackUsed: true,
         fallbackReason: JevFallbackReason.INVALID,
         requestId,
@@ -126,7 +128,7 @@ export async function gateCacheHit(
         inputTokens: result.usage?.input_tokens,
         outputTokens: result.usage?.output_tokens,
       });
-      return { serve: true };
+      return { serve };
     }
 
     const jevWouldServe = shouldServeCachedAnswer(decision);
@@ -163,18 +165,19 @@ export async function gateCacheHit(
       error: error instanceof Error ? error.message : String(error),
       requestId,
     });
+    const serve = mode !== JevMode.ACTIVE;
     logJevDecision({
       checkpoint: JevCheckpoint.CACHE_GATE,
       schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - startedAt,
-      outcome: "error_serve",
+      outcome: serve ? "error_serve" : "error_veto",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });
-    return { serve: true };
+    return { serve };
   }
 }

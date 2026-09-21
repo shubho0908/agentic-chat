@@ -200,28 +200,94 @@ test("cache gate active serves a confident serve verdict", async () => {
   });
 });
 
-test("cache gate active fails open on invalid response and provider error", async () => {
+test("cache gate active refuses hits the gate could not evaluate", async () => {
   await withEnv({ JEV_CACHE_GATE_MODE: "active" }, async () => {
     const invalid = await gateCacheHit(
       CACHE_STATE,
       undefined,
       fakeClient({ unrelated: { type: "noul", noul: 0.1 } }),
     );
-    assert.equal(invalid.serve, true);
+    assert.equal(invalid.serve, false);
 
     const down = await gateCacheHit(
       CACHE_STATE,
       undefined,
       fakeClient(() => new Error("provider down")),
     );
-    assert.equal(down.serve, true);
+    assert.equal(down.serve, false);
 
     const timedOut = await gateCacheHit(
       CACHE_STATE,
       undefined,
       fakeClient(() => Object.assign(new Error("timeout"), { name: "AbortError" })),
     );
-    assert.equal(timedOut.serve, true);
+    assert.equal(timedOut.serve, false);
+  });
+});
+
+test("cache gate shadow and ab still serve on invalid response and provider error", async () => {
+  for (const mode of ["shadow", "ab"]) {
+    await withEnv({ JEV_CACHE_GATE_MODE: mode }, async () => {
+      const invalid = await gateCacheHit(
+        CACHE_STATE,
+        undefined,
+        fakeClient({ unrelated: { type: "noul", noul: 0.1 } }),
+      );
+      assert.equal(invalid.serve, true, mode);
+
+      const down = await gateCacheHit(
+        CACHE_STATE,
+        undefined,
+        fakeClient(() => new Error("provider down")),
+      );
+      assert.equal(down.serve, true, mode);
+    });
+  }
+});
+
+test("cross-question contamination is not served when the active gate errors", async () => {
+  // Regression for the cow-essay/Mirzapur incident: an unrelated query matched
+  // a cached entry above threshold and the gate's fail-open served it. With a
+  // marginal-score hit the active gate must never serve what it cannot judge.
+  const marginalHit: JevCacheGateState = {
+    ...CACHE_STATE,
+    similarityScore: 0.86,
+    scoreMargin: 0.01,
+    entryScopedToConversation: false,
+  };
+  await withEnv({ JEV_CACHE_GATE_MODE: "active" }, async () => {
+    const errored = await gateCacheHit(
+      marginalHit,
+      "conv-cow",
+      fakeClient(() => new Error("provider down")),
+    );
+    assert.equal(errored.serve, false);
+
+    const invalid = await gateCacheHit(
+      marginalHit,
+      "conv-cow",
+      fakeClient({}),
+    );
+    assert.equal(invalid.serve, false);
+
+    const circuitOpen = await gateCacheHit(
+      marginalHit,
+      "conv-cow",
+      fakeClient(() => Object.assign(new Error("circuit open"), { name: "JevCircuitOpenError" })),
+    );
+    assert.equal(circuitOpen.serve, false);
+  });
+});
+
+test("cache gate active still serves a confidently evaluated marginal hit", async () => {
+  const marginalHit: JevCacheGateState = {
+    ...CACHE_STATE,
+    similarityScore: 0.86,
+    scoreMargin: 0.01,
+  };
+  await withEnv({ JEV_CACHE_GATE_MODE: "active" }, async () => {
+    const outcome = await gateCacheHit(marginalHit, undefined, fakeClient(SERVE));
+    assert.equal(outcome.serve, true);
   });
 });
 

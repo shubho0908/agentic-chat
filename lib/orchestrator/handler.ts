@@ -205,8 +205,8 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             const entry = await searchSemanticCacheEntry(embedding, userId, conversationId, model, reasoningEffort ?? null);
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
-              // serves, active can veto a confident no-serve verdict, and
-              // every failure path fails open to serving the hit.
+              // serves, active vetoes confident no-serve verdicts and refuses
+              // hits the gate could not evaluate.
               const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
               const gate = await gateCacheHit(
                 {
