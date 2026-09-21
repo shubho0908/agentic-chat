@@ -389,6 +389,7 @@ export async function getRAGContext(
           query,
           enrichedResults,
           conversationId,
+          { failClosed: options.toolCapable === true },
         );
         if (!gatedResults.length) return null;
         return formatRetrievedContext(gatedResults);

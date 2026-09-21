@@ -4,26 +4,41 @@
 <meta charset="utf-8">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html,body{margin:0;padding:0;height:100%}iframe{display:block;border:0;width:100%;height:100%}</style>
 </head>
 <body>
 <script>
 (function() {
+  var currentFrame = null;
+
   function notifyReady() {
     parent.postMessage({ type: 'sandbox-ready' }, '*');
   }
 
   function handleMessage(e) {
-    if (e.data && e.data.type === 'sandbox-probe') {
+    if (e.source !== window.parent) return;
+    var data = e.data;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'sandbox-probe') {
       notifyReady();
       return;
     }
 
-    if (e.data && e.data.type === 'render' && typeof e.data.html === 'string') {
-      document.open();
-      document.write(e.data.html);
-      document.close();
-      addEventListener('message', handleMessage);
-      parent.postMessage({ type: 'sandbox-rendered' }, '*');
+    if (data.type === 'render' && typeof data.html === 'string') {
+      if (currentFrame) {
+        currentFrame.remove();
+        currentFrame = null;
+      }
+      var frame = document.createElement('iframe');
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+      frame.addEventListener('load', function() {
+        parent.postMessage({ type: 'sandbox-rendered' }, '*');
+      });
+      frame.srcdoc = data.html;
+      document.body.appendChild(frame);
+      currentFrame = frame;
     }
   }
 

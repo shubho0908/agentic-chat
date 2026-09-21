@@ -216,6 +216,7 @@ async function resolveDocumentContext(
     processingTimeoutMs?: number;
     signal?: AbortSignal;
     currentDocumentAttachmentIds?: string[];
+    toolCapable?: boolean;
   },
 ) {
   if (!queries.length) return null;
@@ -231,6 +232,7 @@ async function resolveDocumentContext(
       processingTimeoutMs: options.processingTimeoutMs,
       queryVariants: queries.slice(1),
       signal: options.signal,
+      toolCapable: options.toolCapable,
     });
   } catch (error) {
     if (options.signal?.aborted)
@@ -345,6 +347,7 @@ export async function routeContext(
     apiKey?: string;
     signal?: AbortSignal;
     currentDocumentAttachmentIds?: string[];
+    toolCapable?: boolean;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -420,6 +423,7 @@ export async function routeContext(
         waitForProcessing: true,
         processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
         signal: options?.signal,
+        toolCapable: options?.toolCapable,
       });
 
       if (ragResult) {
@@ -484,6 +488,7 @@ export async function routeContext(
       waitForProcessing: true,
       processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
       signal: options?.signal,
+      toolCapable: options?.toolCapable,
     });
 
     if (ragResult) {

@@ -304,7 +304,7 @@ test("Jev passage gate drops a malicious injection in active mode", async () => 
     },
   ];
   const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "active" }, () =>
-    gatePassages("q", candidates, undefined, fake),
+    gatePassages("q", candidates, undefined, { dependency: fake }),
   );
   assert.deepEqual(
     result.map((x) => x.metadata.chunkId),
@@ -325,7 +325,7 @@ test("Jev passage gate timeout and provider error both fail open promptly", asyn
     const candidates = [candidate("a"), candidate("b")];
     const started = performance.now();
     const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "active" }, () =>
-      gatePassages("q", candidates, undefined, fake),
+      gatePassages("q", candidates, undefined, { dependency: fake }),
     );
     assert.deepEqual(
       result.map((x) => x.metadata.chunkId),
@@ -365,7 +365,7 @@ test("Jev passage gate bounds in-flight evaluations instead of bursting", async 
     candidate(`p${i}`),
   );
   const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "shadow" }, () =>
-    gatePassages("q", candidates, undefined, fake),
+    gatePassages("q", candidates, undefined, { dependency: fake }),
   );
   assert.equal(result.length, 12);
   assert.equal(calls, 12);
@@ -398,7 +398,7 @@ test("Jev passage gate fails fast: first failure cancels siblings and fails open
   ];
   const started = performance.now();
   const result = await withEnv({ JEV_PASSAGE_GATE_MODE: "active" }, () =>
-    gatePassages("q", candidates, undefined, fake),
+    gatePassages("q", candidates, undefined, { dependency: fake }),
   );
   const elapsed = performance.now() - started;
   assert.equal(result.length, 12);

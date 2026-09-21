@@ -154,6 +154,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
 
         let enhancedMessages = messages;
         const lastUserMessage = messages[messages.length - 1]?.content || "";
+        const connectedToolkits = await getConnectedToolkits(userId);
 
         try {
           const contextResult = await routeContext(
@@ -163,7 +164,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             conversationId,
             null,
             memoryEnabled,
-            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds }
+            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds, toolCapable: connectedToolkits.length > 0 }
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           if (contextResult.context) {
@@ -195,8 +196,6 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           closeStream();
           return;
         }
-
-        const connectedToolkits = await getConnectedToolkits(userId);
 
         const queryText = extractTextFromMessage(lastUserMessage);
         const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(

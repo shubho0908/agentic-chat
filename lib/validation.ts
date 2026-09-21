@@ -35,7 +35,7 @@ interface ValidationResult {
 }
 
 const VALID_DB_ROLES = ["USER", "ASSISTANT", "SYSTEM"] as const;
-const VALID_CHAT_ROLES = ["user", "assistant", "system"] as const;
+const VALID_CHAT_ROLES = ["user", "assistant"] as const;
 
 function isValidDBRole(role: string): boolean {
   return (VALID_DB_ROLES as readonly string[]).includes(role);
@@ -94,7 +94,8 @@ function validateChatMessage(message: unknown): ValidationResult {
   if (!isValidChatRole(message.role)) {
     return {
       valid: false,
-      error: "Invalid message role. Must be user, assistant, or system",
+      error:
+        "Invalid message role. Clients may only send user or assistant messages; the server owns system messages",
     };
   }
 

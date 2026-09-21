@@ -58,16 +58,24 @@ export function shouldKeepPassage(decision: PassageGateDecision): boolean {
       decision.contradiction >= 0.5)
   );
 }
+export interface PassageGateOptions {
+  dependency?: JevDecisionClient;
+  /** Set on tool-capable flows: an evaluation failure there fails closed
+   * (drops the batch) because an unscreened passage could steer tool calls.
+   * Read-only flows keep the fail-open default. */
+  failClosed?: boolean;
+}
+
 /** Default is off. Shadow records decisions but never changes context. Active
- * filters only confident injection/irrelevance decisions and fails open. */
+ * filters only confident injection/irrelevance decisions. */
 export async function gatePassages(
   query: string,
   candidates: RetrievalCandidate[],
   conversationId?: string,
-  dependency?: JevDecisionClient,
+  options: PassageGateOptions = {},
 ): Promise<RetrievalCandidate[]> {
   const mode = getJevMode(JevCheckpoint.PASSAGE_GATE);
-  const client = dependency ?? JevDecisionClient.createIfConfigured();
+  const client = options.dependency ?? JevDecisionClient.createIfConfigured();
   if (mode === JevMode.OFF || !client || !candidates.length) return candidates;
   let evaluated: Array<{ candidate: RetrievalCandidate; keep: boolean }>;
   const batchRequestId = createRequestId("jev_passage");
@@ -127,11 +135,13 @@ export async function gatePassages(
     );
   } catch (error) {
     // Fail-fast: the first failure already aborted every sibling in flight,
-    // and the gate fails open for the whole batch instead of dripping out
+    // and the gate decides for the whole batch instead of dripping out
     // partial filtering behind a degraded provider.
     logWarn({
       event: "jev_passage_gate_fallback",
-      message: "Passage gate failed open",
+      message: options.failClosed
+        ? "Passage gate failed closed"
+        : "Passage gate failed open",
       error: error instanceof Error ? error.message : String(error),
       requestId: batchRequestId,
     });
@@ -141,13 +151,13 @@ export async function gatePassages(
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - batchStarted,
-      outcome: "error_keep",
+      outcome: options.failClosed ? "error_drop" : "error_keep",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId: batchRequestId,
       conversationId,
     });
-    return candidates;
+    return options.failClosed ? [] : candidates;
   }
   if (mode === JevMode.SHADOW || mode === JevMode.AB) return candidates;
   const decisions = new Map(

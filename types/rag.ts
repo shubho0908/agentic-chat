@@ -22,6 +22,9 @@ export interface RAGContextOptions {
   processingTimeoutMs?: number;
   queryVariants?: string[];
   signal?: AbortSignal;
+  /** True when the requesting flow can execute tools; gates on this path
+   * fail closed instead of passing unscreened context through. */
+  toolCapable?: boolean;
 }
 
 export interface RAGContextResult {

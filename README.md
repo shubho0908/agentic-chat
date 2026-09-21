@@ -83,8 +83,13 @@ Set `TYPESAFE_API_KEY` in deployment secrets to enable Jev calls. Each checkpoin
 | Passage gate | `JEV_PASSAGE_GATE_MODE` | `off`, `shadow`, `ab`, `active` |
 | Cache gate | `JEV_CACHE_GATE_MODE` | `off`, `shadow`, `ab`, `active` |
 | HITL escalation | `JEV_HITL_ESCALATION_MODE` | `off`, `shadow`, `ab`, `active` |
+| Memory retrieval gate | `JEV_MEMORY_GATE_MODE` | `off`, `shadow`, `ab`, `active` |
+| Memory evidence gate | `JEV_MEMORY_EVIDENCE_MODE` | `off`, `shadow`, `ab`, `active` |
+| Memory storage gate | `JEV_MEMORY_STORAGE_MODE` | `off`, `shadow`, `ab`, `active` |
 
-The shared mode parser accepts `off`, `shadow`, `ab`, and `active`. A checkpoint only changes production behavior in the modes listed above. Shadow and A/B gate modes record decisions without filtering. Provider errors fail open. The RAG reranker falls back to Cohere when a Jev request fails.
+The shared mode parser accepts `off`, `shadow`, `ab`, and `active`. A checkpoint only changes production behavior in the modes listed above. Shadow and A/B gate modes record decisions without filtering. Provider errors fail open, with two exceptions that fail closed on tool-capable flows: the passage gate drops the whole retrieval batch and the memory storage gate skips the write when their evaluation fails, because unscreened content there could steer future tool calls. The RAG reranker falls back to Cohere when a Jev request fails.
+
+Residual risk, stated plainly: when the passage gate is `off` (the default) or unconfigured, retrieved document passages enter the prompt unscreened, and shadow mode never filters. The gate also covers RAG passages only; tool outputs, web scrape results, and direct user input do not pass through it. Fail-closed behavior applies only when the gate is `active` on a tool-capable flow.
 
 Use `GET /api/jev/stats?days=30` for all checkpoints or add `&checkpoint=planner` to filter the report. The endpoint requires an authenticated user. `days` defaults to 30 and is capped at 90.
 

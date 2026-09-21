@@ -4,6 +4,7 @@ import { CODE_BLOCK_SHELL_CLASS } from "./constants";
 import { MermaidPreview } from "./mermaidPreview";
 import { getTextFromChildren, normalizeLanguageLabel } from "./plainTextUtils";
 import { isMermaidCodeBlock } from "@/lib/markdown/rendering";
+import { isSafeMarkdownImageSrc } from "@/lib/markdown/url";
 
 function withoutMarkdownNode<Props extends { node?: unknown }>(props: Props): Omit<Props, "node"> {
   const { node, ...domProps } = props;
@@ -133,6 +134,26 @@ export const components: Components = {
       {children}
     </li>
   ),
+  img: ({ src, alt }) => {
+    const safeSrc = typeof src === "string" && isSafeMarkdownImageSrc(src) ? src : null;
+    if (!safeSrc) {
+      return (
+        <span className="my-1 block rounded-md border border-border/40 bg-foreground/[0.03] px-3 py-2 text-[11px] text-muted-foreground">
+          {alt ? `Image blocked: ${alt}` : "Image blocked: untrusted source"}
+        </span>
+      );
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={safeSrc}
+        alt={alt ?? ""}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="max-w-full h-auto rounded-md"
+      />
+    );
+  },
   a: ({ children, href, ...props }) => (
     <a
       href={href}

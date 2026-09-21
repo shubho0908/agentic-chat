@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import { components } from "./response/markdownComponents";
+import { markdownUrlTransform } from "@/lib/markdown/url";
 import {
   COMPLETE_CODE_FENCE_PATTERN,
   MAX_MARKDOWN_RENDER_CHARS,
@@ -46,6 +47,7 @@ export const Response = memo(function Response({
   return (
     <div className={`prose-edward leading-inherit text-foreground ${className}`}>
       <ReactMarkdown
+        urlTransform={markdownUrlTransform}
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={rehypePlugins}
         components={components}

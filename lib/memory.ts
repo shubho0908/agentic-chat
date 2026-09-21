@@ -12,7 +12,10 @@ import { buildMemoryLookupQueries } from "@/lib/chat/requestMediator";
 import { logError, logMetric, logWarn } from "@/lib/observability";
 import { isRecord } from "@/lib/typeGuards";
 import { gateMemoryEvidence } from "@/lib/jev/memoryEvidenceGate";
-import { shadowMemoryStorageWorthiness } from "@/lib/jev/memoryStorageShadow";
+import { gateMemoryStorageWorthiness } from "@/lib/jev/memoryStorageGate";
+import { shouldPersistConversationMemory } from "@/lib/chat/memoryPolicy";
+import { containsInjectionPattern } from "@/lib/sanitize";
+import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 
 const MEM0_API_KEY = process.env.MEM0_API_KEY;
 
@@ -136,6 +139,46 @@ export async function storeConversationMemory(
     return;
   }
 
+  if (
+    !shouldPersistConversationMemory({
+      userMessage: normalizedUserMessage,
+      assistantMessage: normalizedAssistantMessage,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    containsInjectionPattern(normalizedUserMessage) ||
+    containsInjectionPattern(normalizedAssistantMessage)
+  ) {
+    logWarn({
+      event: "memory_store_blocked_injection",
+      message: "Skipped memory write matching injection patterns",
+    });
+    return;
+  }
+
+  let toolCapable = true;
+  try {
+    toolCapable = (await getConnectedToolkits(userId)).length > 0;
+  } catch {
+    toolCapable = true;
+  }
+
+  const allowed = await gateMemoryStorageWorthiness(
+    normalizedUserMessage,
+    normalizedAssistantMessage,
+    { toolCapable },
+  );
+  if (!allowed) {
+    logWarn({
+      event: "memory_store_blocked_jev",
+      message: "Jev storage gate rejected the exchange",
+    });
+    return;
+  }
+
   try {
     const messages = [
       {
@@ -148,26 +191,10 @@ export async function storeConversationMemory(
       },
     ];
 
-    const [shadowResult, storeResult] = await Promise.allSettled([
-      shadowMemoryStorageWorthiness(
-        normalizedUserMessage,
-        normalizedAssistantMessage,
-      ),
-      addMemories(messages, {
-        user_id: userId,
-        mem0ApiKey: MEM0_API_KEY,
-      }),
-    ]);
-    if (shadowResult.status === "rejected") {
-      logWarn({
-        event: "jev_memory_storage_shadow_failed",
-        error:
-          shadowResult.reason instanceof Error
-            ? shadowResult.reason.message
-            : String(shadowResult.reason),
-      });
-    }
-    if (storeResult.status === "rejected") throw storeResult.reason;
+    await addMemories(messages, {
+      user_id: userId,
+      mem0ApiKey: MEM0_API_KEY,
+    });
   } catch (error) {
     logError({
       event: "mem0_store_failed",

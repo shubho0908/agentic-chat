@@ -32,3 +32,10 @@ export function sanitizeToolOutput(output: string): string {
 
   return sanitized;
 }
+
+export function containsInjectionPattern(text: string): boolean {
+  return INJECTION_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(text);
+  });
+}
