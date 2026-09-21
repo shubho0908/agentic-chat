@@ -164,8 +164,8 @@ export function ModelPicker({
                     className={cn(
                       "flex size-9 shrink-0 items-center justify-center rounded-full border transition-colors",
                       isSelected
-                        ? "border-black/15 bg-white text-foreground shadow-sm dark:border-border/60 dark:bg-background"
-                        : "border-black/10 bg-white text-muted-foreground dark:border-border/20 dark:bg-background/50"
+                        ? "border-black/15 bg-white text-foreground shadow-sm dark:border-white/15 dark:bg-white/10"
+                        : "border-black/10 bg-white text-muted-foreground dark:border-white/10 dark:bg-white/[0.06]"
                     )}
                   >
                     <OpenAIIcon className="size-3.5" />
@@ -224,7 +224,7 @@ export function ModelPicker({
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent
-                      className="w-[min(240px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-[rgb(244_244_247)] dark:border-border/40 dark:bg-background/95 p-1.5 shadow-xl backdrop-blur-xl"
+                      className="w-[min(240px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-surface-overlay supports-[backdrop-filter]:bg-surface-overlay dark:border-white/10 p-1.5 shadow-xl backdrop-blur-none"
                       sideOffset={6}
                       collisionPadding={12}
                     >
