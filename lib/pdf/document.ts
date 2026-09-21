@@ -13,7 +13,6 @@ export const PdfListStyle = {
   BULLET: "bullet",
   NUMBERED: "numbered",
 } as const;
-export type PdfListStyleValue = (typeof PdfListStyle)[keyof typeof PdfListStyle];
 
 export const PdfCalloutVariant = {
   INFO: "info",
@@ -28,7 +27,6 @@ export const PdfImageMime = {
   JPEG: "image/jpeg",
   PNG: "image/png",
 } as const;
-export type PdfImageMimeValue = (typeof PdfImageMime)[keyof typeof PdfImageMime];
 
 export const PdfBlockType = {
   PARAGRAPH: "paragraph",
@@ -81,7 +79,7 @@ const listItemSchema: z.ZodType<PdfListItem> = z.lazy(() =>
   }),
 );
 
-export const pdfBlockSchema = z.discriminatedUnion("type", [
+const pdfBlockSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal(PdfBlockType.PARAGRAPH),
     text: z.string(),
@@ -134,7 +132,7 @@ export const pdfBlockSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const pdfSectionSchema = z.object({
+const pdfSectionSchema = z.object({
   heading: z.string().optional(),
   blocks: z.array(pdfBlockSchema),
 });

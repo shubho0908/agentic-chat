@@ -18,7 +18,7 @@ let pdf: typeof ReactPdf;
 
 type PdfStyleProp = ReactPdf.TextProps["style"];
 
-export interface RenderPdfOptions {
+interface RenderPdfOptions {
   images: Map<string, PdfImageAsset>;
   generatedAt: Date;
   logoDataUri?: string;

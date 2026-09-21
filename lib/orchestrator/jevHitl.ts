@@ -21,7 +21,7 @@ import {
 } from "@/lib/jev/hitlEscalation";
 import { previewToolArgs } from "@/lib/jev/toolRouter";
 
-export interface JevHitlToolCall {
+interface JevHitlToolCall {
   name?: string;
   args?: unknown;
 }

@@ -61,10 +61,6 @@ export const createPdfTool = new DynamicStructuredTool({
 
     const pages = pdf.pageCount > 0 ? `${pdf.pageCount} page${pdf.pageCount === 1 ? "" : "s"}` : "pages unknown";
     try {
-      // The tool-call config carries the run's callback manager directly, so
-      // the event does not depend on AsyncLocalStorage propagation: in some
-      // server runtimes (e.g. bundled Next.js handlers) that context is lost
-      // and the config-less dispatch silently drops the event.
       await dispatchCustomEvent(CustomEventName.PDF_FILE, { pdf }, config);
     } catch (error) {
       logger.warn("[create_pdf] Failed to emit PDF file event:", error);

@@ -7,7 +7,7 @@ export const PdfFontFamily = {
   DEVANAGARI: "PdfNotoSansDevanagari",
 } as const;
 
-export type PdfFontFamilyValue = (typeof PdfFontFamily)[keyof typeof PdfFontFamily];
+type PdfFontFamilyValue = (typeof PdfFontFamily)[keyof typeof PdfFontFamily];
 
 interface PdfFontFace {
   src: string;

@@ -16,7 +16,7 @@ export function sanitizePdfText(input: string): string {
     .trim();
 }
 
-export interface ScriptRun {
+interface ScriptRun {
   text: string;
   devanagari: boolean;
 }

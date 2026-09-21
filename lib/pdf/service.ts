@@ -8,7 +8,7 @@ import { prefetchPdfImages } from "./images";
 import { renderPdfDocument } from "./render";
 import { storePdf, type StoredPdf } from "./store";
 
-export interface GeneratedPdf {
+interface GeneratedPdf {
   url: string;
   name: string;
   size: number;
@@ -16,11 +16,11 @@ export interface GeneratedPdf {
   title: string;
 }
 
-export type GeneratePdfResult =
+type GeneratePdfResult =
   | { ok: true; pdf: GeneratedPdf }
   | { ok: false; error: string };
 
-export interface GeneratePdfOptions {
+interface GeneratePdfOptions {
   signal?: AbortSignal;
   generatedAt?: Date;
   store?: (buffer: Buffer, fileName: string) => Promise<StoredPdf>;

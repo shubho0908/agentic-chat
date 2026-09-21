@@ -1,8 +1,5 @@
 import { createUploadthing, type FileRouter, UTFiles } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
-// uploadthing@7 logs `file.url`/`file.appUrl` deprecation warnings from its
-// own internals even for callers that already use `file.ufsUrl`; silence just
-// that self-inflicted noise (see lib/uploadthing-warnings.ts).
 import "@/lib/uploadthing-warnings";
 import { z } from "zod";
 import {

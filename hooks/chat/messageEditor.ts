@@ -404,10 +404,6 @@ export async function handleEditMessage(
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    
-    // A persistence/versioning error after a successful stream must not roll
-    // the generated answer and file card back to the previous branch. Keep the
-    // local result visible and mark it interrupted so the user can retry.
     if (responseContent || messageMetadata.pdfs?.length || messageMetadata.artifacts?.length) {
       messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
       onMessagesUpdate((prev) => prev.map((msg) =>

@@ -62,11 +62,6 @@ function isPdfArtifact(value: unknown): value is Record<string, unknown> {
     typeof (value as Record<string, unknown>).url === "string"
   );
 }
-
-/** The create_pdf tool also returns the file as a ToolMessage artifact, which
- * travels the deterministic on_tool_end data channel. Custom events are an
- * optimistic fast path only; whichever arrives first delivers the card and
- * the client dedupes by URL. */
 function emitPdfReady(writer: StreamWriter, pdf: unknown): void {
   if (!isPdfArtifact(pdf)) return;
   writer.enqueue(
@@ -195,10 +190,6 @@ export function createStreamEventMapper(): StreamEventMapper {
           const artifactPdf = name === ToolName.CREATE_PDF
             ? extractToolOutputArtifact(data?.output)
             : undefined;
-          // Keep the file attached to the tool result itself. This is the most
-          // direct delivery channel and prevents a later progress event from
-          // being lost by an adapter or consumer that only retains tool
-          // lifecycle events.
           writer.enqueue(
             encodeToolResult(
               name,

@@ -371,10 +371,6 @@ export async function handleStreamingResponse(
         }
       },
       onToolProgress: (progress) => {
-        // Metadata carried by progress events (sources, images, PDFs) must
-        // merge unconditionally: it is message data, not memory status, and
-        // dropping it when no memory_status event has arrived silently loses
-        // delivered files.
         messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         if (messageCreated && messageMetadata) {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {

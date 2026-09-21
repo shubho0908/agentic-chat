@@ -14,7 +14,7 @@ import { isSafeHttpUrl, sanitizePdfText } from "./text";
 
 const CALLOUT_VARIANTS = new Set<string>(Object.values(PdfCalloutVariant));
 
-export type NormalizePdfResult =
+type NormalizePdfResult =
   | { ok: true; document: PdfDocument }
   | { ok: false; error: string };
 
