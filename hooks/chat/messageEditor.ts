@@ -3,7 +3,6 @@ import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { getModel } from "@/lib/storage";
-import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
@@ -111,7 +110,7 @@ export async function handleEditMessage(
       activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, model, attachments);
 
     let accumulatedContent = "";
     let thinkingBuffer = "";

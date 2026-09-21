@@ -1,16 +1,15 @@
 import test from "node:test";
+import { buildChatSystemPrompt } from "@/lib/chat/systemPrompt";
 import assert from "node:assert/strict";
 
 import {
   ARTIFACT_QUALITY_PROMPT,
-  DEFAULT_ASSISTANT_PROMPT,
 } from "@/lib/prompts";
-import { buildSystemPrompt } from "@/lib/orchestrator/nodes/agent";
 
 test("direct and orchestrated chat share the same artifact quality contract", () => {
-  const orchestratorPrompt = buildSystemPrompt([]);
+  const orchestratorPrompt = buildChatSystemPrompt();
 
-  assert.ok(DEFAULT_ASSISTANT_PROMPT.includes(ARTIFACT_QUALITY_PROMPT));
+  assert.ok(buildChatSystemPrompt().includes(ARTIFACT_QUALITY_PROMPT));
   assert.ok(orchestratorPrompt.includes(ARTIFACT_QUALITY_PROMPT));
 });
 

@@ -7,83 +7,14 @@ import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { MAX_RESPONSE_TOKENS, PlanComplexity } from "../constants";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
-import {
-  TOOLKIT_DISPLAY_NAMES,
-  type ComposioToolkit,
-} from "@/lib/tools/composio/config";
 import { getAnyMentionedComposioToolkits, selectToolsForAgentStep, hasWebActionIntent } from "../tools";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
 import { resolveJevHitlVerdict } from "../jevHitl";
-import {
-  ARTIFACT_QUALITY_PROMPT,
-  PROMPT_CONTEXT_BOUNDARY,
-  PROMPT_MARKDOWN_PREAMBLE,
-  PROMPT_OUTPUT_QUALITY,
-  PROMPT_PRIVATE_ANALYSIS,
-  PROMPT_RESPONSE_FORMATTING,
-  PROMPT_SECURITY_BOUNDARY,
-  WEB_CITATION_PROMPT,
-  joinPromptSections,
-} from "@/lib/prompts";
 
-const TOOL_AGENT_RULES = `Tool rules:
-- Service tools are pre-authenticated as the user. Never ask for usernames, workspace URLs, account IDs, API keys, or credentials. The tools already know the user's connected account.
-- Act proactively. Call tools immediately when user intent is clear. Use ask_user only for genuinely ambiguous choices.
-- Destructive actions require confirmation first. Non-destructive actions should proceed when intent is clear.
-- Read each tool name and description carefully. Pick the tool whose name exactly matches the requested action.
-- If a tool requires an object identifier such as database_id, page_id, repository id/name, thread id, channel, or project id, discover it with a search/list/fetch tool before acting.
-- Container queries such as databases, repos, channels, projects, or spreadsheets require discovery first: list/search containers, fetch schema or details when available, then query with exact field names and exact option values from the tool response.
-- For mutations such as create, update, insert, append, delete, archive, or send, pick the matching write tool and call it with arguments derived from the user's request and fetched schema. Do not hand the user manual API commands when a connected tool can perform the action.
-- "My" repos, emails, files, projects, pages, channels, or records means use the authenticated user's connected account without asking for a user identifier.
-- If a service is listed as connected, its tools work immediately. No setup is needed from the user.
-- Never fall back to web search, web scrape, or CSV/export requests when a connected service tool can answer the question. If the first connector call is insufficient, refine the args or try a better tool from the same connector.
-- If a connector tool returns an auth or not-connected error, do not invent data. Tell the user which connector is not connected and to enable it in the Tools menu.`;
+export { buildChatSystemPrompt as buildSystemPrompt } from "@/lib/chat/systemPrompt";
 
-const RESEARCH_TOOL_RULES = `Research tool policy:
-- Use deep_research only when the user explicitly requests a research investigation, deep dive, thorough investigation, or comprehensive multi-source analysis.
-- Do not use deep_research for simple questions, basic comparisons, "tell me about X", "explain X", or questions answerable from model knowledge or a single web_search.
-- Use web_search for factual lookups, quick comparisons, or current information needs.
-- You can access public websites. To read one page, use web_scrape. To explore a site across pages or collect links, use web_crawl, then follow returned links with web_scrape or web_crawl as needed.
-- If the user names a site without a URL, use web_search to find the URL before scraping or crawling it.`;
-
-const EXECUTION_BUDGET_PROMPT = `Execution budget:
-- Use at most about 15 tool-call rounds per user message.
-- If a tool fails, try one materially different approach.
-- Do not retry the same failing tool call with identical arguments.
-- If two attempts cannot resolve the task, answer with what is known and explain what failed.
-- For deep_research, call it once per topic; it handles its own multi-step searching internally.`;
-
-const BASE_SYSTEM_PROMPT = joinPromptSections(
-  PROMPT_MARKDOWN_PREAMBLE,
-  `Role:
-Helpful AI assistant with tool access. Be concise, direct, and action-oriented.`,
-  PROMPT_OUTPUT_QUALITY,
-  PROMPT_PRIVATE_ANALYSIS,
-  TOOL_AGENT_RULES,
-  RESEARCH_TOOL_RULES,
-  PROMPT_CONTEXT_BOUNDARY,
-  PROMPT_SECURITY_BOUNDARY,
-  EXECUTION_BUDGET_PROMPT,
-  PROMPT_RESPONSE_FORMATTING,
-  WEB_CITATION_PROMPT,
-  ARTIFACT_QUALITY_PROMPT,
-);
-
-export function buildSystemPrompt(connectedServices: string[]): string {
-  if (connectedServices.length === 0) return BASE_SYSTEM_PROMPT;
-
-  const connectedNames = connectedServices
-    .flatMap((s) => {
-      const name = TOOLKIT_DISPLAY_NAMES[s as ComposioToolkit];
-      return name ? [name] : [];
-    })
-    .join(", ");
-
-  return `${BASE_SYSTEM_PROMPT}
-
-Connected services (pre-authenticated): ${connectedNames}`;
-}
+import { buildChatSystemPrompt } from "@/lib/chat/systemPrompt";
 
 function getMessageText(message: BaseMessage): string {
   return typeof message.content === "string"
@@ -318,7 +249,10 @@ export function createAgentNode(
     const latestUserText = getLatestHumanText(conversationMessages);
     const connectedServices = state.connectedServices ?? [];
 
-    const baseSystemPrompt = buildSystemPrompt(connectedServices);
+    const baseSystemPrompt = buildChatSystemPrompt({
+      connectedServices,
+      documentFocused: state.documentFocused,
+    });
     const isDirect =
       state.toolPlan?.complexity === PlanComplexity.DIRECT &&
       !hasWebActionIntent(latestUserText) &&

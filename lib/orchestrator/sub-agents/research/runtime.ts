@@ -1,9 +1,8 @@
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import type { AIMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { z } from "zod";
 import { withRetry, isAbortError } from "@/lib/retry";
-import { JSON_ONLY_RESPONSE_PROMPT, joinPromptSections } from "@/lib/prompts";
 import {
   logError,
   logInfo,
@@ -19,6 +18,23 @@ const LLM_RETRY_INITIAL_DELAY_MS = 400;
 
 export type InvokableLLM = {
   invoke(input: BaseMessage[], options?: LangGraphRunnableConfig): Promise<LLMResponse>;
+};
+
+export type StructuredInvokableLLM = InvokableLLM & {
+  withStructuredOutput<T extends Record<string, unknown>>(
+    schema: z.ZodType<T>,
+    options: {
+      name: string;
+      method: "jsonSchema";
+      strict: true;
+      includeRaw: true;
+    },
+  ): {
+    invoke(
+      input: BaseMessage[],
+      options?: LangGraphRunnableConfig,
+    ): Promise<{ raw: AIMessage; parsed: T }>;
+  };
 };
 
 export interface LLMResponse {
@@ -38,7 +54,6 @@ interface InvokeResearchLLMOptions {
 interface InvokeJsonOptions<T> extends InvokeResearchLLMOptions {
   schema: z.ZodType<T>;
   fallback: T;
-  schemaDescription: string;
 }
 
 export type ResearchNodeUpdate = Partial<ResearchStateType>;
@@ -273,110 +288,48 @@ export async function invokeResearchLLM(
   };
 }
 
-function stripJsonFences(text: string): string {
-  return text.replace(/```json?\n?|\n?```/g, "").trim();
-}
-
-function parseJsonCandidate(text: string): unknown {
-  const cleaned = stripJsonFences(text);
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const objectStart = cleaned.indexOf("{");
-    const objectEnd = cleaned.lastIndexOf("}");
-    if (objectStart >= 0 && objectEnd > objectStart) {
-      return JSON.parse(cleaned.slice(objectStart, objectEnd + 1));
-    }
-
-    const arrayStart = cleaned.indexOf("[");
-    const arrayEnd = cleaned.lastIndexOf("]");
-    if (arrayStart >= 0 && arrayEnd > arrayStart) {
-      return JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1));
-    }
-
-    throw new Error("No JSON object or array found");
-  }
-}
-
-function parseJsonWithSchema<T>(
-  text: string,
-  schema: z.ZodType<T>
-): { ok: true; value: T } | { ok: false; error: Error } {
-  try {
-    const parsed = parseJsonCandidate(text);
-    const result = schema.safeParse(parsed);
-    if (result.success) {
-      return { ok: true, value: result.data };
-    }
-    return { ok: false, error: result.error };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
-  }
-}
-
-export async function invokeResearchJson<T>(
-  llm: InvokableLLM,
+export async function invokeResearchJson<T extends Record<string, unknown>>(
+  llm: StructuredInvokableLLM,
   messages: BaseMessage[],
   options: InvokeJsonOptions<T>
 ): Promise<{ value: T; tokenUsage: ResearchTokenUsage }> {
-  const first = await invokeResearchLLM(llm, messages, options);
-  const parsed = parseJsonWithSchema(first.text, options.schema);
-  if (parsed.ok) {
-    return { value: parsed.value, tokenUsage: first.tokenUsage };
-  }
-
-  logWarn({
-    event: "research_json_parse_failed",
-    node: options.nodeName,
-    error: parsed.error.message,
-    responsePreview: first.text.slice(0, 500),
-  });
-
-  const repairMessages = [
-    new SystemMessage(
-      joinPromptSections(
-        JSON_ONLY_RESPONSE_PROMPT,
-        "You repair invalid LLM JSON outputs. Return valid JSON matching the requested schema exactly."
-      )
-    ),
-    new HumanMessage(
-      `Schema: ${options.schemaDescription}\n\nInvalid output:\n${first.text}\n\nParser error: ${parsed.error.message}`
-    ),
-  ];
-
-  const repairOptions: InvokeResearchLLMOptions = {
-    ...options,
-    state: {
-      ...options.state,
-      tokenUsage: mergeTokenUsage(options.state.tokenUsage ?? emptyTokenUsage(), first.tokenUsage),
-    },
-  };
+  throwIfAborted(options.config);
+  enforceTokenBudget(options.state, options.nodeName, messages, options.maxOutputTokens);
 
   try {
-    const repair = await invokeResearchLLM(llm, repairMessages, repairOptions);
-    const repaired = parseJsonWithSchema(repair.text, options.schema);
-    const tokenUsage = mergeTokenUsage(first.tokenUsage, repair.tokenUsage);
-    if (repaired.ok) {
-      return { value: repaired.value, tokenUsage };
-    }
-
-    logWarn({
-      event: "research_json_repair_failed",
-      node: options.nodeName,
-      error: repaired.error.message,
-      responsePreview: repair.text.slice(0, 500),
+    const structured = llm.withStructuredOutput(options.schema, {
+      name: `research_${options.nodeName}`,
+      method: "jsonSchema",
+      strict: true,
+      includeRaw: true,
     });
-    return { value: options.fallback, tokenUsage };
+    const result = await withRetry(
+      (attemptSignal) =>
+        structured.invoke(
+          messages,
+          withNodeConfig(options.config, options.nodeName, attemptSignal),
+        ),
+      {
+        retries: LLM_RETRIES,
+        initialDelayMs: LLM_RETRY_INITIAL_DELAY_MS,
+        timeoutMs: options.timeoutMs,
+        signal: getAbortSignal(options.config),
+      },
+    );
+    const value = options.schema.parse(result.parsed);
+    const tokenUsage =
+      extractActualUsage(result.raw) ?? fallbackUsage(messages, result.raw);
+    return { value, tokenUsage };
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
     }
     logWarn({
-      event: "research_json_repair_invoke_failed",
+      event: "research_structured_output_failed",
       node: options.nodeName,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { value: options.fallback, tokenUsage: first.tokenUsage };
+    return { value: options.fallback, tokenUsage: emptyTokenUsage() };
   }
 }
 

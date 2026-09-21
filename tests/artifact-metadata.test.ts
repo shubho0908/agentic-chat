@@ -87,7 +87,6 @@ test("buildMessagesForAPI sends artifact bodies as hidden assistant context", ()
   const apiMessages = buildMessagesForAPI(
     messages,
     "Make the counter button blue",
-    "System",
     "test-model"
   );
 
@@ -116,7 +115,7 @@ test("buildMessagesForAPI escapes artifact body so a literal </artifact> cannot 
     metadata: { artifacts: [adversarialArtifact] },
   }];
 
-  const apiMessages = buildMessagesForAPI(messages, "follow up", "System", "test-model");
+  const apiMessages = buildMessagesForAPI(messages, "follow up", "test-model");
   const assistantContent = apiMessages.find((m) => m.role === MessageRole.ASSISTANT)?.content as string;
 
   assert.equal(typeof assistantContent, "string");
@@ -130,7 +129,6 @@ test("buildMessagesForAPI gives artifact prompts both vision input and exact att
   const apiMessages = buildMessagesForAPI(
     [],
     "Create an HTML artifact that uses the attached image as the hero photo",
-    "System",
     "test-model",
     [imageAttachment]
   );
@@ -161,7 +159,6 @@ test("buildMessagesForAPI sanitizes attached image names before adding URL conte
   const apiMessages = buildMessagesForAPI(
     [],
     "Create an HTML artifact using the attached image",
-    "System",
     "test-model",
     [adversarialImageAttachment]
   );
@@ -188,7 +185,6 @@ test("buildMessagesForAPI rehydrates prior image attachments for referential art
   const apiMessages = buildMessagesForAPI(
     messages,
     "Now build a React artifact using the attached image",
-    "System",
     "test-model"
   );
 
@@ -214,7 +210,7 @@ test("buildMessagesForAPI does not resend historical images on unrelated turns",
     attachments: [imageAttachment],
   }];
 
-  const apiMessages = buildMessagesForAPI(messages, "What is the latest GitHub issue?", "System", "test-model");
+  const apiMessages = buildMessagesForAPI(messages, "What is the latest GitHub issue?", "test-model");
   const priorUserMessage = apiMessages.find((message) => message.role === MessageRole.USER);
   assert.ok(priorUserMessage);
   assert.equal(typeof priorUserMessage.content, "string");

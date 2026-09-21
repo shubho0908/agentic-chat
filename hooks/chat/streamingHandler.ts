@@ -9,7 +9,6 @@ import { performCacheCheck } from "./cacheHandler";
 import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { saveAssistantMessage } from "./messageApi";
 import { logger } from "@/lib/logger";
-import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
 import { toJsonValue } from "@/lib/json";
@@ -237,7 +236,7 @@ export async function handleStreamingResponse(
       return { success: true, assistantMessageId };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, model, userAttachments);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,

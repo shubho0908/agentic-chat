@@ -57,6 +57,8 @@ import { REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSuppo
 import { withRetry } from '@/lib/retry';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { logger } from "@/lib/logger";
+import { buildChatSystemPrompt } from '@/lib/chat/systemPrompt';
+import { MessageRole } from '@/lib/schemas/chat';
 import { isRecord } from '@/lib/typeGuards';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -311,6 +313,16 @@ export async function POST(request: NextRequest) {
           },
         ];
       }
+
+      enhancedMessages = [
+        {
+          role: MessageRole.SYSTEM,
+          content: buildChatSystemPrompt({
+            documentFocused: memoryStatusInfo.hasDocuments,
+          }),
+        },
+        ...enhancedMessages.filter((message) => message.role !== MessageRole.SYSTEM),
+      ];
 
       try {
         const budgetCheck = checkTokenBudget(enhancedMessages, validatedModel);

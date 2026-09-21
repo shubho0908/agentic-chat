@@ -11,7 +11,6 @@ import {
   buildModelContentWithImageAttachments,
   generateTitle as generateTitleUtil,
 } from "@/lib/contentUtils";
-import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { orderConversationMessagesDesc } from "@/lib/conversationMessageOrder";
 import { saveUserMessage, saveAssistantMessage } from "./messageApi";
 import type { ConversationResult } from "@/types/chat";
@@ -214,7 +213,6 @@ function trimMessagesByApproximateTokenBudget(
 export function buildMessagesForAPI(
   messages: Message[],
   newContent: string | MessageContentPart[],
-  systemPrompt: string,
   model: string,
   currentAttachments?: Attachment[],
 ): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
@@ -232,10 +230,6 @@ export function buildMessagesForAPI(
 
     return trimMessagesByApproximateTokenBudget(
       [
-        {
-          role: MessageRole.SYSTEM,
-          content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
-        },
         ...recentMessages.flatMap((message) => {
           const content = getMessageContentForAPI(message, isReferential);
           if (
@@ -264,10 +258,6 @@ export function buildMessagesForAPI(
 
   return trimMessagesByApproximateTokenBudget(
     [
-      {
-        role: MessageRole.SYSTEM,
-        content: systemPrompt,
-      },
       ...contextMessages.flatMap((message) => {
         const content = getMessageContentForAPI(message);
         if (content === "" || (Array.isArray(content) && content.length === 0))

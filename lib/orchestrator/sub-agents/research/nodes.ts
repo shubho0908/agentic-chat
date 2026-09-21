@@ -27,6 +27,7 @@ import {
   emptyTokenUsage,
   getAbortSignal,
   invokeResearchJson,
+  type StructuredInvokableLLM,
   invokeResearchLLM,
   mergeTokenUsage,
   normalizeSearchQuery,
@@ -38,18 +39,18 @@ const SHORT_LLM_TIMEOUT_MS = 30_000;
 const LONG_LLM_TIMEOUT_MS = 60_000;
 
 const triageSchema = z.object({
-  needsClarification: z.boolean().optional(),
-  confidence: z.number().optional(),
-  questions: z.array(z.string()).optional(),
+  needsClarification: z.boolean(),
+  confidence: z.number(),
+  questions: z.array(z.string()),
 });
 
-const stringArraySchema = z.array(z.string());
+const stringArraySchema = z.object({ items: z.array(z.string()) });
 
 const evaluationSchema = z.object({
-  sufficient: z.boolean().optional(),
-  coveredSubQuestions: z.array(z.string()).optional(),
-  gaps: z.array(z.string()).optional(),
-  followUpQueries: z.array(z.string()).optional(),
+  sufficient: z.boolean(),
+  coveredSubQuestions: z.array(z.string()),
+  gaps: z.array(z.string()),
+  followUpQueries: z.array(z.string()),
 });
 
 const claimSchema = z.object({
@@ -59,10 +60,10 @@ const claimSchema = z.object({
 });
 
 const reflexionSchema = z.object({
-  passed: z.boolean().optional(),
-  claims: z.array(claimSchema).optional(),
-  issues: z.array(z.string()).optional(),
-  suggestion: z.string().optional(),
+  passed: z.boolean(),
+  claims: z.array(claimSchema),
+  issues: z.array(z.string()),
+  suggestion: z.string(),
 });
 
 async function scrapeWithTimeout(
@@ -135,7 +136,7 @@ export function triageNode(apiKey: string, model: string, reasoningEffort?: Reas
     await emitProgress(ResearchStep.TRIAGING, "Analyzing research scope...", config);
 
     const { value: result, tokenUsage } = await invokeResearchJson(
-      llm,
+      llm as unknown as StructuredInvokableLLM,
       [new SystemMessage(TRIAGE_PROMPT), new HumanMessage(state.query)],
       {
         nodeName: ResearchNode.TRIAGE,
@@ -144,9 +145,7 @@ export function triageNode(apiKey: string, model: string, reasoningEffort?: Reas
         maxOutputTokens: 256,
         timeoutMs: SHORT_LLM_TIMEOUT_MS,
         schema: triageSchema,
-        fallback: { needsClarification: false, confidence: 1 },
-        schemaDescription:
-          '{"needsClarification": boolean, "confidence": number, "questions": string[]}',
+        fallback: { needsClarification: false, confidence: 1, questions: [] },
       }
     );
 
@@ -179,7 +178,7 @@ export function decomposeNode(apiKey: string, model: string, reasoningEffort?: R
       : state.query;
 
     const { value, tokenUsage } = await invokeResearchJson(
-      llm,
+      llm as unknown as StructuredInvokableLLM,
       [new SystemMessage(DECOMPOSE_PROMPT), new HumanMessage(enrichedQuery)],
       {
         nodeName: ResearchNode.DECOMPOSE,
@@ -188,11 +187,10 @@ export function decomposeNode(apiKey: string, model: string, reasoningEffort?: R
         maxOutputTokens: 512,
         timeoutMs: SHORT_LLM_TIMEOUT_MS,
         schema: stringArraySchema,
-        fallback: [state.query],
-        schemaDescription: '["searchable sub-question", "..."]',
+        fallback: { items: [state.query] },
       }
     );
-    const subQuestions = value
+    const subQuestions = value.items
       .filter((question) => question.trim().length > 0)
       .slice(0, Limit.MAX_SUB_QUESTIONS);
 
@@ -213,7 +211,7 @@ export function planQueriesNode(apiKey: string, model: string, reasoningEffort?:
     const queryGroups = await Promise.all(
       state.subQuestions.map(async (subQ) => {
         const result = await invokeResearchJson(
-          llm,
+          llm as unknown as StructuredInvokableLLM,
           [new SystemMessage(QUERY_PLANNER_PROMPT), new HumanMessage(subQ)],
           {
             nodeName: ResearchNode.PLAN_QUERIES,
@@ -222,12 +220,11 @@ export function planQueriesNode(apiKey: string, model: string, reasoningEffort?:
             maxOutputTokens: 512,
             timeoutMs: SHORT_LLM_TIMEOUT_MS,
             schema: stringArraySchema,
-            fallback: [subQ],
-            schemaDescription: '["precise search query", "..."]',
+            fallback: { items: [subQ] },
           }
         );
         return {
-          queries: result.value.slice(0, Limit.MAX_QUERIES_PER_SUB),
+          queries: result.value.items.slice(0, Limit.MAX_QUERIES_PER_SUB),
           tokenUsage: result.tokenUsage,
         };
       })
@@ -381,7 +378,7 @@ export function evaluateNode(apiKey: string, model: string, reasoningEffort?: Re
       .join("\n");
 
     const { value: evaluation, tokenUsage } = await invokeResearchJson(
-      llm,
+      llm as unknown as StructuredInvokableLLM,
       [
         new SystemMessage(EVALUATOR_PROMPT),
         new HumanMessage(
@@ -395,9 +392,7 @@ export function evaluateNode(apiKey: string, model: string, reasoningEffort?: Re
         maxOutputTokens: 768,
         timeoutMs: SHORT_LLM_TIMEOUT_MS,
         schema: evaluationSchema,
-        fallback: { sufficient: true },
-        schemaDescription:
-          '{"sufficient": boolean, "coveredSubQuestions": string[], "gaps": string[], "followUpQueries": string[]}',
+        fallback: { sufficient: true, coveredSubQuestions: [], gaps: [], followUpQueries: [] },
       }
     );
 
@@ -494,7 +489,7 @@ export function reflexionNode(apiKey: string, model: string, reasoningEffort?: R
       .join("\n");
 
     const { value: audit, tokenUsage } = await invokeResearchJson(
-      llm,
+      llm as unknown as StructuredInvokableLLM,
       [
         new SystemMessage(REFLEXION_PROMPT),
         new HumanMessage(`Synthesis to verify:\n${state.synthesis}\n\nSources:\n${sourcesRef}`),
@@ -506,9 +501,7 @@ export function reflexionNode(apiKey: string, model: string, reasoningEffort?: R
         maxOutputTokens: 1024,
         timeoutMs: SHORT_LLM_TIMEOUT_MS,
         schema: reflexionSchema,
-        fallback: { passed: true },
-        schemaDescription:
-          '{"passed": boolean, "claims": [{"claim": string, "supportedBy": number[], "confidence": "high|medium|low|unsupported"}], "issues": string[], "suggestion": string}',
+        fallback: { passed: true, claims: [], issues: [], suggestion: "" },
       }
     );
 

@@ -3,16 +3,15 @@ import assert from "node:assert/strict";
 
 import {
   ARTIFACT_QUALITY_PROMPT,
-  DEFAULT_ASSISTANT_PROMPT,
-  JSON_ONLY_RESPONSE_PROMPT,
+  IMAGE_ATTACHMENT_PROMPT,
+  MEMORY_USAGE_PROMPT,
   PROMPT_CONTEXT_BOUNDARY,
-  PROMPT_MARKDOWN_PREAMBLE,
   PROMPT_OUTPUT_QUALITY,
   PROMPT_PRIVATE_ANALYSIS,
   PROMPT_RESPONSE_FORMATTING,
   PROMPT_SECURITY_BOUNDARY,
 } from "@/lib/prompts";
-import { buildSystemPrompt } from "@/lib/orchestrator/nodes/agent";
+import { buildChatSystemPrompt } from "@/lib/chat/systemPrompt";
 import { PLANNER_SYSTEM_PROMPT } from "@/lib/orchestrator/nodes/planner";
 import {
   DECOMPOSE_PROMPT,
@@ -24,8 +23,7 @@ import {
 } from "@/lib/orchestrator/sub-agents/research/prompts";
 
 const productionPrompts = [
-  DEFAULT_ASSISTANT_PROMPT,
-  buildSystemPrompt([]),
+  buildChatSystemPrompt(),
   PLANNER_SYSTEM_PROMPT,
   TRIAGE_PROMPT,
   DECOMPOSE_PROMPT,
@@ -36,31 +34,31 @@ const productionPrompts = [
 ];
 
 test("direct and orchestrated prompts share current core policy modules", () => {
-  const orchestratorPrompt = buildSystemPrompt([]);
+  const prompt = buildChatSystemPrompt();
 
-  for (const prompt of [DEFAULT_ASSISTANT_PROMPT, orchestratorPrompt]) {
-    assert.ok(prompt.startsWith(PROMPT_MARKDOWN_PREAMBLE));
-    assert.ok(prompt.includes(PROMPT_OUTPUT_QUALITY));
-    assert.ok(prompt.includes(PROMPT_PRIVATE_ANALYSIS));
-    assert.ok(prompt.includes(PROMPT_CONTEXT_BOUNDARY));
-    assert.ok(prompt.includes(PROMPT_SECURITY_BOUNDARY));
-    assert.ok(prompt.includes(PROMPT_RESPONSE_FORMATTING));
-    assert.ok(prompt.includes(ARTIFACT_QUALITY_PROMPT));
-  }
+  assert.ok(prompt.includes(PROMPT_OUTPUT_QUALITY));
+  assert.ok(prompt.includes(PROMPT_PRIVATE_ANALYSIS));
+  assert.ok(prompt.includes(PROMPT_CONTEXT_BOUNDARY));
+  assert.ok(prompt.includes(PROMPT_SECURITY_BOUNDARY));
+  assert.ok(prompt.includes(PROMPT_RESPONSE_FORMATTING));
+  assert.ok(prompt.includes(ARTIFACT_QUALITY_PROMPT));
+  assert.ok(prompt.includes(MEMORY_USAGE_PROMPT));
+  assert.ok(prompt.includes(IMAGE_ATTACHMENT_PROMPT));
 });
 
-test("structured prompt surfaces include the shared JSON-only contract", () => {
-  for (const prompt of [
-    PLANNER_SYSTEM_PROMPT,
-    TRIAGE_PROMPT,
-    DECOMPOSE_PROMPT,
-    QUERY_PLANNER_PROMPT,
-    EVALUATOR_PROMPT,
-    REFLEXION_PROMPT,
-  ]) {
-    assert.ok(prompt.includes(JSON_ONLY_RESPONSE_PROMPT));
-    assert.match(prompt, /Do not wrap JSON in markdown fences/);
-    assert.match(prompt, /Do not include comments, prose, hidden analysis, or extra keys/);
+test("browser chat code does not import or assemble system prompts", async () => {
+  const files = [
+    "hooks/chat/conversationManager.ts",
+    "hooks/chat/streamingHandler.ts",
+    "hooks/chat/messageEditor.ts",
+    "hooks/chat/messageRegenerator.ts",
+  ];
+  const { readFile } = await import("node:fs/promises");
+
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    assert.doesNotMatch(source, /@\/lib\/prompts/);
+    assert.doesNotMatch(source, /role:\s*MessageRole\.SYSTEM/);
   }
 });
 

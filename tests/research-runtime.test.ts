@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HumanMessage } from "@langchain/core/messages";
+import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 
 import { ResearchNode } from "@/lib/orchestrator/sub-agents/research/constants";
@@ -13,6 +13,7 @@ import {
   dedupeSearchQueries,
   invokeResearchJson,
   invokeResearchLLM,
+  type StructuredInvokableLLM,
   type InvokableLLM,
 } from "@/lib/orchestrator/sub-agents/research/runtime";
 
@@ -52,17 +53,35 @@ test("dedupeSearchQueries removes duplicates and previously searched queries", (
   assert.deepEqual(queries, ["React performance"]);
 });
 
-test("invokeResearchJson retries with a JSON repair prompt before using fallback", async () => {
-  let calls = 0;
-  const fakeLLM: InvokableLLM = {
+test("invokeResearchJson uses strict native structured output", async () => {
+  let options: Record<string, unknown> | undefined;
+  const fakeLLM: StructuredInvokableLLM = {
     async invoke() {
-      calls += 1;
+      throw new Error("plain invocation must not run");
+    },
+    withStructuredOutput<T extends Record<string, unknown>>(
+      schema: z.ZodType<T>,
+      receivedOptions: {
+        name: string;
+        method: "jsonSchema";
+        strict: true;
+        includeRaw: true;
+      },
+    ) {
+      options = receivedOptions;
       return {
-        content: calls === 1 ? "not json" : '{"ok":true}',
-        usage_metadata: {
-          input_tokens: 2,
-          output_tokens: 3,
-          total_tokens: 5,
+        async invoke() {
+          return {
+            raw: new AIMessage({
+              content: "",
+              usage_metadata: {
+                input_tokens: 2,
+                output_tokens: 3,
+                total_tokens: 5,
+              },
+            }),
+            parsed: schema.parse({ ok: true }),
+          };
         },
       };
     },
@@ -70,7 +89,7 @@ test("invokeResearchJson retries with a JSON repair prompt before using fallback
 
   const result = await invokeResearchJson(
     fakeLLM,
-    [new HumanMessage("return json")],
+    [new HumanMessage("return structured data")],
     {
       nodeName: ResearchNode.TRIAGE,
       state: createResearchState(),
@@ -78,48 +97,17 @@ test("invokeResearchJson retries with a JSON repair prompt before using fallback
       timeoutMs: 1000,
       schema: z.object({ ok: z.boolean() }),
       fallback: { ok: false },
-      schemaDescription: '{"ok": boolean}',
-    }
-  );
-
-  assert.equal(calls, 2);
-  assert.deepEqual(result.value, { ok: true });
-  assert.equal(result.tokenUsage.llmCalls, 2);
-  assert.equal(result.tokenUsage.totalTokens, 10);
-});
-
-test("invokeResearchJson repair call enforces budget against merged token usage", async () => {
-  let calls = 0;
-  const fakeLLM: InvokableLLM = {
-    async invoke() {
-      calls += 1;
-      return {
-        content: "not json",
-        usage_metadata: {
-          input_tokens: 30,
-          output_tokens: 20,
-          total_tokens: 50,
-        },
-      };
     },
-  };
-
-  const result = await invokeResearchJson(
-    fakeLLM,
-    [new HumanMessage("hi")],
-    {
-      nodeName: ResearchNode.TRIAGE,
-      state: createResearchState({ tokenBudget: 80 }),
-      maxOutputTokens: 30,
-      timeoutMs: 1000,
-      schema: z.object({ ok: z.boolean() }),
-      fallback: { ok: false },
-      schemaDescription: '{"ok": boolean}',
-    }
   );
 
-  assert.equal(calls, 1);
-  assert.deepEqual(result.value, { ok: false });
+  assert.deepEqual(options, {
+    name: "research_triage",
+    method: "jsonSchema",
+    strict: true,
+    includeRaw: true,
+  });
+  assert.deepEqual(result.value, { ok: true });
+  assert.equal(result.tokenUsage.totalTokens, 5);
 });
 
 test("invokeResearchLLM rejects before invoking when token budget would be exceeded", async () => {

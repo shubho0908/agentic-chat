@@ -254,6 +254,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           messages: langChainMessages,
           userId,
           conversationId,
+          documentFocused: memoryStatusInfo.hasDocuments,
           connectedServices: connectedToolkits,
         };
 

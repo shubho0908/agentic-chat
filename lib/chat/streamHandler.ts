@@ -27,6 +27,7 @@ import { getChatReasoningEffort } from '@/lib/modelPolicy';
 import type { ReasoningEffortLevel } from '@/constants/openai-models';
 import { withRetry } from '@/lib/retry';
 import { createSafeStream } from './safeStream';
+import { buildChatSystemPrompt } from './systemPrompt';
 
 import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
@@ -206,6 +207,16 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             },
           ];
         }
+
+        enhancedMessages = [
+          {
+            role: MessageRole.SYSTEM,
+            content: buildChatSystemPrompt({
+              documentFocused: memoryStatusInfo.hasDocuments,
+            }),
+          },
+          ...enhancedMessages.filter((message) => message.role !== MessageRole.SYSTEM),
+        ];
 
         if (!(await ensurePromptBudget())) {
           return;

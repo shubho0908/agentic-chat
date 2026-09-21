@@ -14,7 +14,6 @@ import {
 } from "@/lib/modelPolicy";
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
-import { JSON_ONLY_RESPONSE_PROMPT } from "@/lib/prompts";
 import {
   evaluatePlannerWithJev,
   mapJevPlannerResult,
@@ -27,15 +26,6 @@ import { logJevDecision } from "@/lib/jev/telemetry";
 import { createRequestId } from "@/lib/observability";
 
 export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
-
-${JSON_ONLY_RESPONSE_PROMPT}
-
-Output ONLY a JSON object (no markdown, no explanation):
-{
-  "complexity": "direct" | "tool_needed" | "multi_step",
-  "tools_needed": [],
-  "plan": "one-line description of approach"
-}
 
 Rules:
 - "direct": simple question answerable without tools (greetings, knowledge questions, follow-ups)
@@ -179,9 +169,13 @@ function queueJevPlannerShadow(
 }
 
 const plannerResponseSchema = z.object({
-  complexity: z.string().optional(),
-  tools_needed: z.array(z.string()).optional(),
-  plan: z.string().optional(),
+  complexity: z.enum([
+    PlanComplexity.DIRECT,
+    PlanComplexity.TOOL_NEEDED,
+    PlanComplexity.MULTI_STEP,
+  ]),
+  tools_needed: z.array(z.string()),
+  plan: z.string(),
 });
 
 function isValidComplexity(value: unknown): value is PlanComplexityValue {
@@ -226,6 +220,12 @@ export function createPlannerNode(
         : {}),
   });
 
+  const structuredPlanner = llm.withStructuredOutput(plannerResponseSchema, {
+    name: "agent_tool_plan",
+    method: "jsonSchema",
+    strict: true,
+  });
+
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
     const lastMessage = state.messages[state.messages.length - 1];
     if (!lastMessage) return { messages: [] };
@@ -263,7 +263,7 @@ export function createPlannerNode(
       ];
 
       const response = await withRetry(
-        (signal) => llm.invoke(messages, { ...(config ?? {}), signal }),
+        (signal) => structuredPlanner.invoke(messages, { ...(config ?? {}), signal }),
         {
           retries: 1,
           initialDelayMs: 400,
@@ -271,10 +271,7 @@ export function createPlannerNode(
         },
       );
 
-      const planText =
-        typeof response.content === "string" ? response.content : "";
-      const cleaned = planText.replace(/```json?\n?|\n?```/g, "").trim();
-      const parsed = plannerResponseSchema.parse(JSON.parse(cleaned));
+      const parsed = plannerResponseSchema.parse(response);
 
       const complexity: PlanComplexityValue = isValidComplexity(
         parsed.complexity,

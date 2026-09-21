@@ -2,7 +2,6 @@ import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, Mess
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
-import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
@@ -84,7 +83,7 @@ export async function handleRegenerateResponse(
       activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, model, previousUserMessage.attachments);
 
     let accumulatedContent = "";
     let thinkingBuffer = "";

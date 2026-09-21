@@ -16,6 +16,10 @@ export const AgentState = Annotation.Root({
   ...MessagesAnnotation.spec,
   userId: Annotation<string>,
   conversationId: Annotation<string | undefined>,
+  documentFocused: Annotation<boolean>({
+    reducer: (_current, update) => update,
+    default: () => false,
+  }),
   connectedServices: Annotation<string[]>({
     reducer: (_current, update) => update,
     default: () => [],
