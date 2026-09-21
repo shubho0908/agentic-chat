@@ -46,30 +46,35 @@ export const createPdfTool = new DynamicStructuredTool({
     "tables for tabular data, code blocks for code, callouts for important notes, key_values for metadata or specs, quotes, and images. " +
     "The PDF must be self-contained: the user reads the PDF, not this chat, so include all content that belongs in the document.",
   schema: createPdfSchema,
+  responseFormat: "content_and_artifact",
   func: async (input, _runManager, config) => {
     const outcome = await generateAndStorePdf(input, { signal: config?.signal });
 
     if (!outcome.ok) {
-      return `PDF creation failed: ${outcome.error}\nFix the document input and call ${ToolName.CREATE_PDF} again with the corrected value.`;
+      return [
+        `PDF creation failed: ${outcome.error}\nFix the document input and call ${ToolName.CREATE_PDF} again with the corrected value.`,
+        null,
+      ];
     }
 
     const { pdf } = outcome;
 
     const pages = pdf.pageCount > 0 ? `${pdf.pageCount} page${pdf.pageCount === 1 ? "" : "s"}` : "pages unknown";
     try {
-      await dispatchCustomEvent(CustomEventName.PDF_FILE, { pdf });
+      // The tool-call config carries the run's callback manager directly, so
+      // the event does not depend on AsyncLocalStorage propagation: in some
+      // server runtimes (e.g. bundled Next.js handlers) that context is lost
+      // and the config-less dispatch silently drops the event.
+      await dispatchCustomEvent(CustomEventName.PDF_FILE, { pdf }, config);
     } catch (error) {
       logger.warn("[create_pdf] Failed to emit PDF file event:", error);
-      return (
-        `PDF created: "${pdf.title}" (${pages}, ${formatBytes(pdf.size)}), but the download card could not be attached to this chat. ` +
-        `Share this direct download link with the user instead: ${pdf.url}`
-      );
     }
 
-    return (
+    return [
       `PDF created: "${pdf.title}" (${pages}, ${formatBytes(pdf.size)}). ` +
-      `The user has received a download card for this file, so do not paste the URL or restate the file contents. ` +
-      `Reply with one or two sentences confirming what the PDF covers.`
-    );
+        `The user has received a download card for this file, so do not paste the URL or restate the file contents. ` +
+        `Reply with one or two sentences confirming what the PDF covers.`,
+      { pdf },
+    ];
   },
 });

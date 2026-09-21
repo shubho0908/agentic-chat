@@ -54,6 +54,41 @@ function extractToolOutput(output: unknown): string | Record<string, unknown> | 
   return output as string | Record<string, unknown> | unknown[];
 }
 
+function isPdfArtifact(value: unknown): value is Record<string, unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).url === "string"
+  );
+}
+
+/** The create_pdf tool also returns the file as a ToolMessage artifact, which
+ * travels the deterministic on_tool_end data channel. Custom events are an
+ * optimistic fast path only; whichever arrives first delivers the card and
+ * the client dedupes by URL. */
+function emitPdfReady(writer: StreamWriter, pdf: unknown): void {
+  if (!isPdfArtifact(pdf)) return;
+  writer.enqueue(
+    encodeToolProgress(ToolName.CREATE_PDF, ToolStatus.COMPLETED, "PDF ready", { pdf })
+  );
+}
+
+function extractToolOutputArtifact(output: unknown): unknown {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const obj = output as Record<string, unknown>;
+  if (isPdfArtifact(obj.artifact)) return obj.artifact;
+  const artifact = obj.artifact;
+  if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
+    const nested = (artifact as Record<string, unknown>).pdf;
+    if (isPdfArtifact(nested)) return nested;
+  }
+  if (obj.kwargs && typeof obj.kwargs === "object" && !Array.isArray(obj.kwargs)) {
+    return extractToolOutputArtifact(obj.kwargs);
+  }
+  return undefined;
+}
+
 interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   flush(writer: StreamWriter): void;
@@ -159,6 +194,10 @@ export function createStreamEventMapper(): StreamEventMapper {
           const result = extractToolOutput(data?.output);
           writer.enqueue(encodeToolResult(name, runId, result));
           writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
+          if (name === ToolName.CREATE_PDF) {
+            const artifactPdf = extractToolOutputArtifact(data?.output);
+            if (artifactPdf) emitPdfReady(writer, artifactPdf);
+          }
           break;
         }
 
@@ -197,12 +236,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             }
           }
           if (eventName === CustomEventName.PDF_FILE) {
-            const pdf = customData?.pdf;
-            if (pdf && typeof pdf === "object" && !Array.isArray(pdf) && typeof (pdf as Record<string, unknown>).url === "string") {
-              writer.enqueue(
-                encodeToolProgress(ToolName.CREATE_PDF, ToolStatus.COMPLETED, "PDF ready", { pdf: pdf as Record<string, unknown> })
-              );
-            }
+            emitPdfReady(writer, customData?.pdf);
           }
           if (eventName === CustomEventName.SEARCH_SOURCES) {
             const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;

@@ -347,6 +347,16 @@ export async function handleStreamingResponse(
         }
       },
       onToolProgress: (progress) => {
+        // Metadata carried by progress events (sources, images, PDFs) must
+        // merge unconditionally: it is message data, not memory status, and
+        // dropping it when no memory_status event has arrived silently loses
+        // delivered files.
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
+        if (messageCreated && messageMetadata) {
+          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+            metadata: messageMetadata,
+          });
+        }
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -362,7 +372,6 @@ export async function handleStreamingResponse(
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
       reasoningEffort,
@@ -471,7 +480,7 @@ export async function handleStreamingResponse(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent && artifacts.length === 0 && !responseIncompleteReason) {
+      if (cacheQuery && assistantContent && artifacts.length === 0 && !messageMetadata?.pdfs?.length && !responseIncompleteReason) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,

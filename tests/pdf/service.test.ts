@@ -54,30 +54,29 @@ test("generateAndStorePdf propagates storage failures as errors", async () => {
 });
 
 test("create_pdf tool returns a corrective message on malformed input", async () => {
-  const result = await createPdfTool.func(
+  const [content, artifact] = (await createPdfTool.func(
     { title: "", sections: [] },
     undefined as never,
     {} as never,
-  );
-  assert.equal(typeof result, "string");
-  assert.match(result as string, /PDF creation failed/);
-  assert.match(result as string, /create_pdf/);
+  )) as [string, unknown];
+  assert.match(content, /PDF creation failed/);
+  assert.match(content, /create_pdf/);
+  assert.equal(artifact, null);
 });
 
 test("create_pdf tool succeeds end to end with a working store", async () => {
   const originalToken = process.env.UPLOADTHING_TOKEN;
   delete process.env.UPLOADTHING_TOKEN;
   try {
-    const result = await createPdfTool.func(
+    const [content] = (await createPdfTool.func(
       {
         title: "Tool Test",
         sections: [{ blocks: [{ type: "paragraph", text: "From the tool." }] }],
       },
       undefined as never,
       {} as never,
-    );
-    assert.equal(typeof result, "string");
-    assert.match(result as string, /PDF (created|creation failed)/);
+    )) as [string, unknown];
+    assert.match(content, /PDF (created|creation failed)/);
   } finally {
     if (originalToken !== undefined) process.env.UPLOADTHING_TOKEN = originalToken;
   }
