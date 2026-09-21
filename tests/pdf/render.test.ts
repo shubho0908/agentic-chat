@@ -183,14 +183,17 @@ test("supports concurrent renders", async () => {
   for (const buffer of buffers) assertValidPdf(buffer);
 });
 
-test("renders italic and bold Devanagari without a missing italic face", async () => {
+test("every font family degrades missing italic faces to upright instead of crashing", async () => {
   const buffer = await render({
-    title: "Devanagari italics",
+    title: "Italic fallbacks",
     sections: [
       {
         blocks: [
-          { type: "paragraph", text: "Latin *italic* with Hindi *नमस्ते जी* and **बोल्ड** plus ***दोनों***." },
-          { type: "quote", text: "*पूरा उद्धरण italic में*" },
+          { type: "paragraph", text: "Latin *italic* and ***bold italic*** at every weight." },
+          { type: "paragraph", text: "Hindi *नमस्ते जी* and ***बोल्ड italics*** mixed in." },
+          { type: "paragraph", text: "Mono family via `*code styled*` and plain `code` runs." },
+          { type: "quote", text: "*पूरा उद्धरण italic में* with *English italics*" },
+          { type: "callout", variant: "warning", text: "***तुरंत कार्रवाई*** needed *now*" },
         ],
       },
     ],
