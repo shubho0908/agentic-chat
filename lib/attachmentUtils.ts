@@ -2,8 +2,10 @@ import type { Attachment } from "@/lib/schemas/chat";
 import { isSupportedDocumentExtension } from "./fileValidation";
 
 interface UploadFileResponse {
-  url: string;
-  ufsUrl: string;
+  /** Preferred file URL (uploadthing v9 canonical field). */
+  ufsUrl?: string;
+  /** @deprecated Removed in uploadthing v9; kept only as a fallback. */
+  url?: string;
   name: string;
   size?: number;
   type?: string;
@@ -48,7 +50,10 @@ function uploadResponseToAttachment(
     inferMimeTypeFromFileName(uploadResult.name);
 
   return {
-    fileUrl: uploadResult.ufsUrl,
+    // Prefer ufsUrl (v9 canonical); fall back to legacy url for old payloads.
+    // These are plain data fields (no deprecation getters), so the fallback
+    // read is warning-free.
+    fileUrl: uploadResult.ufsUrl || uploadResult.url || "",
     fileName: uploadResult.name,
     fileType: resolvedType,
     fileSize: uploadResult.size || 0,

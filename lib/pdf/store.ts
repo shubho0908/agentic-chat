@@ -1,4 +1,7 @@
 import { UTApi } from "uploadthing/server";
+// uploadthing@7's UTApi reads its own deprecated `url`/`appUrl` getters
+// internally even though we only consume `ufsUrl`; drop just that noise.
+import "@/lib/uploadthing-warnings";
 
 export interface StoredPdf {
   url: string;
@@ -13,5 +16,8 @@ export async function storePdf(buffer: Buffer, fileName: string): Promise<Stored
   if (response.error) {
     throw new Error(response.error.message || "PDF upload failed");
   }
-  return { url: response.data.ufsUrl, name: fileName, size: buffer.length };
+  // Prefer ufsUrl (v9 canonical). `data.url` is a plain string on the UTApi
+  // result (no deprecation getter), so the fallback read is warning-free.
+  const url = response.data.ufsUrl || response.data.url;
+  return { url, name: fileName, size: buffer.length };
 }
