@@ -134,3 +134,59 @@ test("chat message memo re-renders when memory degradation or skip state arrives
     false,
   );
 });
+
+test("memory degradation survives the full server-to-browser stream path", async () => {
+  const { encodeMemoryStatus } = await import("@/lib/chat/streamingHelpers");
+  const { readChatStream } = await import("@/hooks/chat/streamingApi");
+  const degraded = {
+    source: DegradedContextSource.Memory,
+    reason: "Memory provider check failed; answering without past-chat memory",
+  };
+  const bytes = encodeMemoryStatus(status({ degradedContexts: [degraded] }));
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  let received: MemoryStatus | undefined;
+  await readChatStream(new Response(body), {
+    onChunk: () => {},
+    onMemoryStatus: (memoryStatus) => {
+      received = memoryStatus;
+    },
+  });
+  assert.deepEqual(received?.degradedContexts, [degraded]);
+});
+
+test("stream parser drops malformed degradation entries", async () => {
+  const { readChatStream } = await import("@/hooks/chat/streamingApi");
+  const payload = `data: ${JSON.stringify({
+    type: "memory_status",
+    hasMemories: false,
+    memoryCount: 0,
+    degradedContexts: [
+      { source: "memory", reason: "provider down" },
+      { source: "not_a_source", reason: "bogus" },
+      { source: "memory" },
+      "garbage",
+    ],
+  })}\n\n`;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(payload + "data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  let received: MemoryStatus | undefined;
+  await readChatStream(new Response(body), {
+    onChunk: () => {},
+    onMemoryStatus: (memoryStatus) => {
+      received = memoryStatus;
+    },
+  });
+  assert.deepEqual(received?.degradedContexts, [
+    { source: DegradedContextSource.Memory, reason: "provider down" },
+  ]);
+});

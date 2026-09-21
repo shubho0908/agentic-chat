@@ -22,6 +22,7 @@ export function encodeMemoryStatus(
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
     activeToolName: memoryStatusInfo.activeToolName,
+    degradedContexts: memoryStatusInfo.degradedContexts,
     tokenUsage: memoryStatusInfo.tokenUsage
   });
 }
