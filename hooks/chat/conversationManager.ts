@@ -286,6 +286,24 @@ export function buildMessagesForAPI(
   );
 }
 
+/**
+ * The conversation row is created before its opening message is saved. When
+ * that save fails or is aborted the row would otherwise stay in the user's
+ * conversation list with no messages, so drop it on a best-effort basis:
+ * cleanup must never mask the original failure.
+ */
+async function discardEmptyConversation(conversationId: string): Promise<void> {
+  try {
+    await fetch(apiRoutes.conversation(conversationId), { method: "DELETE" });
+  } catch (err) {
+    try {
+      logger.warn("[conversationManager] Failed to discard empty conversation:", err);
+    } catch (logErr) {
+      emergencyLog(`logger.warn() threw in discardEmptyConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+    }
+  }
+}
+
 async function createNewConversation(
   userContent: string | MessageContentPart[],
   assistantContent: string,
@@ -309,14 +327,24 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    const userMessageId = await saveUserMessage(
-      conversationId,
-      userContent,
-      attachments,
-      signal,
-    );
+    let userMessageId: string | null;
+    try {
+      userMessageId = await saveUserMessage(
+        conversationId,
+        userContent,
+        attachments,
+        signal,
+      );
+    } catch (err) {
+      // An aborted opening save must not leave an empty conversation behind.
+      await discardEmptyConversation(conversationId);
+      throw err;
+    }
 
     if (!userMessageId) {
+      // Nothing was written to the row, so drop it rather than leaving an
+      // empty conversation in the user's list.
+      await discardEmptyConversation(conversationId);
       return null;
     }
 

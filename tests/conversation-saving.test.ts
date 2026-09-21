@@ -13,10 +13,12 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function stubFetch(handler: (url: string) => Response | Promise<Response>) {
+function stubFetch(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>
+) {
   const original = globalThis.fetch;
-  globalThis.fetch = ((url: unknown) =>
-    handler(String(url))) as typeof fetch;
+  globalThis.fetch = ((url: unknown, init?: RequestInit) =>
+    handler(String(url), init)) as typeof fetch;
   return () => {
     globalThis.fetch = original;
   };
@@ -75,10 +77,14 @@ test("new conversation: returns the creation result and pre-populates cache (ear
 });
 
 test("new conversation: returns null without onConversationCreated when the user message cannot persist", async () => {
-  const restore = stubFetch((url) => {
+  const calls: string[] = [];
+  const restore = stubFetch((url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
     if (url === "/api/conversations") return jsonResponse({ id: "conv-1" });
     if (url === "/api/conversations/conv-1/messages")
       return jsonResponse({ error: "nope" }, 400);
+    if (url === "/api/conversations/conv-1")
+      return jsonResponse({ success: true });
     throw new Error(`unexpected fetch: ${url}`);
   });
   try {
@@ -112,6 +118,59 @@ test("new conversation: returns null without onConversationCreated when the user
     assert.equal(result, null);
     assert.equal(created.length, 0);
     assert.deepEqual(ready, []);
+    // The row was created before the message failed, so it must be discarded
+    // rather than lingering in the conversation list with no messages.
+    assert.ok(
+      calls.includes("DELETE /api/conversations/conv-1"),
+      `expected the empty conversation to be discarded, saw: ${calls.join(", ")}`
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("new conversation: discards the row when the opening save aborts", async () => {
+  const calls: string[] = [];
+  const restore = stubFetch((url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (url === "/api/conversations") return jsonResponse({ id: "conv-1" });
+    if (url === "/api/conversations/conv-1/messages") {
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    }
+    if (url === "/api/conversations/conv-1")
+      return jsonResponse({ success: true });
+    throw new Error(`unexpected fetch: ${url}`);
+  });
+  try {
+    const queryClient = new QueryClient();
+    const ready: string[] = [];
+
+    await assert.rejects(
+      handleConversationSaving(
+        true,
+        null,
+        "Hello there",
+        "",
+        Date.now(),
+        queryClient,
+        undefined,
+        undefined,
+        true,
+        undefined,
+        undefined,
+        (id) => {
+          ready.push(id);
+        }
+      ),
+      (err: Error) => err.name === "AbortError"
+    );
+
+    // The abort must not publish the ID or leave the empty row behind.
+    assert.deepEqual(ready, []);
+    assert.ok(
+      calls.includes("DELETE /api/conversations/conv-1"),
+      `expected the empty conversation to be discarded, saw: ${calls.join(", ")}`
+    );
   } finally {
     restore();
   }
