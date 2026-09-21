@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { formatMemoryContext } from "@/lib/memory";
+import { formatMemoryContext } from "@/lib/memoryContext";
 
 test("memory framing escapes every delimiter-like tag variant", () => {
   const context = formatMemoryContext([
