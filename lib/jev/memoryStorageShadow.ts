@@ -1,10 +1,9 @@
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient } from "./client";
+import { JevDecisionClient, classifyJevFailure } from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
-  JevFallbackReason,
   JevMode,
   type JevQuestions,
 } from "./types";
@@ -64,7 +63,7 @@ export async function shadowMemoryStorageWorthiness(
       latencyMs: Date.now() - started,
       outcome: "error",
       fallbackUsed: true,
-      fallbackReason: JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });

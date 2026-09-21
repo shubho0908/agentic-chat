@@ -1,7 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { JevDecisionClient, JevInvalidResponseError } from "@/lib/jev/client";
+import {
+  JevDecisionClient,
+  JevEvaluationCancelledError,
+  JevEvaluationTimeoutError,
+  JevInvalidResponseError,
+  classifyJevFailure,
+} from "@/lib/jev/client";
 import { getCircuitBreaker } from "@/lib/circuitBreaker";
 import { JevCheckpoint } from "@/lib/jev/types";
 
@@ -21,6 +27,40 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+/** Records what the observability sink actually emits. Mirrors the real sink's
+ *  level routing so assertions cover severity, not just message text. */
+function captureLogs(): { entries: Array<Record<string, unknown>>; restore: () => void } {
+  const entries: Array<Record<string, unknown>> = [];
+  const original = { info: console.info, warn: console.warn, error: console.error };
+  const record = (args: unknown[]) => {
+    if (typeof args[0] !== "string") return;
+    try {
+      entries.push(JSON.parse(args[0]) as Record<string, unknown>);
+    } catch {
+      // Non-JSON writes (stack traces) are irrelevant here.
+    }
+  };
+
+  console.info = (...args: unknown[]) => record(args);
+  console.warn = (...args: unknown[]) => record(args);
+  console.error = (...args: unknown[]) => record(args);
+
+  return {
+    entries,
+    restore: () => {
+      console.info = original.info;
+      console.warn = original.warn;
+      console.error = original.error;
+    },
+  };
+}
+
+/** Evaluations that miss their budget count as breaker failures, so tests that
+ *  provoke them must not leak that state into the next test. */
+function resetJevBreaker(): void {
+  getCircuitBreaker("jev-decision-client").recordSuccess();
 }
 
 test("evaluate validates response shape and returns model version", async () => {
@@ -154,14 +194,18 @@ test("caller-cancelled evaluate rejects fast without counting against the breake
     for (let i = 0; i < 5; i++) {
       await assert.rejects(
         client.evaluate({ ...evalInput(), signal: controller.signal }),
-        (error: unknown) =>
-          error instanceof Error && error.name === "AbortError",
+        JevEvaluationCancelledError,
       );
     }
     assert.equal(fetchCalls, 0, "pre-cancelled calls never hit the network");
     assert.ok(
       breaker.canAttempt(),
       "five caller-cancelled calls must not open the breaker (threshold is 5)",
+    );
+    assert.equal(
+      classifyJevFailure(new JevEvaluationCancelledError()),
+      "cancelled",
+      "cancellations stay distinguishable from provider faults",
     );
   } finally {
     globalThis.fetch = original;
@@ -191,10 +235,145 @@ test("an abort arriving mid-flight cancels the request", async () => {
       signal: controller.signal,
     });
     controller.abort();
-    await assert.rejects(pending, (error: unknown) =>
-      error instanceof Error && error.name === "AbortError",
+    await assert.rejects(pending, JevEvaluationCancelledError);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a budget miss surfaces as a typed timeout, not a generic abort", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = ((_input: unknown, init?: RequestInit) =>
+    new Promise<Response>((_, reject) => {
+      fetchCalls += 1;
+      init?.signal?.addEventListener(
+        "abort",
+        () => reject(init.signal?.reason),
+        { once: true },
+      );
+    })) as unknown as typeof fetch;
+
+  const logs = captureLogs();
+  try {
+    await assert.rejects(
+      () => client.evaluate({ ...evalInput(), timeoutMs: 40 }),
+      (error: unknown) => {
+        assert.ok(error instanceof JevEvaluationTimeoutError);
+        assert.match(error.message, /40ms budget/);
+        assert.equal(classifyJevFailure(error), "timeout");
+        return true;
+      },
+    );
+
+    assert.equal(fetchCalls, 1, "a spent budget must not retry dead work");
+
+    const failure = logs.entries.find(
+      (entry) => entry.event === "jev_evaluate_failed",
+    );
+    assert.equal(failure?.level, "warn", "a budget miss is not fault-level");
+    assert.equal(failure?.reason, "timeout");
+    assert.equal(failure?.checkpoint, JevCheckpoint.PLANNER);
+    assert.match(String(failure?.error), /40ms budget/);
+    assert.notEqual(failure?.error, "Operation aborted");
+    assert.equal(
+      logs.entries.some((entry) => entry.level === "error"),
+      false,
+      "the failure that produced the original report was logged at error level",
+    );
+  } finally {
+    logs.restore();
+    globalThis.fetch = original;
+    resetJevBreaker();
+  }
+});
+
+test("a transport that ignores the deadline signal is still bounded", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = (() => new Promise<Response>(() => {})) as typeof fetch;
+
+  const logs = captureLogs();
+  try {
+    await assert.rejects(
+      () => client.evaluate({ ...evalInput(), timeoutMs: 40 }),
+      JevEvaluationTimeoutError,
+    );
+  } finally {
+    logs.restore();
+    globalThis.fetch = original;
+    resetJevBreaker();
+  }
+});
+
+test("caller cancellation is logged below error level", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  const originalVerbose = process.env.OBSERVABILITY_VERBOSE;
+  globalThis.fetch = (async () =>
+    jsonResponse({
+      model: "jev-1.13.0",
+      answers: { q: { type: "noul", noul: 0.5 } },
+    })) as typeof fetch;
+
+  const controller = new AbortController();
+  controller.abort();
+  const logs = captureLogs();
+  try {
+    process.env.OBSERVABILITY_VERBOSE = "true";
+    await assert.rejects(
+      client.evaluate({ ...evalInput(), signal: controller.signal }),
+      JevEvaluationCancelledError,
+    );
+
+    assert.equal(
+      logs.entries.some((entry) => entry.event === "jev_evaluate_failed"),
+      false,
+      "a cancelled evaluation is not a failed evaluation",
+    );
+    const cancelled = logs.entries.find(
+      (entry) => entry.event === "jev_evaluate_cancelled",
+    );
+    assert.equal(cancelled?.level, "info");
+  } finally {
+    logs.restore();
+    if (originalVerbose === undefined) {
+      delete process.env.OBSERVABILITY_VERBOSE;
+    } else {
+      process.env.OBSERVABILITY_VERBOSE = originalVerbose;
+    }
+    globalThis.fetch = original;
+    resetJevBreaker();
+  }
+});
+
+test("classifyJevFailure maps every failure family a checkpoint can see", async () => {
+  assert.equal(classifyJevFailure(new JevEvaluationTimeoutError(1_000)), "timeout");
+  assert.equal(classifyJevFailure(new JevEvaluationCancelledError()), "cancelled");
+  assert.equal(classifyJevFailure(new JevInvalidResponseError("bad shape")), "invalid");
+  assert.equal(classifyJevFailure(new Error("provider down")), "error");
+  assert.equal(classifyJevFailure("not an error"), "error");
+  // Legacy abort shapes (DOMException, foreign clients) still read as timeouts.
+  assert.equal(classifyJevFailure(new DOMException("x", "AbortError")), "timeout");
+  assert.equal(
+    classifyJevFailure(Object.assign(new Error("timeout"), { name: "AbortError" })),
+    "timeout",
+  );
+
+  const breaker = getCircuitBreaker("jev-decision-client");
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    jsonResponse({ model: "m", answers: { q: { type: "noul", noul: 0.5 } } })) as typeof fetch;
+  try {
+    for (let i = 0; i < 5; i++) breaker.recordFailure();
+    await assert.rejects(
+      () => client.evaluate(evalInput()),
+      (error: unknown) => classifyJevFailure(error) === "circuit_open",
     );
   } finally {
     globalThis.fetch = original;
+    resetJevBreaker();
   }
 });

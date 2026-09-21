@@ -1,5 +1,5 @@
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient } from "./client";
+import { JevDecisionClient, classifyJevFailure } from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
@@ -171,10 +171,7 @@ export async function gateCacheHit(
       latencyMs: Date.now() - startedAt,
       outcome: "error_serve",
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });

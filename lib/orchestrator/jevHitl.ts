@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDangerousAction } from "@/lib/tools/composio/config";
 import { createRequestId } from "@/lib/observability";
 import { logger } from "@/lib/logger";
-import { JevDecisionClient } from "@/lib/jev/client";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { getJevMode } from "@/lib/jev/config";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import {
@@ -153,10 +153,7 @@ async function runJevHitlShadow(
       modelVersion: "unknown",
       latencyMs: Date.now() - startedAt,
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });
@@ -223,10 +220,7 @@ async function evaluateJevHitlActive(
       modelVersion: "unknown",
       latencyMs: Date.now() - startedAt,
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });

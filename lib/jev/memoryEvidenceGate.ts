@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient } from "./client";
+import { JevDecisionClient, classifyJevFailure } from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
-  JevFallbackReason,
   JevMode,
   type JevQuestions,
 } from "./types";
@@ -134,10 +133,7 @@ export async function gateMemoryEvidence(
       latencyMs: Date.now() - started,
       outcome: "error_high_confidence_only",
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });

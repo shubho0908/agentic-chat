@@ -28,7 +28,7 @@ import {
   trailingIdenticalFailureCount,
 } from "../toolFailure";
 import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
-import { JevDecisionClient } from "@/lib/jev/client";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { getJevMode } from "@/lib/jev/config";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import {
@@ -188,10 +188,7 @@ async function runJevToolDiagnosis(
       latencyMs: Date.now() - startedAt,
       outcome: "error",
       fallbackUsed: true,
-      fallbackReason:
-        error instanceof Error && error.name === "AbortError"
-          ? JevFallbackReason.TIMEOUT
-          : JevFallbackReason.ERROR,
+      fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });

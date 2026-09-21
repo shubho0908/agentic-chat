@@ -3,8 +3,8 @@ import { CohereClientV2 } from "cohere-ai";
 import { RAG_CONFIG } from "../config";
 import type { RerankDocument, RerankResult } from "@/types/rag";
 import { createRequestId, logError, logWarn } from "@/lib/observability";
-import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
-import { JevDecisionClient } from "@/lib/jev/client";
+import { JevCheckpoint, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { getJevMode } from "@/lib/jev/config";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import { rerankWithJev } from "@/lib/jev/reranker";
@@ -169,10 +169,7 @@ export async function rerankDocuments(
         latencyMs: Date.now() - startedAt,
         outcome: "error",
         fallbackUsed: true,
-        fallbackReason:
-          error instanceof Error && error.name === "AbortError"
-            ? JevFallbackReason.TIMEOUT
-            : JevFallbackReason.ERROR,
+        fallbackReason: classifyJevFailure(error),
         requestId,
         ...conversationScope,
       });
