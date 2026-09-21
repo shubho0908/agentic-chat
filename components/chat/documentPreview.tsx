@@ -17,9 +17,10 @@ interface EmbeddedFrameProps {
   src: string;
   fileName: string;
   fileUrl: string;
+  sandbox?: string;
 }
 
-function EmbeddedFrame({ src, fileName, fileUrl }: EmbeddedFrameProps) {
+function EmbeddedFrame({ src, fileName, fileUrl, sandbox }: EmbeddedFrameProps) {
   const [status, setStatus] = useState<"loading" | "loaded" | "blocked">("loading");
 
   useEffect(() => {
@@ -68,7 +69,7 @@ function EmbeddedFrame({ src, fileName, fileUrl }: EmbeddedFrameProps) {
         src={src}
         className="w-full h-full border-0"
         title={fileName}
-        sandbox="allow-scripts allow-popups"
+        sandbox={sandbox}
         onLoad={() => setStatus("loaded")}
         onError={() => setStatus("blocked")}
       />
@@ -237,7 +238,13 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
       renderStatus("No content available")
     )
   ) : isOfficeDoc ? (
-    <EmbeddedFrame key={fileUrl} src={getViewerUrl()} fileName={fileName} fileUrl={fileUrl} />
+    <EmbeddedFrame
+      key={fileUrl}
+      src={getViewerUrl()}
+      fileName={fileName}
+      fileUrl={fileUrl}
+      sandbox="allow-scripts allow-popups allow-same-origin allow-forms"
+    />
   ) : (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
       <p className="text-muted-foreground">Preview not available for this file type</p>
