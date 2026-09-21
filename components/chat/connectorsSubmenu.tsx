@@ -77,7 +77,7 @@ export function ConnectorsSubmenuContent({ onActionComplete, filter }: Connector
             disabled={isStatusLoading || isMutating}
           >
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-black/10 bg-white dark:border-border/40 dark:bg-background">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.06]">
                 <Icon className="size-4" />
               </span>
               <span className="font-medium text-sm truncate">
@@ -96,7 +96,7 @@ export function ConnectorsSubmenuContent({ onActionComplete, filter }: Connector
                   isMutating && "opacity-60",
                   isConnected
                     ? "bg-gradient-to-b from-secondary to-secondary/90 text-secondary-foreground"
-                    : "bg-gradient-to-b from-primary to-primary/90 text-primary-foreground"
+                    : "bg-gradient-to-b from-zinc-600 to-zinc-700 text-white hover:from-zinc-500 hover:to-zinc-600 dark:from-primary dark:to-primary/90 dark:text-primary-foreground dark:hover:from-primary/90 dark:hover:to-primary/80"
                 )}
               >
                 {isMutating ? (

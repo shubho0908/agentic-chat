@@ -124,7 +124,7 @@ export function ModelPicker({
       </TooltipProvider>
 
       <DropdownMenuContent
-        className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-[rgb(244_244_247)] dark:border-border/40 dark:bg-background/95 p-1.5 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
+        className="w-[min(360px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-surface-overlay supports-[backdrop-filter]:bg-surface-overlay dark:border-white/10 p-1.5 shadow-xl backdrop-blur-none animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200"
         align="end"
         side="top"
         sideOffset={8}

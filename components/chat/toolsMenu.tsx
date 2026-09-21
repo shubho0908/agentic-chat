@@ -127,7 +127,7 @@ export function ToolsMenu({
           <DropdownMenuContent
             align="start"
             side="top"
-            className="w-[min(320px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-[rgb(244_244_247)] dark:border-border/40 dark:bg-background/95 shadow-xl backdrop-blur-xl animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200 p-1.5"
+            className="w-[min(320px,calc(100vw-2rem))] rounded-2xl border-black/10 bg-surface-overlay supports-[backdrop-filter]:bg-surface-overlay dark:border-white/10 shadow-xl backdrop-blur-none animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-200 p-1.5"
             sideOffset={8}
             collisionPadding={12}
           >
@@ -137,7 +137,7 @@ export function ToolsMenu({
                 disabled={disabled}
                 className="cursor-pointer gap-3 rounded-xl p-2.5"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white dark:border-border/40 dark:bg-background">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.06]">
                   <Paperclip className="size-4 text-muted-foreground" />
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -165,7 +165,7 @@ export function ToolsMenu({
               />
             </div>
 
-            <div className="mt-1.5 flex items-center gap-2 border-t border-black/10 dark:border-border/40 px-2.5 pt-2.5 pb-1">
+            <div className="mt-1.5 flex items-center gap-2 border-t border-black/10 dark:border-white/[0.08] px-2.5 pt-2.5 pb-1">
               <Search className="size-3.5 shrink-0 text-muted-foreground/60" />
               <input
                 type="text"

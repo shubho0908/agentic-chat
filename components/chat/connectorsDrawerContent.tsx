@@ -105,7 +105,7 @@ export function ConnectorsDrawerContent() {
                   "transition-all duration-100",
                   isConnected
                     ? "bg-gradient-to-b from-secondary to-secondary/90 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/80"
-                    : "bg-gradient-to-b from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80"
+                    : "bg-gradient-to-b from-zinc-600 to-zinc-700 text-white hover:from-zinc-500 hover:to-zinc-600 dark:from-primary dark:to-primary/90 dark:text-primary-foreground dark:hover:from-primary/90 dark:hover:to-primary/80"
                 )}
               >
                 {isMutating ? (
