@@ -6,7 +6,7 @@ import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/contentUtils";
-import { MessageHeader } from "./messageHeader";
+import { MessageMeta } from "./messageMeta";
 import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
@@ -213,7 +213,7 @@ function renderUserTextContent(text: string): ReactNode[] | null {
   return nodes;
 }
 
-function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -232,8 +232,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const displayedAttachments = displayedMessage.attachments;
   const artifactMetadata = !isUser ? displayedMessage.metadata?.artifacts ?? [] : [];
   const displayedMessageId = displayedMessage.id ?? message.id;
-
-  const modelName = "AI Assistant"
 
   const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
 
@@ -374,16 +372,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
         <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
           <div className={cn("flex min-w-0 flex-col", isUser ? "gap-1 items-end" : "gap-2 w-full items-start")}>
-            {!isUser && (
-              <MessageHeader
-                isUser={false}
-                userName={userName}
-                modelName={modelName}
-                timestamp={displayedMessage.timestamp}
-                citations={citations}
-              />
-            )}
-
             <AttachmentDisplay
               attachments={displayedAttachments}
               isUser={isUser}
@@ -460,14 +448,30 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
                 {!isSharePage && (
                   <div className={cn(
-                    "mt-1 opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
-                    isUser ? "pr-2" : "pl-1"
+                    "mt-1 flex items-center gap-2",
+                    isUser ? "pr-2" : "pl-1 w-full justify-between"
                   )}>
-                    <MessageActions
-                      context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
-                      textContent={textContent}
-                      onEditStart={handleEditStart}
-                      onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
+                    <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                      <MessageActions
+                        context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
+                        textContent={textContent}
+                        onEditStart={handleEditStart}
+                        onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
+                      />
+                    </div>
+                    {!isUser && !isThinking && (
+                      <MessageMeta
+                        timestamp={displayedMessage.timestamp}
+                        citations={citations}
+                      />
+                    )}
+                  </div>
+                )}
+                {isSharePage && !isUser && !isThinking && (
+                  <div className="mt-1 flex w-full justify-end pl-1">
+                    <MessageMeta
+                      timestamp={displayedMessage.timestamp}
+                      citations={citations}
                     />
                   </div>
                 )}
