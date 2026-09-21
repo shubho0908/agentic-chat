@@ -82,3 +82,16 @@ test("create_pdf tool succeeds end to end with a working store", async () => {
     if (originalToken !== undefined) process.env.UPLOADTHING_TOKEN = originalToken;
   }
 });
+
+test("concurrent renders are bounded but all complete", async () => {
+  const input = (n: number) => ({
+    title: `Concurrent ${n}`,
+    sections: [{ blocks: [{ type: "paragraph", text: `Body ${n}` }] }],
+  });
+  const outcomes = await Promise.all(
+    [1, 2, 3, 4].map((n) =>
+      generateAndStorePdf(input(n), { store: fakeStore, generatedAt: new Date("2026-09-21T12:00:00Z") }),
+    ),
+  );
+  for (const outcome of outcomes) assert.equal(outcome.ok, true);
+});

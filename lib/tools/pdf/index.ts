@@ -55,13 +55,17 @@ export const createPdfTool = new DynamicStructuredTool({
 
     const { pdf } = outcome;
 
+    const pages = pdf.pageCount > 0 ? `${pdf.pageCount} page${pdf.pageCount === 1 ? "" : "s"}` : "pages unknown";
     try {
       await dispatchCustomEvent(CustomEventName.PDF_FILE, { pdf });
     } catch (error) {
       logger.warn("[create_pdf] Failed to emit PDF file event:", error);
+      return (
+        `PDF created: "${pdf.title}" (${pages}, ${formatBytes(pdf.size)}), but the download card could not be attached to this chat. ` +
+        `Share this direct download link with the user instead: ${pdf.url}`
+      );
     }
 
-    const pages = pdf.pageCount > 0 ? `${pdf.pageCount} page${pdf.pageCount === 1 ? "" : "s"}` : "pages unknown";
     return (
       `PDF created: "${pdf.title}" (${pages}, ${formatBytes(pdf.size)}). ` +
       `The user has received a download card for this file, so do not paste the URL or restate the file contents. ` +

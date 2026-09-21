@@ -182,3 +182,18 @@ test("supports concurrent renders", async () => {
   );
   for (const buffer of buffers) assertValidPdf(buffer);
 });
+
+test("renders italic and bold Devanagari without a missing italic face", async () => {
+  const buffer = await render({
+    title: "Devanagari italics",
+    sections: [
+      {
+        blocks: [
+          { type: "paragraph", text: "Latin *italic* with Hindi *नमस्ते जी* and **बोल्ड** plus ***दोनों***." },
+          { type: "quote", text: "*पूरा उद्धरण italic में*" },
+        ],
+      },
+    ],
+  });
+  assertValidPdf(buffer);
+});

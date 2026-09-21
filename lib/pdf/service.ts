@@ -28,6 +28,41 @@ export interface GeneratePdfOptions {
 
 const FILENAME_MAX_CHARS = 80;
 const PDF_RENDER_TIMEOUT_MS = 60_000;
+const MAX_CONCURRENT_RENDERS = 2;
+
+let activeRenders = 0;
+const renderQueue: Array<() => void> = [];
+
+async function acquireRenderSlot(signal?: AbortSignal): Promise<void> {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return;
+  }
+  // The slot released by releaseRenderSlot is transferred to this waiter,
+  // so the active count is intentionally not incremented again here.
+  await new Promise<void>((resolve, reject) => {
+    const grant = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const onAbort = () => {
+      const index = renderQueue.indexOf(grant);
+      if (index !== -1) renderQueue.splice(index, 1);
+      reject(new Error("PDF generation was cancelled"));
+    };
+    renderQueue.push(grant);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function releaseRenderSlot(): void {
+  const next = renderQueue.shift();
+  if (next) {
+    next();
+    return;
+  }
+  activeRenders -= 1;
+}
 
 export function slugifyPdfFileName(title: string): string {
   const slug = title
@@ -93,16 +128,22 @@ export async function generateAndStorePdf(
     const imageUrls = extractImageUrls(document);
     const images = await prefetchPdfImages(imageUrls, options.signal);
 
-    const buffer = await withTimeout(
-      renderPdfDocument(document, {
-        images,
-        generatedAt: options.generatedAt ?? new Date(),
-        logoDataUri: loadLogoDataUri(),
-      }),
-      PDF_RENDER_TIMEOUT_MS,
-      "PDF rendering",
-      options.signal,
-    );
+    await acquireRenderSlot(options.signal);
+    let buffer: Buffer;
+    try {
+      buffer = await withTimeout(
+        renderPdfDocument(document, {
+          images,
+          generatedAt: options.generatedAt ?? new Date(),
+          logoDataUri: loadLogoDataUri(),
+        }),
+        PDF_RENDER_TIMEOUT_MS,
+        "PDF rendering",
+        options.signal,
+      );
+    } finally {
+      releaseRenderSlot();
+    }
 
     let pageCount = 0;
     try {

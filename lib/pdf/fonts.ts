@@ -39,7 +39,9 @@ export async function ensurePdfFonts(fontDir = join(process.cwd(), "public", "fo
     family: PdfFontFamily.DEVANAGARI,
     fonts: [
       { src: load("NotoSansDevanagari-Regular.ttf"), fontWeight: 400 },
+      { src: load("NotoSansDevanagari-Regular.ttf"), fontWeight: 400, fontStyle: "italic" },
       { src: load("NotoSansDevanagari-SemiBold.ttf"), fontWeight: 600 },
+      { src: load("NotoSansDevanagari-SemiBold.ttf"), fontWeight: 600, fontStyle: "italic" },
     ],
   });
 
