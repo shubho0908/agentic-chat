@@ -64,6 +64,7 @@ export async function handleRegenerateResponse(
   let messageMetadata: MessageMetadata | undefined;
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
+  let responseContent = "";
   
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
@@ -88,7 +89,7 @@ export async function handleRegenerateResponse(
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
-    const responseContent = await streamChatCompletion({
+    responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
       signal: abortSignal,

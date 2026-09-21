@@ -61,6 +61,7 @@ export async function handleEditMessage(
   let messageMetadata: MessageMetadata = {};
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
+  let responseContent = "";
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
@@ -115,7 +116,7 @@ export async function handleEditMessage(
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
-    const responseContent = await streamChatCompletion({
+    responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
       signal: abortSignal,
