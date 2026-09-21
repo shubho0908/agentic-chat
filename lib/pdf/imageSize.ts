@@ -1,3 +1,4 @@
+import { PdfImageMime } from "./document";
 export interface RasterSize {
   width: number;
   height: number;
@@ -32,7 +33,7 @@ function readJpegSize(buffer: Buffer): RasterSize | null {
 }
 
 export function readRasterSize(buffer: Buffer, mimeType: string): RasterSize | null {
-  if (mimeType === "image/png") return readPngSize(buffer);
-  if (mimeType === "image/jpeg") return readJpegSize(buffer);
+  if (mimeType === PdfImageMime.PNG) return readPngSize(buffer);
+  if (mimeType === PdfImageMime.JPEG) return readJpegSize(buffer);
   return null;
 }

@@ -1,5 +1,8 @@
 import {
   PdfBlockType,
+  PdfCalloutVariant,
+  PdfListStyle,
+  type PdfCalloutVariantValue,
   PdfLimits,
   pdfDocumentSchema,
   type PdfBlock,
@@ -8,6 +11,8 @@ import {
   type PdfSection,
 } from "./document";
 import { isSafeHttpUrl, sanitizePdfText } from "./text";
+
+const CALLOUT_VARIANTS = new Set<string>(Object.values(PdfCalloutVariant));
 
 export type NormalizePdfResult =
   | { ok: true; document: PdfDocument }
@@ -70,7 +75,7 @@ function coerceBlock(raw: unknown): CoerceResult {
       return {
         block: {
           type,
-          style: raw.style === "numbered" ? "numbered" : "bullet",
+          style: raw.style === PdfListStyle.NUMBERED ? PdfListStyle.NUMBERED : PdfListStyle.BULLET,
           items: items.list,
         },
       };
@@ -132,10 +137,9 @@ function coerceBlock(raw: unknown): CoerceResult {
       const text = sanitizePdfText(asText(raw.text));
       if (!text) return null;
       if (text.length > PdfLimits.CALLOUT_CHARS) return overLimit("A callout", PdfLimits.CALLOUT_CHARS);
-      const variant =
-        raw.variant === "warning" || raw.variant === "success" || raw.variant === "danger"
-          ? raw.variant
-          : "info";
+      const variant = CALLOUT_VARIANTS.has(raw.variant as PdfCalloutVariantValue)
+        ? (raw.variant as PdfCalloutVariantValue)
+        : PdfCalloutVariant.INFO;
       const title = sanitizePdfText(asText(raw.title));
       return {
         block: {

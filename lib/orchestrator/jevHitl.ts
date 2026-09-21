@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { isDangerousAction } from "@/lib/tools/composio/config";
+import { ToolName } from "@/lib/tools/constants";
 import { createRequestId } from "@/lib/observability";
 import { logger } from "@/lib/logger";
 import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
@@ -238,13 +239,14 @@ export async function resolveJevHitlVerdict(
   conversationId: string | undefined,
 ): Promise<JevHitlEscalationVerdict | null> {
   const mode = getJevMode(JevCheckpoint.HITL_ESCALATION);
-  if (mode === JevMode.OFF || !jevClient || toolCalls.length === 0) {
+  const evaluatedCalls = toolCalls.filter((tc) => tc.name !== ToolName.CREATE_PDF);
+  if (mode === JevMode.OFF || !jevClient || evaluatedCalls.length === 0) {
     return null;
   }
-  const deterministicEscalated = toolCalls.some(
+  const deterministicEscalated = evaluatedCalls.some(
     (tc) => typeof tc.name === "string" && isDangerousAction(tc.name),
   );
-  const state = buildJevHitlState(toolCalls, deterministicEscalated);
+  const state = buildJevHitlState(evaluatedCalls, deterministicEscalated);
   if (mode !== JevMode.ACTIVE || deterministicEscalated) {
     queueJevHitlShadow(state, conversationId, mode);
     return null;

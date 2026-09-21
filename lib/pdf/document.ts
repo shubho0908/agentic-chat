@@ -9,6 +9,27 @@ export const PdfAccent = {
 } as const;
 export type PdfAccentValue = (typeof PdfAccent)[keyof typeof PdfAccent];
 
+export const PdfListStyle = {
+  BULLET: "bullet",
+  NUMBERED: "numbered",
+} as const;
+export type PdfListStyleValue = (typeof PdfListStyle)[keyof typeof PdfListStyle];
+
+export const PdfCalloutVariant = {
+  INFO: "info",
+  WARNING: "warning",
+  SUCCESS: "success",
+  DANGER: "danger",
+} as const;
+export type PdfCalloutVariantValue =
+  (typeof PdfCalloutVariant)[keyof typeof PdfCalloutVariant];
+
+export const PdfImageMime = {
+  JPEG: "image/jpeg",
+  PNG: "image/png",
+} as const;
+export type PdfImageMimeValue = (typeof PdfImageMime)[keyof typeof PdfImageMime];
+
 export const PdfBlockType = {
   PARAGRAPH: "paragraph",
   HEADING: "heading",
@@ -72,7 +93,7 @@ export const pdfBlockSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal(PdfBlockType.LIST),
-    style: z.enum(["bullet", "numbered"]).optional(),
+    style: z.enum([PdfListStyle.BULLET, PdfListStyle.NUMBERED]).optional(),
     items: z.array(listItemSchema),
   }),
   z.object({
@@ -92,7 +113,9 @@ export const pdfBlockSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal(PdfBlockType.CALLOUT),
-    variant: z.enum(["info", "warning", "success", "danger"]).optional(),
+    variant: z
+      .enum([PdfCalloutVariant.INFO, PdfCalloutVariant.WARNING, PdfCalloutVariant.SUCCESS, PdfCalloutVariant.DANGER])
+      .optional(),
     title: z.string().optional(),
     text: z.string(),
   }),

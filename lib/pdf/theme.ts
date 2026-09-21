@@ -1,4 +1,4 @@
-import { PdfAccent, type PdfAccentValue } from "./document";
+import { PdfAccent, PdfCalloutVariant, type PdfAccentValue, type PdfCalloutVariantValue } from "./document";
 
 export interface PdfTheme {
   accent: string;
@@ -20,15 +20,6 @@ const ACCENT_COLORS: Record<PdfAccentValue, string> = {
   [PdfAccent.AMBER]: "#B45309",
   [PdfAccent.ROSE]: "#BE123C",
 };
-
-export const PdfCalloutVariant = {
-  INFO: "info",
-  WARNING: "warning",
-  SUCCESS: "success",
-  DANGER: "danger",
-} as const;
-export type PdfCalloutVariantValue =
-  (typeof PdfCalloutVariant)[keyof typeof PdfCalloutVariant];
 
 export const CALLOUT_COLORS: Record<
   PdfCalloutVariantValue,

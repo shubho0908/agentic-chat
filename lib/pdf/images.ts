@@ -1,13 +1,13 @@
 import { safeFetch } from "@/lib/network/safeFetch";
 import { logger } from "@/lib/logger";
-import { PdfLimits } from "./document";
+import { PdfImageMime, PdfLimits } from "./document";
 import { readRasterSize, type RasterSize } from "./imageSize";
 
 export type PdfImageAsset =
   | { ok: true; dataUri: string; size: RasterSize | null }
   | { ok: false; reason: string };
 
-const SUPPORTED_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
+const SUPPORTED_MIME_TYPES = new Set<string>(Object.values(PdfImageMime));
 const IMAGE_TIMEOUT_MS = 10_000;
 const IMAGE_CONCURRENCY = 3;
 

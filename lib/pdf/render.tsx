@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import type * as ReactPdf from "@react-pdf/renderer";
-import { PdfBlockType, type PdfBlock, type PdfDocument, type PdfListItem } from "./document";
+import { PdfBlockType, PdfCalloutVariant, PdfListStyle, type PdfBlock, type PdfDocument, type PdfListItem } from "./document";
 import { ensurePdfFonts, PdfFontFamily } from "./fonts";
 import { parseInlineMarkdown, splitScriptRuns, type InlineSegment } from "./text";
-import { CALLOUT_COLORS, resolveTheme, type PdfCalloutVariantValue, type PdfTheme } from "./theme";
+import { CALLOUT_COLORS, resolveTheme, type PdfTheme } from "./theme";
 import type { PdfImageAsset } from "./images";
 
 const PAGE_MARGIN_TOP = 56;
@@ -132,11 +132,11 @@ function ListItems({
                 width: 16,
                 fontFamily: PdfFontFamily.BODY,
                 fontSize: 10.5,
-                color: listStyle === "numbered" ? theme.accent : theme.muted,
-                fontWeight: listStyle === "numbered" ? 600 : 400,
+                color: listStyle === PdfListStyle.NUMBERED ? theme.accent : theme.muted,
+                fontWeight: listStyle === PdfListStyle.NUMBERED ? 600 : 400,
               }}
             >
-              {listStyle === "numbered" ? `${index + 1}.` : BULLET_MARKERS[Math.min(depth, BULLET_MARKERS.length - 1)]}
+              {listStyle === PdfListStyle.NUMBERED ? `${index + 1}.` : BULLET_MARKERS[Math.min(depth, BULLET_MARKERS.length - 1)]}
             </pdf.Text>
             <pdf.View style={{ flex: 1 }}>
               {item.text ? <RichText text={item.text} theme={theme} style={{ lineHeight: 1.5 }} /> : null}
@@ -263,7 +263,7 @@ function QuoteBlock({ block, theme }: { block: Extract<PdfBlock, { type: "quote"
 }
 
 function CalloutBlock({ block, theme }: { block: Extract<PdfBlock, { type: "callout" }> } & BlockProps) {
-  const variant = (block.variant ?? "info") as PdfCalloutVariantValue;
+  const variant = block.variant ?? PdfCalloutVariant.INFO;
   const colors = CALLOUT_COLORS[variant];
   return (
     <pdf.View
