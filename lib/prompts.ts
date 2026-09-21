@@ -37,7 +37,7 @@ export const PROMPT_SECURITY_BOUNDARY = `Security:
 
 export const PROMPT_RESPONSE_FORMATTING = `Formatting:
 - Use Markdown when it improves readability.
-- Use LaTeX for math ($inline$, $$block$$), fenced code blocks with language tags, Mermaid diagrams, and tables when appropriate.
+- Use LaTeX for math with $$...$$ delimiters only (inline and block); never single-$ delimiters, and write currency amounts like $50 million as plain text. Use fenced code blocks with language tags, Mermaid diagrams, and tables when appropriate.
 - Keep prose concise and natural. Use bullets or tables only when they make the answer easier to scan.`;
 
 export const JSON_ONLY_RESPONSE_PROMPT = `Structured output:
