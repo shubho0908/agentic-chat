@@ -7,6 +7,7 @@ import { SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from './pgvectorClient';
 import { cacheGateDefersToOrchestrator, gateCacheHit, type JevCacheGateState } from '@/lib/jev/cacheGate';
 import { MIN_CACHEABLE_QUERY_LENGTH } from '@/lib/orchestrator/constants';
 import { logger } from '@/lib/logger';
+import { screenAssistantOutput } from '@/lib/security/outputDlp';
 
 async function auth() {
   const { user, error } = await getAuthenticatedUser(await headers());
@@ -92,10 +93,11 @@ export async function checkSemanticCacheAction(query: string, conversationId: st
         logger.log(`[Cache] HIT vetoed by Jev gate in ${latency}ms`);
         return { cached: false, latency };
       }
+      const screened = await screenAssistantOutput(entry.answer, conversationId);
       logger.log(`[Cache] HIT in ${latency}ms`);
       return {
         cached: true,
-        response: entry.answer,
+        response: screened.content,
         latency
       };
     }

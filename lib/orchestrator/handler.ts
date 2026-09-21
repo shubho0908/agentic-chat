@@ -9,7 +9,7 @@ import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { getToolsForRequest, shouldBypassSemanticCacheForMessageContext } from "./tools";
 import { createStreamEventMapper, encodeGraphInterrupt } from "./streaming";
-import { screenAssistantOutput } from "@/lib/security/outputDlp";
+import { containsInternalMarkers, screenAssistantOutput } from "@/lib/security/outputDlp";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -117,16 +117,23 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
       const closeStream = async () => {
         mapper.flush(stream);
         const output = mapper.takeAssistantOutput();
-        if (output.text || output.artifactText || output.eventText) {
-          const screened = await screenAssistantOutput(`${output.text}
-${output.artifactText}
-${output.eventText}`, conversationId);
-          if (screened.allowed) {
+        const hasDeliverable = Boolean(output.text || output.artifactText);
+        if (hasDeliverable || output.events.length > 0 || output.interruptEvents.length > 0) {
+          const deliverable = hasDeliverable
+            ? await screenAssistantOutput(`${output.text}
+${output.artifactText}`, conversationId)
+            : null;
+          if (output.events.length > 0 && !containsInternalMarkers(output.eventText)) {
             for (const chunk of output.events) stream.enqueue(chunk);
-            if (output.text) stream.enqueue(encodeChatChunk(output.text));
-            for (const chunk of output.artifacts) stream.enqueue(chunk);
-          } else {
-            stream.enqueue(encodeChatChunk(screened.content));
+          }
+          for (const chunk of output.interruptEvents) stream.enqueue(chunk);
+          if (deliverable) {
+            if (deliverable.allowed) {
+              if (output.text) stream.enqueue(encodeChatChunk(output.text));
+              for (const chunk of output.artifacts) stream.enqueue(chunk);
+            } else {
+              stream.enqueue(encodeChatChunk(deliverable.content));
+            }
           }
         }
         stream.finish({ done: encodeDone() });
@@ -305,7 +312,7 @@ ${output.eventText}`, conversationId);
               : {}),
             threadId,
           };
-          mapper.bufferEvent(encodeGraphInterrupt(interruptData), interruptData);
+          mapper.bufferInterrupt(encodeGraphInterrupt(interruptData));
           await closeStream();
           return;
         }
@@ -317,7 +324,7 @@ ${output.eventText}`, conversationId);
           const interruptData = typeof interruptValue === "object" && interruptValue !== null
             ? { ...interruptValue as Record<string, unknown>, threadId }
             : { threadId };
-          mapper.bufferEvent(encodeGraphInterrupt(interruptData), interruptData);
+          mapper.bufferInterrupt(encodeGraphInterrupt(interruptData));
           await closeStream();
           return;
         }

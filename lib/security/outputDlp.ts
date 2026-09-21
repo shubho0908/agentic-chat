@@ -13,9 +13,13 @@ function normalized(text: string): string {
 
 export interface OutputDlpResult { allowed: boolean; content: string; reason?: string }
 
-export async function screenAssistantOutput(content: string, conversationId?: string, dependency?: JevDecisionClient | null): Promise<OutputDlpResult> {
+export function containsInternalMarkers(content: string): boolean {
   const value = normalized(content);
-  if (DISTINCTIVE_INTERNAL_MARKERS.some((marker) => value.includes(marker))) return { allowed: false, content: "I can't provide hidden instructions or internal context.", reason: "internal_marker" };
+  return DISTINCTIVE_INTERNAL_MARKERS.some((marker) => value.includes(marker));
+}
+
+export async function screenAssistantOutput(content: string, conversationId?: string, dependency?: JevDecisionClient | null): Promise<OutputDlpResult> {
+  if (containsInternalMarkers(content)) return { allowed: false, content: "I can't provide hidden instructions or internal context.", reason: "internal_marker" };
   const client = dependency === undefined ? JevDecisionClient.createIfConfigured() : dependency;
   if (!client) return { allowed: false, content: "I couldn't safely return that response. Please try again.", reason: "semantic_check_unconfigured" };
   try {

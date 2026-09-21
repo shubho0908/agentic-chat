@@ -476,6 +476,7 @@ export async function routeContext(
       attachmentInfo.documentAttachmentIds,
       userId,
       options?.signal,
+      options?.toolCapable === true,
     );
 
     if (inlineResult) {

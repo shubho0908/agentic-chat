@@ -77,27 +77,29 @@ function normalizeConnectorToolContent(toolName: string | undefined, content: st
   return content;
 }
 
-function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMessage[] {
+async function createToolErrorMessages(toolCalls: ToolCall[], error: unknown, toolCapable: boolean, conversationId?: string, securityDependency?: JevDecisionClient | null): Promise<ToolMessage[]> {
   const errorMessage = error instanceof Error ? error.message : String(error);
 
-  return toolCalls.map(
-    (toolCall, index) => {
-      const content = sanitizeToolOutput(
-        normalizeConnectorToolContent(toolCall.name, `Tool execution failed: ${errorMessage}`)
+  return Promise.all(toolCalls.map(
+    async (toolCall, index) => {
+      const origin = toolOutputOrigin(toolCall.name);
+      const screened = await screenUntrustedContent(
+        normalizeConnectorToolContent(toolCall.name, `Tool execution failed: ${errorMessage}`),
+        origin,
+        { toolCapable, conversationId, dependency: securityDependency },
       );
 
       return new ToolMessage({
         tool_call_id: toolCallResultId(toolCall, index),
         name: toolCall.name,
-        content,
+        content: screened.content,
         status: TOOL_ERROR_STATUS,
         additional_kwargs: {
           status: TOOL_ERROR_STATUS,
-          error: errorMessage,
         },
       });
     }
-  );
+  ));
 }
 
 /** Best-effort Jev note on the first failure of the round. Shadow is
@@ -407,7 +409,7 @@ export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolN
     } catch (error) {
       logger.error("[ToolNode] Tool execution failed:", error);
       return {
-        messages: createToolErrorMessages(toolCalls, error).map(
+        messages: (await createToolErrorMessages(toolCalls, error, tools.length > 0, state.conversationId, nodeConfig.securityDependency)).map(
           wrapFailureEnvelope,
         ),
       };

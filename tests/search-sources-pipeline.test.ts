@@ -20,6 +20,18 @@ function decodeSseChunks(chunks: Uint8Array[]): Array<Record<string, unknown>> {
     .map((block) => JSON.parse(block.replace(/^data: /, "")));
 }
 
+test("interrupt events are buffered separately from lifecycle events", () => {
+  const mapper = createStreamEventMapper();
+  const encoder = new TextEncoder();
+  mapper.bufferEvent(encoder.encode('data: {"type":"tool_progress"}\n\n'), { type: "tool_progress" });
+  mapper.bufferInterrupt(encoder.encode('data: {"type":"human_in_the_loop_request"}\n\n'));
+
+  const output = mapper.takeAssistantOutput();
+  assert.equal(output.events.length, 1);
+  assert.equal(output.interruptEvents.length, 1);
+  assert.ok(!output.eventText.includes("human_in_the_loop_request"));
+});
+
 test("search_sources custom event is forwarded as tool_progress carrying details.sources", () => {
   const mapper = createStreamEventMapper();
   const chunks: Uint8Array[] = [];

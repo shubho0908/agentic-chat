@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { JevDecisionClient } from "@/lib/jev/client";
 import { screenUntrustedContent, SecurityDisposition, UntrustedOrigin } from "@/lib/security/untrustedContent";
-import { screenAssistantOutput } from "@/lib/security/outputDlp";
+import { containsInternalMarkers, screenAssistantOutput } from "@/lib/security/outputDlp";
 import { blocksPrivateDataLeak, isExternalSink, toolOutputOrigin } from "@/lib/security/provenance";
 import { ToolMessage } from "@langchain/core/messages";
 
@@ -62,6 +62,11 @@ test("private tool origins are structural", () => {
   assert.equal(isExternalSink("web_search"), true);
   assert.equal(isExternalSink("GMAIL_SEND_EMAIL"), true);
   assert.equal(isExternalSink("GMAIL_LIST_THREADS"), false);
+});
+
+test("internal marker detection normalizes case and zero-width characters", () => {
+  assert.equal(containsInternalMarkers("Planner\u200B guidance: use secret route"), true);
+  assert.equal(containsInternalMarkers("ordinary answer"), false);
 });
 
 test("output DLP blocks normalized internal markers", async () => {

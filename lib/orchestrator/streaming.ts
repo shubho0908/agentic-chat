@@ -42,7 +42,8 @@ interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   flush(writer: StreamWriter): void;
   bufferEvent(chunk: Uint8Array, value: unknown): void;
-  takeAssistantOutput(): { text: string; artifacts: Uint8Array[]; artifactText: string; events: Uint8Array[]; eventText: string };
+  bufferInterrupt(chunk: Uint8Array): void;
+  takeAssistantOutput(): { text: string; artifacts: Uint8Array[]; artifactText: string; events: Uint8Array[]; interruptEvents: Uint8Array[]; eventText: string };
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
@@ -52,6 +53,7 @@ export function createStreamEventMapper(): StreamEventMapper {
   let artifactChunks: Uint8Array[] = [];
   let eventChunks: Uint8Array[] = [];
   let eventValues: unknown[] = [];
+  let interruptChunks: Uint8Array[] = [];
   const artifactParser = createArtifactStreamParser();
 
   const getNode = (event: Record<string, unknown>): string | undefined => {
@@ -80,8 +82,13 @@ export function createStreamEventMapper(): StreamEventMapper {
     eventValues.push(value);
   };
 
+  const bufferInterrupt = (chunk: Uint8Array) => {
+    interruptChunks.push(chunk);
+  };
+
   return {
     bufferEvent,
+    bufferInterrupt,
     map(_writer, event) {
       const eventType = event.event as string;
 
@@ -208,12 +215,13 @@ export function createStreamEventMapper(): StreamEventMapper {
       emitParsedResults(artifactParser.flush());
     },
     takeAssistantOutput() {
-      const value = { text: assistantText, artifacts: artifactChunks, artifactText, events: eventChunks, eventText: JSON.stringify(eventValues) };
+      const value = { text: assistantText, artifacts: artifactChunks, artifactText, events: eventChunks, interruptEvents: interruptChunks, eventText: JSON.stringify(eventValues) };
       assistantText = "";
       artifactText = "";
       artifactChunks = [];
       eventChunks = [];
       eventValues = [];
+      interruptChunks = [];
       return value;
     },
   };
