@@ -145,7 +145,9 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
     return <ConversationNotFound isAuthenticated={!!session} />;
   }
 
-  if (isLoadingConversation && messages.length === 0) {
+  // Post-redirect first paint reads the optimistically cached thread, so only
+  // show the loading state when there is genuinely no data yet.
+  if (isLoadingConversation && !conversationData && messages.length === 0) {
     return (
       <>
         <ChatHeader

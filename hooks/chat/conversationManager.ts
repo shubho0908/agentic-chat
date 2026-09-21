@@ -476,7 +476,7 @@ export async function handleConversationSaving(
   signal?: AbortSignal,
   metadata?: MessageMetadata,
   onConversationIdReady?: (conversationId: string) => void,
-): Promise<void> {
+): Promise<ConversationResult | null> {
   if (isNewConversation) {
     const result = await createNewConversation(
       userContent,
@@ -488,7 +488,11 @@ export async function handleConversationSaving(
       onConversationIdReady,
     );
 
-    if (result && onConversationCreated) {
+    if (!result) {
+      return null;
+    }
+
+    if (onConversationCreated) {
       if (earlyCreate) {
         updateQueryCacheWithUserMessage(
           queryClient,
@@ -503,24 +507,23 @@ export async function handleConversationSaving(
           assistantContent,
           metadata,
         );
-        if (!persistableAssistantContent) {
-          onConversationCreated(result);
-          return;
+        if (persistableAssistantContent) {
+          updateQueryCache(
+            queryClient,
+            result.conversationId,
+            userContent,
+            persistableAssistantContent,
+            result.userMessageId,
+            result.assistantMessageId,
+            userTimestamp,
+            attachments,
+            metadata,
+          );
         }
-        updateQueryCache(
-          queryClient,
-          result.conversationId,
-          userContent,
-          persistableAssistantContent,
-          result.userMessageId,
-          result.assistantMessageId,
-          userTimestamp,
-          attachments,
-          metadata,
-        );
       }
       onConversationCreated(result);
     }
+    return result;
   } else if (currentConversationId) {
     const persistableAssistantContent = getPersistableAssistantContent(
       assistantContent,
@@ -528,7 +531,7 @@ export async function handleConversationSaving(
     );
 
     if (!persistableAssistantContent) {
-      return;
+      return null;
     }
 
     const assistantMessageId = await saveAssistantMessage(
@@ -542,13 +545,17 @@ export async function handleConversationSaving(
         queryKey: queryKeys.conversation(currentConversationId),
       });
 
+      const created = {
+        conversationId: currentConversationId,
+        userMessageId: "",
+        assistantMessageId,
+      };
       if (onConversationCreated) {
-        onConversationCreated({
-          conversationId: currentConversationId,
-          userMessageId: "",
-          assistantMessageId,
-        });
+        onConversationCreated(created);
       }
+      return created;
     }
+    return null;
   }
+  return null;
 }

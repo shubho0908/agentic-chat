@@ -27,6 +27,7 @@ export const CustomEventName = {
   PLANNING: "planning",
   RESEARCH_PROGRESS: "research_progress",
   SEARCH_IMAGES: "search_images",
+  SEARCH_SOURCES: "search_sources",
 } as const;
 
 export const StreamEventType = {

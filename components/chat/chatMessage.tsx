@@ -179,7 +179,7 @@ function MessageContentSurface({
         <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
           <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
           <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
-          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue</Button>}
+          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue response</Button>}
         </div>
       )}
 
@@ -460,19 +460,23 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                       />
                     </div>
                     {!isUser && !isThinking && (
-                      <MessageMeta
-                        timestamp={displayedMessage.timestamp}
-                        citations={citations}
-                      />
+                      <div className="ml-auto flex items-center gap-2">
+                        {citations.length > 0 && (
+                          <MessageSources citations={citations} />
+                        )}
+                        <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                      </div>
                     )}
                   </div>
                 )}
                 {isSharePage && !isUser && !isThinking && (
-                  <div className="mt-1 flex w-full justify-end pl-1">
-                    <MessageMeta
-                      timestamp={displayedMessage.timestamp}
-                      citations={citations}
-                    />
+                  <div className="mt-1 flex w-full items-center gap-2 pl-1">
+                    <div className="ml-auto flex items-center gap-2">
+                      {citations.length > 0 && (
+                        <MessageSources citations={citations} />
+                      )}
+                      <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                    </div>
                   </div>
                 )}
               </>

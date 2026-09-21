@@ -110,8 +110,7 @@ async function createAndSaveConversation(
   attachments: Attachment[] | undefined,
   abortSignal: AbortSignal,
 ): Promise<string> {
-  let conversationId: string | null = null;
-  await handleConversationSaving(
+  const creationResult = await handleConversationSaving(
     true,
     null,
     messageContent,
@@ -133,13 +132,14 @@ async function createAndSaveConversation(
     abortSignal,
     undefined,
     (id: string) => {
-      conversationId = id;
       onConversationIdUpdate(id);
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
   );
-  if (!conversationId) throw new Error("Failed to create conversation");
-  return conversationId;
+  // The ready-callback above fires right after the row INSERT, so only a
+  // non-null result proves the user message persisted and navigation is safe.
+  if (!creationResult) throw new Error("Failed to create conversation");
+  return creationResult.conversationId;
 }
 
 export async function handleSendMessage(
