@@ -7,8 +7,8 @@ import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
-import { shouldBypassSemanticCacheForMessageContext } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
+import { getToolsForRequest, shouldBypassSemanticCacheForMessageContext } from "./tools";
+import { createStreamEventMapper, encodeGraphInterrupt } from "./streaming";
 import { screenAssistantOutput } from "@/lib/security/outputDlp";
 import {
   encodeMemoryStatus,
@@ -117,9 +117,12 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
       const closeStream = async () => {
         mapper.flush(stream);
         const output = mapper.takeAssistantOutput();
-        if (output.text || output.artifactText) {
-          const screened = await screenAssistantOutput(`${output.text}\n${output.artifactText}`, conversationId);
+        if (output.text || output.artifactText || output.eventText) {
+          const screened = await screenAssistantOutput(`${output.text}
+${output.artifactText}
+${output.eventText}`, conversationId);
           if (screened.allowed) {
+            for (const chunk of output.events) stream.enqueue(chunk);
             if (output.text) stream.enqueue(encodeChatChunk(output.text));
             for (const chunk of output.artifacts) stream.enqueue(chunk);
           } else {
@@ -164,6 +167,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         let enhancedMessages = messages;
         const lastUserMessage = messages[messages.length - 1]?.content || "";
         const connectedToolkits = await getConnectedToolkits(userId);
+        const installedTools = await getToolsForRequest(userId, connectedToolkits, { apiKey, model, reasoningEffort });
 
         try {
           const contextResult = await routeContext(
@@ -173,7 +177,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
             conversationId,
             null,
             memoryEnabled,
-            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds, toolCapable: connectedToolkits.length > 0 }
+            { apiKey, signal: abortSignal, currentDocumentAttachmentIds: documentAttachmentIds, toolCapable: installedTools.length > 0 }
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           if (contextResult.context) {
@@ -255,6 +259,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         const graph = await createAgentGraph(userId, apiKey, model, {
           reasoningEffort,
           connectedToolkits,
+          installedTools,
         });
 
         const langChainMessages = convertToLangChainMessages(enhancedMessages);
@@ -300,7 +305,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
               : {}),
             threadId,
           };
-          handleGraphInterrupt(stream, interruptData);
+          mapper.bufferEvent(encodeGraphInterrupt(interruptData), interruptData);
           await closeStream();
           return;
         }
@@ -312,7 +317,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           const interruptData = typeof interruptValue === "object" && interruptValue !== null
             ? { ...interruptValue as Record<string, unknown>, threadId }
             : { threadId };
-          handleGraphInterrupt(stream, interruptData);
+          mapper.bufferEvent(encodeGraphInterrupt(interruptData), interruptData);
           await closeStream();
           return;
         }

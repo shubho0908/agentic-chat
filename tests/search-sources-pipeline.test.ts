@@ -46,7 +46,9 @@ test("search_sources custom event is forwarded as tool_progress carrying details
     },
   });
 
-  const messages = decodeSseChunks(chunks);
+  assert.equal(chunks.length, 0);
+  const output = mapper.takeAssistantOutput();
+  const messages = decodeSseChunks(output.events);
   const progress = messages.find(
     (message) =>
       message.type === "tool_progress" &&
@@ -108,4 +110,31 @@ test("progress metadata does not duplicate a repeated source url", () => {
     (merged?.sources ?? []).map((source) => source.url),
     ["https://a.test"]
   );
+});
+
+
+test("stream mapper buffers sensitive event payloads and artifact metadata", () => {
+  const mapper = createStreamEventMapper();
+  const chunks: Uint8Array[] = [];
+  const writer = { enqueue: (chunk: Uint8Array) => { chunks.push(chunk); } };
+  mapper.map(writer, {
+    event: StreamEventType.CHAT_MODEL_STREAM,
+    metadata: { langgraph_node: "agent" },
+    data: { chunk: { content: '<artifact type="code" title="private-title" language="secret-lang">private-body</artifact>', additional_kwargs: { reasoning_content: "private-reasoning" } } },
+  });
+  mapper.map(writer, {
+    event: StreamEventType.TOOL_START,
+    name: ToolName.WEB_SEARCH,
+    run_id: "call-1",
+    metadata: { langgraph_node: "tools" },
+    data: { input: { query: "private-query" } },
+  });
+  mapper.flush(writer);
+  assert.equal(chunks.length, 0);
+  const output = mapper.takeAssistantOutput();
+  assert.match(output.eventText, /private-reasoning/);
+  assert.match(output.eventText, /private-query/);
+  assert.match(output.artifactText, /private-title/);
+  assert.match(output.artifactText, /secret-lang/);
+  assert.match(output.artifactText, /private-body/);
 });

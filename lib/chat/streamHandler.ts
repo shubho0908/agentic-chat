@@ -172,7 +172,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey }
+              { apiKey, toolCapable: false }
             );
 
             memoryStatusInfo = {

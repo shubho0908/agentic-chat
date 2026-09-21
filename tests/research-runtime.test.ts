@@ -194,3 +194,49 @@ test("getRankedSources enforces max 3 sources per domain", () => {
   assert.equal(ranked.filter((source) => source.domain === "example.com").length, 3);
   assert.equal(ranked.some((source) => source.domain === "other.com"), true);
 });
+
+test("invokeResearchJson preserves provider usage when schema parsing fails", async () => {
+  const fakeLLM = {
+    async invoke() {
+      throw new Error("plain invocation must not run");
+    },
+    withStructuredOutput() {
+      return {
+        async invoke() {
+          return {
+            raw: new AIMessage({
+              content: "",
+              usage_metadata: {
+                input_tokens: 7,
+                output_tokens: 4,
+                total_tokens: 11,
+              },
+            }),
+            parsed: { ok: "invalid" },
+          };
+        },
+      };
+    },
+  } as StructuredInvokableLLM;
+
+  const result = await invokeResearchJson(
+    fakeLLM,
+    [new HumanMessage("return structured data")],
+    {
+      nodeName: ResearchNode.TRIAGE,
+      state: createResearchState(),
+      maxOutputTokens: 20,
+      timeoutMs: 1000,
+      schema: z.object({ ok: z.boolean() }),
+      fallback: { ok: false },
+    },
+  );
+
+  assert.deepEqual(result.value, { ok: false });
+  assert.deepEqual(result.tokenUsage, {
+    inputTokens: 7,
+    outputTokens: 4,
+    totalTokens: 11,
+    llmCalls: 1,
+  });
+});

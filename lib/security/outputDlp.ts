@@ -17,7 +17,7 @@ export async function screenAssistantOutput(content: string, conversationId?: st
   const value = normalized(content);
   if (DISTINCTIVE_INTERNAL_MARKERS.some((marker) => value.includes(marker))) return { allowed: false, content: "I can't provide hidden instructions or internal context.", reason: "internal_marker" };
   const client = dependency === undefined ? JevDecisionClient.createIfConfigured() : dependency;
-  if (!client) return { allowed: true, content, reason: "semantic_check_unconfigured" };
+  if (!client) return { allowed: false, content: "I couldn't safely return that response. Please try again.", reason: "semantic_check_unconfigured" };
   try {
     const result = await client.evaluate({ checkpoint: JevCheckpoint.OUTPUT_DLP, schemaVersion: "2.0.0", state: { response: content }, questions: QUESTIONS, timeoutMs: 2_000, traceContext: { requestId: createRequestId("output_dlp"), conversationId } });
     const answer = result.answers.internal_leak;

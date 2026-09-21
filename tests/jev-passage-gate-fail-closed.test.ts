@@ -48,3 +48,16 @@ test("off mode returns candidates without evaluating", () =>
     });
     assert.equal(result.length, 1);
   }));
+
+test("shadow and A/B modes keep context when evaluation fails", async () => {
+  for (const mode of ["shadow", "ab"] as const) {
+    await withEnv({ JEV_PASSAGE_GATE_MODE: mode }, async () => {
+      const input = [candidate("alpha"), candidate("bravo")];
+      const result = await gatePassages("q", input, undefined, {
+        dependency: failingClient,
+        failClosed: true,
+      });
+      assert.deepEqual(result, input);
+    });
+  }
+});

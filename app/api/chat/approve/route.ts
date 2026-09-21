@@ -8,7 +8,7 @@ import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
 import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
-import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
+import { createStreamEventMapper, encodeGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { screenAssistantOutput } from "@/lib/security/outputDlp";
 import { encodeChatChunk, encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
@@ -155,10 +155,12 @@ export async function POST(request: NextRequest) {
         const finishStream = async () => {
           mapper.flush(stream);
           const output = mapper.takeAssistantOutput();
-          if (output.text || output.artifactText) {
+          if (output.text || output.artifactText || output.eventText) {
             const screened = await screenAssistantOutput(`${output.text}
-${output.artifactText}`, conversationId);
+${output.artifactText}
+${output.eventText}`, conversationId);
             if (screened.allowed) {
+              for (const chunk of output.events) stream.enqueue(chunk);
               if (output.text) stream.enqueue(encodeChatChunk(output.text));
               for (const chunk of output.artifacts) stream.enqueue(chunk);
             } else {
@@ -200,7 +202,7 @@ ${output.artifactText}`, conversationId);
                 : {}),
               threadId,
             };
-            handleGraphInterrupt(stream, interruptData);
+            mapper.bufferEvent(encodeGraphInterrupt(interruptData), interruptData);
             await finishStream();
             return;
           }

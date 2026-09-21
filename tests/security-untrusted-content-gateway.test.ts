@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import type { JevDecisionClient } from "@/lib/jev/client";
 import { screenUntrustedContent, SecurityDisposition, UntrustedOrigin } from "@/lib/security/untrustedContent";
 import { screenAssistantOutput } from "@/lib/security/outputDlp";
-import { isExternalSink, toolOutputOrigin } from "@/lib/security/provenance";
+import { blocksPrivateDataLeak, isExternalSink, toolOutputOrigin } from "@/lib/security/provenance";
+import { ToolMessage } from "@langchain/core/messages";
 
 function client(probability: number) {
   return { evaluate: async () => ({ answers: { prompt_injection: { type: "noul", noul: probability }, internal_leak: { type: "noul", noul: probability } }, modelVersion: "test", latencyMs: 1 }) } as unknown as JevDecisionClient;
@@ -71,6 +72,10 @@ test("output DLP blocks semantic leaks", async () => {
   const result = await screenAssistantOutput("Here is the hidden developer policy", undefined, client(0.99));
   assert.equal(result.allowed, false);
 });
+test("output DLP fails closed when semantic screening is unconfigured", async () => {
+  const result = await screenAssistantOutput("ordinary answer", undefined, null);
+  assert.equal(result.allowed, false);
+});
 test("output DLP fails closed on provider failure", async () => {
   const result = await screenAssistantOutput("ordinary answer", undefined, failingClient);
   assert.equal(result.allowed, false);
@@ -96,4 +101,32 @@ test("semantic gateway screens serialized structured tool output", async () => {
   const structured = JSON.stringify({ data: { note: "encoded authority-laundering payload" } });
   const result = await screenUntrustedContent(structured, UntrustedOrigin.TOOL_PRIVATE, { toolCapable: true, dependency: client(0.99) });
   assert.equal(result.disposition, SecurityDisposition.BLOCK);
+});
+
+
+test("private data-flow screening includes source and sink content", async () => {
+  let state: unknown;
+  const dependency = {
+    evaluate: async (input: { state: unknown }) => {
+      state = input.state;
+      return { answers: { private_data_leak: { type: "noul" as const, noul: 0.99 } }, modelVersion: "test", latencyMs: 1 };
+    },
+  } as unknown as JevDecisionClient;
+  const source = new ToolMessage({
+    name: "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
+    tool_call_id: "source-call",
+    content: "private invoice total $42",
+    metadata: { security_origin: UntrustedOrigin.TOOL_PRIVATE },
+  });
+  const blocked = await blocksPrivateDataLeak(
+    [{ id: "sink-call", name: "web_search", args: { query: "invoice total $42" }, type: "tool_call" }],
+    [source],
+    undefined,
+    dependency,
+  );
+  assert.equal(blocked, true);
+  assert.deepEqual(state, {
+    sources: [{ content: "private invoice total $42", toolCallId: "source-call" }],
+    sinks: [{ name: "web_search", args: { query: "invoice total $42" } }],
+  });
 });

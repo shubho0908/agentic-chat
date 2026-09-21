@@ -296,6 +296,7 @@ export async function invokeResearchJson<T extends Record<string, unknown>>(
   throwIfAborted(options.config);
   enforceTokenBudget(options.state, options.nodeName, messages, options.maxOutputTokens);
 
+  let rawResponse: AIMessage | undefined;
   try {
     const structured = llm.withStructuredOutput(options.schema, {
       name: `research_${options.nodeName}`,
@@ -316,9 +317,10 @@ export async function invokeResearchJson<T extends Record<string, unknown>>(
         signal: getAbortSignal(options.config),
       },
     );
+    rawResponse = result.raw;
     const value = options.schema.parse(result.parsed);
     const tokenUsage =
-      extractActualUsage(result.raw) ?? fallbackUsage(messages, result.raw);
+      extractActualUsage(rawResponse) ?? fallbackUsage(messages, rawResponse);
     return { value, tokenUsage };
   } catch (error) {
     if (isAbortError(error)) {
@@ -329,7 +331,12 @@ export async function invokeResearchJson<T extends Record<string, unknown>>(
       node: options.nodeName,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { value: options.fallback, tokenUsage: emptyTokenUsage() };
+    return {
+      value: options.fallback,
+      tokenUsage: rawResponse
+        ? extractActualUsage(rawResponse) ?? fallbackUsage(messages, rawResponse)
+        : emptyTokenUsage(),
+    };
   }
 }
 

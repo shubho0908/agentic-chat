@@ -41,7 +41,8 @@ function extractToolArgs(input: Record<string, unknown>): Record<string, unknown
 interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   flush(writer: StreamWriter): void;
-  takeAssistantOutput(): { text: string; artifacts: Uint8Array[]; artifactText: string };
+  bufferEvent(chunk: Uint8Array, value: unknown): void;
+  takeAssistantOutput(): { text: string; artifacts: Uint8Array[]; artifactText: string; events: Uint8Array[]; eventText: string };
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
@@ -49,6 +50,8 @@ export function createStreamEventMapper(): StreamEventMapper {
   let assistantText = "";
   let artifactText = "";
   let artifactChunks: Uint8Array[] = [];
+  let eventChunks: Uint8Array[] = [];
+  let eventValues: unknown[] = [];
   const artifactParser = createArtifactStreamParser();
 
   const getNode = (event: Record<string, unknown>): string | undefined => {
@@ -61,19 +64,25 @@ export function createStreamEventMapper(): StreamEventMapper {
     return getNode(event) !== GraphNode.TOOLS;
   };
 
-  function emitParsedResults(writer: StreamWriter, results: Array<{ text: string } | { event: ArtifactSSE }>) {
+  function emitParsedResults(results: Array<{ text: string } | { event: ArtifactSSE }>) {
     for (const item of results) {
       if ("text" in item) {
         assistantText += item.text;
       } else {
-        if (typeof item.event.content === "string") artifactText += item.event.content;
+        artifactText += JSON.stringify(item.event);
         artifactChunks.push(encodeArtifactEvent(item.event as unknown as Record<string, unknown>));
       }
     }
   }
 
+  const bufferEvent = (chunk: Uint8Array, value: unknown) => {
+    eventChunks.push(chunk);
+    eventValues.push(value);
+  };
+
   return {
-    map(writer, event) {
+    bufferEvent,
+    map(_writer, event) {
       const eventType = event.event as string;
 
       switch (eventType) {
@@ -91,18 +100,18 @@ export function createStreamEventMapper(): StreamEventMapper {
           // Handle reasoning: Chat Completions API format (additional_kwargs.reasoning_content)
           const reasoningContent = chunk?.chunk?.additional_kwargs?.reasoning_content;
           if (reasoningContent && typeof reasoningContent === "string") {
-            writer.enqueue(encodeThinkingChunk(reasoningContent));
+            bufferEvent(encodeThinkingChunk(reasoningContent), { type: "thinking", content: reasoningContent });
           }
 
           const content = chunk?.chunk?.content;
           if (typeof content === "string" && content) {
-            emitParsedResults(writer, artifactParser.push(content));
+            emitParsedResults(artifactParser.push(content));
           } else if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "reasoning" && block.reasoning) {
-                writer.enqueue(encodeThinkingChunk(block.reasoning));
+                bufferEvent(encodeThinkingChunk(block.reasoning), { type: "thinking", content: block.reasoning });
               } else if (block.type === "text" && block.text) {
-                emitParsedResults(writer, artifactParser.push(block.text));
+                emitParsedResults(artifactParser.push(block.text));
               }
             }
           }
@@ -116,7 +125,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             output?: { response_metadata?: { finish_reason?: unknown } };
           } | undefined;
           if (data?.output?.response_metadata?.finish_reason === "length") {
-            writer.enqueue(encodeResponseIncomplete("length"));
+            bufferEvent(encodeResponseIncomplete("length"), { type: "response_incomplete", reason: "length" });
           }
           break;
         }
@@ -131,8 +140,8 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { input?: Record<string, unknown> } | undefined;
           const args = extractToolArgs(data?.input ?? {});
-          writer.enqueue(encodeToolCall(name, runId, args));
-          writer.enqueue(encodeToolProgress(name, ToolStatus.RUNNING, `Executing ${name}...`));
+          bufferEvent(encodeToolCall(name, runId, args), { type: "tool_call", toolName: name, toolCallId: runId, args });
+          bufferEvent(encodeToolProgress(name, ToolStatus.RUNNING, `Executing ${name}...`), { type: "tool_progress", toolName: name, status: ToolStatus.RUNNING, message: `Executing ${name}...` });
           break;
         }
 
@@ -143,7 +152,7 @@ export function createStreamEventMapper(): StreamEventMapper {
             break;
           }
           if (isNestedToolEvent(event, name)) break;
-          writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
+          bufferEvent(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`), { type: "tool_progress", toolName: name, status: ToolStatus.COMPLETED, message: `${name} completed` });
           break;
         }
 
@@ -152,32 +161,31 @@ export function createStreamEventMapper(): StreamEventMapper {
           const eventName = event.name as string | undefined;
 
           if (customData?.type === CustomEventName.THINKING) {
-            writer.enqueue(encodeThinkingChunk(customData.content as string));
+            bufferEvent(encodeThinkingChunk(customData.content as string), { type: "thinking", content: customData.content });
           }
           if (customData?.type === CustomEventName.PLANNING || eventName === CustomEventName.PLANNING) {
             const planData = customData?.plan ?? customData;
-            writer.enqueue(
-              encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, "Plan ready", planData as Record<string, unknown>)
+            bufferEvent(
+              encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, "Plan ready", planData as Record<string, unknown>),
+              { type: "tool_progress", toolName: CustomEventName.PLANNING, status: ToolStatus.COMPLETED, message: "Plan ready", details: planData },
             );
           }
           if (eventName === CustomEventName.RESEARCH_PROGRESS) {
             const step = (customData?.step as string) ?? "researching";
             const detail = (customData?.detail as string) ?? "Researching...";
             const images = Array.isArray(customData?.images) ? customData.images : undefined;
-            writer.enqueue(
-              encodeToolProgress(
-                ToolName.DEEP_RESEARCH,
-                ToolStatus.RUNNING,
-                `[${step}] ${detail}`,
-                images ? { images } : undefined
-              )
+            const details = images ? { images } : undefined;
+            bufferEvent(
+              encodeToolProgress(ToolName.DEEP_RESEARCH, ToolStatus.RUNNING, `[${step}] ${detail}`, details),
+              { type: "tool_progress", toolName: ToolName.DEEP_RESEARCH, status: ToolStatus.RUNNING, message: `[${step}] ${detail}`, details },
             );
           }
           if (eventName === CustomEventName.SEARCH_IMAGES) {
             const images = Array.isArray(customData?.images) ? customData.images : undefined;
             if (images) {
-              writer.enqueue(
-                encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images })
+              bufferEvent(
+                encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images }),
+                { type: "tool_progress", toolName: ToolName.WEB_SEARCH, status: ToolStatus.RUNNING, message: "Found images", details: { images } },
               );
             }
           }
@@ -185,8 +193,10 @@ export function createStreamEventMapper(): StreamEventMapper {
             const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;
             if (sources && sources.length > 0) {
               const tool = customData?.tool === ToolName.DEEP_RESEARCH ? ToolName.DEEP_RESEARCH : ToolName.WEB_SEARCH;
-              writer.enqueue(
-                encodeToolProgress(tool, ToolStatus.COMPLETED, `Found ${sources.length} source${sources.length === 1 ? "" : "s"}`, { sources })
+              const message = `Found ${sources.length} source${sources.length === 1 ? "" : "s"}`;
+              bufferEvent(
+                encodeToolProgress(tool, ToolStatus.COMPLETED, message, { sources }),
+                { type: "tool_progress", toolName: tool, status: ToolStatus.COMPLETED, message, details: { sources } },
               );
             }
           }
@@ -194,23 +204,21 @@ export function createStreamEventMapper(): StreamEventMapper {
         }
       }
     },
-    flush(writer) {
-      emitParsedResults(writer, artifactParser.flush());
+    flush() {
+      emitParsedResults(artifactParser.flush());
     },
     takeAssistantOutput() {
-      const value = { text: assistantText, artifacts: artifactChunks, artifactText };
+      const value = { text: assistantText, artifacts: artifactChunks, artifactText, events: eventChunks, eventText: JSON.stringify(eventValues) };
       assistantText = "";
       artifactText = "";
       artifactChunks = [];
+      eventChunks = [];
+      eventValues = [];
       return value;
     },
   };
 }
 
-export function handleGraphInterrupt(
-  writer: StreamWriter,
-  interruptData: unknown
-): void {
-  const data = interruptData as Record<string, unknown>;
-  writer.enqueue(encodeHumanInTheLoopRequest(data));
+export function encodeGraphInterrupt(interruptData: unknown): Uint8Array {
+  return encodeHumanInTheLoopRequest(interruptData as Record<string, unknown>);
 }

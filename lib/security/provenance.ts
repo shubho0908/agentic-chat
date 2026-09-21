@@ -14,8 +14,17 @@ export function toolOutputOrigin(toolName: string | undefined) {
   return toolName && getComposioToolkitForToolName(toolName) ? UntrustedOrigin.TOOL_PRIVATE : UntrustedOrigin.TOOL_PUBLIC;
 }
 
+function privateSources(messages: BaseMessage[]): Array<{ content: string; toolCallId?: string }> {
+  return messages.flatMap((message) => {
+    const value = message as unknown as { content?: unknown; tool_call_id?: string; metadata?: Record<string, unknown> };
+    if (value.metadata?.security_origin !== UntrustedOrigin.TOOL_PRIVATE) return [];
+    const content = typeof value.content === "string" ? value.content : JSON.stringify(value.content);
+    return [{ content: (content ?? "").slice(0, 32_000), ...(value.tool_call_id ? { toolCallId: value.tool_call_id } : {}) }];
+  });
+}
+
 export function hasPrivateSource(messages: BaseMessage[]): boolean {
-  return messages.some((message) => ((message as unknown as { metadata?: Record<string, unknown> }).metadata)?.security_origin === UntrustedOrigin.TOOL_PRIVATE);
+  return privateSources(messages).length > 0;
 }
 
 export function isExternalSink(toolName: string): boolean {
@@ -23,13 +32,14 @@ export function isExternalSink(toolName: string): boolean {
 }
 
 export async function blocksPrivateDataLeak(toolCalls: ToolCall[], messages: BaseMessage[], conversationId?: string, dependency?: JevDecisionClient | null): Promise<boolean> {
-  if (!hasPrivateSource(messages)) return false;
+  const sources = privateSources(messages);
+  if (!sources.length) return false;
   const sinks = toolCalls.filter((call) => isExternalSink(call.name));
   if (!sinks.length) return false;
   const client = dependency === undefined ? JevDecisionClient.createIfConfigured() : dependency;
   if (!client) return true;
   try {
-    const result = await client.evaluate({ checkpoint: JevCheckpoint.OUTPUT_DLP, schemaVersion: "2.0.0", state: { sinks: sinks.map(({ name, args }) => ({ name, args })) }, questions: QUESTIONS, timeoutMs: 2_000, traceContext: { requestId: createRequestId("private_sink"), conversationId } });
+    const result = await client.evaluate({ checkpoint: JevCheckpoint.OUTPUT_DLP, schemaVersion: "2.0.0", state: { sources, sinks: sinks.map(({ name, args }) => ({ name, args })) }, questions: QUESTIONS, timeoutMs: 2_000, traceContext: { requestId: createRequestId("private_sink"), conversationId } });
     const answer = result.answers.private_data_leak;
     if (answer?.type !== "noul") return true;
     return answer.noul >= 0.5;

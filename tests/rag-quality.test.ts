@@ -38,25 +38,10 @@ test("citations use stable IDs, scores, and distinguish coverage samples", () =>
   assert.match(coverage.context, /not query-retrieved evidence/);
   assert.equal(coverage.citations?.[0].relevance, "coverage-sample");
 });
-test("passage gate blocks prompt injection and keeps contradiction evidence", () => {
-  assert.equal(
-    shouldKeepPassage({
-      relevant: 0.9,
-      usableEvidence: 0.9,
-      contradiction: 0,
-      promptInjection: 0.9,
-    }),
-    false,
-  );
-  assert.equal(
-    shouldKeepPassage({
-      relevant: 0.2,
-      usableEvidence: 0.2,
-      contradiction: 0.8,
-      promptInjection: 0.1,
-    }),
-    true,
-  );
+test("passage gate keeps usable and contradictory evidence", () => {
+  assert.equal(shouldKeepPassage({ relevant: 0.9, usableEvidence: 0.9, contradiction: 0 }), true);
+  assert.equal(shouldKeepPassage({ relevant: 0.2, usableEvidence: 0.2, contradiction: 0.8 }), true);
+  assert.equal(shouldKeepPassage({ relevant: 0.2, usableEvidence: 0.2, contradiction: 0.2 }), false);
 });
 
 test("fusion never lets a raw lexical rank pose as the displayable evidence score", () => {

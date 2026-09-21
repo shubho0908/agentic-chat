@@ -14,6 +14,7 @@ import type { ComposioToolkit } from "@/lib/tools/composio/config";
 interface CreateAgentGraphOptions {
   reasoningEffort?: ReasoningEffortLevel | null;
   connectedToolkits?: ComposioToolkit[];
+  installedTools?: DynamicStructuredTool[];
 }
 
 export async function createAgentGraph(
@@ -22,9 +23,9 @@ export async function createAgentGraph(
   model = DEFAULT_MODEL,
   options: CreateAgentGraphOptions = {}
 ) {
-  const { reasoningEffort, connectedToolkits } = options;
+  const { reasoningEffort, connectedToolkits, installedTools } = options;
 
-  const allTools: DynamicStructuredTool[] = await getToolsForRequest(userId, connectedToolkits, { apiKey, model, reasoningEffort });
+  const allTools: DynamicStructuredTool[] = installedTools ?? await getToolsForRequest(userId, connectedToolkits, { apiKey, model, reasoningEffort });
   const tools = allTools;
   const checkpointer = await getCheckpointer();
 
