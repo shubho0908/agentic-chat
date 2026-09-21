@@ -196,6 +196,14 @@ export function createStreamEventMapper(): StreamEventMapper {
               );
             }
           }
+          if (eventName === CustomEventName.PDF_FILE) {
+            const pdf = customData?.pdf;
+            if (pdf && typeof pdf === "object" && !Array.isArray(pdf) && typeof (pdf as Record<string, unknown>).url === "string") {
+              writer.enqueue(
+                encodeToolProgress(ToolName.CREATE_PDF, ToolStatus.COMPLETED, "PDF ready", { pdf: pdf as Record<string, unknown> })
+              );
+            }
+          }
           if (eventName === CustomEventName.SEARCH_SOURCES) {
             const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;
             if (sources && sources.length > 0) {

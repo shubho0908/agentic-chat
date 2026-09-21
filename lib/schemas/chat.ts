@@ -143,6 +143,17 @@ const messageMetadataBaseSchema = z.object({
       }),
     )
     .optional(),
+  pdfs: z
+    .array(
+      z.object({
+        url: z.string(),
+        name: z.string(),
+        title: z.string().optional(),
+        size: z.number().optional(),
+        pageCount: z.number().optional(),
+      }),
+    )
+    .optional(),
   humanInTheLoopRequest: z
     .object({
       type: z.literal(HUMAN_IN_THE_LOOP_REQUEST_TYPE).optional(),

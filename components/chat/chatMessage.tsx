@@ -13,6 +13,7 @@ import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { FollowUpQuestions } from "./followUpQuestions";
 import { SearchImages } from "./searchImages";
+import { PdfDocuments } from "./pdfDocuments";
 import { RichLink } from "../ai-elements/richLink";
 import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
 import type { MemoryStatus } from "@/types/chat";
@@ -380,6 +381,10 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
               <SearchImages images={images} />
             )}
 
+            {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
+              <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
+            )}
+
             {isEditing ? (
               <MessageEditForm
                 editText={editText}
@@ -520,6 +525,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
     prevMetadata?.images?.length !== nextMetadata?.images?.length ||
+    prevMetadata?.pdfs?.length !== nextMetadata?.pdfs?.length ||
     prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
     prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
   ) {

@@ -82,6 +82,26 @@ export function extractMetadataFromProgress(
     }
   }
 
+  if ('pdf' in progress.details) {
+    const raw = progress.details.pdf;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const record = raw as Record<string, unknown>;
+      if (typeof record.url === 'string' && typeof record.name === 'string') {
+        const pdf: NonNullable<MessageMetadata['pdfs']>[number] = {
+          url: record.url,
+          name: record.name,
+          ...(typeof record.title === 'string' ? { title: record.title } : {}),
+          ...(typeof record.size === 'number' ? { size: record.size } : {}),
+          ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+        };
+        const existing = currentMetadata?.pdfs ?? [];
+        if (!existing.some((item) => item.url === pdf.url)) {
+          metadata = { ...metadata, pdfs: [...existing, pdf] };
+        }
+      }
+    }
+  }
+
   const details = progress.details as {
     citations?: MessageMetadata['citations'];
     followUpQuestions?: string[];
