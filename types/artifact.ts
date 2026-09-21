@@ -15,7 +15,7 @@ export const ArtifactEventType = {
   END: 'artifact_end',
 } as const;
 
-export type ArtifactEventTypeValue = (typeof ArtifactEventType)[keyof typeof ArtifactEventType];
+type ArtifactEventTypeValue = (typeof ArtifactEventType)[keyof typeof ArtifactEventType];
 
 /** Artifact types that support live preview (not just code display) */
 export const PREVIEWABLE_ARTIFACT_TYPES: ReadonlySet<ArtifactTypeValue> = new Set([

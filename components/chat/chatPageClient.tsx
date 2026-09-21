@@ -187,7 +187,6 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
         <ChatContainer
           messages={messages}
           isLoading={isLoading}
-          userName={session?.user?.name}
           onEditMessage={handleEdit}
           onRegenerateMessage={handleRegenerate}
           onSendMessage={handleFollowUpQuestion}

@@ -196,7 +196,6 @@ function SharedConversationContent({
         <ChatContainer
           messages={messages}
           isLoading={false}
-          userName="Shared conversation"
           onOpenArtifact={openArtifactFromMetadata}
         />
       </div>

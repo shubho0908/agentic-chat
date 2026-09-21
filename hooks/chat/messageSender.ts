@@ -168,7 +168,7 @@ export async function handleSendMessage(
   }
 
   const messageContent = buildMultimodalContent(content.trim(), attachments);
-  const userMessageId = `user-${Date.now()}`;
+  const userMessageId = crypto.randomUUID();
 
   const userMessage: Message = {
     role: MessageRole.USER,
@@ -216,7 +216,8 @@ export async function handleSendMessage(
         currentConversationId,
         messageContent,
         attachments,
-        abortSignal
+        abortSignal,
+        userMessage.id
       );
 
       if (!savedMsgId) {

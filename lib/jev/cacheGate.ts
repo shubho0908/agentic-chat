@@ -10,7 +10,7 @@ import {
 } from "./types";
 
 export const JEV_CACHE_GATE_SCHEMA_VERSION = "1.0.0";
-export const JEV_CACHE_GATE_TIMEOUT_MS = 2_000;
+const JEV_CACHE_GATE_TIMEOUT_MS = 2_000;
 
 /** Structural signals only. The cached question and answer never leave for
  * the external evaluation API - the gate judges the hit by its shape
@@ -31,7 +31,7 @@ export interface JevCacheGateDecision {
   stalenessRisk: number;
 }
 
-export const JEV_CACHE_GATE_QUESTIONS: JevQuestions = {
+const JEV_CACHE_GATE_QUESTIONS: JevQuestions = {
   serve_from_cache: {
     type: "noul",
     instructions:

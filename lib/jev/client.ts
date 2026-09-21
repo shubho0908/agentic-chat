@@ -41,7 +41,7 @@ export class JevConfigurationError extends Error {
   }
 }
 
-export class JevCircuitOpenError extends Error {
+class JevCircuitOpenError extends Error {
   constructor() {
     super("Jev circuit breaker is open");
     this.name = "JevCircuitOpenError";

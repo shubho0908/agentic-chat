@@ -76,7 +76,6 @@ function extractUserUrls(text: string) {
 
 interface ChatMessageProps {
   message: Message;
-  userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
@@ -449,7 +448,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                 {!isSharePage && (
                   <div className={cn(
                     "mt-1 flex items-center gap-2",
-                    isUser ? "pr-2" : "pl-1 w-full justify-between"
+                    isUser ? "pr-2" : "pl-1 w-full"
                   )}>
                     <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                       <MessageActions

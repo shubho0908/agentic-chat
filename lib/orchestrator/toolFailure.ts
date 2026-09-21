@@ -132,10 +132,10 @@ export function isAuthFailureText(content: string): boolean {
   return AUTH_PATTERN.test(content);
 }
 
-export const MAX_IDENTICAL_FAILURE_ROUNDS = 3;
-export const MAX_CONSECUTIVE_ERROR_ROUNDS = 3;
+const MAX_IDENTICAL_FAILURE_ROUNDS = 3;
+const MAX_CONSECUTIVE_ERROR_ROUNDS = 3;
 
-export interface ToolCallLike {
+interface ToolCallLike {
   id?: unknown;
   name?: unknown;
   args?: unknown;

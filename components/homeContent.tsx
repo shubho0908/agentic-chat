@@ -191,7 +191,6 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       <ChatContainer
         messages={messages}
         isLoading={isLoading}
-        userName={session?.user?.name}
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}

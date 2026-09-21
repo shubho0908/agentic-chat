@@ -102,7 +102,7 @@ export function computeAdaptiveSimilarityThreshold(params: {
   return clamp(baseThreshold - drop, minThreshold, 1);
 }
 
-export function dedupeCandidates(
+function dedupeCandidates(
   candidates: RetrievalCandidate[],
 ): RetrievalCandidate[] {
   const deduped: RetrievalCandidate[] = [];

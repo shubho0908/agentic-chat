@@ -17,10 +17,6 @@ const STORAGE_KEYS = {
 
 const VALID_OPENAI_MODELS = new Set(OPENAI_MODELS.map((model) => model.id));
 
-function logStorageError(operation: string, error: unknown): void {
-  logger.warn(`[Storage] Failed to ${operation}:`, error);
-}
-
 function isLocalStorageAvailable(): boolean {
   try {
     const test = '__localStorage_test__';
@@ -65,16 +61,6 @@ export function getModel(): string | null {
     return null;
   }
 }
-
-export function removeModel(): void {
-  if (!isLocalStorageAvailable()) return;
-  try {
-    localStorage.removeItem(STORAGE_KEYS.OPENAI_MODEL);
-  } catch (error) {
-    logStorageError('remove stored model', error);
-  }
-}
-
 
 
 export function clearUserStorage(): void {
@@ -136,7 +122,7 @@ export function getReasoningEffortMap(): ReasoningEffortMap {
   }
 }
 
-export function getReasoningEffortForModel(model: string): ReasoningEffortLevel {
+function getReasoningEffortForModel(model: string): ReasoningEffortLevel {
   const stored = getReasoningEffortMap()[model];
   return stored && isReasoningEffortSupported(model, stored)
     ? stored

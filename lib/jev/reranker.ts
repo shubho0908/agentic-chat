@@ -3,9 +3,9 @@ import type { JevDecisionClient, JevEvaluateResult } from "./client";
 import { mapWithConcurrencyLimit } from "./concurrency";
 import { JevCheckpoint, type JevQuestions } from "./types";
 
-export const JEV_RERANK_SCHEMA_VERSION = "1.0.0";
-export const JEV_RERANK_TIMEOUT_MS = 2_000;
-export const JEV_RERANK_MAX_CONCURRENCY = 4;
+const JEV_RERANK_SCHEMA_VERSION = "1.0.0";
+const JEV_RERANK_TIMEOUT_MS = 2_000;
+const JEV_RERANK_MAX_CONCURRENCY = 4;
 
 const RERANK_QUESTIONS: JevQuestions = {
   answers_query: {

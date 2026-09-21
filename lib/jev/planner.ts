@@ -3,8 +3,8 @@ import { PlanComplexity, type PlanComplexityValue } from "@/lib/orchestrator/con
 import { JevCheckpoint, type JevQuestions } from "./types";
 import type { JevDecisionClient, JevEvaluateResult } from "./client";
 
-export const JEV_PLANNER_SCHEMA_VERSION = "1.0.0";
-export const JEV_PLANNER_TIMEOUT_MS = 2_000;
+const JEV_PLANNER_SCHEMA_VERSION = "1.0.0";
+const JEV_PLANNER_TIMEOUT_MS = 2_000;
 
 export interface JevPlannerState {
   latestMessage: string;
@@ -20,7 +20,7 @@ export interface JevPlannerDecision {
   needsClarification: number;
 }
 
-export const JEV_PLANNER_QUESTIONS: JevQuestions = {
+const JEV_PLANNER_QUESTIONS: JevQuestions = {
   complexity: {
     type: "choice",
     instructions: "Classify how the user's latest request should be executed.",

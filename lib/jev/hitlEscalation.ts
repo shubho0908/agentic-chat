@@ -1,10 +1,10 @@
 import { JevCheckpoint, type JevQuestions } from "./types";
 import type { JevDecisionClient, JevEvaluateResult } from "./client";
 
-export const JEV_HITL_ESCALATION_SCHEMA_VERSION = "1.0.0";
+const JEV_HITL_ESCALATION_SCHEMA_VERSION = "1.0.0";
 // Active mode awaits this verdict before tools run, so the budget matches
 // the tool-diagnosis bound: cold starts fail open to the deterministic path.
-export const JEV_HITL_ESCALATION_TIMEOUT_MS = 2_000;
+const JEV_HITL_ESCALATION_TIMEOUT_MS = 2_000;
 // Jev may only ADD human review, so the bar sits well above the 0.5 used by
 // filter-style gates: interrupt fatigue is the failure mode being avoided.
 export const JEV_HITL_ESCALATE_THRESHOLD = 0.8;
@@ -23,7 +23,7 @@ export interface JevHitlEscalationDecision {
   irreversibleOrExternal: number;
 }
 
-export const JEV_HITL_ESCALATION_QUESTIONS: JevQuestions = {
+const JEV_HITL_ESCALATION_QUESTIONS: JevQuestions = {
   needs_human_review: {
     type: "noul",
     instructions:

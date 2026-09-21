@@ -23,11 +23,11 @@ import { JevDecisionClient } from "@/lib/jev/client";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import { extractText } from "./planner";
 
-export const MAX_TOOL_ROUNDS = 15;
+const MAX_TOOL_ROUNDS = 15;
 
 const jevClient = JevDecisionClient.createIfConfigured();
 
-export function countToolRoundsSinceLastHuman(messages: BaseMessage[]): number {
+function countToolRoundsSinceLastHuman(messages: BaseMessage[]): number {
   let count = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];

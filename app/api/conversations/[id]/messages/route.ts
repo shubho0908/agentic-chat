@@ -102,38 +102,56 @@ export async function POST(
       validatedAttachments = attachmentValidation.attachments;
     }
 
-    let message: MessageWithAttachments;
-    try {
-      message = await prisma.$transaction(async (tx) => {
-        await tx.conversation.update({
-          where: { id: conversationId, userId: user.id },
-          data: { updatedAt: new Date() },
-          select: { id: true },
-        });
+    const clientMessageId =
+      typeof body.id === 'string' && body.id.length > 0 && body.id.length <= 128
+        ? body.id
+        : undefined;
 
-        return tx.message.create({
-          data: {
-            conversationId,
-            role: validatedRole,
-            content: validatedContent,
-            ...(validatedMetadata && { metadata: validatedMetadata }),
-            attachments: validatedAttachments && validatedAttachments.length > 0 ? {
-              create: validatedAttachments.map(att => ({
-                fileUrl: att.fileUrl,
-                fileName: att.fileName,
-                fileType: att.fileType,
-                fileSize: att.fileSize,
-              }))
-            } : undefined,
-          },
-          include: { attachments: true },
-        });
+    try {
+      await prisma.conversation.update({
+        where: { id: conversationId, userId: user.id },
+        data: { updatedAt: new Date() },
+        select: { id: true },
       });
-    } catch (txErr) {
-      if (txErr && typeof txErr === "object" && "code" in txErr && txErr.code === "P2025") {
+    } catch (updateErr) {
+      if (isRecord(updateErr) && updateErr.code === "P2025") {
         return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
       }
-      throw txErr;
+      throw updateErr;
+    }
+
+    let message: MessageWithAttachments;
+    try {
+      message = await prisma.message.create({
+        data: {
+          ...(clientMessageId && { id: clientMessageId }),
+          conversationId,
+          role: validatedRole,
+          content: validatedContent,
+          ...(validatedMetadata && { metadata: validatedMetadata }),
+          attachments: validatedAttachments && validatedAttachments.length > 0 ? {
+            create: validatedAttachments.map(att => ({
+              fileUrl: att.fileUrl,
+              fileName: att.fileName,
+              fileType: att.fileType,
+              fileSize: att.fileSize,
+            }))
+          } : undefined,
+        },
+        include: { attachments: true },
+      });
+    } catch (createErr) {
+      if (isRecord(createErr) && createErr.code === "P2002" && clientMessageId) {
+        const existing = await prisma.message.findUnique({
+          where: { id: clientMessageId },
+          include: { attachments: true },
+        });
+        if (existing && existing.conversationId === conversationId) {
+          return jsonResponse(existing, HTTP_STATUS.OK);
+        }
+        return errorResponse('Message ID conflict', undefined, HTTP_STATUS.CONFLICT);
+      }
+      throw createErr;
     }
 
     scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);
