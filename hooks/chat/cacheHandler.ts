@@ -8,6 +8,7 @@ import { extractTextFromContent } from "@/lib/contentUtils";
 import type { CacheCheckResult } from "@/types/chat";
 import { checkSemanticCacheAction } from "@/lib/rag/storage/cacheActions";
 import { MIN_CACHEABLE_QUERY_LENGTH } from "@/lib/orchestrator/constants";
+import { shouldBypassSemanticCacheForToolIntent } from "@/lib/orchestrator/cacheIntent";
 
 interface CacheCheckContext {
   messages: Message[];
@@ -152,7 +153,7 @@ export async function performCacheCheck(
   const rawText = extractTextFromContent(content);
   const useCaching =
     shouldUseSemanticCache(messages, attachments, activeTool) &&
-    !/\bpdf\b/i.test(rawText);
+    !shouldBypassSemanticCacheForToolIntent(rawText);
   let cacheQuery = "";
   let cacheData: CacheCheckResult = { cached: false };
 

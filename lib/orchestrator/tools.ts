@@ -19,6 +19,8 @@ import { ToolName } from "@/lib/tools/constants";
 import { RoutingDecision } from "@/types/chat";
 import type { Message } from "@/lib/schemas/chat";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
+import { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
+export { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
 
 export const ASK_USER_TOOL_NAME = ToolName.ASK_USER;
 
@@ -460,22 +462,6 @@ export function hasWebActionIntent(latestUserText: string): boolean {
     /https?:\/\//i.test(latestUserText) ||
     matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
     matchesAnyTerm(rawText, WEB_SEARCH_TERMS)
-  );
-}
-
-export function shouldBypassSemanticCacheForToolIntent(
-  latestUserText: string,
-  _connectedServices?: string[],
-): boolean {
-  void _connectedServices;
-  const rawText = latestUserText.toLowerCase();
-  return (
-    getAnyMentionedToolkits(latestUserText).length > 0 ||
-    matchesAnyTerm(rawText, WEB_SEARCH_TERMS) ||
-    matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
-    qualifiesForDeepResearch(latestUserText) ||
-    /\bpdf\b/i.test(latestUserText) ||
-    /https?:\/\//i.test(latestUserText)
   );
 }
 

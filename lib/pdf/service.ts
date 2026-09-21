@@ -133,21 +133,20 @@ export async function generateAndStorePdf(
     const images = await prefetchPdfImages(imageUrls, options.signal);
 
     await acquireRenderSlot(options.signal);
-    let buffer: Buffer;
-    try {
-      buffer = await withTimeout(
-        renderPdfDocument(document, {
-          images,
-          generatedAt: options.generatedAt ?? new Date(),
-          logoDataUri: loadLogoDataUri(),
-        }),
-        PDF_RENDER_TIMEOUT_MS,
-        "PDF rendering",
-        options.signal,
-      );
-    } finally {
-      releaseRenderSlot();
-    }
+    const renderPromise = renderPdfDocument(document, {
+      images,
+      generatedAt: options.generatedAt ?? new Date(),
+      logoDataUri: loadLogoDataUri(),
+    });
+    // React PDF cannot cancel a render. Hold its concurrency slot until the
+    // underlying work settles, even if the caller times out or disconnects.
+    void renderPromise.then(releaseRenderSlot, releaseRenderSlot);
+    const buffer = await withTimeout(
+      renderPromise,
+      PDF_RENDER_TIMEOUT_MS,
+      "PDF rendering",
+      options.signal,
+    );
 
     let pageCount = 0;
     try {
