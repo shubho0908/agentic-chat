@@ -54,6 +54,36 @@ function extractToolOutput(output: unknown): string | Record<string, unknown> | 
   return output as string | Record<string, unknown> | unknown[];
 }
 
+function isPdfArtifact(value: unknown): value is Record<string, unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).url === "string"
+  );
+}
+function emitPdfReady(writer: StreamWriter, pdf: unknown): void {
+  if (!isPdfArtifact(pdf)) return;
+  writer.enqueue(
+    encodeToolProgress(ToolName.CREATE_PDF, ToolStatus.COMPLETED, "PDF ready", { pdf })
+  );
+}
+
+function extractToolOutputArtifact(output: unknown): unknown {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const obj = output as Record<string, unknown>;
+  if (isPdfArtifact(obj.artifact)) return obj.artifact;
+  const artifact = obj.artifact;
+  if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
+    const nested = (artifact as Record<string, unknown>).pdf;
+    if (isPdfArtifact(nested)) return nested;
+  }
+  if (obj.kwargs && typeof obj.kwargs === "object" && !Array.isArray(obj.kwargs)) {
+    return extractToolOutputArtifact(obj.kwargs);
+  }
+  return undefined;
+}
+
 interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   flush(writer: StreamWriter): void;
@@ -157,8 +187,18 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);
-          writer.enqueue(encodeToolResult(name, runId, result));
+          const artifactPdf = name === ToolName.CREATE_PDF
+            ? extractToolOutputArtifact(data?.output)
+            : undefined;
+          writer.enqueue(
+            encodeToolResult(
+              name,
+              runId,
+              artifactPdf ? { content: result, pdf: artifactPdf } : result,
+            ),
+          );
           writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
+          if (artifactPdf) emitPdfReady(writer, artifactPdf);
           break;
         }
 
@@ -195,6 +235,9 @@ export function createStreamEventMapper(): StreamEventMapper {
                 encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images })
               );
             }
+          }
+          if (eventName === CustomEventName.PDF_FILE) {
+            emitPdfReady(writer, customData?.pdf);
           }
           if (eventName === CustomEventName.SEARCH_SOURCES) {
             const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;

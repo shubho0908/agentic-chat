@@ -1,5 +1,6 @@
 import { createUploadthing, type FileRouter, UTFiles } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import "@/lib/uploadthing-warnings";
 import { z } from "zod";
 import {
   MAX_DOCUMENT_FILE_SIZE_LABEL,
@@ -102,9 +103,13 @@ export const ourFileRouter = {
         latencyMs: measureLatencyMs(uploadStartedAt),
       });
 
-      return { 
-        uploadedBy: metadata.userId, 
+      return {
+        uploadedBy: metadata.userId,
+        // `file.ufsUrl` is the v9-canonical accessor; never read the
+        // deprecated `file.url` / `file.appUrl` getters here (they warn).
+        // Keep the legacy `url` key for backward compat with older clients.
         url: file.ufsUrl,
+        ufsUrl: file.ufsUrl,
         name: file.name,
         type: file.type,
         customId: file.customId,

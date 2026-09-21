@@ -82,6 +82,26 @@ export function extractMetadataFromProgress(
     }
   }
 
+  if ('pdf' in progress.details) {
+    const raw = progress.details.pdf;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const record = raw as Record<string, unknown>;
+      if (typeof record.url === 'string' && typeof record.name === 'string') {
+        const pdf: NonNullable<MessageMetadata['pdfs']>[number] = {
+          url: record.url,
+          name: record.name,
+          ...(typeof record.title === 'string' ? { title: record.title } : {}),
+          ...(typeof record.size === 'number' ? { size: record.size } : {}),
+          ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+        };
+        const existing = currentMetadata?.pdfs ?? [];
+        if (!existing.some((item) => item.url === pdf.url)) {
+          metadata = { ...metadata, pdfs: [...existing, pdf] };
+        }
+      }
+    }
+  }
+
   const details = progress.details as {
     citations?: MessageMetadata['citations'];
     followUpQuestions?: string[];
@@ -96,6 +116,21 @@ export function extractMetadataFromProgress(
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+export function extractPdfFromToolResult(result: unknown): NonNullable<MessageMetadata['pdfs']>[number] | undefined {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const raw = (result as Record<string, unknown>).pdf;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.url !== 'string' || typeof record.name !== 'string') return undefined;
+  return {
+    url: record.url,
+    name: record.name,
+    ...(typeof record.title === 'string' ? { title: record.title } : {}),
+    ...(typeof record.size === 'number' ? { size: record.size } : {}),
+    ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+  };
 }
 
 function toHumanInTheLoopMetadata(request: HumanInTheLoopRequestEvent): MessageMetadata["humanInTheLoopRequest"] {
@@ -309,6 +344,15 @@ export async function handleStreamingResponse(
         }
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata?.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            ensureAssistantMessage();
+            updateAssistantMessage(onMessagesUpdate, assistantMessageId, { metadata: messageMetadata });
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -327,6 +371,12 @@ export async function handleStreamingResponse(
         }
       },
       onToolProgress: (progress) => {
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
+        if (messageCreated && messageMetadata) {
+          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+            metadata: messageMetadata,
+          });
+        }
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -342,7 +392,6 @@ export async function handleStreamingResponse(
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
       reasoningEffort,
@@ -451,7 +500,7 @@ export async function handleStreamingResponse(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent && artifacts.length === 0 && !responseIncompleteReason) {
+      if (cacheQuery && assistantContent && artifacts.length === 0 && !messageMetadata?.pdfs?.length && !responseIncompleteReason) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,

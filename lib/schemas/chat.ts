@@ -70,16 +70,7 @@ const toolActivitySchema = z.object({
   toolCallId: z.string(),
   toolName: z.string(),
   status: toolStatusSchema,
-  args: z.record(
-    z.string(),
-    z.union([
-      z.string(),
-      z.number(),
-      z.boolean(),
-      z.null(),
-      z.array(z.union([z.string(), z.number(), z.boolean()])),
-    ]),
-  ),
+  args: z.record(z.string(), jsonValueSchema),
   result: jsonValueSchema.optional(),
   error: z.string().optional(),
   timestamp: z.number(),
@@ -140,6 +131,17 @@ const messageMetadataBaseSchema = z.object({
         description: z.string().optional(),
         searchIndex: z.number().optional(),
         searchQuery: z.string().optional(),
+      }),
+    )
+    .optional(),
+  pdfs: z
+    .array(
+      z.object({
+        url: z.string(),
+        name: z.string(),
+        title: z.string().optional(),
+        size: z.number().optional(),
+        pageCount: z.number().optional(),
       }),
     )
     .optional(),
@@ -232,6 +234,4 @@ export const ToolStatus = {
   Error: "error" as const,
 } as const;
 
-type ToolArgValue =
-  string | number | boolean | null | Array<string | number | boolean>;
-export type ToolArgs = Record<string, ToolArgValue>;
+export type ToolArgs = Record<string, JsonValue>;

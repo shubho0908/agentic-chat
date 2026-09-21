@@ -7,7 +7,7 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
-import { extractMetadataFromProgress } from "./streamingHandler";
+import { extractMetadataFromProgress, extractPdfFromToolResult } from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
@@ -61,6 +61,7 @@ export async function handleEditMessage(
   let messageMetadata: MessageMetadata = {};
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
+  let responseContent = "";
   
   const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
   const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
@@ -115,7 +116,7 @@ export async function handleEditMessage(
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
-    const responseContent = await streamChatCompletion({
+    responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
       signal: abortSignal,
@@ -155,6 +156,16 @@ export async function handleEditMessage(
         );
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            onMessagesUpdate((prev) => prev.map((msg) =>
+              msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+            ));
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -177,6 +188,10 @@ export async function handleEditMessage(
         }
       },
       onToolProgress: (progress) => {
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata) ?? messageMetadata;
+        onMessagesUpdate((prev) => prev.map((msg) =>
+          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
+        ));
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -192,7 +207,6 @@ export async function handleEditMessage(
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
           
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata) ?? messageMetadata;
         }
       },
       reasoningEffort,
@@ -391,8 +405,16 @@ export async function handleEditMessage(
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    
-    onMessagesUpdate(() => originalMessagesState);
+    if (responseContent || messageMetadata.pdfs?.length || messageMetadata.artifacts?.length) {
+      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
+      onMessagesUpdate((prev) => prev.map((msg) =>
+        msg.id === placeholderAssistantId
+          ? { ...msg, content: getPersistableAssistantContent(responseContent, messageMetadata) ?? responseContent, metadata: messageMetadata }
+          : msg
+      ));
+    } else {
+      onMessagesUpdate(() => originalMessagesState);
+    }
     return { success: false, error: errorMessage };
   }
 }

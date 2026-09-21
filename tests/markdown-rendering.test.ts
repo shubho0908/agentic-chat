@@ -17,10 +17,17 @@ test("detects display math as markdown", () => {
   );
 });
 
-test("detects inline math as markdown", () => {
+test("detects double-dollar math as markdown", () => {
+  assert.equal(
+    shouldRenderMarkdownContent("The score is $$x^2 + y^2$$ for this point."),
+    true,
+  );
+});
+
+test("does not treat single-dollar spans as markdown math", () => {
   assert.equal(
     shouldRenderMarkdownContent("The score is $x^2 + y^2$ for this point."),
-    true,
+    false,
   );
 });
 

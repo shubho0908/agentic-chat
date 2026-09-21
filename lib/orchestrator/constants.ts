@@ -28,6 +28,7 @@ export const CustomEventName = {
   RESEARCH_PROGRESS: "research_progress",
   SEARCH_IMAGES: "search_images",
   SEARCH_SOURCES: "search_sources",
+  PDF_FILE: "pdf_file",
 } as const;
 
 export const StreamEventType = {

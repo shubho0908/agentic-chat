@@ -15,7 +15,7 @@ test("markdown artifacts render GFM, math, highlighted code, and Mermaid preview
     "| --- | --- |",
     "| Mermaid | supported |",
     "",
-    "The score is $x^2 + y^2$.",
+    "The score is $$x^2 + y^2$$.",
     "",
     "```mermaid",
     "flowchart TD",

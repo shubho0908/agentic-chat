@@ -1,6 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { exaSearchTool } from "@/lib/tools/exa";
+import { createPdfTool } from "@/lib/tools/pdf";
 import { webScrapeTool, webCrawlTool } from "@/lib/tools/scrape";
 import { getToolsForUser } from "@/lib/tools/composio";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
@@ -18,6 +19,8 @@ import { ToolName } from "@/lib/tools/constants";
 import { RoutingDecision } from "@/types/chat";
 import type { Message } from "@/lib/schemas/chat";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
+import { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
+export { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
 
 export const ASK_USER_TOOL_NAME = ToolName.ASK_USER;
 
@@ -408,6 +411,7 @@ export function selectToolsForAgentStep(
 
   addToolByName(selected, toolsByName, ToolName.ASK_USER);
   addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
+  addToolByName(selected, toolsByName, ToolName.CREATE_PDF);
   addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
   addToolByName(selected, toolsByName, ToolName.WEB_CRAWL);
   addToolsByName(selected, toolsByName, plannedTools);
@@ -461,21 +465,6 @@ export function hasWebActionIntent(latestUserText: string): boolean {
   );
 }
 
-export function shouldBypassSemanticCacheForToolIntent(
-  latestUserText: string,
-  _connectedServices?: string[],
-): boolean {
-  void _connectedServices;
-  const rawText = latestUserText.toLowerCase();
-  return (
-    getAnyMentionedToolkits(latestUserText).length > 0 ||
-    matchesAnyTerm(rawText, WEB_SEARCH_TERMS) ||
-    matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
-    qualifiesForDeepResearch(latestUserText) ||
-    /https?:\/\//i.test(latestUserText)
-  );
-}
-
 function messagesHaveImageContent(messages: Message[]): boolean {
   return messages.some(
     (message) =>
@@ -520,6 +509,10 @@ export async function getToolsForRequest(
 
   if (process.env.EXA_API_KEY) {
     baseTools.push(exaSearchTool);
+  }
+
+  if (process.env.UPLOADTHING_TOKEN) {
+    baseTools.push(createPdfTool);
   }
 
   if (options?.apiKey) {
@@ -579,7 +572,10 @@ export function filterToolsForContext(
     case RoutingDecision.VisionOnly:
     case RoutingDecision.DocumentsOnly:
       return allTools.filter(
-        (t) => alwaysInclude.includes(t.name) || t.name === ToolName.WEB_SCRAPE,
+        (t) =>
+          alwaysInclude.includes(t.name) ||
+          t.name === ToolName.WEB_SCRAPE ||
+          t.name === ToolName.CREATE_PDF,
       );
 
     default:
