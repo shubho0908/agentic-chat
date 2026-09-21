@@ -167,7 +167,12 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           if (contextResult.context) {
-            enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
+            enhancedMessages = injectContextToMessages(
+              enhancedMessages,
+              contextResult.context,
+              model,
+              contextResult.role,
+            );
           }
         } catch (error) {
           if (abortSignal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;

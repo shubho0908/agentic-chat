@@ -179,7 +179,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
             };
 
             if (contextResult.context) {
-              enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
+              enhancedMessages = injectContextToMessages(
+                enhancedMessages,
+                contextResult.context,
+                model,
+                contextResult.role,
+              );
             }
 
             if (contextResult.metadata.citations?.length) {

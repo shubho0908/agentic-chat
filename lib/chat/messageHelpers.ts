@@ -19,13 +19,18 @@ function getContextBudgetTokens(messages: Message[], model: string): number {
   return Math.min(available, Math.min(MAX_RAG_CONTEXT_TOKENS, Math.max(MIN_RAG_CONTEXT_TOKENS, budget)));
 }
 
-export function injectContextToMessages(messages: Message[], context: string, model?: string): Message[] {
+export function injectContextToMessages(
+  messages: Message[],
+  context: string,
+  model?: string,
+  role: MessageRole = MessageRole.USER,
+): Message[] {
   const trimmedContext = context.trim();
   if (!trimmedContext) {
     return messages;
   }
 
-  const isSystemInstruction = trimmedContext.includes('<document_processing_notice>');
+  const isSystemInstruction = role === MessageRole.SYSTEM;
 
   const safeContext = isSystemInstruction
     ? trimmedContext

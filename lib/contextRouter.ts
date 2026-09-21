@@ -130,6 +130,7 @@ interface ContextRoutingMetadata {
 interface ContextRoutingResult {
   context: string;
   metadata: ContextRoutingMetadata;
+  role?: MessageRole;
 }
 
 const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
@@ -239,13 +240,10 @@ async function resolveDocumentContext(
   }
 }
 
-function buildMissingDocumentContext(query: string): string {
-  const normalizedQuery = query.trim() || "the attached documents";
-
+function buildMissingDocumentContext(): string {
   return (
     "\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed." +
     "\n<document_processing_notice>" +
-    `\nUser's request: ${normalizedQuery}` +
     "\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge." +
     "\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again." +
     "\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay." +
@@ -449,7 +447,11 @@ export async function routeContext(
         documentCount: attachmentInfo.documentCount,
         isReferential,
       });
-      return { context: buildMissingDocumentContext(textQuery), metadata };
+      return {
+        context: buildMissingDocumentContext(),
+        metadata,
+        role: MessageRole.SYSTEM,
+      };
     }
 
     if (hasImages) {
@@ -510,7 +512,11 @@ export async function routeContext(
       documentCount: attachmentInfo.documentCount,
       isReferential,
     });
-    return { context: buildMissingDocumentContext(textQuery), metadata };
+    return {
+      context: buildMissingDocumentContext(),
+      metadata,
+      role: MessageRole.SYSTEM,
+    };
   }
 
   if (hasImages) {

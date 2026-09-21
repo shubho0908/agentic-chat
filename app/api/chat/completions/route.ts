@@ -294,7 +294,12 @@ export async function POST(request: NextRequest) {
         memoryStatusInfo = contextResult.metadata;
 
         if (contextResult.context) {
-          enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
+          enhancedMessages = injectContextToMessages(
+            enhancedMessages,
+            contextResult.context,
+            validatedModel,
+            contextResult.role,
+          );
         }
       } catch (error) {
         logger.error('[Context Routing Error]', error);
