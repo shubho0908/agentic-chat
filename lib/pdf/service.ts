@@ -34,6 +34,9 @@ let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
 
 async function acquireRenderSlot(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw new Error("PDF generation was cancelled");
+  }
   if (activeRenders < MAX_CONCURRENT_RENDERS) {
     activeRenders += 1;
     return;
@@ -50,8 +53,9 @@ async function acquireRenderSlot(signal?: AbortSignal): Promise<void> {
       if (index !== -1) renderQueue.splice(index, 1);
       reject(new Error("PDF generation was cancelled"));
     };
-    renderQueue.push(grant);
     signal?.addEventListener("abort", onAbort, { once: true });
+    renderQueue.push(grant);
+    if (signal?.aborted) onAbort();
   });
 }
 

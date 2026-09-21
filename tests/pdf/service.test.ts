@@ -95,3 +95,17 @@ test("concurrent renders are bounded but all complete", async () => {
   );
   for (const outcome of outcomes) assert.equal(outcome.ok, true);
 });
+
+test("an already-aborted signal never queues or starts a render", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const outcome = await generateAndStorePdf(
+    {
+      title: "Aborted",
+      sections: [{ blocks: [{ type: "paragraph", text: "Never rendered." }] }],
+    },
+    { store: fakeStore, signal: controller.signal },
+  );
+  assert.equal(outcome.ok, false);
+  if (!outcome.ok) assert.match(outcome.error, /cancelled/i);
+});
