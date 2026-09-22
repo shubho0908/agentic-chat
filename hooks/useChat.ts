@@ -43,7 +43,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { initialMessages = [], conversationId: initialConversationId, autoContinue, onArtifact } = options;
+  const { initialMessages = [], conversationId: initialConversationId, activeBranchId: initialActiveBranchId, autoContinue, onArtifact } = options;
   const [messages, setMessages] = useState<Message[]>(() => dedupeMessagesById(initialMessages));
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
@@ -54,7 +54,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
   const autoContinuedRef = useRef<string | null>(null);
-  const branchIdRef = useRef<string | undefined>(undefined);
+  const branchIdRef = useRef<string | undefined>(initialActiveBranchId ?? undefined);
   const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   const messagesRef = useRef<Message[]>(messages);
@@ -72,9 +72,9 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
       autoContinuedRef.current = null;
-      branchIdRef.current = undefined;
+      branchIdRef.current = initialActiveBranchId ?? undefined;
     }
-  }, [initialConversationId, initialMessages, messages.length]);
+  }, [initialActiveBranchId, initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
     async ({ content, session, attachments, activeTool, reasoningEffort }: SendMessageOptions) => {

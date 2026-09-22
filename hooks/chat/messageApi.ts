@@ -1,6 +1,13 @@
-import { type Attachment, type MessageContentPart, type MessageMetadata } from "@/lib/schemas/chat";
+import {
+  type Attachment,
+  type MessageContentPart,
+  type MessageMetadata,
+} from "@/lib/schemas/chat";
 import { extractTextFromContent } from "@/lib/contentUtils";
-import type { FinalizeEditedMessageResponse, UpdateMessageResponse } from "@/types/chat";
+import type {
+  FinalizeEditedMessageResponse,
+  UpdateMessageResponse,
+} from "@/types/chat";
 import { isSupportedForRAG } from "@/lib/rag/utils";
 import { apiRoutes } from "@/lib/routes";
 
@@ -13,7 +20,10 @@ interface SavedMessageWithAttachments {
   }>;
 }
 
-function logDocumentProcessingDispatchError(context: string, error: unknown): void {
+function logDocumentProcessingDispatchError(
+  context: string,
+  error: unknown,
+): void {
   try {
     logger.warn(`[Message API] Failed to ${context}:`, error);
   } catch {
@@ -27,19 +37,19 @@ async function processDocumentsAsync(attachmentIds: string[]): Promise<void> {
   try {
     if (attachmentIds.length === 1) {
       await fetch(apiRoutes.documentsProcess, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ attachmentId: attachmentIds[0] }),
       });
     } else {
       await fetch(apiRoutes.documentsProcessBatch, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ attachmentIds }),
       });
     }
   } catch (error) {
-    logDocumentProcessingDispatchError('process documents', error);
+    logDocumentProcessingDispatchError("process documents", error);
   }
 }
 
@@ -75,7 +85,7 @@ export async function saveUserMessage(
   content: string | MessageContentPart[],
   attachments?: Attachment[],
   signal?: AbortSignal,
-  clientMessageId?: string
+  clientMessageId?: string,
 ): Promise<string | null> {
   const contentToSave = extractTextFromContent(content);
   const payload = {
@@ -97,23 +107,30 @@ export async function saveUserMessage(
     }
 
     try {
-      const response = await fetch(apiRoutes.conversationMessages(conversationId), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal,
-      });
+      const response = await fetch(
+        apiRoutes.conversationMessages(conversationId),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal,
+        },
+      );
 
       if (!response.ok) {
         let serverMessage = response.statusText;
         try {
           const errorData = await response.json();
-          if (typeof errorData?.message === "string") serverMessage = errorData.message;
-          else if (typeof errorData?.error === "string") serverMessage = errorData.error;
+          if (typeof errorData?.message === "string")
+            serverMessage = errorData.message;
+          else if (typeof errorData?.error === "string")
+            serverMessage = errorData.error;
         } catch {
           // Non-JSON error body — keep statusText
         }
-        lastError = new Error(`Failed to save message (${response.status}): ${serverMessage}`);
+        lastError = new Error(
+          `Failed to save message (${response.status}): ${serverMessage}`,
+        );
         if (response.status < 500) {
           break;
         }
@@ -122,9 +139,14 @@ export async function saveUserMessage(
 
       const savedMessage: SavedMessageWithAttachments = await response.json();
 
-      if (response.status === 201 && savedMessage.attachments && savedMessage.attachments.length > 0) {
-        const documentAttachmentIds = savedMessage.attachments
-          .flatMap((att) => isSupportedForRAG(att.fileType) ? [att.id] : []);
+      if (
+        response.status === 201 &&
+        savedMessage.attachments &&
+        savedMessage.attachments.length > 0
+      ) {
+        const documentAttachmentIds = savedMessage.attachments.flatMap((att) =>
+          isSupportedForRAG(att.fileType) ? [att.id] : [],
+        );
 
         if (documentAttachmentIds.length > 0) {
           await processDocumentsAsync(documentAttachmentIds);
@@ -151,7 +173,7 @@ export async function saveUserMessage(
 export async function saveAssistantMessage(
   conversationId: string,
   content: string,
-  metadata?: MessageMetadata
+  metadata?: MessageMetadata,
 ): Promise<string | null> {
   try {
     const body = {
@@ -160,11 +182,14 @@ export async function saveAssistantMessage(
       ...(metadata && { metadata }),
     };
 
-    const response = await fetch(apiRoutes.conversationMessages(conversationId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      apiRoutes.conversationMessages(conversationId),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to save message: ${response.statusText}`);
@@ -190,22 +215,27 @@ export async function finalizeEditedMessage(
   assistantMessageId?: string,
   attachments?: Attachment[],
   assistantMetadata?: MessageMetadata,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  branchId?: string,
 ): Promise<FinalizeEditedMessageResponse> {
   const contentToSave = extractTextFromContent(content);
 
-  const response = await fetch(apiRoutes.conversationMessage(conversationId, messageId), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      content: contentToSave,
-      attachments: attachments || [],
-      assistantContent,
-      assistantMessageId,
-      assistantMetadata,
-    }),
-    signal,
-  });
+  const response = await fetch(
+    apiRoutes.conversationMessage(conversationId, messageId),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: contentToSave,
+        attachments: attachments || [],
+        assistantContent,
+        assistantMessageId,
+        assistantMetadata,
+        branchId,
+      }),
+      signal,
+    },
+  );
 
   if (!response.ok) {
     let errorMessage = `Failed to finalize edited message: ${response.statusText}`;
@@ -218,7 +248,10 @@ export async function finalizeEditedMessage(
       }
     } catch (error) {
       try {
-        logger.warn("Failed to parse finalize edited message error response:", error);
+        logger.warn(
+          "Failed to parse finalize edited message error response:",
+          error,
+        );
       } catch {
         // Swallow — logging must never crash the application
       }
@@ -228,9 +261,16 @@ export async function finalizeEditedMessage(
 
   const finalized: FinalizeEditedMessageResponse = await response.json();
 
-  if (finalized.updatedMessage.attachments && finalized.updatedMessage.attachments.length > 0) {
-    const documentAttachmentIds = finalized.updatedMessage.attachments
-      .flatMap((att) => typeof att.id === "string" && isSupportedForRAG(att.fileType) ? [att.id] : []);
+  if (
+    finalized.updatedMessage.attachments &&
+    finalized.updatedMessage.attachments.length > 0
+  ) {
+    const documentAttachmentIds = finalized.updatedMessage.attachments.flatMap(
+      (att) =>
+        typeof att.id === "string" && isSupportedForRAG(att.fileType)
+          ? [att.id]
+          : [],
+    );
 
     if (documentAttachmentIds.length > 0) {
       await processDocumentsAsync(documentAttachmentIds);
@@ -245,22 +285,29 @@ export async function updateAssistantMessage(
   messageId: string,
   content: string,
   metadata?: MessageMetadata,
-  inPlace?: boolean
+  inPlace?: boolean,
+  branchId?: string,
 ): Promise<UpdateMessageResponse> {
   const body = {
     content,
     ...(inPlace && { inPlace: true }),
     ...(metadata && { metadata }),
+    ...(branchId && { branchId }),
   };
 
-  const response = await fetch(apiRoutes.conversationMessage(conversationId, messageId), {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(
+    apiRoutes.conversationMessage(conversationId, messageId),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 
   if (!response.ok) {
-    throw new Error(`Failed to update assistant message: ${response.statusText}`);
+    throw new Error(
+      `Failed to update assistant message: ${response.statusText}`,
+    );
   }
 
   return await response.json();

@@ -11,6 +11,6 @@ function encodeThreadPart(value: string): string {
 }
 
 export function deriveThreadId(conversationId: string, branchId?: string): string {
-  const root = `conv:${encodeThreadPart(conversationId)}`;
+  const root = `conv-${encodeThreadPart(conversationId)}`;
   return branchId ? `${root}:branch:${encodeThreadPart(branchId)}` : root;
 }

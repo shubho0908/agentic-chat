@@ -27,7 +27,7 @@ Finally, edits and regenerations change the visible message-tree branch in Postg
 
 The request gains an optional `branchId`, supplied by edit/regenerate flows from the branch point's stable persisted message ID. Thread IDs are derived as:
 
-- normal branch: `conv:<conversationId>`
+- normal branch: `conv-<conversationId>`
 - edited/regenerated branch: `conv:<conversationId>:branch:<branchId>`
 
 IDs are encoded before use, and the API verifies conversation ownership before graph execution. First-party orchestrated requests require `conversationId`; callers that cannot persist a conversation must use the non-orchestrated stateless path rather than sharing `user-<id>-ephemeral`.
@@ -94,4 +94,4 @@ Where a real external dependency is unavailable, the test must fail or explicitl
 
 ## Rollout
 
-Deploy behind `CHECKPOINT_HISTORY_V2` for one preview environment, run migration-compatible dual diagnostics without dual writes, then enable for the preview user. Existing polluted checkpoints should not be reused: fork once to a `:v2` namespace or delete them after explicit migration. Rollback is the flag plus namespace switch; old checkpoint data remains isolated.
+The production `conv-<conversationId>` root namespace is unchanged, so existing checkpoints and historical tool-call state remain readable. The new branch metadata column is additive. Deploy the database migration before the application version; rollback can ignore the nullable column without stranding checkpoints.

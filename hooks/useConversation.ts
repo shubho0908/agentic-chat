@@ -28,6 +28,7 @@ interface ConversationDetails {
   isPublic: boolean;
   createdAt: string;
   updatedAt: string;
+  activeBranchId?: string | null;
 }
 
 interface MessagesPage {

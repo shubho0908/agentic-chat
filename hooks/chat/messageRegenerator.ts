@@ -1,4 +1,10 @@
-import { type Message, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole } from "@/lib/schemas/chat";
+import {
+  type Message,
+  type ToolActivity,
+  type MessageMetadata,
+  ToolStatus,
+  MessageRole,
+} from "@/lib/schemas/chat";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { getModel } from "@/lib/storage";
@@ -6,13 +12,22 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { updateAssistantMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
-import { extractMetadataFromProgress, extractPdfFromToolResult } from "./streamingHandler";
+import {
+  extractMetadataFromProgress,
+  extractPdfFromToolResult,
+} from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
-import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
+import {
+  buildMessagesForAPI,
+  getPersistableAssistantContent,
+} from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
-import { fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
+import {
+  fetchMessageVersions,
+  updateMessageWithVersions,
+} from "./versionManager";
 import { queryKeys } from "@/lib/queryKeys";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { toJsonValue } from "@/lib/json";
@@ -25,7 +40,7 @@ export async function handleRegenerateResponse(
   messageId: string,
   context: RegenerateContext,
   activeTool?: string | null,
-  reasoningEffort?: ReasoningEffortLevel
+  reasoningEffort?: ReasoningEffortLevel,
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -66,7 +81,7 @@ export async function handleRegenerateResponse(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
-  
+
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
   const updatedAssistantMessage: Message = {
@@ -77,16 +92,29 @@ export async function handleRegenerateResponse(
   };
 
   const messagesUpToAssistant = messages.slice(0, messageIndex);
-  onMessagesUpdate(() => [...messagesUpToAssistant, updatedAssistantMessage, ...messagesAfterAssistant]);
+  onMessagesUpdate(() => [
+    ...messagesUpToAssistant,
+    updatedAssistantMessage,
+    ...messagesAfterAssistant,
+  ]);
 
   try {
     const useCaching = shouldUseSemanticCache(
       messagesUpToAssistant,
       previousUserMessage.attachments,
-      activeTool
+      activeTool,
     );
-    const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments, previousUserMessage.id);
+    const cacheQuery = useCaching
+      ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content)
+      : "";
+    const messagesForAPI = buildMessagesForAPI(
+      messagesUpToAssistant,
+      previousUserMessage.content,
+      DEFAULT_ASSISTANT_PROMPT,
+      model,
+      previousUserMessage.attachments,
+      previousUserMessage.id,
+    );
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
@@ -101,13 +129,15 @@ export async function handleRegenerateResponse(
           prev.map((msg) =>
             msg.id === assistantMessage.id
               ? { ...msg, content: accumulatedContent }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       conversationId,
       branchId,
-      documentAttachmentIds: previousUserMessage.attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
+      documentAttachmentIds: previousUserMessage.attachments?.flatMap(
+        (attachment) => (attachment.id ? [attachment.id] : []),
+      ),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -120,15 +150,15 @@ export async function handleRegenerateResponse(
           args: toolCall.args,
           timestamp: Date.now(),
         };
-        
+
         toolActivities.push(activity);
-        
+
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessage.id
               ? { ...msg, toolActivities: [...toolActivities] }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       onToolResult: (toolResult) => {
@@ -136,16 +166,23 @@ export async function handleRegenerateResponse(
         if (resultPdf) {
           const existing = messageMetadata?.pdfs ?? [];
           if (!existing.some((item) => item.url === resultPdf.url)) {
-            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
-            onMessagesUpdate((prev) => prev.map((msg) =>
-              msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
-            ));
+            messageMetadata = {
+              ...messageMetadata,
+              pdfs: [...existing, resultPdf],
+            };
+            onMessagesUpdate((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessage.id
+                  ? { ...msg, metadata: messageMetadata }
+                  : msg,
+              ),
+            );
           }
         }
         const activityIndex = toolActivities.findIndex(
-          (a) => a.toolCallId === toolResult.toolCallId
+          (a) => a.toolCallId === toolResult.toolCallId,
         );
-        
+
         if (activityIndex !== -1) {
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
@@ -153,21 +190,28 @@ export async function handleRegenerateResponse(
             result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
-          
+
           onMessagesUpdate((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessage.id
                 ? { ...msg, toolActivities: [...toolActivities] }
-                : msg
-            )
+                : msg,
+            ),
           );
         }
       },
       onToolProgress: (progress) => {
-        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
-        onMessagesUpdate((prev) => prev.map((msg) =>
-          msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
-        ));
+        messageMetadata = extractMetadataFromProgress(
+          progress,
+          messageMetadata,
+        );
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, metadata: messageMetadata }
+              : msg,
+          ),
+        );
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -182,7 +226,6 @@ export async function handleRegenerateResponse(
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
-          
         }
       },
       reasoningEffort,
@@ -192,8 +235,8 @@ export async function handleRegenerateResponse(
           prev.map((msg) =>
             msg.id === assistantMessage.id
               ? { ...msg, thinking: thinkingBuffer }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       onResponseIncomplete: () => {
@@ -211,8 +254,8 @@ export async function handleRegenerateResponse(
               prev.map((msg) =>
                 msg.id === assistantMessage.id
                   ? { ...msg, metadata: messageMetadata }
-                  : msg
-              )
+                  : msg,
+              ),
             );
           }
         }
@@ -220,8 +263,6 @@ export async function handleRegenerateResponse(
         context.onArtifact?.(eventWithMessage);
       },
     });
-    onBranchIdUpdate?.(branchId);
-
     if (toolActivities.length > 0) {
       messageMetadata = { ...(messageMetadata || {}), toolActivities };
     }
@@ -235,33 +276,46 @@ export async function handleRegenerateResponse(
       prev.map((msg) =>
         msg.id === assistantMessage.id
           ? { ...msg, metadata: messageMetadata }
-          : msg
-      )
+          : msg,
+      ),
     );
 
     if (responseIncomplete) {
       messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
-          msg.id === assistantMessage.id ? { ...msg, metadata: messageMetadata } : msg
-        )
+          msg.id === assistantMessage.id
+            ? { ...msg, metadata: messageMetadata }
+            : msg,
+        ),
       );
     }
 
-    const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
+    const persistableAssistantContent = getPersistableAssistantContent(
+      responseContent,
+      messageMetadata,
+    );
 
-    if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
+    if (
+      persistableAssistantContent &&
+      persistableAssistantContent !== responseContent
+    ) {
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessage.id
             ? { ...msg, content: persistableAssistantContent }
-            : msg
-        )
+            : msg,
+        ),
       );
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && responseContent && artifacts.length === 0 && !responseIncomplete) {
+      if (
+        cacheQuery &&
+        responseContent &&
+        artifacts.length === 0 &&
+        !responseIncomplete
+      ) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
@@ -275,15 +329,21 @@ export async function handleRegenerateResponse(
           conversationId,
           assistantMessage.id,
           persistableAssistantContent,
-          messageMetadata
+          messageMetadata,
+          false,
+          branchId,
         );
-        const parentId = updatedAssistant.parentMessageId || updatedAssistant.id;
+        const parentId =
+          updatedAssistant.parentMessageId || updatedAssistant.id;
         let versions: Message[] = [];
 
         try {
           versions = await fetchMessageVersions(conversationId, parentId);
         } catch (versionError) {
-          logger.warn('Failed to fetch message versions after regeneration:', versionError);
+          logger.warn(
+            "Failed to fetch message versions after regeneration:",
+            versionError,
+          );
         }
 
         onMessagesUpdate((prev) =>
@@ -295,13 +355,16 @@ export async function handleRegenerateResponse(
                     metadata: messageMetadata,
                   },
                   updatedAssistant.id,
-                  versions
+                  versions,
                 )
-              : msg
-          )
+              : msg,
+          ),
         );
-        
-        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationId) });
+
+        onBranchIdUpdate?.(branchId);
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversation(conversationId),
+        });
         queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
@@ -326,19 +389,37 @@ export async function handleRegenerateResponse(
       onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }
-    
+
     const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    
-    if (responseContent || messageMetadata?.pdfs?.length || messageMetadata?.artifacts?.length) {
-      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
-      onMessagesUpdate((prev) => prev.map((msg) =>
-        msg.id === assistantMessage.id
-          ? { ...msg, content: getPersistableAssistantContent(responseContent, messageMetadata) ?? responseContent, metadata: messageMetadata }
-          : msg
-      ));
+
+    if (
+      responseContent ||
+      messageMetadata?.pdfs?.length ||
+      messageMetadata?.artifacts?.length
+    ) {
+      messageMetadata = {
+        ...messageMetadata,
+        streamStatus: "error",
+        streamError: errorMessage,
+      };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id
+            ? {
+                ...msg,
+                content:
+                  getPersistableAssistantContent(
+                    responseContent,
+                    messageMetadata,
+                  ) ?? responseContent,
+                metadata: messageMetadata,
+              }
+            : msg,
+        ),
+      );
     } else {
       onMessagesUpdate(() => originalMessagesState);
     }

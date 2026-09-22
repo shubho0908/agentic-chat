@@ -93,6 +93,7 @@ export interface VersionData {
 export interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
+  activeBranchId?: string | null;
   onArtifact?: (event: ArtifactEvent) => void;
   autoContinue?: {
     session?: { user: { id: string } };
