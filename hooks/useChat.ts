@@ -504,11 +504,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
     if (conversationId) {
       // Lock-free server marker: even if this tab dies before the stream's
       // disconnect reaches the server, the stop is recorded and a later
-      // refresh can never auto-retry it.
+      // refresh can never auto-retry it. The user message id scopes the
+      // marker to this turn so a newer turn is never finalized by mistake.
+      const lastUserMessageId = messagesRef.current.findLast(
+        (message) => message.role === MessageRole.USER,
+      )?.id;
       void fetch(apiRoutes.chatStop, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId }),
+        body: JSON.stringify({
+          conversationId,
+          ...(lastUserMessageId && { userMessageId: lastUserMessageId }),
+        }),
         keepalive: true,
       }).catch(() => {});
     }

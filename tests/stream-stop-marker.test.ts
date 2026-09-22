@@ -45,7 +45,7 @@ test("marker id is deterministic per conversation and user message", () => {
 
 test("writes the marker when the conversation ends at the user message", async () => {
   const { state, db } = createFakeDb({ id: "msg-1", role: "USER", content: "hi" });
-  const result = await markStreamStoppedByUser("conv-1", db as never);
+  const result = await markStreamStoppedByUser("conv-1", undefined, db as never);
   assert.equal(result.marked, true);
   assert.equal(result.messageId, "stopmsg-conv-1-msg-1");
   assert.equal(state.executeRawCalls, 1);
@@ -62,7 +62,7 @@ test("first-writer-wins: a finalized completion blocks the marker", async () => 
     role: "ASSISTANT",
     content: "Here is your answer.",
   });
-  const result = await markStreamStoppedByUser("conv-1", db as never);
+  const result = await markStreamStoppedByUser("conv-1", undefined, db as never);
   assert.equal(result.marked, false);
   assert.equal(result.reason, "turn-already-finalized");
   assert.equal(state.createManyCalls.length, 0);
@@ -74,15 +74,43 @@ test("idempotent: an existing marker blocks a duplicate marker", async () => {
     role: "ASSISTANT",
     content: STREAM_STOPPED_BY_USER_MARKER,
   });
-  const result = await markStreamStoppedByUser("conv-1", db as never);
+  const result = await markStreamStoppedByUser("conv-1", undefined, db as never);
   assert.equal(result.marked, false);
   assert.equal(state.createManyCalls.length, 0);
 });
 
 test("no messages means nothing to mark", async () => {
   const { state, db } = createFakeDb(null);
-  const result = await markStreamStoppedByUser("conv-1", db as never);
+  const result = await markStreamStoppedByUser("conv-1", undefined, db as never);
   assert.equal(result.marked, false);
   assert.equal(result.reason, "no-messages");
+  assert.equal(state.createManyCalls.length, 0);
+});
+
+test("turn-scoped: writes when the expected user message is the latest", async () => {
+  const { state, db } = createFakeDb({ id: "msg-1", role: "USER", content: "hi" });
+  const result = await markStreamStoppedByUser("conv-1", "msg-1", db as never);
+  assert.equal(result.marked, true);
+  assert.equal(result.messageId, "stopmsg-conv-1-msg-1");
+  assert.equal(state.createManyCalls.length, 1);
+});
+
+test("turn-scoped: a newer turn blocks the stop of an older stream", async () => {
+  const { state, db } = createFakeDb({ id: "msg-2", role: "USER", content: "newer turn" });
+  const result = await markStreamStoppedByUser("conv-1", "msg-1", db as never);
+  assert.equal(result.marked, false);
+  assert.equal(result.reason, "superseded-by-newer-turn");
+  assert.equal(state.createManyCalls.length, 0);
+});
+
+test("turn-scoped: a finalized newer turn also blocks the stale stop", async () => {
+  const { state, db } = createFakeDb({
+    id: "msg-3",
+    role: "ASSISTANT",
+    content: "newer answer",
+  });
+  const result = await markStreamStoppedByUser("conv-1", "msg-1", db as never);
+  assert.equal(result.marked, false);
+  assert.equal(result.reason, "superseded-by-newer-turn");
   assert.equal(state.createManyCalls.length, 0);
 });

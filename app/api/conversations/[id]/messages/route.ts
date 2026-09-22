@@ -211,7 +211,7 @@ export async function POST(
     // unanswered user message and auto-continue would retry it on refresh.
     if (validatedRole === 'USER' && request.signal.aborted) {
       try {
-        await markStreamStoppedByUser(conversationId);
+        await markStreamStoppedByUser(conversationId, message.id);
       } catch (markErr) {
         logger.warn('[Messages Route] Failed to persist stream-stopped marker after aborted save:', markErr);
       }

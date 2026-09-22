@@ -71,7 +71,14 @@ export async function POST(request: NextRequest) {
       throw updateErr;
     }
 
-    const result = await markStreamStoppedByUser(conversationId);
+    const expectedUserMessageId =
+      typeof body.userMessageId === "string" && body.userMessageId.length > 0
+        ? body.userMessageId
+        : undefined;
+    const result = await markStreamStoppedByUser(
+      conversationId,
+      expectedUserMessageId,
+    );
     return jsonResponse(result, HTTP_STATUS.OK);
   } catch (error) {
     return errorResponse(

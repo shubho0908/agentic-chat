@@ -158,9 +158,10 @@ export function createOrchestratorStreamHandler(
       // Client-disconnect abort: record the stop server-side so a refresh or
       // the auto-continue resume can never retry a turn the user cancelled.
       // Best-effort: a failed marker write must never mask the abort itself.
+      const requestUserMessageId = messages[messages.length - 1]?.id;
       const persistStopMarker = async () => {
         try {
-          await markStreamStoppedByUser(conversationId);
+          await markStreamStoppedByUser(conversationId, requestUserMessageId);
         } catch (error) {
           logger.warn(
             "[Orchestrator] Failed to persist stream-stopped marker:",

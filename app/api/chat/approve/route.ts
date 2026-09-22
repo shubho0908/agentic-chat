@@ -207,8 +207,10 @@ export async function POST(request: NextRequest) {
         ? HUMAN_IN_THE_LOOP_APPROVED
         : HUMAN_IN_THE_LOOP_DENIED;
 
+      let startBegan = false;
       const readableStream = new ReadableStream({
         async start(controller) {
+          startBegan = true;
           const stream = createSafeStream(controller, {
             abortSignal: abortController.signal,
             label: "Approve",
@@ -302,8 +304,15 @@ export async function POST(request: NextRequest) {
         },
         cancel() {
           abortController.abort();
-          clearTimeout(deadlineTimer);
-          void threadLock.release();
+          // The lease stays with start(): releasing here while streamEvents
+          // and its checkpoint writes are still unwinding would let the next
+          // acquirer run concurrently with the aborted resume. start()'s
+          // finally releases once the unwind settles. Only when start never
+          // ran does cancel own the release, so the lease cannot leak.
+          if (!startBegan) {
+            clearTimeout(deadlineTimer);
+            void threadLock.release();
+          }
         },
       });
 
