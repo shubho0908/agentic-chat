@@ -1,5 +1,9 @@
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient, classifyJevFailure } from "./client";
+import {
+  JevConfigurationError,
+  JevDecisionClient,
+  classifyJevFailure,
+} from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
@@ -88,20 +92,22 @@ export function cacheGateDefersToOrchestrator(): boolean {
 }
 
 /** Default is off. Shadow and ab record the decision but always serve the
- * hit. Active vetoes only confident no-serve decisions and fails open on
- * provider errors: a Jev outage can never turn cache hits into misses. */
+ * hit. Active vetoes confident no-serve verdicts and refuses any hit the
+ * gate could not evaluate: an unevaluated entry is never served, so a Jev
+ * outage costs fresh generations instead of stale or off-topic answers. */
 export async function gateCacheHit(
   state: JevCacheGateState,
   conversationId?: string,
   dependency?: JevDecisionClient,
 ): Promise<CacheGateOutcome> {
   const mode = getJevMode(JevCheckpoint.CACHE_GATE);
-  const client = dependency ?? JevDecisionClient.createIfConfigured();
-  if (mode === JevMode.OFF || !client) return { serve: true };
+  if (mode === JevMode.OFF) return { serve: true };
 
   const requestId = createRequestId("jev_cache_gate");
   const startedAt = Date.now();
   try {
+    const client = dependency ?? JevDecisionClient.createIfConfigured();
+    if (!client) throw new JevConfigurationError();
     const result = await client.evaluate({
       checkpoint: JevCheckpoint.CACHE_GATE,
       schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
@@ -112,13 +118,14 @@ export async function gateCacheHit(
     });
     const decision = mapJevCacheGateResult(result);
     if (!decision) {
+      const serve = mode !== JevMode.ACTIVE;
       logJevDecision({
         checkpoint: JevCheckpoint.CACHE_GATE,
         schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
         modelVersion: result.modelVersion,
         mode,
         latencyMs: Date.now() - startedAt,
-        outcome: "invalid_response_serve",
+        outcome: serve ? "invalid_response_serve" : "invalid_response_veto",
         fallbackUsed: true,
         fallbackReason: JevFallbackReason.INVALID,
         requestId,
@@ -126,7 +133,7 @@ export async function gateCacheHit(
         inputTokens: result.usage?.input_tokens,
         outputTokens: result.usage?.output_tokens,
       });
-      return { serve: true };
+      return { serve };
     }
 
     const jevWouldServe = shouldServeCachedAnswer(decision);
@@ -157,9 +164,12 @@ export async function gateCacheHit(
     });
     return { serve };
   } catch (error) {
+    const serve = mode !== JevMode.ACTIVE;
     logWarn({
       event: "jev_cache_gate_fallback",
-      message: "Cache gate failed open",
+      message: serve
+        ? "Cache gate evaluation failed; serving unchecked hit"
+        : "Cache gate evaluation failed; vetoing unchecked hit",
       error: error instanceof Error ? error.message : String(error),
       requestId,
     });
@@ -169,12 +179,12 @@ export async function gateCacheHit(
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - startedAt,
-      outcome: "error_serve",
+      outcome: serve ? "error_serve" : "error_veto",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });
-    return { serve: true };
+    return { serve };
   }
 }

@@ -1,4 +1,4 @@
-import type { ApprovalStreamConfig, HumanInTheLoopRequestEvent, MemoryStatus, StreamConfig } from "@/types/chat";
+import { DegradedContextSource, type ApprovalStreamConfig, type HumanInTheLoopRequestEvent, type MemoryStatus, type StreamConfig } from "@/types/chat";
 import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { ToolArgs } from "@/lib/schemas/chat";
 import { apiRoutes } from "@/lib/routes";
@@ -129,6 +129,21 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
       : undefined;
   }
 
+  const DEGRADED_SOURCES = new Set<string>(Object.values(DegradedContextSource));
+
+  function optionalDegradedContexts(value: unknown): MemoryStatus["degradedContexts"] {
+    if (!Array.isArray(value)) return undefined;
+    const parsed = value.flatMap((entry) => {
+      const record = optionalRecord(entry);
+      if (!record) return [];
+      const { source, reason } = record;
+      if (typeof source !== "string" || !DEGRADED_SOURCES.has(source)) return [];
+      if (typeof reason !== "string") return [];
+      return [{ source: source as DegradedContextSource, reason }];
+    });
+    return parsed.length > 0 ? parsed : undefined;
+  }
+
   function processParsedEvent(parsed: Record<string, unknown>): void {
     if (parsed.error) {
       throw new Error(typeof parsed.error === "string" ? parsed.error : "Stream error");
@@ -148,6 +163,7 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
         routingDecision: optionalString(parsed.routingDecision) as MemoryStatus["routingDecision"],
         skippedMemory: optionalBoolean(parsed.skippedMemory),
         activeToolName: optionalString(parsed.activeToolName),
+        degradedContexts: optionalDegradedContexts(parsed.degradedContexts),
         tokenUsage: optionalRecord(parsed.tokenUsage) as MemoryStatus["tokenUsage"],
       });
     }

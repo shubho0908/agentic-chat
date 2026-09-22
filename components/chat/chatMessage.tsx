@@ -493,7 +493,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   );
 }
 
-export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
   if (
     prevProps.message.id !== nextProps.message.id ||
     prevProps.message.content !== nextProps.message.content ||
@@ -539,12 +539,14 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
 
     if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
       prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
+      prevStatus?.skippedMemory !== nextStatus?.skippedMemory ||
       prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||
       prevStatus?.documentCount !== nextStatus?.documentCount ||
       prevStatus?.imageCount !== nextStatus?.imageCount ||
-      prevStatus?.routingDecision !== nextStatus?.routingDecision) {
+      prevStatus?.routingDecision !== nextStatus?.routingDecision ||
+      prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length) {
       return false;
     }
 
@@ -560,4 +562,6 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   }
 
   return true;
-});
+}
+
+export const ChatMessage = memo(ChatMessageComponent, areChatMessagePropsEqual);

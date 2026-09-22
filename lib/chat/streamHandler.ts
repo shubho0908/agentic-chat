@@ -9,7 +9,7 @@ import type {
 } from 'openai/resources/responses/responses';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import { MessageRole } from '@/lib/schemas/chat';
-import type { MemoryStatus } from '@/types/chat';
+import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { routeContext } from '@/lib/contextRouter';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { injectContextToMessages } from '@/lib/chat/messageHelpers';
@@ -196,7 +196,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           memoryStatusInfo.degradedContexts = [
             ...(memoryStatusInfo.degradedContexts || []),
             {
-              source: 'context_router',
+              source: DegradedContextSource.ContextRouter,
               reason: error instanceof Error ? error.message : String(error),
             },
           ];
