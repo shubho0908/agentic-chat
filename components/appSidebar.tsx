@@ -139,10 +139,17 @@ export function AppSidebar() {
                           variant="ghost"
                           size="icon"
                           className="size-6"
-                          onClick={handleNewChat}
+                          asChild
                         >
-                          <Plus className="size-4" />
-                          <span className="sr-only">New Conversation</span>
+                          <Link
+                            href="/"
+                            prefetch
+                            onClick={handleNewChat}
+                            aria-label="New Conversation"
+                          >
+                            <Plus className="size-4" />
+                            <span className="sr-only">New Conversation</span>
+                          </Link>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="right">
