@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useRef } from "react";
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion";
 import { useInteractionTimeline, useShowcaseWidth, useViewportBounds } from "@/components/landing/interaction-showcase/hooks";
@@ -10,7 +11,8 @@ import {
   WebSearchScene,
 } from "@/components/landing/interaction-showcase/scenes";
 import { SCENE_TRANSITION } from "@/components/landing/interaction-showcase/constants";
-import { getDeviceKind, getSceneTitle } from "@/components/landing/interaction-showcase/timeline";
+import { getDeviceKind } from "@/components/landing/interaction-showcase/timeline";
+import { SceneKind } from "@/components/landing/interaction-showcase/types";
 
 export function InteractionShowcase() {
   const prefersReducedMotion = useReducedMotion() ?? false;
@@ -18,19 +20,41 @@ export function InteractionShowcase() {
   const showcaseWidth = useShowcaseWidth(showcaseRef);
   const viewport = useViewportBounds();
   const device = getDeviceKind(showcaseWidth, viewport.width, viewport.height);
-  const { timeline, navigateScene } = useInteractionTimeline(prefersReducedMotion);
+  const tabletLandscape = viewport.width > viewport.height && viewport.height < 560;
+  const { timeline } = useInteractionTimeline(prefersReducedMotion);
   const { cycle, scene, step, sceneElapsed } = timeline;
   const sceneKey = prefersReducedMotion ? scene : `${cycle}-${scene}`;
+  const sceneContent: Record<SceneKind, ReactNode> = {
+    [SceneKind.WebSearch]: (
+      <WebSearchScene
+        device={device}
+        step={step}
+        sceneElapsed={sceneElapsed}
+        prefersReducedMotion={prefersReducedMotion}
+      />
+    ),
+    [SceneKind.Orchestration]: (
+      <OrchestrationScene
+        step={step}
+        sceneElapsed={sceneElapsed}
+        prefersReducedMotion={prefersReducedMotion}
+      />
+    ),
+    [SceneKind.DeepResearch]: (
+      <DeepResearchScene
+        step={step}
+        sceneElapsed={sceneElapsed}
+        prefersReducedMotion={prefersReducedMotion}
+      />
+    ),
+  };
 
   return (
     <LazyMotion features={domAnimation}>
       <div ref={showcaseRef} className="relative mx-auto w-full max-w-[700px]">
         <DeviceShell
           device={device}
-          chromeTitle={getSceneTitle(scene)}
-          scene={scene}
-          onPreviousScene={() => navigateScene(-1)}
-          onNextScene={() => navigateScene(1)}
+          tabletLandscape={tabletLandscape}
         >
           <AnimatePresence mode="wait" initial={false}>
             <m.div
@@ -41,28 +65,7 @@ export function InteractionShowcase() {
               transition={prefersReducedMotion ? { duration: 0 } : SCENE_TRANSITION}
               className="flex min-h-0 flex-1 flex-col"
             >
-              {scene === "web" && (
-                <WebSearchScene
-                  device={device}
-                  step={step}
-                  sceneElapsed={sceneElapsed}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
-              {scene === "orchestration" && (
-                <OrchestrationScene
-                  step={step}
-                  sceneElapsed={sceneElapsed}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
-              {scene === "deep-research" && (
-                <DeepResearchScene
-                  step={step}
-                  sceneElapsed={sceneElapsed}
-                  prefersReducedMotion={prefersReducedMotion}
-                />
-              )}
+              {sceneContent[scene]}
             </m.div>
           </AnimatePresence>
         </DeviceShell>

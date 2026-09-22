@@ -38,7 +38,7 @@ function LandingShowcaseFallback() {
   return (
     <div
       aria-hidden="true"
-      className="aspect-[10/19] w-full rounded-[1.9rem] border border-border/30 bg-muted/10 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:aspect-[4/5] lg:aspect-[39/32] lg:rounded-[1.6rem]"
+      className="aspect-[70.6/146.6] w-full rounded-[2.6rem] border border-border/30 bg-muted/10 shadow-[0_20px_60px_rgba(15,23,42,0.08)] sm:aspect-[178.5/247.6] sm:rounded-[2.1rem] lg:aspect-[27/16] lg:rounded-t-xl lg:rounded-b-none lg:border-b-0"
     />
   );
 }
@@ -103,7 +103,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               >
                 <m.h1
                   variants={item}
-                  className="max-w-[12ch] text-balance font-[family-name:var(--font-newsreader)] text-[clamp(2.9rem,12vw,7.4rem)] font-normal leading-[0.94] tracking-tight"
+                  className="max-w-[12ch] text-balance font-[family-name:var(--font-newsreader)] text-[clamp(2.75rem,10vw,4.5rem)] font-normal leading-[0.98] tracking-tight"
                 >
                   Intelligence, <br />
                   <span className="italic text-muted-foreground">with context</span>

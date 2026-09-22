@@ -1,9 +1,9 @@
-import type { SceneKind } from "@/components/landing/interaction-showcase/types";
+import { SceneKind } from "@/components/landing/interaction-showcase/types";
 import type { ToolActivity } from "@/lib/schemas/chat";
 import { ToolStatus } from "@/lib/schemas/chat";
 import { ToolName } from "@/lib/tools/constants";
 
-export const SCENE_ORDER: SceneKind[] = ["web", "orchestration", "deep-research"];
+export const SCENE_ORDER: SceneKind[] = [SceneKind.WebSearch, SceneKind.Orchestration, SceneKind.DeepResearch];
 export const SCENE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
 
 export const SOURCE_ITEMS = ["Reuters", "Perplexity blog", "The Information"];
@@ -198,9 +198,9 @@ export const DR_SCENE_ACTIVITIES_3_DONE: ToolActivity[] = [
 ];
 
 export const SCENE_DURATIONS: Record<SceneKind, number[]> = {
-  web: [900, 2000, 1200, 2800, 2200],
-  orchestration: [600, 900, 1400, 800, 1800, 800, 1400, 2600],
-  "deep-research": [600, 800, 2200, 600, 2200, 600, 2200, 4200],
+  [SceneKind.WebSearch]: [900, 2000, 1200, 2800, 2200],
+  [SceneKind.Orchestration]: [600, 900, 1400, 800, 1800, 800, 1400, 2600],
+  [SceneKind.DeepResearch]: [600, 800, 2200, 600, 2200, 600, 2200, 4200],
 };
 
 export const FRAME_SURFACE_CLASS =

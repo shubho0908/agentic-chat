@@ -1,135 +1,127 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { m } from "framer-motion";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Globe,
-  Network,
-  BookOpenText,
-} from "lucide-react";
+import { ArrowUp, ChevronDown, Plus } from "lucide-react";
 import { OpenAIIcon } from "@/components/icons/openaiIcon";
+import { cn } from "@/lib/utils";
 import {
   DIVIDER_CLASS,
-  FRAME_RING_CLASS,
-  FRAME_SURFACE_CLASS,
   VIEWPORT_SURFACE_CLASS,
 } from "@/components/landing/interaction-showcase/constants";
-import type { DeviceKind, SceneKind } from "@/components/landing/interaction-showcase/types";
+import {
+  IpadFrame,
+  LaptopFrame,
+  PhoneFrame,
+} from "@/components/landing/interaction-showcase/deviceFrames";
+import {
+  DeviceKind,
+  DeviceOrientation,
+} from "@/components/landing/interaction-showcase/types";
 
-const SCENE_ICONS: Record<SceneKind, ReactNode> = {
-  web: <Globe className="size-3.5 shrink-0 text-muted-foreground/90" />,
-  orchestration: <Network className="size-3.5 shrink-0 text-muted-foreground/90" />,
-  "deep-research": <BookOpenText className="size-3.5 shrink-0 text-muted-foreground/90" />,
-};
-
-function ChromeUtilityRail({
-  onPreviousScene,
-  onNextScene,
-  ariaHidden = false,
+export function ScreenScaler({
+  designWidth,
+  fallbackScale,
+  children,
 }: {
-  onPreviousScene: () => void;
-  onNextScene: () => void;
-  ariaHidden?: boolean;
+  designWidth: number;
+  fallbackScale: number;
+  children: ReactNode;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [screen, setScreen] = useState<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const update = () => {
+      const rect = node.getBoundingClientRect();
+      setScreen((prev) =>
+        prev &&
+        Math.abs(prev.width - rect.width) < 0.5 &&
+        Math.abs(prev.height - rect.height) < 0.5
+          ? prev
+          : { width: rect.width, height: rect.height },
+      );
+    };
+
+    update();
+
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const scale = screen ? screen.width / designWidth : fallbackScale;
+
   return (
-    <div aria-hidden={ariaHidden} className={`flex items-center ${ariaHidden ? "invisible" : ""}`}>
-      <div className="flex items-center gap-1 text-muted-foreground/70">
-        <button
-          type="button"
-          onClick={onPreviousScene}
-          aria-label={ariaHidden ? undefined : "Show previous animation"}
-          tabIndex={ariaHidden ? -1 : 0}
-          className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06] dark:hover:text-white/[0.88]"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onNextScene}
-          aria-label={ariaHidden ? undefined : "Show next animation"}
-          tabIndex={ariaHidden ? -1 : 0}
-          className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06] dark:hover:text-white/[0.88]"
-        >
-          <ChevronRight className="size-4" />
-        </button>
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
+      <div
+        className="@container absolute left-0 top-0"
+        style={{
+          width: designWidth,
+          height: screen ? screen.height / scale : "100%",
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
+        {children}
       </div>
     </div>
   );
 }
 
-function ContentChrome({
-  device,
-  chromeTitle,
-  scene,
-  onPreviousScene,
-  onNextScene,
-}: {
-  device: DeviceKind;
-  chromeTitle: string;
-  scene: SceneKind;
-  onPreviousScene: () => void;
-  onNextScene: () => void;
-}) {
-  const isPhone = device === "phone";
-  const toolbarHeight = isPhone ? "h-[68px]" : device === "tablet" ? "h-[58px]" : "h-14";
-  const toolbarRadius =
-    device === "phone"
-      ? "rounded-t-[24px]"
-      : device === "tablet"
-        ? "rounded-t-[22px]"
-        : "rounded-t-[16px]";
-  const omnibarClass =
-    device === "phone"
-      ? "h-[1.875rem] max-w-[198px] rounded-full px-2.5"
-      : device === "tablet"
-        ? "h-[2.125rem] max-w-[250px] rounded-full px-3"
-        : "h-9 max-w-[350px] rounded-full px-4";
-  const omnibarSurfaceClass =
-    "border border-black/[0.08] bg-[linear-gradient(180deg,rgba(241,243,248,0.98),rgba(232,235,241,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/[0.08] dark:bg-[linear-gradient(180deg,rgba(33,36,44,0.98),rgba(24,27,33,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
-
+export function ComposerBar({ className }: { className?: string }) {
   return (
     <div
-      className={`shrink-0 border-b backdrop-blur ${toolbarHeight} ${toolbarRadius} ${VIEWPORT_SURFACE_CLASS} ${DIVIDER_CLASS}`}
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none shrink-0 select-none px-2 pb-2 @[40rem]:px-3 @[40rem]:pb-3",
+        className,
+      )}
     >
-      <div
-        className={`relative flex h-full px-3 sm:px-4 ${
-          isPhone ? "items-end justify-center pb-2.5" : "items-center"
-        }`}
-      >
-        {!isPhone ? (
-          <div className="grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3">
-            <ChromeUtilityRail onPreviousScene={onPreviousScene} onNextScene={onNextScene} />
-            <div className="flex min-w-0 justify-center">
-              <div
-                className={`flex w-full items-center justify-center gap-2 ${omnibarSurfaceClass} ${omnibarClass}`}
-              >
-                {SCENE_ICONS[scene]}
-                <span className="truncate text-[10px] font-medium uppercase tracking-[0.09em] text-foreground/52 dark:text-white/[0.62] sm:text-[11px]">
-                  {chromeTitle}
-                </span>
-              </div>
-            </div>
-            <ChromeUtilityRail
-              ariaHidden
-              onPreviousScene={onPreviousScene}
-              onNextScene={onNextScene}
-            />
-          </div>
-        ) : (
-          <div className="flex w-full justify-center">
-            <div
-              className={`flex w-full items-center justify-center gap-2 ${omnibarSurfaceClass} ${omnibarClass}`}
-            >
-              {SCENE_ICONS[scene]}
-              <span className="truncate text-[10px] font-medium uppercase tracking-[0.09em] text-foreground/52 dark:text-white/[0.62]">
-                {chromeTitle}
-              </span>
-            </div>
-          </div>
-        )}
+      <div className="relative isolate overflow-hidden rounded-3xl border border-black/[0.07] bg-[rgb(252_252_253)] shadow-[0_2px_6px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(15,23,42,0.08)] dark:border-white/[0.09] dark:bg-[rgb(24_24_27)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25),0_16px_40px_-12px_rgba(0,0,0,0.5)]">
+        <div className="px-4 pt-3">
+          <span className="block truncate text-[13px] leading-6 text-muted-foreground">
+            Ask me anything...
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-2">
+          <button
+            type="button"
+            disabled
+            tabIndex={-1}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+          >
+            <Plus className="size-4" />
+          </button>
+          <div className="min-w-0 flex-1" />
+          <button
+            type="button"
+            disabled
+            tabIndex={-1}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2 text-[12px] font-medium text-foreground/80"
+          >
+            <OpenAIIcon className="size-3.5 shrink-0" />
+            <span className="truncate">GPT-5.6 Sol</span>
+            <ChevronDown className="size-3 shrink-0 opacity-60" />
+          </button>
+          <button
+            type="button"
+            disabled
+            tabIndex={-1}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/[0.06] text-muted-foreground shadow-none dark:bg-white/[0.08]"
+          >
+            <ArrowUp className="size-4" strokeWidth={2.25} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -137,78 +129,66 @@ function ContentChrome({
 
 export function DeviceShell({
   device,
-  chromeTitle,
-  scene,
-  onPreviousScene,
-  onNextScene,
+  tabletLandscape = false,
   children,
 }: {
   device: DeviceKind;
-  chromeTitle: string;
-  scene: SceneKind;
-  onPreviousScene: () => void;
-  onNextScene: () => void;
+  tabletLandscape?: boolean;
   children: ReactNode;
 }) {
-  if (device === "phone") {
-    return (
-      <div className="mx-auto w-full max-w-[clamp(15.75rem,84vw,18.75rem)]">
-        <div className={`relative aspect-[10/19] overflow-hidden rounded-[30px] bg-[#f5f6f9] p-[8px] shadow-sm dark:bg-[#07080b] ${FRAME_RING_CLASS}`}>
-          <div className="pointer-events-none absolute inset-[1px] rounded-[29px] border border-black/[0.08] dark:border-white/[0.08]" />
-          <div className="absolute left-1/2 top-[17px] z-20 h-[7px] w-[54px] -translate-x-1/2 rounded-full bg-black/12 dark:bg-white/12" />
-          <div className={`relative flex h-full flex-col overflow-hidden rounded-[24px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
-            <ContentChrome
-              device={device}
-              chromeTitle={chromeTitle}
-              scene={scene}
-              onPreviousScene={onPreviousScene}
-              onNextScene={onNextScene}
-            />
-            {children}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const designSpecs: Record<DeviceKind, { designWidth: number; fallbackScale: number }> = {
+    [DeviceKind.Phone]: { designWidth: 390, fallbackScale: 0.74 },
+    [DeviceKind.Tablet]: tabletLandscape
+      ? { designWidth: 880, fallbackScale: 0.6 }
+      : { designWidth: 660, fallbackScale: 0.68 },
+    [DeviceKind.Desktop]: { designWidth: 720, fallbackScale: 0.88 },
+  };
+  const { designWidth, fallbackScale } = designSpecs[device];
 
-  if (device === "tablet") {
-    return (
-      <div className="mx-auto w-full max-w-[clamp(20rem,80vw,29rem)]">
-        <div className={`relative aspect-[4/5] overflow-hidden rounded-[28px] p-[8px] shadow-sm ${FRAME_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
-          <div className="absolute left-1/2 top-[5px] z-20 h-[4px] w-[64px] -translate-x-1/2 rounded-full bg-black/12 dark:bg-white/18" />
-          <div className={`relative flex h-full flex-col overflow-hidden rounded-[22px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
-            <ContentChrome
-              device={device}
-              chromeTitle={chromeTitle}
-              scene={scene}
-              onPreviousScene={onPreviousScene}
-              onNextScene={onNextScene}
-            />
-            {children}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full max-w-[46rem]">
+  const screenContent = (
+    <ScreenScaler designWidth={designWidth} fallbackScale={fallbackScale}>
       <div
-        className={`relative aspect-[39/32] overflow-hidden rounded-[22px] p-[6px] shadow-sm ${FRAME_SURFACE_CLASS} ${FRAME_RING_CLASS}`}
+        className={`flex h-full min-h-0 flex-col ${VIEWPORT_SURFACE_CLASS} ${
+          device === DeviceKind.Phone ? "pt-11" : ""
+        }`}
       >
-        <div className={`relative flex h-full flex-col overflow-hidden rounded-[16px] ${VIEWPORT_SURFACE_CLASS} ${FRAME_RING_CLASS}`}>
-          <ContentChrome
-            device={device}
-            chromeTitle={chromeTitle}
-              scene={scene}
-            onPreviousScene={onPreviousScene}
-            onNextScene={onNextScene}
-          />
-          {children}
-        </div>
+        {children}
+        {device !== DeviceKind.Desktop ? (
+          <ComposerBar className={device === DeviceKind.Phone ? "mb-3" : undefined} />
+        ) : null}
       </div>
-    </div>
+    </ScreenScaler>
   );
+
+  const frames: Record<DeviceKind, ReactNode> = {
+    [DeviceKind.Phone]: (
+      <div className="mx-auto w-full max-w-[clamp(15.75rem,84vw,18.75rem)]">
+        <PhoneFrame>{screenContent}</PhoneFrame>
+      </div>
+    ),
+    [DeviceKind.Tablet]: (
+      <div
+        className={`mx-auto w-full ${
+          tabletLandscape
+            ? "max-w-[min(34rem,112vh)]"
+            : "max-w-[clamp(20rem,80vw,29rem)]"
+        }`}
+      >
+        <IpadFrame
+          orientation={tabletLandscape ? DeviceOrientation.Landscape : DeviceOrientation.Portrait}
+        >
+          {screenContent}
+        </IpadFrame>
+      </div>
+    ),
+    [DeviceKind.Desktop]: (
+      <div className="w-full max-w-[46rem]">
+        <LaptopFrame>{screenContent}</LaptopFrame>
+      </div>
+    ),
+  };
+
+  return frames[device];
 }
 
 export function SceneFrame({
@@ -222,14 +202,14 @@ export function SceneFrame({
 }) {
   return (
     <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${VIEWPORT_SURFACE_CLASS}`}>
-      <div className={`shrink-0 border-b px-2.5 py-2.5 sm:px-4 sm:py-3 ${DIVIDER_CLASS}`}>
+      <div className={`shrink-0 border-b px-2.5 py-2.5 @[40rem]:px-4 @[40rem]:py-3 ${DIVIDER_CLASS}`}>
         <div>
-          <p className="text-[10px] font-medium tracking-[0.06em] text-muted-foreground/80 dark:text-white/[0.52] sm:text-[11px]">{caption}</p>
-          <h3 className="mt-1 text-[15px] font-medium text-foreground sm:text-[17px]">{title}</h3>
+          <p className="text-[10px] font-medium tracking-[0.06em] text-muted-foreground/80 dark:text-white/[0.52] @[40rem]:text-[11px]">{caption}</p>
+          <h3 className="mt-1 text-[15px] font-medium text-foreground @[40rem]:text-[17px]">{title}</h3>
         </div>
       </div>
 
-      <div className="min-h-0 max-h-full flex-1 overflow-hidden p-2 sm:p-3">
+      <div className="min-h-0 max-h-full flex-1 overflow-hidden p-2 @[40rem]:p-3">
         {children}
       </div>
     </div>
@@ -274,7 +254,7 @@ export function AutoScrollStage({ children }: { children: ReactNode }) {
       ref={viewportRef}
       className="scrollbar-hide relative h-full min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain"
     >
-      <div ref={contentRef} className="flex min-h-full flex-col gap-2 sm:gap-2.5">
+      <div ref={contentRef} className="flex min-h-full flex-col gap-2 @[40rem]:gap-2.5">
         {children}
       </div>
     </div>
@@ -284,7 +264,7 @@ export function AutoScrollStage({ children }: { children: ReactNode }) {
 export function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[92%] whitespace-pre-wrap break-words rounded-[18px] rounded-br-[6px] border border-chat-user-bubble-border bg-chat-user-bubble px-2.5 py-2 text-[11.5px] leading-[1.25rem] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:border-white/[0.12] dark:bg-[#222329] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] sm:max-w-[78%] sm:px-3 sm:text-[13px] sm:leading-[1.3rem]">
+      <div className="max-w-[92%] whitespace-pre-wrap break-words rounded-[18px] rounded-br-[6px] border border-chat-user-bubble-border bg-chat-user-bubble px-2.5 py-2 text-[11.5px] leading-[1.25rem] text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:border-white/[0.12] dark:bg-[#222329] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] @[40rem]:max-w-[78%] @[40rem]:px-3 @[40rem]:text-[13px] @[40rem]:leading-[1.3rem]">
         {text}
       </div>
     </div>
@@ -293,12 +273,12 @@ export function UserBubble({ text }: { text: string }) {
 
 export function AssistantShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 sm:gap-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 @[40rem]:gap-2.5">
       <div className="flex items-center gap-2">
         <div className="relative flex size-6 items-center justify-center overflow-hidden rounded-full border border-black/5 bg-white shadow-sm dark:border-white/[0.14] dark:bg-[#14161a] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
           <OpenAIIcon className="size-3 text-black dark:text-primary" />
         </div>
-        <span className="text-[12px] font-semibold tracking-tight text-muted-foreground dark:text-white/[0.68] sm:text-[13px]">
+        <span className="text-[12px] font-semibold tracking-tight text-muted-foreground dark:text-white/[0.68] @[40rem]:text-[13px]">
           AI assistant
         </span>
       </div>
@@ -320,7 +300,7 @@ export function ResponseBubble({
 }) {
   return (
     <div className={`min-w-0 ${minHeight}`}>
-      <p className="whitespace-pre-line text-[11.5px] leading-[1.28rem] text-foreground sm:text-[12.5px] sm:leading-[1.35rem]">
+      <p className="whitespace-pre-line text-[11.5px] leading-[1.28rem] text-foreground @[40rem]:text-[12.5px] @[40rem]:leading-[1.35rem]">
         {text}
         {showCursor && text.length > 0 && !prefersReducedMotion && (
           <m.span
