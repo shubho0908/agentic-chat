@@ -224,7 +224,8 @@ export function buildMessagesForAPI(
   systemPrompt: string,
   model: string,
   currentAttachments?: Attachment[],
-): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
+  newMessageId?: string,
+): Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
   const hasCurrentDocumentAttachment =
@@ -250,10 +251,11 @@ export function buildMessagesForAPI(
             (Array.isArray(content) && content.length === 0)
           )
             return [];
-          return [{ role: message.role as MessageRole, content }];
+          return [{ role: message.role as MessageRole, content, id: message.id }];
         }),
         {
           role: MessageRole.USER,
+          id: newMessageId,
           content: buildModelContentWithImageAttachments(
             newContent,
             currentAttachments,
@@ -279,10 +281,11 @@ export function buildMessagesForAPI(
         const content = getMessageContentForAPI(message);
         if (content === "" || (Array.isArray(content) && content.length === 0))
           return [];
-        return [{ role: message.role as MessageRole, content }];
+        return [{ role: message.role as MessageRole, content, id: message.id }];
       }),
       {
         role: MessageRole.USER,
+        id: newMessageId,
         content: buildModelContentWithImageAttachments(
           newContent,
           currentAttachments,

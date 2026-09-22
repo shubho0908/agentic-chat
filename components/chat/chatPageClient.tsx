@@ -61,6 +61,7 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
   const { messages, isLoading, sendMessage, editMessage, regenerateResponse, respondToHumanInTheLoop, stopGeneration, clearChat, memoryStatus } = useChat({
     initialMessages,
     conversationId,
+    activeBranchId: conversationData?.conversation.activeBranchId,
     onArtifact: handleArtifactEvent,
     autoContinue: session ? {
       session: session as { user: { id: string } },

@@ -123,6 +123,10 @@ export async function POST(request: NextRequest) {
       return errorResponse('conversationId must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
+    if (!conversationId && body.useOrchestrator !== false) {
+      return errorResponse('conversationId is required for orchestrated requests.', undefined, HTTP_STATUS.BAD_REQUEST);
+    }
+
     if (conversationId) {
       if (!isValidConversationId(conversationId)) {
         return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -130,6 +134,11 @@ export async function POST(request: NextRequest) {
 
       const { error: ownershipError } = await verifyConversationOwnership(conversationId, authUser.id);
       if (ownershipError) return ownershipError;
+    }
+
+    const branchId = body.branchId === undefined ? undefined : typeof body.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : null;
+    if (branchId === null || (branchId && branchId.length > 200)) {
+      return errorResponse('branchId must be a non-empty string up to 200 characters.', undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
     const streamResult = parseOptionalBoolean(body.stream, 'stream', true);
@@ -224,7 +233,8 @@ export async function POST(request: NextRequest) {
             model: validatedModel,
             apiKey,
             userId: authUser.id,
-            conversationId,
+            conversationId: conversationId!,
+            branchId,
             documentAttachmentIds,
             memoryEnabled,
             reasoningEffort,

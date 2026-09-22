@@ -286,7 +286,7 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, conversationId, documentAttachmentIds, reasoningEffort } = config;
+  const { messages, model, signal, conversationId, branchId, documentAttachmentIds, reasoningEffort } = config;
 
   const requestPayload: Record<string, unknown> = {
     model,
@@ -298,6 +298,7 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   if (conversationId) {
     requestPayload.conversationId = conversationId;
   }
+  if (branchId) requestPayload.branchId = branchId;
   if (documentAttachmentIds?.length) {
     requestPayload.documentAttachmentIds = documentAttachmentIds;
   }

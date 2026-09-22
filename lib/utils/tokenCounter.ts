@@ -12,14 +12,19 @@ const MODEL_TOKEN_LIMITS: Record<string, number> = Object.fromEntries(
 const TOKENS_PER_MESSAGE = 4;
 
 const encoderCache = new Map<string, ReturnType<typeof get_encoding>>();
+const modelEncodingCache = new Map<string, string>();
 
 function resolveEncodingName(model: string): string {
+  const cached = modelEncodingCache.get(model);
+  if (cached) return cached;
   try {
     const enc = encoding_for_model(model as TiktokenModel);
     const name = enc.name ?? "o200k_base";
     enc.free();
+    modelEncodingCache.set(model, name);
     return name;
   } catch {
+    modelEncodingCache.set(model, "o200k_base");
     return "o200k_base";
   }
 }

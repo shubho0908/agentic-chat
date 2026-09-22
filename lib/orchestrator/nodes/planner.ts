@@ -67,6 +67,19 @@ export function extractText(content: unknown): string {
   return JSON.stringify(content);
 }
 
+function plannerConversationTail(messages: AgentStateType["messages"]): string {
+  return messages
+    .filter((message) => message.type === "human" || message.type === "ai")
+    .map((message) => ({ message, text: extractText(message.content).trim() }))
+    .filter(({ text }) => text.length > 0)
+    .slice(-6)
+    .map(
+      ({ message, text }) =>
+        `${message.type === "human" ? "User" : "Assistant"}: ${text.slice(0, 1200)}`,
+    )
+    .join("\n");
+}
+
 function buildShadowState(
   messages: AgentStateType["messages"],
   latestMessage: string,
@@ -77,7 +90,8 @@ function buildShadowState(
     conversationTail: messages
       .slice(-(JEV_SHADOW_TAIL_TURNS + 1), -1)
       .map((m) => ({
-        role: m._getType() === "human" ? ("user" as const) : ("assistant" as const),
+        role:
+          m._getType() === "human" ? ("user" as const) : ("assistant" as const),
         content: extractText(m.content).slice(0, JEV_SHADOW_TAIL_CONTENT_CHARS),
       }))
       .filter((m) => m.content.length > 0),
@@ -154,7 +168,6 @@ async function runJevPlannerShadow(
   }
 }
 
-
 /** Fire-and-forget wrapper. Building the shadow state runs outside the
  * async function, so this catches sync throws too and the planner never
  * depends on shadow. */
@@ -196,7 +209,10 @@ export function createPlannerNode(
   tools: DynamicStructuredTool[],
   apiKey: string,
   model: string,
-  options: { reasoningEffort?: ReasoningEffortLevel | null } = {},
+  options: {
+    reasoningEffort?: ReasoningEffortLevel | null;
+    ephemeralContext?: AgentStateType["messages"];
+  } = {},
 ) {
   const toolNames = tools.map((t) => t.name);
   const toolNameSet = new Set(toolNames);
@@ -227,6 +243,10 @@ export function createPlannerNode(
   });
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
+    const planningMessages = [
+      ...(options.ephemeralContext ?? []),
+      ...state.messages,
+    ];
     const lastMessage = state.messages[state.messages.length - 1];
     if (!lastMessage) return { messages: [] };
 
@@ -259,7 +279,9 @@ export function createPlannerNode(
         new SystemMessage(
           `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`,
         ),
-        new HumanMessage(content),
+        new HumanMessage(
+          `Recent conversation:\n${plannerConversationTail(planningMessages)}\n\nPlan the latest user request.`,
+        ),
       ];
 
       const response = await withRetry(
@@ -280,7 +302,7 @@ export function createPlannerNode(
         parsed.complexity,
       )
         ? parsed.complexity
-        : PlanComplexity.DIRECT;
+        : PlanComplexity.TOOL_NEEDED;
 
       const plan: AgentToolPlan = {
         complexity,
@@ -329,10 +351,22 @@ export function createPlannerNode(
         );
       }
       logger.warn(
-        "[Planner] Failed to produce a valid plan; continuing without planner hint:",
+        "[Planner] Failed to produce a valid plan; using conservative tool-capable fallback:",
         error,
       );
-      return { messages: [] };
+      const fallbackPlan: AgentToolPlan = {
+        complexity: PlanComplexity.TOOL_NEEDED,
+        tools_needed: [],
+        plan: "Planner output was invalid; preserve deterministic tool selection.",
+      };
+      return {
+        toolPlan: fallbackPlan,
+        messages: [
+          new SystemMessage(
+            "[PLAN] Planner fallback: preserve deterministic tool selection for this turn.",
+          ),
+        ],
+      };
     }
   };
 }

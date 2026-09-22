@@ -1,4 +1,11 @@
-import { type Attachment, type ToolActivity, type MessageMetadata, ToolStatus, MessageRole, type Message } from "@/lib/schemas/chat";
+import {
+  type Attachment,
+  type ToolActivity,
+  type MessageMetadata,
+  ToolStatus,
+  MessageRole,
+  type Message,
+} from "@/lib/schemas/chat";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { toast } from "sonner";
 import { buildMultimodalContent } from "@/lib/contentUtils";
@@ -7,10 +14,21 @@ import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { finalizeEditedMessage } from "./messageApi";
 import { streamChatCompletion } from "./streamingApi";
-import { extractMetadataFromProgress, extractPdfFromToolResult } from "./streamingHandler";
+import {
+  extractMetadataFromProgress,
+  extractPdfFromToolResult,
+} from "./streamingHandler";
 import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
-import { buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
-import { createNewVersion, buildUpdatedVersionsList, fetchMessageVersions, updateMessageWithVersions } from "./versionManager";
+import {
+  buildMessagesForAPI,
+  getPersistableAssistantContent,
+} from "./conversationManager";
+import {
+  createNewVersion,
+  buildUpdatedVersionsList,
+  fetchMessageVersions,
+  updateMessageWithVersions,
+} from "./versionManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { EditMessageContext } from "@/types/chatHooks";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
@@ -20,7 +38,10 @@ import { queryKeys } from "@/lib/queryKeys";
 import { toJsonValue } from "@/lib/json";
 import { ArtifactEventType } from "@/types/artifact";
 import { createArtifactMetadataCollector } from "@/lib/artifacts/metadata";
-import { getPendingAssistantMessageId, isPendingAssistantId } from "./pendingAssistant";
+import {
+  getPendingAssistantMessageId,
+  isPendingAssistantId,
+} from "./pendingAssistant";
 
 export async function handleEditMessage(
   messageId: string,
@@ -28,7 +49,7 @@ export async function handleEditMessage(
   attachments: Attachment[] | undefined,
   context: EditMessageContext,
   activeTool?: string | null,
-  reasoningEffort?: ReasoningEffortLevel
+  reasoningEffort?: ReasoningEffortLevel,
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -38,13 +59,16 @@ export async function handleEditMessage(
     onMessagesUpdate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    onBranchIdUpdate,
   } = context;
 
   const messageIndex = messages.findIndex((m) => m.id === messageId);
-  if (messageIndex === -1) return { success: false, error: "Message not found" };
+  if (messageIndex === -1)
+    return { success: false, error: "Message not found" };
 
   const messageToEdit = messages[messageIndex];
-  if (messageToEdit.role !== MessageRole.USER) return { success: false, error: "Cannot edit assistant message" };
+  if (messageToEdit.role !== MessageRole.USER)
+    return { success: false, error: "Cannot edit assistant message" };
 
   const model = getModel();
   if (!model) {
@@ -53,7 +77,9 @@ export async function handleEditMessage(
   }
 
   const messageContent = buildMultimodalContent(newContent, attachments);
-  const placeholderAssistantId = getPendingAssistantMessageId(conversationId ?? messageId);
+  const placeholderAssistantId = getPendingAssistantMessageId(
+    conversationId ?? messageId,
+  );
   const messagesUpToEdit = messages.slice(0, messageIndex);
   const originalMessagesState = [...messages];
   const toolActivities: ToolActivity[] = [];
@@ -62,26 +88,34 @@ export async function handleEditMessage(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
-  
-  const nextAssistantIndex = messages.findIndex((m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT);
-  const nextAssistantMessage = nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
+
+  const nextAssistantIndex = messages.findIndex(
+    (m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT,
+  );
+  const nextAssistantMessage =
+    nextAssistantIndex !== -1 ? messages[nextAssistantIndex] : undefined;
   const persistedNextAssistantId =
     nextAssistantMessage?.id && !isPendingAssistantId(nextAssistantMessage.id)
       ? nextAssistantMessage.id
       : undefined;
-  const messagesAfterAssistant = nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
-  
+  const messagesAfterAssistant =
+    nextAssistantIndex !== -1 ? messages.slice(nextAssistantIndex + 1) : [];
+
   const newEditedVersion = createNewVersion(
     messageToEdit.versions || [],
     MessageRole.USER,
     messageContent,
     `temp-edit-${Date.now()}`,
     undefined,
-    attachments
+    attachments,
   );
-  
-  const updatedVersions = buildUpdatedVersionsList(messageToEdit, newEditedVersion, true);
-  
+
+  const updatedVersions = buildUpdatedVersionsList(
+    messageToEdit,
+    newEditedVersion,
+    true,
+  );
+
   onMessagesUpdate(() => [
     ...messagesUpToEdit,
     {
@@ -109,13 +143,23 @@ export async function handleEditMessage(
     const useCaching = shouldUseSemanticCache(
       messagesUpToEdit,
       attachments,
-      activeTool
+      activeTool,
     );
-    const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments);
+    const cacheQuery = useCaching
+      ? buildCacheQuery(messagesUpToEdit, messageContent)
+      : "";
+    const messagesForAPI = buildMessagesForAPI(
+      messagesUpToEdit,
+      messageContent,
+      DEFAULT_ASSISTANT_PROMPT,
+      model,
+      attachments,
+      messageToEdit.id,
+    );
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
+    const branchId = `edit-${messageToEdit.id}-${newEditedVersion.id}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
@@ -126,12 +170,15 @@ export async function handleEditMessage(
           prev.map((msg) =>
             msg.id === placeholderAssistantId
               ? { ...msg, content: accumulatedContent }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       conversationId,
-      documentAttachmentIds: attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
+      branchId,
+      documentAttachmentIds: attachments?.flatMap((attachment) =>
+        attachment.id ? [attachment.id] : [],
+      ),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -144,15 +191,15 @@ export async function handleEditMessage(
           args: toolCall.args,
           timestamp: Date.now(),
         };
-        
+
         toolActivities.push(activity);
-        
+
         onMessagesUpdate((prev) =>
           prev.map((msg) =>
             msg.id === placeholderAssistantId
               ? { ...msg, toolActivities: [...toolActivities] }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       onToolResult: (toolResult) => {
@@ -160,16 +207,23 @@ export async function handleEditMessage(
         if (resultPdf) {
           const existing = messageMetadata.pdfs ?? [];
           if (!existing.some((item) => item.url === resultPdf.url)) {
-            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
-            onMessagesUpdate((prev) => prev.map((msg) =>
-              msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
-            ));
+            messageMetadata = {
+              ...messageMetadata,
+              pdfs: [...existing, resultPdf],
+            };
+            onMessagesUpdate((prev) =>
+              prev.map((msg) =>
+                msg.id === placeholderAssistantId
+                  ? { ...msg, metadata: messageMetadata }
+                  : msg,
+              ),
+            );
           }
         }
         const activityIndex = toolActivities.findIndex(
-          (a) => a.toolCallId === toolResult.toolCallId
+          (a) => a.toolCallId === toolResult.toolCallId,
         );
-        
+
         if (activityIndex !== -1) {
           toolActivities[activityIndex] = {
             ...toolActivities[activityIndex],
@@ -177,21 +231,27 @@ export async function handleEditMessage(
             result: toJsonValue(toolResult.result),
             timestamp: Date.now(),
           };
-          
+
           onMessagesUpdate((prev) =>
             prev.map((msg) =>
               msg.id === placeholderAssistantId
                 ? { ...msg, toolActivities: [...toolActivities] }
-                : msg
-            )
+                : msg,
+            ),
           );
         }
       },
       onToolProgress: (progress) => {
-        messageMetadata = extractMetadataFromProgress(progress, messageMetadata) ?? messageMetadata;
-        onMessagesUpdate((prev) => prev.map((msg) =>
-          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
-        ));
+        messageMetadata =
+          extractMetadataFromProgress(progress, messageMetadata) ??
+          messageMetadata;
+        onMessagesUpdate((prev) =>
+          prev.map((msg) =>
+            msg.id === placeholderAssistantId
+              ? { ...msg, metadata: messageMetadata }
+              : msg,
+          ),
+        );
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -206,7 +266,6 @@ export async function handleEditMessage(
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
-          
         }
       },
       reasoningEffort,
@@ -216,15 +275,18 @@ export async function handleEditMessage(
           prev.map((msg) =>
             msg.id === placeholderAssistantId
               ? { ...msg, thinking: thinkingBuffer }
-              : msg
-          )
+              : msg,
+          ),
         );
       },
       onResponseIncomplete: () => {
         responseIncomplete = true;
       },
       onArtifact: (event) => {
-        const eventWithMessage = { ...event, messageId: placeholderAssistantId };
+        const eventWithMessage = {
+          ...event,
+          messageId: placeholderAssistantId,
+        };
         artifactCollector.push(eventWithMessage);
 
         if (event.type === ArtifactEventType.END) {
@@ -235,8 +297,8 @@ export async function handleEditMessage(
               prev.map((msg) =>
                 msg.id === placeholderAssistantId
                   ? { ...msg, metadata: messageMetadata }
-                  : msg
-              )
+                  : msg,
+              ),
             );
           }
         }
@@ -244,7 +306,6 @@ export async function handleEditMessage(
         context.onArtifact?.(eventWithMessage);
       },
     });
-
     if (toolActivities.length > 0) {
       messageMetadata = { ...messageMetadata, toolActivities };
     }
@@ -258,33 +319,46 @@ export async function handleEditMessage(
       prev.map((msg) =>
         msg.id === placeholderAssistantId
           ? { ...msg, metadata: messageMetadata }
-          : msg
-      )
+          : msg,
+      ),
     );
 
     if (responseIncomplete) {
       messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
-          msg.id === placeholderAssistantId ? { ...msg, metadata: messageMetadata } : msg
-        )
+          msg.id === placeholderAssistantId
+            ? { ...msg, metadata: messageMetadata }
+            : msg,
+        ),
       );
     }
 
-    const persistableAssistantContent = getPersistableAssistantContent(responseContent, messageMetadata);
+    const persistableAssistantContent = getPersistableAssistantContent(
+      responseContent,
+      messageMetadata,
+    );
 
-    if (persistableAssistantContent && persistableAssistantContent !== responseContent) {
+    if (
+      persistableAssistantContent &&
+      persistableAssistantContent !== responseContent
+    ) {
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === placeholderAssistantId
             ? { ...msg, content: persistableAssistantContent }
-            : msg
-        )
+            : msg,
+        ),
       );
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && responseContent && artifacts.length === 0 && !responseIncomplete) {
+      if (
+        cacheQuery &&
+        responseContent &&
+        artifacts.length === 0 &&
+        !responseIncomplete
+      ) {
         saveToCacheMutate({
           query: cacheQuery,
           response: responseContent,
@@ -303,13 +377,19 @@ export async function handleEditMessage(
           persistedNextAssistantId,
           attachments,
           messageMetadata,
-          abortSignal
+          abortSignal,
+          branchId,
         );
         const updatedMessageId = finalizedEdit.updatedMessage.id;
-        const parentId = finalizedEdit.updatedMessage.parentMessageId || updatedMessageId;
-        const versions = await fetchMessageVersions(conversationIdStr, parentId);
+        const parentId =
+          finalizedEdit.updatedMessage.parentMessageId || updatedMessageId;
+        const versions = await fetchMessageVersions(
+          conversationIdStr,
+          parentId,
+        );
         const assistantParentId =
-          finalizedEdit.assistantMessage.parentMessageId || finalizedEdit.assistantMessage.id;
+          finalizedEdit.assistantMessage.parentMessageId ||
+          finalizedEdit.assistantMessage.id;
         let assistantVersions: Message[] = [];
         let shouldUseAssistantFallback = false;
 
@@ -317,29 +397,40 @@ export async function handleEditMessage(
           assistantVersions = await fetchMessageVersions(
             conversationIdStr,
             assistantParentId,
-            { throwOnError: true }
+            { throwOnError: true },
           );
 
           if (assistantVersions.length === 0) {
             shouldUseAssistantFallback = true;
-            logger.warn("Falling back to finalized assistant edit data after empty versions response", {
-              conversationId: conversationIdStr,
-              assistantParentId,
-              assistantMessageId: finalizedEdit.assistantMessage.id,
+            logger.warn(
+              "Falling back to finalized assistant edit data after empty versions response",
+              {
+                conversationId: conversationIdStr,
+                assistantParentId,
+                assistantMessageId: finalizedEdit.assistantMessage.id,
+              },
+            );
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.conversation(conversationIdStr),
             });
-            queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
           }
         } catch (assistantVersionsError) {
           shouldUseAssistantFallback = true;
-          logger.warn("Failed to fetch assistant message versions after edit; using finalized response fallback", {
-            conversationId: conversationIdStr,
-            assistantParentId,
-            assistantMessageId: finalizedEdit.assistantMessage.id,
-            error: assistantVersionsError instanceof Error
-              ? assistantVersionsError.message
-              : String(assistantVersionsError),
+          logger.warn(
+            "Failed to fetch assistant message versions after edit; using finalized response fallback",
+            {
+              conversationId: conversationIdStr,
+              assistantParentId,
+              assistantMessageId: finalizedEdit.assistantMessage.id,
+              error:
+                assistantVersionsError instanceof Error
+                  ? assistantVersionsError.message
+                  : String(assistantVersionsError),
+            },
+          );
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.conversation(conversationIdStr),
           });
-          queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
         }
 
         onMessagesUpdate((prev) =>
@@ -353,8 +444,11 @@ export async function handleEditMessage(
                   ...msg,
                   id: finalizedEdit.assistantMessage.id,
                   content: finalizedEdit.assistantMessage.content,
-                  timestamp: new Date(finalizedEdit.assistantMessage.createdAt).getTime(),
-                  parentMessageId: finalizedEdit.assistantMessage.parentMessageId,
+                  timestamp: new Date(
+                    finalizedEdit.assistantMessage.createdAt,
+                  ).getTime(),
+                  parentMessageId:
+                    finalizedEdit.assistantMessage.parentMessageId,
                   siblingIndex: finalizedEdit.assistantMessage.siblingIndex,
                   attachments: finalizedEdit.assistantMessage.attachments,
                   metadata: messageMetadata,
@@ -367,18 +461,23 @@ export async function handleEditMessage(
                   metadata: messageMetadata,
                 },
                 finalizedEdit.assistantMessage.id,
-                assistantVersions
+                assistantVersions,
               );
             }
             return msg;
-          })
+          }),
         );
-        
-        queryClient.invalidateQueries({ queryKey: queryKeys.conversation(conversationIdStr) });
+
+        onBranchIdUpdate?.(branchId);
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversation(conversationIdStr),
+        });
         queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
       }
 
-      const assistantContentForMemory = prepareAssistantContentForMemory(persistableAssistantContent);
+      const assistantContentForMemory = prepareAssistantContentForMemory(
+        persistableAssistantContent,
+      );
       persistConversationMemoryIfEligible({
         userMessageContent: messageContent,
         assistantContent: assistantContentForMemory,
@@ -400,18 +499,36 @@ export async function handleEditMessage(
       onMessagesUpdate(() => originalMessagesState);
       return { success: false, error: "aborted" };
     }
-    
+
     const errorMessage = toUserFriendlyError(err);
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    if (responseContent || messageMetadata.pdfs?.length || messageMetadata.artifacts?.length) {
-      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
-      onMessagesUpdate((prev) => prev.map((msg) =>
-        msg.id === placeholderAssistantId
-          ? { ...msg, content: getPersistableAssistantContent(responseContent, messageMetadata) ?? responseContent, metadata: messageMetadata }
-          : msg
-      ));
+    if (
+      responseContent ||
+      messageMetadata.pdfs?.length ||
+      messageMetadata.artifacts?.length
+    ) {
+      messageMetadata = {
+        ...messageMetadata,
+        streamStatus: "error",
+        streamError: errorMessage,
+      };
+      onMessagesUpdate((prev) =>
+        prev.map((msg) =>
+          msg.id === placeholderAssistantId
+            ? {
+                ...msg,
+                content:
+                  getPersistableAssistantContent(
+                    responseContent,
+                    messageMetadata,
+                  ) ?? responseContent,
+                metadata: messageMetadata,
+              }
+            : msg,
+        ),
+      );
     } else {
       onMessagesUpdate(() => originalMessagesState);
     }
@@ -429,7 +546,7 @@ function prepareAssistantContentForMemory(content: string): string {
   stripped = stripped.replace(/^ {0,3}```[\s\S]*?^ {0,3}```/gm, (match) => {
     if (match.length > 500) {
       const lang = match.match(/```(\w*)/)?.[1] || "";
-      const lines = match.split('\n').length - 2;
+      const lines = match.split("\n").length - 2;
       return `\`\`\`${lang}\n[${lines} lines omitted]\n\`\`\``;
     }
     return match;

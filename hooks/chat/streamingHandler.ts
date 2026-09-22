@@ -26,6 +26,7 @@ interface StreamingContext {
   conversationId: string;
   userMessageContent: string | Message["content"];
   userTimestamp: number;
+  userMessageId?: string;
   userAttachments?: Message["attachments"];
   model: string;
   abortSignal: AbortSignal;
@@ -34,6 +35,7 @@ interface StreamingContext {
   activeTool?: string | null;
   reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
+  branchId?: string;
 }
 
 interface StreamingCallbacks {
@@ -154,6 +156,7 @@ export async function handleStreamingResponse(
     conversationId,
     userMessageContent,
     userTimestamp,
+    userMessageId,
     userAttachments,
     model,
     abortSignal,
@@ -162,6 +165,7 @@ export async function handleStreamingResponse(
     activeTool,
     reasoningEffort,
     existingAssistantMessageId,
+    branchId,
   } = context;
 
   const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
@@ -272,7 +276,7 @@ export async function handleStreamingResponse(
       return { success: true, assistantMessageId };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments, userMessageId);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -298,6 +302,7 @@ export async function handleStreamingResponse(
         }
       },
       conversationId,
+      branchId,
       documentAttachmentIds: userAttachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
