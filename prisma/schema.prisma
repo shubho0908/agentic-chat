@@ -225,4 +225,12 @@ model OrchestrationJob {
   @@map("orchestration_job")
 }
 
+model ThreadLock {
+  threadId   String   @id @map("thread_id")
+  ownerToken String   @map("owner_token")
+  acquiredAt DateTime @default(now()) @map("acquired_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
 
+  @@index([expiresAt], map: "thread_locks_expires_idx")
+  @@map("thread_locks")
+}

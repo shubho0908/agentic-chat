@@ -8,6 +8,28 @@ export const RECURSION_LIMIT = 40;
 export const MAX_RESPONSE_TOKENS = 16384;
 export const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
+/**
+ * Hard deadline for one orchestrator stream, aligned under this route's Vercel
+ * maxDuration (300s) so the handler can abort work and emit a terminal SSE
+ * error before the platform hard-kills the invocation.
+ */
+export const ORCHESTRATOR_STREAM_DEADLINE_MS = 285_000;
+
+/**
+ * SSE comment cadence proving stream liveness during long model/tool silences;
+ * the client stall watchdog keys off any inbound bytes, including these.
+ */
+export const STREAM_HEARTBEAT_INTERVAL_MS = 15_000;
+
+/**
+ * Per-attempt ceiling for the agent node's ChatOpenAI call. The SDK default
+ * (~600s) exceeds the route's maxDuration (300s), so a hung model call used to
+ * be killed by the platform with no client-visible error. With 2 retries the
+ * worst case stays bounded by ORCHESTRATOR_STREAM_DEADLINE_MS via the request
+ * abort signal.
+ */
+export const AGENT_LLM_TIMEOUT_MS = 180_000;
+
 export const GraphNode = {
   PLANNER: "planner",
   AGENT: "agent",
@@ -20,7 +42,8 @@ export const PlanComplexity = {
   TOOL_NEEDED: "tool_needed",
   MULTI_STEP: "multi_step",
 } as const;
-export type PlanComplexityValue = (typeof PlanComplexity)[keyof typeof PlanComplexity];
+export type PlanComplexityValue =
+  (typeof PlanComplexity)[keyof typeof PlanComplexity];
 
 export const CustomEventName = {
   THINKING: "thinking",

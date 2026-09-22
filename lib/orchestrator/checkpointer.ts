@@ -14,8 +14,16 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
   }
 
   checkpointerPromise = (async () => {
+    // Audited for the pooled (PgBouncer transaction-mode) DATABASE_URL:
+    // PostgresSaver runs every write inside BEGIN/COMMIT on a single
+    // checked-out client and uses no session-level features (no advisory
+    // locks, LISTEN/NOTIFY, or named prepared statements), so transaction-mode
+    // pooling is safe here. Thread mutual exclusion does NOT rely on this
+    // connection shape - see lib/orchestrator/threadLock.ts.
     const pool = new pg.Pool({ connectionString: connString, max: 3 });
-    const checkpointer = new PostgresSaver(pool, undefined, { schema: "langgraph" });
+    const checkpointer = new PostgresSaver(pool, undefined, {
+      schema: "langgraph",
+    });
     await checkpointer.setup();
     return checkpointer;
   })().catch((error) => {

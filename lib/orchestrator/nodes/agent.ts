@@ -8,7 +8,7 @@ import {
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentStateType } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { MAX_RESPONSE_TOKENS } from "../constants";
+import { AGENT_LLM_TIMEOUT_MS, MAX_RESPONSE_TOKENS } from "../constants";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   getChatReasoningEffort,
@@ -341,6 +341,7 @@ export function createAgentNode(
     apiKey,
     streaming: true,
     maxTokens: MAX_RESPONSE_TOKENS,
+    timeout: AGENT_LLM_TIMEOUT_MS,
     ...(supportedTemperature !== undefined
       ? { temperature: supportedTemperature }
       : {}),
@@ -416,6 +417,7 @@ export function createAgentNode(
       {
         retries: 2,
         initialDelayMs: 400,
+        timeoutMs: AGENT_LLM_TIMEOUT_MS,
         signal: config?.signal,
       },
     );

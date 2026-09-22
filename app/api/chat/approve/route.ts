@@ -18,10 +18,11 @@ import { toUserFriendlyError } from "@/lib/errorMessages";
 import { isRecord } from "@/lib/typeGuards";
 import { createRequestId, logError } from "@/lib/observability";
 import { isValidConversationId } from "@/lib/validation";
+import { deriveThreadId, isThreadIdForConversation } from "@/lib/orchestrator/threadIdentity";
+import { STREAM_HEARTBEAT_INTERVAL_MS } from "@/lib/orchestrator/constants";
 
-function deriveThreadIdFromConversation(conversationId: string): string {
-  return `conv-${conversationId}`;
-}
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const requestId = createRequestId("chat-approve");
@@ -65,11 +66,15 @@ export async function POST(request: NextRequest) {
       typeof body.threadId === "string" && body.threadId.trim()
         ? body.threadId.trim()
         : null;
-    const expectedThreadId = deriveThreadIdFromConversation(conversationId);
-    if (explicitThreadId && explicitThreadId !== expectedThreadId) {
+    // HITL interrupts fire on the branch thread when the user is on a branch
+    // (conv-<id>:branch:<branchId>), not only on the root thread. Validate the
+    // explicit thread id against every thread this conversation owns via the
+    // same encoder the orchestrator uses, then resume that exact thread;
+    // rejecting branch ids here stranded every branch approval with a 400.
+    if (explicitThreadId && !isThreadIdForConversation(explicitThreadId, conversationId)) {
       return errorResponse("threadId does not match conversationId", undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    const threadId = expectedThreadId;
+    const threadId = explicitThreadId ?? deriveThreadId(conversationId);
 
     const reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
     if (body.reasoningEffort !== undefined && reasoningEffort === null) {
@@ -149,6 +154,7 @@ export async function POST(request: NextRequest) {
         const stream = createSafeStream(controller, {
           abortSignal: abortController.signal,
           label: "Approve",
+          heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
         });
         const mapper = createStreamEventMapper();
         const finishStream = () => {
