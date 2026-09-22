@@ -1,5 +1,13 @@
 {
   "buildCommand": "NODE_OPTIONS='--max-old-space-size=4096' npm run build",
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "dev": true,
+      "feat/jev": true,
+      "*": false
+    }
+  },
   "functions": {
     "app/api/chat/completions/route.ts": {
       "maxDuration": 300,
