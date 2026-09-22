@@ -112,7 +112,7 @@ export async function handleEditMessage(
       activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToEdit, messageContent) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToEdit, messageContent, DEFAULT_ASSISTANT_PROMPT, model, attachments, messageToEdit.id);
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
@@ -131,6 +131,7 @@ export async function handleEditMessage(
         );
       },
       conversationId,
+      branchId: `edit-${messageToEdit.id}-${newEditedVersion.id}`,
       documentAttachmentIds: attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;

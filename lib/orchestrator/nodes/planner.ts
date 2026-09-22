@@ -67,6 +67,14 @@ export function extractText(content: unknown): string {
   return JSON.stringify(content);
 }
 
+function plannerConversationTail(messages: AgentStateType["messages"]): string {
+  return messages
+    .filter((message) => message.type === "human" || message.type === "ai")
+    .slice(-6)
+    .map((message) => `${message.type === "human" ? "User" : "Assistant"}: ${extractText(message.content).slice(0, 1200)}`)
+    .join("\n");
+}
+
 function buildShadowState(
   messages: AgentStateType["messages"],
   latestMessage: string,
@@ -259,7 +267,7 @@ export function createPlannerNode(
         new SystemMessage(
           `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`,
         ),
-        new HumanMessage(content),
+        new HumanMessage(`Recent conversation:\n${plannerConversationTail(state.messages)}\n\nPlan the latest user request.`),
       ];
 
       const response = await withRetry(
@@ -276,11 +284,9 @@ export function createPlannerNode(
       const cleaned = planText.replace(/```json?\n?|\n?```/g, "").trim();
       const parsed = plannerResponseSchema.parse(JSON.parse(cleaned));
 
-      const complexity: PlanComplexityValue = isValidComplexity(
-        parsed.complexity,
-      )
+      const complexity: PlanComplexityValue = isValidComplexity(parsed.complexity)
         ? parsed.complexity
-        : PlanComplexity.DIRECT;
+        : PlanComplexity.TOOL_NEEDED;
 
       const plan: AgentToolPlan = {
         complexity,
@@ -328,11 +334,16 @@ export function createPlannerNode(
           state.conversationId,
         );
       }
-      logger.warn(
-        "[Planner] Failed to produce a valid plan; continuing without planner hint:",
-        error,
-      );
-      return { messages: [] };
+      logger.warn("[Planner] Failed to produce a valid plan; using conservative tool-capable fallback:", error);
+      const fallbackPlan: AgentToolPlan = {
+        complexity: PlanComplexity.TOOL_NEEDED,
+        tools_needed: [],
+        plan: "Planner output was invalid; preserve deterministic tool selection.",
+      };
+      return {
+        toolPlan: fallbackPlan,
+        messages: [new SystemMessage("[PLAN] Planner fallback: preserve deterministic tool selection for this turn.")],
+      };
     }
   };
 }

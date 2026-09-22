@@ -62,6 +62,7 @@ export async function continueIncompleteConversation(
       conversationId,
       userMessageContent: reconstructedContent,
       userTimestamp: userMessage.timestamp ?? Date.now(),
+      userMessageId: userMessage.id,
       userAttachments: userMessage.attachments,
       model,
       abortSignal,

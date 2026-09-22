@@ -4,15 +4,17 @@ import { AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages"
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentStateType } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { MAX_RESPONSE_TOKENS, PlanComplexity } from "../constants";
+import { MAX_RESPONSE_TOKENS } from "../constants";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { getChatReasoningEffort, getSupportedTemperature } from "@/lib/modelPolicy";
 import {
   TOOLKIT_DISPLAY_NAMES,
   type ComposioToolkit,
 } from "@/lib/tools/composio/config";
-import { getAnyMentionedComposioToolkits, selectToolsForAgentStep, hasWebActionIntent } from "../tools";
+import { selectToolsForAgentStep } from "../tools";
 import { logger } from "@/lib/logger";
+import { buildBoundedModelContext } from "../modelContext";
+import { logInfo, logWarn } from "@/lib/observability";
 import { withRetry } from "@/lib/retry";
 import { resolveJevHitlVerdict } from "../jevHitl";
 import {
@@ -319,17 +321,14 @@ export function createAgentNode(
     const connectedServices = state.connectedServices ?? [];
 
     const baseSystemPrompt = buildSystemPrompt(connectedServices);
-    const isDirect =
-      state.toolPlan?.complexity === PlanComplexity.DIRECT &&
-      !hasWebActionIntent(latestUserText) &&
-      getAnyMentionedComposioToolkits(latestUserText).length === 0;
-    const selectedTools = isDirect
-      ? []
-      : selectToolsForAgentStep(tools, {
-          latestUserText,
-          plannedTools: state.toolPlan?.tools_needed,
-          connectedServices,
-        });
+    // DIRECT is a planning hint, never permission to strip capabilities from
+    // a follow-up. Deterministic selection can retain create_pdf from intent
+    // and prior context even when the planner is wrong.
+    const selectedTools = selectToolsForAgentStep(tools, {
+      latestUserText,
+      plannedTools: state.toolPlan?.tools_needed,
+      connectedServices,
+    });
     logger.log(`[Agent] Selected ${selectedTools.length} tools for step: ${selectedTools.map(t => t.name).join(", ")}`);
     const availableToolsLine = selectedTools.length > 0
       ? `Available tools for this step: ${selectedTools.map((tool) => tool.name).join(", ")}`
@@ -338,9 +337,20 @@ export function createAgentNode(
       ? `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}\n\nPlanner guidance:\n${plannerHints.join("\n")}`
       : `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}`;
     const runnable = selectedTools.length > 0 ? llm.bindTools(selectedTools) : llm;
-    const messages = [new SystemMessage(systemPrompt), ...reconcileDanglingToolCalls(conversationMessages)];
+    let bounded;
+    try {
+      bounded = buildBoundedModelContext(
+        new SystemMessage(systemPrompt),
+        reconcileDanglingToolCalls(conversationMessages),
+        model,
+      );
+    } catch (error) {
+      logWarn({ event: "orchestrator_model_budget_rejected", conversationId: state.conversationId, error: error instanceof Error ? error.message : "unknown" });
+      throw error;
+    }
+    if (bounded.trimmed > 0) logInfo({ event: "orchestrator_context_trimmed", conversationId: state.conversationId, trimmed: bounded.trimmed, protectedPdfPairs: bounded.protectedPdfPairs });
     const response = await withRetry(
-      (signal) => runnable.invoke(messages, { ...(config ?? {}), signal }),
+      (signal) => runnable.invoke(bounded.messages, { ...(config ?? {}), signal }),
       {
         retries: 2,
         initialDelayMs: 400,

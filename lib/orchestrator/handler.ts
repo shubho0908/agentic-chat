@@ -1,7 +1,7 @@
-import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import type { BaseMessage } from "@langchain/core/messages";
-import type { Message, MessageContentPart } from "@/lib/schemas/chat";
+import type { Message } from "@/lib/schemas/chat";
+import { convertToLangChainMessages } from "./messageConversion";
 import type { MemoryStatus } from "@/types/chat";
 import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
@@ -25,60 +25,22 @@ import { generateEmbedding, searchSemanticCacheEntry } from "@/lib/rag/storage/c
 import { SIMILARITY_THRESHOLD, CACHE_TTL_SECONDS } from "@/lib/rag/storage/pgvectorClient";
 import { gateCacheHit } from "@/lib/jev/cacheGate";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
+import { deriveThreadId } from "./threadIdentity";
+import { logError, logInfo, logWarn } from "@/lib/observability";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
   model: string;
   apiKey: string;
   userId: string;
-  conversationId?: string;
+  conversationId: string;
+  branchId?: string;
   documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel | null;
   abortSignal?: AbortSignal;
 }
 
-function toLangChainContent(content: Message["content"]) {
-  if (typeof content === "string") {
-    return content;
-  }
-
-  return content.map((part: MessageContentPart) => {
-    if (part.type === "text") {
-      return { type: "text", text: part.text };
-    }
-
-    return {
-      type: "image_url",
-      image_url: { url: part.image_url.url },
-    };
-  });
-}
-
-function convertToLangChainMessages(messages: Message[]): BaseMessage[] {
-  return messages.map((msg) => {
-    const content = toLangChainContent(msg.content);
-    const textOnlyContent = typeof content === "string"
-      ? content
-      : content.map((p) => (p.type === "text" ? p.text : "")).join(" ");
-
-    switch (msg.role) {
-      case "assistant":
-        return new AIMessage(textOnlyContent);
-      case "system":
-        return new SystemMessage(textOnlyContent);
-      default:
-        return new HumanMessage({ content });
-    }
-  });
-}
-
-function deriveThreadId(conversationId: string | undefined, userId: string): string {
-  if (conversationId) {
-    return `conv-${conversationId}`;
-  }
-  return `user-${userId}-ephemeral`;
-}
 
 export function createOrchestratorStreamHandler(options: OrchestratorStreamOptions) {
   const {
@@ -87,6 +49,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
     apiKey,
     userId,
     conversationId,
+    branchId,
     documentAttachmentIds,
     memoryEnabled = true,
     reasoningEffort,
@@ -99,7 +62,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         abortSignal,
         label: "Orchestrator",
       });
-      const threadId = deriveThreadId(conversationId, userId);
+      const threadId = deriveThreadId(conversationId, branchId);
       let memoryStatusInfo: MemoryStatus = {
         hasMemories: false,
         attemptedMemory: false,
@@ -138,6 +101,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           ? `I couldn't complete this request in ${RECURSION_LIMIT} reasoning steps. Try breaking it into smaller asks or rephrasing.`
           : toUserFriendlyError(error);
 
+        logError({ event: "orchestrator_sse_error", conversationId, threadId, branchId, error: error instanceof Error ? error.name : "unknown" });
         stream.enqueue(encodeError(friendly));
         closeStream();
       };
@@ -186,9 +150,7 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
 
         if (!budgetCheck.ok) {
-          stream.enqueue(encodeError(budgetCheck.errorMessage ?? "Token budget exceeded."));
-          closeStream();
-          return;
+          logWarn({ event: "orchestrator_client_budget_exceeded", conversationId, threadId, used: budgetCheck.tokenUsage.used, limit: budgetCheck.tokenUsage.limit });
         }
 
         const connectedToolkits = await getConnectedToolkits(userId);
@@ -244,9 +206,17 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         });
 
         const langChainMessages = convertToLangChainMessages(enhancedMessages);
+        const graphConfig = { configurable: { thread_id: threadId } };
+        const existingState = await graph.getState(graphConfig);
+        const storedIds = new Set((existingState.values?.messages ?? []).flatMap((message: BaseMessage) => message.id ? [message.id] : []));
+        const checkpointExists = (existingState.values?.messages?.length ?? 0) > 0;
+        const incrementalMessages = checkpointExists
+          ? langChainMessages.filter((message) => !message.id || !storedIds.has(message.id))
+          : langChainMessages;
+        logInfo({ event: "orchestrator_checkpoint_input", conversationId, threadId, branchId, checkpointExists, incomingCount: langChainMessages.length, submittedCount: incrementalMessages.length });
 
         const input = {
-          messages: langChainMessages,
+          messages: incrementalMessages,
           userId,
           conversationId,
           connectedServices: connectedToolkits,

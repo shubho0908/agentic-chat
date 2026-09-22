@@ -26,6 +26,7 @@ interface StreamingContext {
   conversationId: string;
   userMessageContent: string | Message["content"];
   userTimestamp: number;
+  userMessageId?: string;
   userAttachments?: Message["attachments"];
   model: string;
   abortSignal: AbortSignal;
@@ -154,6 +155,7 @@ export async function handleStreamingResponse(
     conversationId,
     userMessageContent,
     userTimestamp,
+    userMessageId,
     userAttachments,
     model,
     abortSignal,
@@ -272,7 +274,7 @@ export async function handleStreamingResponse(
       return { success: true, assistantMessageId };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments, userMessageId);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,

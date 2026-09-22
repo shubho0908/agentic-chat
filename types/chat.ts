@@ -225,7 +225,8 @@ export interface HumanInTheLoopRequestEvent {
 }
 
 export interface StreamConfig {
-  messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>;
+  messages: Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }>;
+  branchId?: string;
   model: string;
   signal: AbortSignal;
   onChunk: (delta: string) => void;

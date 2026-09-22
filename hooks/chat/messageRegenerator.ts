@@ -85,7 +85,7 @@ export async function handleRegenerateResponse(
       activeTool
     );
     const cacheQuery = useCaching ? buildCacheQuery(messagesUpToAssistant, previousUserMessage.content) : '';
-    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments);
+    const messagesForAPI = buildMessagesForAPI(messagesUpToAssistant, previousUserMessage.content, DEFAULT_ASSISTANT_PROMPT, model, previousUserMessage.attachments, previousUserMessage.id);
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
@@ -104,6 +104,7 @@ export async function handleRegenerateResponse(
         );
       },
       conversationId,
+      branchId: `regenerate-${assistantMessage.id ?? previousUserMessage.id}-${Date.now()}`,
       documentAttachmentIds: previousUserMessage.attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
