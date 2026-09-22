@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion";
 import type { Variants } from "framer-motion";
+import { Network, Search, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LegalLinks } from "@/components/legalLinks";
 import Logo from "@/components/logo";
@@ -153,6 +154,9 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               className="mt-[clamp(4rem,9vw,8rem)] grid gap-4 border-t border-border/80 pt-[clamp(2.75rem,6vw,5rem)] sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8"
             >
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:p-7 lg:p-10">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/40 text-foreground/85 dark:bg-muted/20 sm:mb-5">
+                  <Network className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
                   <span className="text-muted-foreground">Orchestration</span>
                 </div>
@@ -161,6 +165,9 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               </m.div>
 
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:p-7 lg:p-10">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/40 text-foreground/85 dark:bg-muted/20 sm:mb-5">
+                  <Search className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
                   <span className="text-muted-foreground">Deep research</span>
                 </div>
@@ -169,6 +176,9 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               </m.div>
 
               <m.div variants={item} className="flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 sm:col-span-2 sm:p-7 lg:col-span-1 lg:p-10">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-muted/40 text-foreground/85 dark:bg-muted/20 sm:mb-5">
+                  <Zap className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
                   <span className="text-muted-foreground">Parallel tools</span>
                 </div>
