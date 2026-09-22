@@ -103,6 +103,18 @@ test("turn-scoped: a newer turn blocks the stop of an older stream", async () =>
   assert.equal(state.createManyCalls.length, 0);
 });
 
+test("turn-scoped: an expected id naming a finalized assistant turn never marks", async () => {
+  const { state, db } = createFakeDb({
+    id: "msg-2",
+    role: "ASSISTANT",
+    content: "already answered",
+  });
+  const result = await markStreamStoppedByUser("conv-1", "msg-2", db as never);
+  assert.equal(result.marked, false);
+  assert.equal(result.reason, "turn-already-finalized");
+  assert.equal(state.createManyCalls.length, 0);
+});
+
 test("turn-scoped: a finalized newer turn also blocks the stale stop", async () => {
   const { state, db } = createFakeDb({
     id: "msg-3",

@@ -63,15 +63,14 @@ export async function markStreamStoppedByUser(
     if (!latest) {
       return { marked: false, reason: "no-messages" as const };
     }
-    if (expectedUserMessageId) {
-      // Root and branch turns coexist on separate threads, so the stop must
-      // name its turn: when a newer turn has already superseded this one,
-      // marking would finalize the wrong turn and could discard that turn's
-      // legitimate completion in the messages route.
-      if (latest.id !== expectedUserMessageId) {
-        return { marked: false, reason: "superseded-by-newer-turn" as const };
-      }
-    } else if (latest.role !== "USER") {
+    // Root and branch turns coexist on separate threads, so the stop must
+    // name its turn: when a newer turn has already superseded this one,
+    // marking would finalize the wrong turn and could discard that turn's
+    // legitimate completion in the messages route.
+    if (expectedUserMessageId && latest.id !== expectedUserMessageId) {
+      return { marked: false, reason: "superseded-by-newer-turn" as const };
+    }
+    if (latest.role !== "USER") {
       return { marked: false, reason: "turn-already-finalized" as const };
     }
     const messageId = getStreamStoppedMarkerMessageId(
