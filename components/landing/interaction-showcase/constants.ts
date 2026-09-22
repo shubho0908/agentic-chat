@@ -4,6 +4,11 @@ import { ToolStatus } from "@/lib/schemas/chat";
 import { ToolName } from "@/lib/tools/constants";
 
 export const SCENE_ORDER: SceneKind[] = [SceneKind.WebSearch, SceneKind.Orchestration, SceneKind.DeepResearch];
+export const SCENE_LABELS: Record<SceneKind, string> = {
+  [SceneKind.WebSearch]: "Web search",
+  [SceneKind.Orchestration]: "Orchestration",
+  [SceneKind.DeepResearch]: "Deep research",
+};
 export const SCENE_TRANSITION = { duration: 0.42, ease: [0.22, 1, 0.36, 1] as const };
 
 export const SOURCE_ITEMS = ["Reuters", "Perplexity blog", "The Information"];

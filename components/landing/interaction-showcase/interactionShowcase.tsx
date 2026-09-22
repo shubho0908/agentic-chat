@@ -10,7 +10,7 @@ import {
   OrchestrationScene,
   WebSearchScene,
 } from "@/components/landing/interaction-showcase/scenes";
-import { SCENE_TRANSITION } from "@/components/landing/interaction-showcase/constants";
+import { SCENE_LABELS, SCENE_ORDER, SCENE_TRANSITION } from "@/components/landing/interaction-showcase/constants";
 import { getDeviceKind } from "@/components/landing/interaction-showcase/timeline";
 import { SceneKind } from "@/components/landing/interaction-showcase/types";
 
@@ -21,7 +21,7 @@ export function InteractionShowcase() {
   const viewport = useViewportBounds();
   const device = getDeviceKind(showcaseWidth, viewport.width, viewport.height);
   const tabletLandscape = viewport.width > viewport.height && viewport.height < 560;
-  const { timeline } = useInteractionTimeline(prefersReducedMotion);
+  const { timeline, selectScene } = useInteractionTimeline(prefersReducedMotion);
   const { cycle, scene, step, sceneElapsed } = timeline;
   const sceneKey = prefersReducedMotion ? scene : `${cycle}-${scene}`;
   const sceneContent: Record<SceneKind, ReactNode> = {
@@ -69,6 +69,26 @@ export function InteractionShowcase() {
             </m.div>
           </AnimatePresence>
         </DeviceShell>
+        <div className="mt-5 flex items-center justify-center gap-1.5" aria-label="Showcase scenes">
+          {SCENE_ORDER.map((kind, index) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => selectScene(index)}
+              aria-label={SCENE_LABELS[kind]}
+              aria-current={scene === kind}
+              className="group flex size-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  scene === kind
+                    ? "w-5 bg-foreground/70"
+                    : "w-1.5 bg-foreground/25 group-hover:bg-foreground/40"
+                }`}
+              />
+            </button>
+          ))}
+        </div>
       </div>
     </LazyMotion>
   );
