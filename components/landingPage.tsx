@@ -114,7 +114,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                   variants={item}
                   className="mt-5 max-w-[34rem] text-balance text-[clamp(1rem,2.4vw,1.32rem)] leading-[clamp(1.75rem,3vw,2.15rem)] text-foreground/78 sm:mt-7 lg:mt-8"
                 >
-                  Search the web, orchestrate multi-agent tasks, run deep research, and execute tools in parallel. Agentic Chat keeps the full thread in view and lets you bring your own API key.
+                                    Ask once. Agents search the web, split the work, and run tools in parallel. The thread stays in view. The key stays yours.
                 </m.p>
 
                 <m.div variants={item} className="mt-7 flex w-full flex-col items-center gap-3.5 sm:mt-9 sm:w-auto sm:flex-row sm:items-stretch lg:mt-10">
@@ -154,7 +154,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               className="mt-[clamp(4rem,9vw,8rem)] grid gap-4 border-t border-border/80 pt-[clamp(2.75rem,6vw,5rem)] sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8"
             >
               <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Network className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
@@ -165,7 +165,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               </m.div>
 
               <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Search className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
@@ -176,7 +176,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               </m.div>
 
               <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:col-span-2 sm:p-7 lg:col-span-1 lg:p-10">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Zap className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
                 <div className="mb-4 inline-flex items-center text-[11px] font-semibold uppercase tracking-[0.14em] sm:mb-5 sm:text-xs">
