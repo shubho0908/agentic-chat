@@ -117,8 +117,8 @@ export function ChatInputForm({
   // max-h must equal MAX_TEXTAREA_HEIGHT in useChatTextarea (single source
   // of truth for the grow cap); overflow stays hidden until JS flips it on.
   const textareaClassName = centered
-    ? "block min-h-[52px] max-h-[200px] w-full resize-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0"
-    : "block min-h-[24px] max-h-[200px] w-full resize-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0";
+    ? "block min-h-[52px] max-h-[200px] w-full resize-none rounded-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0"
+    : "block min-h-[24px] max-h-[200px] w-full resize-none rounded-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0";
 
   const buttonSize = centered ? "large" : "default";
 
