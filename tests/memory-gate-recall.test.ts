@@ -1,9 +1,9 @@
 /**
- * Regression tests for Greptile finding "Recall Requests Skip Memory":
- * in the default OFF mode the gate must never answer shouldQuery:false to a
- * direct recall question. Covers every recalled-phrase class, English and
- * Hinglish, through the public mediateMemoryIntent path, plus negative
- * controls so generic questions still skip retrieval.
+ * Regression tests: in the default OFF mode the gate must never answer
+ * shouldQuery:false to a direct recall question. Covers every
+ * recalled-phrase class, English and Hinglish, through the public
+ * mediateMemoryIntent path, plus negative controls so generic questions
+ * still skip retrieval.
  */
 import test from "node:test";
 import assert from "node:assert/strict";

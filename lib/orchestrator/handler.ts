@@ -18,7 +18,12 @@ import {
 import { createSafeStream } from "@/lib/chat/safeStream";
 import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { isGraphInterrupt } from "@langchain/langgraph";
-import { RECURSION_LIMIT, MIN_CACHEABLE_QUERY_LENGTH } from "./constants";
+import {
+  RECURSION_LIMIT,
+  MIN_CACHEABLE_QUERY_LENGTH,
+  ORCHESTRATOR_STREAM_DEADLINE_MS,
+  STREAM_HEARTBEAT_INTERVAL_MS,
+} from "./constants";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import {
@@ -33,8 +38,13 @@ import { gateCacheHit } from "@/lib/jev/cacheGate";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
 import { deriveThreadId } from "./threadIdentity";
 import { logError, logInfo, logWarn } from "@/lib/observability";
-import { acquireThreadLock } from "./threadLock";
+import {
+  acquireThreadLock,
+  ThreadLockTimeoutError,
+  type ThreadLock,
+} from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
+import { abortAware } from "./abortAware";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -70,6 +80,7 @@ export function createOrchestratorStreamHandler(
       const stream = createSafeStream(controller, {
         abortSignal,
         label: "Orchestrator",
+        heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
       });
       const threadId = deriveThreadId(conversationId, branchId);
       let memoryStatusInfo: MemoryStatus = {
@@ -84,6 +95,24 @@ export function createOrchestratorStreamHandler(
       };
 
       const mapper = createStreamEventMapper();
+
+      // Overall deadline aligned under this route's Vercel maxDuration (300s):
+      // abort downstream work and terminate the stream gracefully with a
+      // terminal SSE error instead of letting the platform hard-kill the
+      // invocation mid-stream with no client-visible outcome.
+      const deadlineController = new AbortController();
+      const deadlineTimer = setTimeout(() => {
+        deadlineController.abort(
+          new Error("Orchestrator stream deadline exceeded"),
+        );
+      }, ORCHESTRATOR_STREAM_DEADLINE_MS);
+      (deadlineTimer as { unref?: () => void }).unref?.();
+      const workSignal = AbortSignal.any(
+        abortSignal
+          ? [abortSignal, deadlineController.signal]
+          : [deadlineController.signal],
+      );
+      const isDeadlineExceeded = () => deadlineController.signal.aborted;
 
       const closeStream = () => {
         stream.finish({
@@ -125,9 +154,39 @@ export function createOrchestratorStreamHandler(
         stream.abort();
       };
 
+      const timeoutStream = () => {
+        if (stream.isAborted) return;
+        logWarn({
+          event: "orchestrator_stream_deadline",
+          conversationId,
+          threadId,
+          branchId,
+          deadlineMs: ORCHESTRATOR_STREAM_DEADLINE_MS,
+        });
+        stream.enqueue(
+          encodeError(
+            "This response took too long and was stopped. Please try again, or break the request into smaller parts.",
+          ),
+        );
+        closeStream();
+      };
+
+      // Client-disconnect abort: cancel the work only. No durable stop
+      // marker is written on this path - refresh, tab close and network
+      // loss must stay resumable by auto-continue. Only an explicit stop
+      // records a marker (the /api/chat/stop endpoint or the client's
+      // scoped marker save).
+      const handleWorkAbort = async () => {
+        if (isDeadlineExceeded()) {
+          timeoutStream();
+          return;
+        }
+        abortStream();
+      };
+
       try {
-        if (abortSignal?.aborted) {
-          abortStream();
+        if (workSignal.aborted) {
+          await handleWorkAbort();
           return;
         }
 
@@ -163,7 +222,7 @@ export function createOrchestratorStreamHandler(
             memoryEnabled,
             {
               apiKey,
-              signal: abortSignal,
+              signal: workSignal,
               currentDocumentAttachmentIds: documentAttachmentIds,
             },
           );
@@ -177,15 +236,15 @@ export function createOrchestratorStreamHandler(
           }
         } catch (error) {
           if (
-            abortSignal?.aborted ||
+            workSignal.aborted ||
             (error instanceof Error && error.name === "AbortError")
           )
             throw error;
           logger.error("[Orchestrator] Context routing failed:", error);
         }
 
-        if (abortSignal?.aborted) {
-          abortStream();
+        if (workSignal.aborted) {
+          await handleWorkAbort();
           return;
         }
 
@@ -213,7 +272,10 @@ export function createOrchestratorStreamHandler(
           return;
         }
 
-        const connectedToolkits = await getConnectedToolkits(userId);
+        const connectedToolkits = await abortAware(
+          getConnectedToolkits(userId),
+          workSignal,
+        );
 
         const queryText = extractTextFromMessage(lastUserMessage);
         const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(
@@ -230,14 +292,17 @@ export function createOrchestratorStreamHandler(
             const embedding = await generateEmbedding(
               queryText,
               userId,
-              abortSignal,
+              workSignal,
             );
-            const entry = await searchSemanticCacheEntry(
-              embedding,
-              userId,
-              conversationId,
-              model,
-              reasoningEffort ?? null,
+            const entry = await abortAware(
+              searchSemanticCacheEntry(
+                embedding,
+                userId,
+                conversationId,
+                model,
+                reasoningEffort ?? null,
+              ),
+              workSignal,
             );
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
@@ -245,21 +310,26 @@ export function createOrchestratorStreamHandler(
               // hits the gate could not evaluate.
               const round4 = (value: number) =>
                 Math.round(value * 10_000) / 10_000;
-              const gate = await gateCacheHit(
-                {
-                  similarityScore: round4(entry.score),
-                  similarityThreshold: SIMILARITY_THRESHOLD,
-                  scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
-                  cacheAgeSeconds: Math.max(
-                    0,
-                    Math.round((Date.now() - entry.createdAt.getTime()) / 1000),
-                  ),
-                  cacheTtlSeconds: CACHE_TTL_SECONDS,
-                  entryScopedToConversation: entry.conversationId !== null,
-                  queryLengthChars: queryText.length,
-                  answerLengthChars: entry.answer.length,
-                },
-                conversationId,
+              const gate = await abortAware(
+                gateCacheHit(
+                  {
+                    similarityScore: round4(entry.score),
+                    similarityThreshold: SIMILARITY_THRESHOLD,
+                    scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
+                    cacheAgeSeconds: Math.max(
+                      0,
+                      Math.round(
+                        (Date.now() - entry.createdAt.getTime()) / 1000,
+                      ),
+                    ),
+                    cacheTtlSeconds: CACHE_TTL_SECONDS,
+                    entryScopedToConversation: entry.conversationId !== null,
+                    queryLengthChars: queryText.length,
+                    answerLengthChars: entry.answer.length,
+                  },
+                  conversationId,
+                ),
+                workSignal,
               );
               if (gate.serve) {
                 logger.log("[Orchestrator] Semantic cache HIT");
@@ -273,7 +343,7 @@ export function createOrchestratorStreamHandler(
             }
           } catch (cacheErr) {
             if (
-              abortSignal?.aborted ||
+              workSignal.aborted ||
               (cacheErr instanceof Error && cacheErr.name === "AbortError")
             )
               throw cacheErr;
@@ -299,9 +369,34 @@ export function createOrchestratorStreamHandler(
           ephemeralContext,
         });
         const graphConfig = { configurable: { thread_id: threadId } };
-        const threadLock = await acquireThreadLock(threadId);
+        let threadLock: ThreadLock;
         try {
-          const existingState = await graph.getState(graphConfig);
+          threadLock = await acquireThreadLock(threadId, {
+            signal: workSignal,
+          });
+        } catch (lockError) {
+          if (lockError instanceof ThreadLockTimeoutError) {
+            logWarn({
+              event: "orchestrator_thread_lock_timeout",
+              conversationId,
+              threadId,
+              branchId,
+            });
+            stream.enqueue(
+              encodeError(
+                "Another response is still being generated for this chat. Please wait for it to finish, then send your message again.",
+              ),
+            );
+            closeStream();
+            return;
+          }
+          throw lockError;
+        }
+        try {
+          const existingState = await abortAware(
+            graph.getState(graphConfig),
+            workSignal,
+          );
           const storedById = new Map<string, string>(
             (existingState.values?.messages ?? []).flatMap(
               (message: BaseMessage) =>
@@ -348,7 +443,7 @@ export function createOrchestratorStreamHandler(
           const config = {
             configurable: { thread_id: threadId },
             recursionLimit: RECURSION_LIMIT,
-            signal: abortSignal,
+            signal: workSignal,
           };
 
           const eventStream = await graph.streamEvents(input, {
@@ -357,18 +452,21 @@ export function createOrchestratorStreamHandler(
           });
 
           for await (const event of eventStream) {
-            if (abortSignal?.aborted) break;
+            if (workSignal.aborted) break;
             mapper.map(stream, event as Record<string, unknown>);
           }
 
-          if (abortSignal?.aborted) {
-            abortStream();
+          if (workSignal.aborted) {
+            await handleWorkAbort();
             return;
           }
 
-          const finalState = await graph.getState({
-            configurable: { thread_id: threadId },
-          });
+          const finalState = await abortAware(
+            graph.getState({
+              configurable: { thread_id: threadId },
+            }),
+            workSignal,
+          );
           const pendingInterrupts = (finalState.tasks ?? []).flatMap(
             (task) => task.interrupts ?? [],
           );
@@ -402,8 +500,13 @@ export function createOrchestratorStreamHandler(
           return;
         }
 
+        if (isDeadlineExceeded()) {
+          timeoutStream();
+          return;
+        }
+
         if (
-          abortSignal?.aborted ||
+          workSignal.aborted ||
           (error instanceof Error && error.name === "AbortError")
         ) {
           logger.warn("[Orchestrator] Stream aborted by user");
@@ -413,6 +516,8 @@ export function createOrchestratorStreamHandler(
           logger.error("[Orchestrator] Stream error:", error);
         }
         failStream(error);
+      } finally {
+        clearTimeout(deadlineTimer);
       }
     },
   };

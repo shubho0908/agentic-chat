@@ -15,7 +15,8 @@ import { queryKeys } from "@/lib/queryKeys";
 import { appRoutes } from "@/lib/routes";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { logger, emergencyLog } from "@/lib/logger";
-import { appendMessagesDedupingIds, getPendingAssistantMessageId } from "./pendingAssistant";
+import { appendMessagesDedupingIds, getPendingAssistantMessageId, upsertMessageById } from "./pendingAssistant";
+import { getStreamStoppedMarkerMessageId } from "@/lib/chat/stopMarker";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
@@ -83,8 +84,24 @@ export async function continueIncompleteConversation(
   );
 
   if (!result.success && result.error === "aborted" && conversationId) {
+    // Optimistic local marker first: without it the conversation briefly ends
+    // at the user message and the auto-continue effect would retry the stop.
+    // The server marker (same deterministic id) stays the source of truth.
+    const markerMessageId = userMessage.id
+      ? getStreamStoppedMarkerMessageId(conversationId, userMessage.id)
+      : undefined;
+    if (markerMessageId) {
+      onMessagesUpdate((prev) => upsertMessageById(prev, {
+        role: MessageRole.ASSISTANT,
+        content: STREAM_STOPPED_BY_USER_MARKER,
+        id: markerMessageId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [],
+      }));
+    }
     try {
-      await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER);
+      await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER, undefined, markerMessageId);
     } catch (err) {
       try {
         logger.warn("[messageSender] Failed to save stream-stopped marker (continue):", err);
@@ -266,8 +283,18 @@ export async function handleSendMessage(
     );
 
     if (!result.success && result.error === "aborted" && currentConversationId && userMessageWasPersisted) {
+      const stoppedUserMessageId = savedMsgId ?? userMessage.id;
+      const markerMessageId = getStreamStoppedMarkerMessageId(currentConversationId, stoppedUserMessageId);
+      onMessagesUpdate((prev) => upsertMessageById(prev, {
+        role: MessageRole.ASSISTANT,
+        content: STREAM_STOPPED_BY_USER_MARKER,
+        id: markerMessageId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [],
+      }));
       try {
-        await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER);
+        await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER, undefined, markerMessageId);
       } catch (err) {
         try {
           logger.warn("[messageSender] Failed to save stream-stopped marker:", err);

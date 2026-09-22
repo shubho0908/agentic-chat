@@ -15,6 +15,8 @@ import type {
   ContinueConversationOptions,
 } from "@/types/chat";
 import { handleSendMessage, continueIncompleteConversation } from "./chat/messageSender";
+import { shouldAutoContinueConversation } from "./chat/autoContinue";
+import { apiRoutes } from "@/lib/routes";
 import { handleEditMessage } from "./chat/messageEditor";
 import { handleRegenerateResponse } from "./chat/messageRegenerator";
 import { useStreaming } from "@/contexts/streaming-context";
@@ -464,16 +466,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   useEffect(() => {
     if (isLoading || messages.length === 0 || !autoContinue?.session) return;
 
-    const lastMessage = messages[messages.length - 1];
+    if (!shouldAutoContinueConversation(messages)) return;
+
     const lastUserMessage = messages.findLast(msg => msg.role === MessageRole.USER);
 
-    if (lastMessage?.role === MessageRole.ASSISTANT && lastMessage.metadata?.humanInTheLoopStatus === "pending") return;
-
-    const isIncomplete =
-      (lastMessage?.role === MessageRole.USER && lastMessage.id) ||
-      (lastMessage?.role === MessageRole.ASSISTANT && !lastMessage.content && !lastMessage.metadata?.humanInTheLoopRequest && lastUserMessage?.id);
-
-    if (isIncomplete && lastUserMessage?.id && conversationId) {
+    if (lastUserMessage?.id && conversationId) {
       const resumeKey = `${conversationId}:${lastUserMessage.id}`;
       if (autoContinuedRef.current === resumeKey) return;
 
@@ -504,9 +501,25 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    // Lock-free explicit-stop marker: even if this tab dies right after the
+    // click, the stop is recorded and a later refresh can never auto-retry
+    // it. The user message id scopes the marker to this turn so a newer turn
+    // is never finalized by mistake; without a user message there is no turn
+    // to stop and nothing to record.
+    const lastUserMessageId = messagesRef.current.findLast(
+      (message) => message.role === MessageRole.USER,
+    )?.id;
+    if (conversationId && lastUserMessageId) {
+      void fetch(apiRoutes.chatStop, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, userMessageId: lastUserMessageId }),
+        keepalive: true,
+      }).catch(() => {});
+    }
     setIsLoading(false);
     stopStreamingContext(false);
-  }, [stopStreamingContext]);
+  }, [stopStreamingContext, conversationId]);
 
   useEffect(() => () => { abortControllerRef.current?.abort(); }, [abortControllerRef]);
 

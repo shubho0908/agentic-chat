@@ -78,7 +78,6 @@ test("mergeJevStats combines outcome counts with latency aggregates", () => {
   assert.deepEqual(planner.outcomes, { agree: 90, disagree: 10 });
   assert.equal(planner.fallbackRate, 0.02);
   assert.deepEqual(planner.latencyMs, { p50: 412, p95: 1802 });
-  // Sorted by volume descending.
   assert.equal(merged[0].checkpoint, "planner");
   const rerank = merged.find((row) => row.checkpoint === "rerank");
   assert.ok(rerank);
