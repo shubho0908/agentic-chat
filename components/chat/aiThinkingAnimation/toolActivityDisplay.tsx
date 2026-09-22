@@ -114,37 +114,30 @@ export const ToolActivityDisplay = memo(function ToolActivityDisplay({
         </AccordionTrigger>
 
         <AccordionContent className="pt-1 pb-1.5">
-          <div className="flex max-h-72 flex-col overflow-y-auto overscroll-contain border-l border-border pl-1.5">
-            {summary.groups.map((group, groupIndex) => {
-              // A lone call is self-describing in its row, so only runs of
-              // sibling calls earn a header (avoids repeating the toolkit twice).
-              const showGroupHeader = group.activities.length > 1;
+          <ol className="max-h-72 overflow-y-auto overscroll-contain pl-3">
+            {visible.map((activity, index) => {
+              const isLast = index === visible.length - 1;
 
               return (
-                <div key={`${group.key}-${groupIndex}`} className="flex flex-col gap-0.5">
-                  {showGroupHeader && (
-                    <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-1">
-                      <ToolIcon icon={group.icon} className="size-3 shrink-0 text-muted-foreground/70" />
-                      <span className="text-[10.5px] font-medium text-muted-foreground">
-                        {group.label}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/60">
-                        {group.activities.length} {group.activities.length === 1 ? "call" : "calls"}
-                      </span>
-                    </div>
+                <li
+                  key={`${activity.toolCallId}-${index}`}
+                  className="relative pl-3"
+                >
+                  <span
+                    aria-hidden
+                    className="absolute top-0 left-0 h-3 w-2.5 rounded-bl-[6px] border-b border-l border-foreground/20 dark:border-foreground/25"
+                  />
+                  {!isLast && (
+                    <span
+                      aria-hidden
+                      className="absolute top-3 bottom-0 left-0 border-l border-foreground/20 dark:border-foreground/25"
+                    />
                   )}
-
-                  <ul className="flex flex-col gap-0.5">
-                    {group.activities.map((activity, activityIndex) => (
-                      <li key={`${activity.toolCallId}-${activityIndex}`}>
-                        <ToolCallRow activity={activity} showFamily={!showGroupHeader} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                  <ToolCallRow activity={activity} />
+                </li>
               );
             })}
-          </div>
+          </ol>
         </AccordionContent>
       </AccordionItem>
     </Accordion>

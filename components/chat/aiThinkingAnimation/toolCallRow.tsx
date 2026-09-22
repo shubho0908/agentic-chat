@@ -163,17 +163,17 @@ export const ToolCallRow = memo(function ToolCallRow({
         aria-controls={panelId}
         // Stable hook for the /message-preview review harness.
         data-tool-activity-row={activity.status}
-        className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <ToolIcon icon={family.icon} className="size-3.5 shrink-0 text-muted-foreground" />
 
-        <span className="truncate text-[12px] font-medium text-foreground/80">{rowLabel}</span>
+        <span className={cn("truncate text-[12px] font-medium text-foreground/80", keyArg ? "max-w-[42%] shrink-0" : "min-w-0 flex-1")}>{rowLabel}</span>
 
         {keyArg && (
           <span
             title={keyArg.text}
             className={cn(
-              "max-w-[200px] shrink-0 truncate text-muted-foreground",
+              "min-w-0 flex-1 truncate text-muted-foreground",
               keyArg.isIdentifier ? "font-mono text-[10.5px]" : "text-[11px]",
             )}
           >
