@@ -186,10 +186,12 @@ export function DocumentPreview({ fileUrl, fileName, fileType, open, onClose }: 
   };
 
   const headerContent = (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="truncate text-lg font-semibold">{fileName}</div>
-        <div className="mt-1 text-sm text-muted-foreground">{fileType}</div>
+    <div className="flex min-w-0 items-center justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-lg font-semibold" title={fileName}>
+          {fileName}
+        </div>
+        <div className="mt-1 truncate text-sm text-muted-foreground">{fileType}</div>
       </div>
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" asChild>
