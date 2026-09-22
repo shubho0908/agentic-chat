@@ -246,9 +246,6 @@ test("cache gate shadow and ab still serve on invalid response and provider erro
 });
 
 test("cross-question contamination is not served when the active gate errors", async () => {
-  // Regression for the cow-essay/Mirzapur incident: an unrelated query matched
-  // a cached entry above threshold and the gate's fail-open served it. With a
-  // marginal-score hit the active gate must never serve what it cannot judge.
   const marginalHit: JevCacheGateState = {
     ...CACHE_STATE,
     similarityScore: 0.86,
@@ -258,21 +255,21 @@ test("cross-question contamination is not served when the active gate errors", a
   await withEnv({ JEV_CACHE_GATE_MODE: "active" }, async () => {
     const errored = await gateCacheHit(
       marginalHit,
-      "conv-cow",
+      "conv-marginal",
       fakeClient(() => new Error("provider down")),
     );
     assert.equal(errored.serve, false);
 
     const invalid = await gateCacheHit(
       marginalHit,
-      "conv-cow",
+      "conv-marginal",
       fakeClient({}),
     );
     assert.equal(invalid.serve, false);
 
     const circuitOpen = await gateCacheHit(
       marginalHit,
-      "conv-cow",
+      "conv-marginal",
       fakeClient(() => Object.assign(new Error("circuit open"), { name: "JevCircuitOpenError" })),
     );
     assert.equal(circuitOpen.serve, false);
