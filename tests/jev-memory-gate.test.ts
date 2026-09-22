@@ -372,7 +372,7 @@ test("memory gate cache is isolated by user", () =>
     },
   ));
 
-test("aborted implicit Jev classification falls back to legacy intent", () =>
+test("aborted implicit Jev classification propagates cancellation", () =>
   withEnv(
     {
       MEMORY_ENABLED: "true",
@@ -382,13 +382,16 @@ test("aborted implicit Jev classification falls back to legacy intent", () =>
     async () => {
       const controller = new AbortController();
       controller.abort();
-      const decision = await mediateMemoryIntent({
-        messageText: `aborted request using what I shared previously ${Date.now()}`,
-        userId: "abort-user",
-        signal: controller.signal,
-      });
-      assert.equal(decision.shouldQuery, true);
-      assert.equal(decision.reasonCode, MemoryGateReason.LEGACY_HEURISTIC);
+      await assert.rejects(
+        mediateMemoryIntent({
+          messageText: `aborted request using what I shared previously ${Date.now()}`,
+          userId: "abort-user",
+          signal: controller.signal,
+        }),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.name === "JevEvaluationCancelledError",
+      );
     },
   ));
 

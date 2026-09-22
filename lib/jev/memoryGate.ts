@@ -168,6 +168,7 @@ export async function mediateMemoryIntent(
       });
       return d;
     } catch (error) {
+      if (a.signal?.aborted) throw error;
       logWarn({
         event: "jev_memory_gate_fallback",
         error: error instanceof Error ? error.message : String(error),

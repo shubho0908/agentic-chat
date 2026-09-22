@@ -14,13 +14,15 @@ const checkpointSchema = z.enum(Object.values(JevCheckpoint));
 const modeSchema = z.enum(Object.values(JevMode));
 const outcomeRowSchema = z.object({
   checkpoint: z.string().min(1),
-  mode: z.string().min(1).optional(),
+  mode: z.string().min(1).nullable(),
+  mode_grouped: z.number().int().min(0).max(1),
   outcome: z.string().min(1),
   count: z.number().int().nonnegative(),
 });
 const latencyRowSchema = z.object({
   checkpoint: z.string().min(1),
-  mode: z.string().min(1).optional(),
+  mode: z.string().min(1).nullable(),
+  mode_grouped: z.number().int().min(0).max(1),
   total: z.number().int().nonnegative(),
   fallback_rate: z.number().min(0).max(1),
   p50: z.number().nonnegative().nullable(),
@@ -71,8 +73,23 @@ export function parseJevStatsQuery(
   };
 }
 
-type OutcomeRow = z.infer<typeof outcomeRowSchema>;
-type LatencyRow = z.infer<typeof latencyRowSchema>;
+interface OutcomeRow {
+  checkpoint: string;
+  mode?: string | null;
+  mode_grouped?: number;
+  outcome: string;
+  count: number;
+}
+
+interface LatencyRow {
+  checkpoint: string;
+  mode?: string | null;
+  mode_grouped?: number;
+  total: number;
+  fallback_rate: number;
+  p50: number | null;
+  p95: number | null;
+}
 
 interface JevStatsAggregate {
   total: number;
@@ -175,18 +192,27 @@ export async function queryJevStats(
   const { checkpoint, mode } = query;
 
   const rawOutcomeRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint, outcome, COUNT(*)::int AS count
+    `SELECT checkpoint,
+       CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
+       GROUPING(mode)::int AS mode_grouped,
+       outcome,
+       COUNT(*)::int AS count
      FROM jev_decisions
      WHERE created_at >= $1
        AND ($2::text IS NULL OR checkpoint = $2)
        AND ($3::text IS NULL OR mode = $3)
-     GROUP BY checkpoint, outcome`,
+     GROUP BY GROUPING SETS (
+       (checkpoint, outcome),
+       (checkpoint, mode, outcome)
+     )`,
     since,
     checkpoint,
     mode,
   );
   const rawLatencyRows = await prisma.$queryRawUnsafe<unknown[]>(
     `SELECT checkpoint,
+       CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
+       GROUPING(mode)::int AS mode_grouped,
        COUNT(*)::int AS total,
        AVG(CASE WHEN fallback_used THEN 1.0 ELSE 0.0 END)::float AS fallback_rate,
        percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms)::float AS p50,
@@ -195,42 +221,31 @@ export async function queryJevStats(
      WHERE created_at >= $1
        AND ($2::text IS NULL OR checkpoint = $2)
        AND ($3::text IS NULL OR mode = $3)
-     GROUP BY checkpoint`,
-    since,
-    checkpoint,
-    mode,
-  );
-  const rawModeOutcomeRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint, mode, outcome, COUNT(*)::int AS count
-     FROM jev_decisions
-     WHERE created_at >= $1
-       AND ($2::text IS NULL OR checkpoint = $2)
-       AND ($3::text IS NULL OR mode = $3)
-     GROUP BY checkpoint, mode, outcome`,
-    since,
-    checkpoint,
-    mode,
-  );
-  const rawModeLatencyRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint, mode,
-       COUNT(*)::int AS total,
-       AVG(CASE WHEN fallback_used THEN 1.0 ELSE 0.0 END)::float AS fallback_rate,
-       percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms)::float AS p50,
-       percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)::float AS p95
-     FROM jev_decisions
-     WHERE created_at >= $1
-       AND ($2::text IS NULL OR checkpoint = $2)
-       AND ($3::text IS NULL OR mode = $3)
-     GROUP BY checkpoint, mode`,
+     GROUP BY GROUPING SETS (
+       (checkpoint),
+       (checkpoint, mode)
+     )`,
     since,
     checkpoint,
     mode,
   );
 
-  const outcomeRows = z.array(outcomeRowSchema).parse(rawOutcomeRows);
-  const latencyRows = z.array(latencyRowSchema).parse(rawLatencyRows);
-  const modeOutcomeRows = z.array(outcomeRowSchema).parse(rawModeOutcomeRows);
-  const modeLatencyRows = z.array(latencyRowSchema).parse(rawModeLatencyRows);
+  const allOutcomeRows: OutcomeRow[] = z
+    .array(outcomeRowSchema)
+    .parse(rawOutcomeRows);
+  const allLatencyRows: LatencyRow[] = z
+    .array(latencyRowSchema)
+    .parse(rawLatencyRows);
+  const outcomeRows = allOutcomeRows.filter((row) => row.mode_grouped === 1);
+  const latencyRows = allLatencyRows.filter((row) => row.mode_grouped === 1);
+  const modeOutcomeRows = allOutcomeRows.filter(
+    (row): row is OutcomeRow & { mode: string } =>
+      row.mode_grouped === 0 && row.mode !== null,
+  );
+  const modeLatencyRows = allLatencyRows.filter(
+    (row): row is LatencyRow & { mode: string } =>
+      row.mode_grouped === 0 && row.mode !== null,
+  );
 
   return mergeJevStats(
     outcomeRows,
