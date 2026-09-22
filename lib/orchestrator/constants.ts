@@ -16,6 +16,15 @@ export const MIN_CACHEABLE_QUERY_LENGTH = 80;
 export const ORCHESTRATOR_STREAM_DEADLINE_MS = 285_000;
 
 /**
+ * Fail-fast lock wait for approvals: they are interactive, and a held lease
+ * means another response is actively generating, so surface that as a
+ * client-visible conflict quickly instead of parking the caller for the full
+ * chat window. Stays well under ORCHESTRATOR_STREAM_DEADLINE_MS so the answer
+ * always lands before the platform hard kill.
+ */
+export const APPROVAL_LOCK_WAIT_TIMEOUT_MS = 60_000;
+
+/**
  * SSE comment cadence proving stream liveness during long model/tool silences;
  * the client stall watchdog keys off any inbound bytes, including these.
  */

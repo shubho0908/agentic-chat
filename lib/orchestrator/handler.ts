@@ -44,6 +44,7 @@ import {
   type ThreadLock,
 } from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
+import { abortAware } from "./abortAware";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -266,7 +267,10 @@ export function createOrchestratorStreamHandler(
           return;
         }
 
-        const connectedToolkits = await getConnectedToolkits(userId);
+        const connectedToolkits = await abortAware(
+          getConnectedToolkits(userId),
+          workSignal,
+        );
 
         const queryText = extractTextFromMessage(lastUserMessage);
         const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(
@@ -285,12 +289,15 @@ export function createOrchestratorStreamHandler(
               userId,
               workSignal,
             );
-            const entry = await searchSemanticCacheEntry(
-              embedding,
-              userId,
-              conversationId,
-              model,
-              reasoningEffort ?? null,
+            const entry = await abortAware(
+              searchSemanticCacheEntry(
+                embedding,
+                userId,
+                conversationId,
+                model,
+                reasoningEffort ?? null,
+              ),
+              workSignal,
             );
             if (entry) {
               // Jev cache gate (structural signals only): shadow logs and
@@ -298,21 +305,26 @@ export function createOrchestratorStreamHandler(
               // hits the gate could not evaluate.
               const round4 = (value: number) =>
                 Math.round(value * 10_000) / 10_000;
-              const gate = await gateCacheHit(
-                {
-                  similarityScore: round4(entry.score),
-                  similarityThreshold: SIMILARITY_THRESHOLD,
-                  scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
-                  cacheAgeSeconds: Math.max(
-                    0,
-                    Math.round((Date.now() - entry.createdAt.getTime()) / 1000),
-                  ),
-                  cacheTtlSeconds: CACHE_TTL_SECONDS,
-                  entryScopedToConversation: entry.conversationId !== null,
-                  queryLengthChars: queryText.length,
-                  answerLengthChars: entry.answer.length,
-                },
-                conversationId,
+              const gate = await abortAware(
+                gateCacheHit(
+                  {
+                    similarityScore: round4(entry.score),
+                    similarityThreshold: SIMILARITY_THRESHOLD,
+                    scoreMargin: round4(entry.score - SIMILARITY_THRESHOLD),
+                    cacheAgeSeconds: Math.max(
+                      0,
+                      Math.round(
+                        (Date.now() - entry.createdAt.getTime()) / 1000,
+                      ),
+                    ),
+                    cacheTtlSeconds: CACHE_TTL_SECONDS,
+                    entryScopedToConversation: entry.conversationId !== null,
+                    queryLengthChars: queryText.length,
+                    answerLengthChars: entry.answer.length,
+                  },
+                  conversationId,
+                ),
+                workSignal,
               );
               if (gate.serve) {
                 logger.log("[Orchestrator] Semantic cache HIT");
@@ -376,7 +388,10 @@ export function createOrchestratorStreamHandler(
           throw lockError;
         }
         try {
-          const existingState = await graph.getState(graphConfig);
+          const existingState = await abortAware(
+            graph.getState(graphConfig),
+            workSignal,
+          );
           const storedById = new Map<string, string>(
             (existingState.values?.messages ?? []).flatMap(
               (message: BaseMessage) =>
@@ -441,9 +456,12 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
-          const finalState = await graph.getState({
-            configurable: { thread_id: threadId },
-          });
+          const finalState = await abortAware(
+            graph.getState({
+              configurable: { thread_id: threadId },
+            }),
+            workSignal,
+          );
           const pendingInterrupts = (finalState.tasks ?? []).flatMap(
             (task) => task.interrupts ?? [],
           );

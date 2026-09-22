@@ -90,7 +90,17 @@ class PostgresThreadLockStore implements ThreadLockStore {
     if (!connectionString) {
       throw new Error("DATABASE_URL is required for thread locking");
     }
-    PostgresThreadLockStore.pool = new pg.Pool({ connectionString, max: 5 });
+    PostgresThreadLockStore.pool = new pg.Pool({
+      connectionString,
+      max: 5,
+      // Bound every stage of the acquisition round trip. A saturated pool or
+      // an unresponsive database must fail tryAcquire fast so the wait loop
+      // can re-check its deadline and the request abort, instead of parking
+      // past both into the platform's hard kill.
+      connectionTimeoutMillis: 5_000,
+      statement_timeout: 5_000,
+      query_timeout: 10_000,
+    });
     return PostgresThreadLockStore.pool;
   }
 

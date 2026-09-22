@@ -16,10 +16,20 @@ import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPo
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { isRecord } from "@/lib/typeGuards";
-import { createRequestId, logError } from "@/lib/observability";
+import { createRequestId, logError, logWarn } from "@/lib/observability";
 import { isValidConversationId } from "@/lib/validation";
 import { deriveThreadId, isThreadIdForConversation } from "@/lib/orchestrator/threadIdentity";
-import { STREAM_HEARTBEAT_INTERVAL_MS } from "@/lib/orchestrator/constants";
+import {
+  APPROVAL_LOCK_WAIT_TIMEOUT_MS,
+  ORCHESTRATOR_STREAM_DEADLINE_MS,
+  STREAM_HEARTBEAT_INTERVAL_MS,
+} from "@/lib/orchestrator/constants";
+import {
+  acquireThreadLock,
+  ThreadLockTimeoutError,
+  type ThreadLock,
+} from "@/lib/orchestrator/threadLock";
+import { abortAware } from "@/lib/orchestrator/abortAware";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -94,21 +104,78 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = await getUserApiKey(user.id);
-    const connectedToolkits = await getConnectedToolkits(user.id);
-    const graph = await createAgentGraph(user.id, apiKey, model, { reasoningEffort, connectedToolkits });
 
-    const existingState = await graph.getState({ configurable: { thread_id: threadId } });
-    const hasPendingInterrupt = (existingState.tasks ?? []).some(
-      (task) => (task.interrupts ?? []).length > 0
+    const abortController = new AbortController();
+    request.signal.addEventListener(
+      "abort",
+      () => {
+        abortController.abort();
+      },
+      { once: true }
     );
-    if (!hasPendingInterrupt) {
-      logger.warn("[Approve] No pending interrupt for thread", { threadId, conversationId });
-      return errorResponse(
-        "This action has already been resolved or the session has expired.",
-        undefined,
-        HTTP_STATUS.BAD_REQUEST
-      );
+
+    // Same deadline contract as the chat stream: abort resume work and emit a
+    // terminal SSE error before the platform hard-kills this 300s route
+    // mid-stream. One agent step can chain three bounded 180s model attempts,
+    // so an unbounded resume can outlive maxDuration while heartbeats keep
+    // the client watchdog quiet.
+    const deadlineController = new AbortController();
+    const deadlineTimer = setTimeout(() => {
+      deadlineController.abort(new Error("Approval stream deadline exceeded"));
+    }, ORCHESTRATOR_STREAM_DEADLINE_MS);
+    (deadlineTimer as { unref?: () => void }).unref?.();
+    const workSignal = AbortSignal.any([
+      abortController.signal,
+      deadlineController.signal,
+    ]);
+
+    // Resume mutates the same checkpoint thread the chat stream serializes,
+    // so it must hold the same lease. Without it two approvals can both
+    // observe the pending interrupt and resume concurrently, racing
+    // checkpoint writes and replaying side-effecting tool work. The
+    // pending-interrupt check below therefore runs only after the lease is
+    // held, closing the check-then-act window.
+    let threadLock: ThreadLock;
+    try {
+      threadLock = await acquireThreadLock(threadId, {
+        signal: workSignal,
+        waitTimeoutMs: APPROVAL_LOCK_WAIT_TIMEOUT_MS,
+      });
+    } catch (lockError) {
+      clearTimeout(deadlineTimer);
+      if (lockError instanceof ThreadLockTimeoutError) {
+        return errorResponse(
+          "Another response is still being generated for this chat. Please wait for it to finish, then try again.",
+          undefined,
+          HTTP_STATUS.CONFLICT,
+        );
+      }
+      throw lockError;
     }
+
+    let streamOwnsLock = false;
+    try {
+      const connectedToolkits = await abortAware(
+        getConnectedToolkits(user.id),
+        workSignal,
+      );
+      const graph = await createAgentGraph(user.id, apiKey, model, { reasoningEffort, connectedToolkits });
+
+      const existingState = await abortAware(
+        graph.getState({ configurable: { thread_id: threadId } }),
+        workSignal,
+      );
+      const hasPendingInterrupt = (existingState.tasks ?? []).some(
+        (task) => (task.interrupts ?? []).length > 0
+      );
+      if (!hasPendingInterrupt) {
+        logger.warn("[Approve] No pending interrupt for thread", { threadId, conversationId });
+        return errorResponse(
+          "This action has already been resolved or the session has expired.",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
 
     const resumeConfig = resolveResumeConfig(
       model,
@@ -140,92 +207,121 @@ export async function POST(request: NextRequest) {
         ? HUMAN_IN_THE_LOOP_APPROVED
         : HUMAN_IN_THE_LOOP_DENIED;
 
-    const abortController = new AbortController();
-    request.signal.addEventListener(
-      "abort",
-      () => {
-        abortController.abort();
-      },
-      { once: true }
-    );
-
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        const stream = createSafeStream(controller, {
-          abortSignal: abortController.signal,
-          label: "Approve",
-          heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
-        });
-        const mapper = createStreamEventMapper();
-        const finishStream = () => {
-          stream.finish({
-            done: encodeDone(),
-            flush: (writer) => mapper.flush(writer),
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          const stream = createSafeStream(controller, {
+            abortSignal: abortController.signal,
+            label: "Approve",
+            heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
           });
-        };
-
-        try {
-          const eventStream = await resumeGraph.streamEvents(
-            new Command({ resume: resumeValue }),
-            {
-              configurable: { thread_id: threadId },
-              version: "v2",
-              signal: abortController.signal,
-            }
-          );
-
-          for await (const event of eventStream) {
-            if (abortController.signal.aborted) break;
-            mapper.map(stream, event as Record<string, unknown>);
-          }
-
-          if (abortController.signal.aborted) {
-            stream.abort();
-            return;
-          }
-
-          const finalState = await resumeGraph.getState({ configurable: { thread_id: threadId } });
-          const pendingInterrupts = (finalState.tasks ?? [])
-            .flatMap((task) => task.interrupts ?? []);
-
-          if (pendingInterrupts.length > 0) {
-            const firstValue = pendingInterrupts[0].value;
-            const interruptData = {
-              ...(typeof firstValue === "object" && firstValue !== null
-                ? firstValue as Record<string, unknown>
-                : {}),
+          const mapper = createStreamEventMapper();
+          const finishStream = () => {
+            stream.finish({
+              done: encodeDone(),
+              flush: (writer) => mapper.flush(writer),
+            });
+          };
+          const timeoutStream = () => {
+            if (stream.isAborted) return;
+            logWarn({
+              event: "approval_stream_deadline",
+              requestId,
               threadId,
-            };
-            handleGraphInterrupt(stream, interruptData);
+              deadlineMs: ORCHESTRATOR_STREAM_DEADLINE_MS,
+            });
+            stream.enqueue(
+              encodeError(
+                "This response took too long and was stopped. Please try again, or break the request into smaller parts.",
+              ),
+            );
             finishStream();
-            return;
-          }
+          };
 
-          finishStream();
-        } catch (err) {
-          if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
-            logger.warn("[Approve] Stream aborted by client");
-            stream.abort();
-            return;
-          }
-          logger.error("[Approve] Error resuming graph:", err);
-          stream.enqueue(encodeError(toUserFriendlyError(err)));
-          finishStream();
-        }
-      },
-      cancel() {
-        abortController.abort();
-      },
-    });
+          try {
+            const eventStream = await resumeGraph.streamEvents(
+              new Command({ resume: resumeValue }),
+              {
+                configurable: { thread_id: threadId },
+                version: "v2",
+                signal: workSignal,
+              }
+            );
 
-    return new Response(readableStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
+            for await (const event of eventStream) {
+              if (workSignal.aborted) break;
+              mapper.map(stream, event as Record<string, unknown>);
+            }
+
+            if (workSignal.aborted) {
+              if (deadlineController.signal.aborted) {
+                timeoutStream();
+              } else {
+                stream.abort();
+              }
+              return;
+            }
+
+            const finalState = await abortAware(
+              resumeGraph.getState({ configurable: { thread_id: threadId } }),
+              workSignal,
+            );
+            const pendingInterrupts = (finalState.tasks ?? [])
+              .flatMap((task) => task.interrupts ?? []);
+
+            if (pendingInterrupts.length > 0) {
+              const firstValue = pendingInterrupts[0].value;
+              const interruptData = {
+                ...(typeof firstValue === "object" && firstValue !== null
+                  ? firstValue as Record<string, unknown>
+                  : {}),
+                threadId,
+              };
+              handleGraphInterrupt(stream, interruptData);
+              finishStream();
+              return;
+            }
+
+            finishStream();
+          } catch (err) {
+            if (deadlineController.signal.aborted) {
+              timeoutStream();
+              return;
+            }
+            if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+              logger.warn("[Approve] Stream aborted by client");
+              stream.abort();
+              return;
+            }
+            logger.error("[Approve] Error resuming graph:", err);
+            stream.enqueue(encodeError(toUserFriendlyError(err)));
+            finishStream();
+          } finally {
+            clearTimeout(deadlineTimer);
+            await threadLock.release();
+          }
+        },
+        cancel() {
+          abortController.abort();
+          clearTimeout(deadlineTimer);
+          void threadLock.release();
+        },
+      });
+
+      streamOwnsLock = true;
+      return new Response(readableStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    } finally {
+      if (!streamOwnsLock) {
+        clearTimeout(deadlineTimer);
+        await threadLock.release();
+      }
+    }
   } catch (error) {
     logError({
       event: "chat_approval_route_failed",
