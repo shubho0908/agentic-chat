@@ -1,3 +1,5 @@
+import { STREAM_STOPPED_BY_USER_MARKER } from "@/lib/chat/stopMarker";
+export { STREAM_STOPPED_BY_USER_MARKER };
 import {
   type Attachment,
   type MessageContentPart,
@@ -62,8 +64,7 @@ export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
   "[[__artifact_only_assistant_content_v1__]]";
 export const PDF_ONLY_ASSISTANT_CONTENT =
   "[[__pdf_only_assistant_content_v1__]]";
-export const STREAM_STOPPED_BY_USER_MARKER =
-  "[[__stream_stopped_by_user_v1__]]";
+
 
 export function getPersistableAssistantContent(
   assistantContent: string,

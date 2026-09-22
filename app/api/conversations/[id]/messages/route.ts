@@ -9,6 +9,8 @@ import { isSupportedForRAG } from '@/lib/rag/utils';
 import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
+import { markStreamStoppedByUser } from '@/lib/chat/streamStopped';
+import { STREAM_STOPPED_BY_USER_MARKER } from '@/lib/chat/stopMarker';
 import type { MessageRole, Prisma } from '@prisma/client';
 
 type MessageWithAttachments = Prisma.MessageGetPayload<{ include: { attachments: true } }>;
@@ -120,26 +122,76 @@ export async function POST(
       throw updateErr;
     }
 
-    let message: MessageWithAttachments;
-    try {
-      message = await prisma.message.create({
-        data: {
-          ...(clientMessageId && { id: clientMessageId }),
-          conversationId,
-          role: validatedRole,
-          content: validatedContent,
-          ...(validatedMetadata && { metadata: validatedMetadata }),
-          attachments: validatedAttachments && validatedAttachments.length > 0 ? {
-            create: validatedAttachments.map(att => ({
-              fileUrl: att.fileUrl,
-              fileName: att.fileName,
-              fileType: att.fileType,
-              fileSize: att.fileSize,
-            }))
-          } : undefined,
-        },
+    // Stop-marker writes go through the shared helper so client, stop
+    // endpoint, and stream-abort path all share one idempotent,
+    // first-writer-wins implementation.
+    if (validatedRole === 'ASSISTANT' && validatedContent === STREAM_STOPPED_BY_USER_MARKER) {
+      const markResult = await markStreamStoppedByUser(conversationId);
+      if (!markResult.marked) {
+        return jsonResponse({ id: null, skipped: markResult.reason ?? 'not-marked' }, HTTP_STATUS.OK);
+      }
+      const markerMessage = await prisma.message.findUnique({
+        where: { id: markResult.messageId as string },
         include: { attachments: true },
       });
+      return jsonResponse(markerMessage, HTTP_STATUS.OK);
+    }
+
+    let message: MessageWithAttachments | null = null;
+    try {
+      if (validatedRole === 'ASSISTANT') {
+        // First-writer-wins against the stop marker: a completion that
+        // arrives after the turn was stopped is dropped. The conversation
+        // row lock closes the check-then-act window against
+        // markStreamStoppedByUser, which takes the same lock.
+        message = await prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT id FROM conversation WHERE id = ${conversationId} FOR UPDATE`;
+          const latest = await tx.message.findFirst({
+            where: { conversationId, isDeleted: false, parentMessageId: null },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, role: true, content: true },
+          });
+          if (latest && latest.role === 'ASSISTANT' && latest.content === STREAM_STOPPED_BY_USER_MARKER) {
+            return null;
+          }
+          return tx.message.create({
+            data: {
+              conversationId,
+              role: validatedRole,
+              content: validatedContent,
+              ...(validatedMetadata && { metadata: validatedMetadata }),
+            },
+            include: { attachments: true },
+          });
+        });
+        if (!message) {
+          const marker = await prisma.message.findFirst({
+            where: { conversationId, isDeleted: false, content: STREAM_STOPPED_BY_USER_MARKER },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true },
+          });
+          return jsonResponse({ id: marker?.id ?? null, droppedAfterStop: true }, HTTP_STATUS.OK);
+        }
+      } else {
+        message = await prisma.message.create({
+          data: {
+            ...(clientMessageId && { id: clientMessageId }),
+            conversationId,
+            role: validatedRole,
+            content: validatedContent,
+            ...(validatedMetadata && { metadata: validatedMetadata }),
+            attachments: validatedAttachments && validatedAttachments.length > 0 ? {
+              create: validatedAttachments.map(att => ({
+                fileUrl: att.fileUrl,
+                fileName: att.fileName,
+                fileType: att.fileType,
+                fileSize: att.fileSize,
+              }))
+            } : undefined,
+          },
+          include: { attachments: true },
+        });
+      }
     } catch (createErr) {
       if (isRecord(createErr) && createErr.code === "P2002" && clientMessageId) {
         const existing = await prisma.message.findUnique({
@@ -152,6 +204,17 @@ export async function POST(
         return errorResponse('Message ID conflict', undefined, HTTP_STATUS.CONFLICT);
       }
       throw createErr;
+    }
+
+    // Stop during the user-message save: the insert landed but the client
+    // is gone, so record the stop now or the conversation would sit at an
+    // unanswered user message and auto-continue would retry it on refresh.
+    if (validatedRole === 'USER' && request.signal.aborted) {
+      try {
+        await markStreamStoppedByUser(conversationId);
+      } catch (markErr) {
+        logger.warn('[Messages Route] Failed to persist stream-stopped marker after aborted save:', markErr);
+      }
     }
 
     scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);

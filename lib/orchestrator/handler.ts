@@ -45,6 +45,7 @@ import {
 } from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
 import { abortAware } from "./abortAware";
+import { markStreamStoppedByUser } from "@/lib/chat/streamStopped";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -154,6 +155,20 @@ export function createOrchestratorStreamHandler(
         stream.abort();
       };
 
+      // Client-disconnect abort: record the stop server-side so a refresh or
+      // the auto-continue resume can never retry a turn the user cancelled.
+      // Best-effort: a failed marker write must never mask the abort itself.
+      const persistStopMarker = async () => {
+        try {
+          await markStreamStoppedByUser(conversationId);
+        } catch (error) {
+          logger.warn(
+            "[Orchestrator] Failed to persist stream-stopped marker:",
+            error,
+          );
+        }
+      };
+
       const timeoutStream = () => {
         if (stream.isAborted) return;
         logWarn({
@@ -171,17 +186,18 @@ export function createOrchestratorStreamHandler(
         closeStream();
       };
 
-      const handleWorkAbort = () => {
+      const handleWorkAbort = async () => {
         if (isDeadlineExceeded()) {
           timeoutStream();
-        } else {
-          abortStream();
+          return;
         }
+        abortStream();
+        await persistStopMarker();
       };
 
       try {
         if (workSignal.aborted) {
-          handleWorkAbort();
+          await handleWorkAbort();
           return;
         }
 
@@ -239,7 +255,7 @@ export function createOrchestratorStreamHandler(
         }
 
         if (workSignal.aborted) {
-          handleWorkAbort();
+          await handleWorkAbort();
           return;
         }
 
@@ -452,7 +468,7 @@ export function createOrchestratorStreamHandler(
           }
 
           if (workSignal.aborted) {
-            handleWorkAbort();
+            await handleWorkAbort();
             return;
           }
 
@@ -506,6 +522,7 @@ export function createOrchestratorStreamHandler(
         ) {
           logger.warn("[Orchestrator] Stream aborted by user");
           abortStream();
+          await persistStopMarker();
           return;
         } else {
           logger.error("[Orchestrator] Stream error:", error);

@@ -22,6 +22,7 @@ export const apiRoutes = {
   upload: "/api/upload",
   chatCompletions: "/api/chat/completions",
   chatApprove: "/api/chat/approve",
+  chatStop: "/api/chat/stop",
   conversations: "/api/conversations",
   conversation: (conversationId: string) => `/api/conversations/${pathSegment(conversationId)}`,
   conversationExport: (conversationId: string) => `/api/conversations/${pathSegment(conversationId)}/export`,

@@ -174,12 +174,14 @@ export async function saveAssistantMessage(
   conversationId: string,
   content: string,
   metadata?: MessageMetadata,
+  clientMessageId?: string,
 ): Promise<string | null> {
   try {
     const body = {
       role: "ASSISTANT" as const,
       content,
       ...(metadata && { metadata }),
+      ...(clientMessageId && { id: clientMessageId }),
     };
 
     const response = await fetch(
