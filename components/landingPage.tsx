@@ -153,7 +153,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
               viewport={{ once: true, margin: "-100px" }}
               className="mt-[clamp(4rem,9vw,8rem)] grid gap-4 border-t border-border/80 pt-[clamp(2.75rem,6vw,5rem)] sm:gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8"
             >
-              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
+              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Network className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
@@ -164,7 +164,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                 <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Breaks complex tasks into subtasks, routes each to the right agent, and assembles the result, without you managing the steps.</p>
               </m.div>
 
-              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
+              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:p-7 lg:p-10">
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Search className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
@@ -175,7 +175,7 @@ export function LandingPage({ onAuthRequired, currentYear }: LandingPageProps) {
                 <p className="text-[0.95rem] leading-7 text-foreground/70 sm:text-base sm:leading-relaxed">Builds a research plan, collects sources across the web, cross-validates claims, then synthesizes a grounded answer.</p>
               </m.div>
 
-              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/40 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:col-span-2 sm:p-7 lg:col-span-1 lg:p-10">
+              <m.div variants={item} className="relative flex min-h-full flex-col items-start rounded-[1.75rem] border border-border/60 bg-muted/20 p-5 backdrop-blur-md transition-colors hover:border-border hover:bg-muted/40 dark:border-white/[0.12] dark:bg-muted/5 dark:hover:border-white/[0.22] dark:hover:bg-muted/10 before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-gradient-to-b before:from-foreground/[0.05] before:to-transparent dark:before:from-white/[0.05] dark:before:to-transparent sm:col-span-2 sm:p-7 lg:col-span-1 lg:p-10">
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-muted/80 to-muted/40 text-foreground/85 dark:border-white/[0.12] dark:from-white/[0.1] dark:to-white/[0.05] sm:mb-5">
                   <Zap className="h-[18px] w-[18px]" strokeWidth={1.75} />
                 </div>
