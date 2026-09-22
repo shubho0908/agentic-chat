@@ -68,7 +68,7 @@ test("explicit recall fails open without Jev", () =>
       assert.equal(d.reasonCode, MemoryGateReason.EXPLICIT_RECALL);
     },
   ));
-test("implicit request fails closed when Jev unavailable", () =>
+test("active mode falls back to the legacy intent heuristic when Jev is unavailable", () =>
   withEnv(
     {
       MEMORY_ENABLED: "true",
@@ -77,10 +77,10 @@ test("implicit request fails closed when Jev unavailable", () =>
     },
     async () => {
       const d = await mediateMemoryIntent({
-        messageText: "tailor this to the role I am targeting",
+        messageText: "tailor this using what I shared previously",
       });
-      assert.equal(d.shouldQuery, false);
-      assert.equal(d.reasonCode, MemoryGateReason.PROVIDER_FAILURE);
+      assert.equal(d.shouldQuery, true);
+      assert.equal(d.reasonCode, MemoryGateReason.LEGACY_HEURISTIC);
     },
   ));
 test("evidence failure policy only keeps high confidence", () => {
@@ -159,7 +159,7 @@ test("active Jev response is Zod-parsed and cached under concurrency", () =>
       }
     },
   ));
-test("malformed Jev response fails closed", () =>
+test("malformed Jev response falls back to the legacy intent heuristic", () =>
   withEnv(
     {
       MEMORY_ENABLED: "true",
@@ -175,11 +175,11 @@ test("malformed Jev response fails closed", () =>
         )) as typeof fetch;
       try {
         const d = await mediateMemoryIntent({
-          messageText: `implicit malformed ${Date.now()}`,
+          messageText: `use what I shared previously ${Date.now()}`,
           userId: "bad-user",
         });
-        assert.equal(d.shouldQuery, false);
-        assert.equal(d.reasonCode, MemoryGateReason.PROVIDER_FAILURE);
+        assert.equal(d.shouldQuery, true);
+        assert.equal(d.reasonCode, MemoryGateReason.LEGACY_HEURISTIC);
       } finally {
         globalThis.fetch = original;
       }
@@ -372,7 +372,7 @@ test("memory gate cache is isolated by user", () =>
     },
   ));
 
-test("aborted implicit Jev classification fails closed", () =>
+test("aborted implicit Jev classification falls back to legacy intent", () =>
   withEnv(
     {
       MEMORY_ENABLED: "true",
@@ -383,12 +383,12 @@ test("aborted implicit Jev classification fails closed", () =>
       const controller = new AbortController();
       controller.abort();
       const decision = await mediateMemoryIntent({
-        messageText: `aborted implicit request ${Date.now()}`,
+        messageText: `aborted request using what I shared previously ${Date.now()}`,
         userId: "abort-user",
         signal: controller.signal,
       });
-      assert.equal(decision.shouldQuery, false);
-      assert.equal(decision.reasonCode, MemoryGateReason.PROVIDER_FAILURE);
+      assert.equal(decision.shouldQuery, true);
+      assert.equal(decision.reasonCode, MemoryGateReason.LEGACY_HEURISTIC);
     },
   ));
 
