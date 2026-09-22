@@ -1,5 +1,9 @@
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient, classifyJevFailure } from "./client";
+import {
+  JevConfigurationError,
+  JevDecisionClient,
+  classifyJevFailure,
+} from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
@@ -97,12 +101,13 @@ export async function gateCacheHit(
   dependency?: JevDecisionClient,
 ): Promise<CacheGateOutcome> {
   const mode = getJevMode(JevCheckpoint.CACHE_GATE);
-  const client = dependency ?? JevDecisionClient.createIfConfigured();
-  if (mode === JevMode.OFF || !client) return { serve: true };
+  if (mode === JevMode.OFF) return { serve: true };
 
   const requestId = createRequestId("jev_cache_gate");
   const startedAt = Date.now();
   try {
+    const client = dependency ?? JevDecisionClient.createIfConfigured();
+    if (!client) throw new JevConfigurationError();
     const result = await client.evaluate({
       checkpoint: JevCheckpoint.CACHE_GATE,
       schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
@@ -159,13 +164,15 @@ export async function gateCacheHit(
     });
     return { serve };
   } catch (error) {
+    const serve = mode !== JevMode.ACTIVE;
     logWarn({
       event: "jev_cache_gate_fallback",
-      message: "Cache gate failed open",
+      message: serve
+        ? "Cache gate evaluation failed; serving unchecked hit"
+        : "Cache gate evaluation failed; vetoing unchecked hit",
       error: error instanceof Error ? error.message : String(error),
       requestId,
     });
-    const serve = mode !== JevMode.ACTIVE;
     logJevDecision({
       checkpoint: JevCheckpoint.CACHE_GATE,
       schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,

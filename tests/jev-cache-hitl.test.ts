@@ -225,6 +225,28 @@ test("cache gate active refuses hits the gate could not evaluate", async () => {
   });
 });
 
+test("cache gate active vetoes when the provider is not configured at all", async () => {
+  await withEnv(
+    { JEV_CACHE_GATE_MODE: "active", TYPESAFE_API_KEY: undefined },
+    async () => {
+      const outcome = await gateCacheHit(CACHE_STATE, undefined, undefined);
+      assert.equal(outcome.serve, false);
+    },
+  );
+});
+
+test("cache gate shadow and ab serve when the provider is not configured", async () => {
+  for (const mode of ["shadow", "ab"]) {
+    await withEnv(
+      { JEV_CACHE_GATE_MODE: mode, TYPESAFE_API_KEY: undefined },
+      async () => {
+        const outcome = await gateCacheHit(CACHE_STATE, undefined, undefined);
+        assert.equal(outcome.serve, true, mode);
+      },
+    );
+  }
+});
+
 test("cache gate shadow and ab still serve on invalid response and provider error", async () => {
   for (const mode of ["shadow", "ab"]) {
     await withEnv({ JEV_CACHE_GATE_MODE: mode }, async () => {
