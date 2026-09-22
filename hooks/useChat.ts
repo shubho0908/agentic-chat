@@ -501,21 +501,19 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    if (conversationId) {
-      // Lock-free server marker: even if this tab dies before the stream's
-      // disconnect reaches the server, the stop is recorded and a later
-      // refresh can never auto-retry it. The user message id scopes the
-      // marker to this turn so a newer turn is never finalized by mistake.
-      const lastUserMessageId = messagesRef.current.findLast(
-        (message) => message.role === MessageRole.USER,
-      )?.id;
+    // Lock-free explicit-stop marker: even if this tab dies right after the
+    // click, the stop is recorded and a later refresh can never auto-retry
+    // it. The user message id scopes the marker to this turn so a newer turn
+    // is never finalized by mistake; without a user message there is no turn
+    // to stop and nothing to record.
+    const lastUserMessageId = messagesRef.current.findLast(
+      (message) => message.role === MessageRole.USER,
+    )?.id;
+    if (conversationId && lastUserMessageId) {
       void fetch(apiRoutes.chatStop, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId,
-          ...(lastUserMessageId && { userMessageId: lastUserMessageId }),
-        }),
+        body: JSON.stringify({ conversationId, userMessageId: lastUserMessageId }),
         keepalive: true,
       }).catch(() => {});
     }

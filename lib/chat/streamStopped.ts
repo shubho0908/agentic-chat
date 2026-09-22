@@ -7,7 +7,11 @@ import {
 export interface StreamStoppedMarkResult {
   marked: boolean;
   messageId?: string;
-  reason?: "no-messages" | "turn-already-finalized" | "superseded-by-newer-turn";
+  reason?:
+    | "no-messages"
+    | "user-message-not-found"
+    | "turn-already-finalized"
+    | "superseded-by-newer-turn";
 }
 
 interface TransactionLike {
@@ -16,6 +20,10 @@ interface TransactionLike {
     ...values: string[]
   ) => Promise<unknown>;
   message: {
+    findUnique: (args: {
+      where: { id: string };
+      select: { id: true; role: true; conversationId: true };
+    }) => Promise<{ id: string; role: string; conversationId: string } | null>;
     findFirst: (args: {
       where: { conversationId: string; isDeleted: boolean; parentMessageId: null };
       orderBy: { createdAt: "desc" };
@@ -37,24 +45,78 @@ interface DbLike {
   $transaction: <T>(fn: (tx: TransactionLike) => Promise<T>) => Promise<T>;
 }
 
+export interface MarkStreamStoppedOptions {
+  /** Extra attempts when the triggering user message has not landed yet. */
+  notFoundRetries?: number;
+  /** Delay between those attempts; no lock or lease is held while waiting. */
+  retryDelayMs?: number;
+}
+
 /**
- * Server-side source of truth for "the user stopped this turn". Writes the
- * stop marker atomically with first-writer-wins against stream completion:
- * the conversation row lock serializes marker writes against completion
- * writes (which take the same lock in the messages route), and the marker is
- * only written while the conversation still ends at the triggering user
- * message. A finalized completion or an existing marker wins; late events
- * after a marker are dropped by the completion path.
+ * Server-side source of truth for "the user explicitly stopped this turn".
+ * Only explicit-stop paths may call this: the /api/chat/stop endpoint and the
+ * client's scoped marker save in the messages route. A plain transport
+ * disconnect (refresh, tab close, network loss) must never write a marker,
+ * so crash/refresh resume keeps working.
  *
- * This never touches the thread lease, so a stop stays instant.
+ * The marker is always scoped to its turn: expectedUserMessageId is required
+ * and the write only lands while that user message is still the newest root
+ * message. A finalized completion or a newer turn wins, so a stale stop can
+ * never finalize the wrong turn or cause its completion to be dropped.
+ *
+ * First-writer-wins against stream completion: the conversation row lock
+ * serializes marker writes against completion writes (which take the same
+ * lock in the messages route), and the deterministic marker id collapses
+ * concurrent writers into one row. This never touches the thread lease, so a
+ * stop stays instant.
  */
 export async function markStreamStoppedByUser(
   conversationId: string,
-  expectedUserMessageId?: string,
+  expectedUserMessageId: string,
+  options: MarkStreamStoppedOptions = {},
   db: DbLike = prisma as unknown as DbLike,
+): Promise<StreamStoppedMarkResult> {
+  const { notFoundRetries = 4, retryDelayMs = 250 } = options;
+  let attempt = 0;
+  for (;;) {
+    const result = await tryMarkStreamStoppedByUser(
+      conversationId,
+      expectedUserMessageId,
+      db,
+    );
+    // The user-message save can still be in flight when an explicit stop
+    // arrives (stop clicked while the save request is mid-flight). Give it a
+    // short bounded window to land instead of losing the stop; each attempt
+    // is its own short transaction, so nothing is locked while waiting.
+    if (
+      result.marked ||
+      result.reason !== "user-message-not-found" ||
+      attempt >= notFoundRetries
+    ) {
+      return result;
+    }
+    attempt += 1;
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  }
+}
+
+async function tryMarkStreamStoppedByUser(
+  conversationId: string,
+  expectedUserMessageId: string,
+  db: DbLike,
 ): Promise<StreamStoppedMarkResult> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM conversation WHERE id = ${conversationId} FOR UPDATE`;
+    const expected = await tx.message.findUnique({
+      where: { id: expectedUserMessageId },
+      select: { id: true, role: true, conversationId: true },
+    });
+    if (!expected || expected.conversationId !== conversationId) {
+      return { marked: false, reason: "user-message-not-found" as const };
+    }
+    if (expected.role !== "USER") {
+      return { marked: false, reason: "turn-already-finalized" as const };
+    }
     const latest = await tx.message.findFirst({
       where: { conversationId, isDeleted: false, parentMessageId: null },
       orderBy: { createdAt: "desc" },
@@ -63,20 +125,28 @@ export async function markStreamStoppedByUser(
     if (!latest) {
       return { marked: false, reason: "no-messages" as const };
     }
-    // Root and branch turns coexist on separate threads, so the stop must
-    // name its turn: when a newer turn has already superseded this one,
-    // marking would finalize the wrong turn and could discard that turn's
-    // legitimate completion in the messages route.
-    if (expectedUserMessageId && latest.id !== expectedUserMessageId) {
-      return { marked: false, reason: "superseded-by-newer-turn" as const };
-    }
-    if (latest.role !== "USER") {
-      return { marked: false, reason: "turn-already-finalized" as const };
-    }
     const messageId = getStreamStoppedMarkerMessageId(
       conversationId,
-      latest.id,
+      expectedUserMessageId,
     );
+    if (latest.id === messageId) {
+      // Same stop delivered twice (stop endpoint plus client marker save):
+      // the marker already exists, so this is a no-op success.
+      return { marked: true, messageId };
+    }
+    // Root and branch turns coexist on separate threads: when anything newer
+    // than the named turn exists, marking now would finalize the wrong turn
+    // and could discard that turn's legitimate completion in the messages
+    // route.
+    if (latest.id !== expectedUserMessageId) {
+      return {
+        marked: false,
+        reason:
+          latest.role === "USER"
+            ? ("superseded-by-newer-turn" as const)
+            : ("turn-already-finalized" as const),
+      };
+    }
     await tx.message.createMany({
       data: [
         {

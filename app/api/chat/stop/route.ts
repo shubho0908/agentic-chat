@@ -14,12 +14,13 @@ import { markStreamStoppedByUser } from "@/lib/chat/streamStopped";
 export const dynamic = "force-dynamic";
 
 /**
- * Lock-free stop signal: records that the user stopped the current turn so a
- * later refresh or auto-continue can never retry it. Never touches the thread
- * lease - stop stays instant. The stream-abort path writes the same marker
- * when the disconnect reaches the server; this endpoint covers the window
- * before the stream request exists (e.g. stop while the user message is still
- * saving) and any abort the server never sees.
+ * Lock-free explicit stop signal: records that the user stopped the named
+ * turn so a later refresh or auto-continue can never retry it. Never touches
+ * the thread lease - stop stays instant. This is one of only two marker
+ * writers (the other is the client's scoped marker save in the messages
+ * route); a plain transport disconnect writes nothing, so crash, refresh and
+ * network-loss resume keep working. The scoped user message id is required:
+ * an unscoped stop could finalize the wrong turn.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -75,6 +76,13 @@ export async function POST(request: NextRequest) {
       typeof body.userMessageId === "string" && body.userMessageId.length > 0
         ? body.userMessageId
         : undefined;
+    if (!expectedUserMessageId) {
+      return errorResponse(
+        "Missing userMessageId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
     const result = await markStreamStoppedByUser(
       conversationId,
       expectedUserMessageId,

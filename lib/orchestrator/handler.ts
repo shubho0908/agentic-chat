@@ -45,7 +45,6 @@ import {
 } from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
 import { abortAware } from "./abortAware";
-import { markStreamStoppedByUser } from "@/lib/chat/streamStopped";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -155,21 +154,6 @@ export function createOrchestratorStreamHandler(
         stream.abort();
       };
 
-      // Client-disconnect abort: record the stop server-side so a refresh or
-      // the auto-continue resume can never retry a turn the user cancelled.
-      // Best-effort: a failed marker write must never mask the abort itself.
-      const requestUserMessageId = messages[messages.length - 1]?.id;
-      const persistStopMarker = async () => {
-        try {
-          await markStreamStoppedByUser(conversationId, requestUserMessageId);
-        } catch (error) {
-          logger.warn(
-            "[Orchestrator] Failed to persist stream-stopped marker:",
-            error,
-          );
-        }
-      };
-
       const timeoutStream = () => {
         if (stream.isAborted) return;
         logWarn({
@@ -187,13 +171,17 @@ export function createOrchestratorStreamHandler(
         closeStream();
       };
 
+      // Client-disconnect abort: cancel the work only. No durable stop
+      // marker is written on this path - refresh, tab close and network
+      // loss must stay resumable by auto-continue. Only an explicit stop
+      // records a marker (the /api/chat/stop endpoint or the client's
+      // scoped marker save).
       const handleWorkAbort = async () => {
         if (isDeadlineExceeded()) {
           timeoutStream();
           return;
         }
         abortStream();
-        await persistStopMarker();
       };
 
       try {
@@ -523,7 +511,6 @@ export function createOrchestratorStreamHandler(
         ) {
           logger.warn("[Orchestrator] Stream aborted by user");
           abortStream();
-          await persistStopMarker();
           return;
         } else {
           logger.error("[Orchestrator] Stream error:", error);

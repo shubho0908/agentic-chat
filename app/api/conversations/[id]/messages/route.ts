@@ -10,7 +10,11 @@ import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJob
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
 import { markStreamStoppedByUser } from '@/lib/chat/streamStopped';
-import { STREAM_STOPPED_BY_USER_MARKER } from '@/lib/chat/stopMarker';
+import {
+  STREAM_STOPPED_BY_USER_MARKER,
+  isStreamStoppedMarkerMessage,
+  parseStreamStoppedMarkerMessageId,
+} from '@/lib/chat/stopMarker';
 import type { MessageRole, Prisma } from '@prisma/client';
 
 type MessageWithAttachments = Prisma.MessageGetPayload<{ include: { attachments: true } }>;
@@ -122,11 +126,19 @@ export async function POST(
       throw updateErr;
     }
 
-    // Stop-marker writes go through the shared helper so client, stop
-    // endpoint, and stream-abort path all share one idempotent,
-    // first-writer-wins implementation.
+    // Explicit-stop marker saves go through the shared helper so this path
+    // and the stop endpoint share one idempotent, first-writer-wins
+    // implementation. The turn scope comes from the deterministic marker id
+    // the client computed for this turn; an unscoped or malformed marker
+    // write is refused, never applied to whatever turn happens to be latest.
     if (validatedRole === 'ASSISTANT' && validatedContent === STREAM_STOPPED_BY_USER_MARKER) {
-      const markResult = await markStreamStoppedByUser(conversationId);
+      const expectedUserMessageId = clientMessageId
+        ? parseStreamStoppedMarkerMessageId(conversationId, clientMessageId)
+        : null;
+      if (!expectedUserMessageId) {
+        return errorResponse('Stop marker requires the scoped marker message id', undefined, HTTP_STATUS.BAD_REQUEST);
+      }
+      const markResult = await markStreamStoppedByUser(conversationId, expectedUserMessageId);
       if (!markResult.marked) {
         return jsonResponse({ id: null, skipped: markResult.reason ?? 'not-marked' }, HTTP_STATUS.OK);
       }
@@ -151,7 +163,7 @@ export async function POST(
             orderBy: { createdAt: 'desc' },
             select: { id: true, role: true, content: true },
           });
-          if (latest && latest.role === 'ASSISTANT' && latest.content === STREAM_STOPPED_BY_USER_MARKER) {
+          if (isStreamStoppedMarkerMessage(latest)) {
             return null;
           }
           return tx.message.create({
@@ -204,17 +216,6 @@ export async function POST(
         return errorResponse('Message ID conflict', undefined, HTTP_STATUS.CONFLICT);
       }
       throw createErr;
-    }
-
-    // Stop during the user-message save: the insert landed but the client
-    // is gone, so record the stop now or the conversation would sit at an
-    // unanswered user message and auto-continue would retry it on refresh.
-    if (validatedRole === 'USER' && request.signal.aborted) {
-      try {
-        await markStreamStoppedByUser(conversationId, message.id);
-      } catch (markErr) {
-        logger.warn('[Messages Route] Failed to persist stream-stopped marker after aborted save:', markErr);
-      }
     }
 
     scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);

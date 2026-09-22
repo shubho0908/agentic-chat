@@ -9,13 +9,40 @@ export const STREAM_STOPPED_BY_USER_MARKER = "[[__stream_stopped_by_user_v1__]]"
 
 /**
  * Deterministic marker row id, scoped to the turn (conversation + triggering
- * user message). Client, stop endpoint, and stream-abort path all compute the
- * same id, so concurrent marker writes collapse into one row via the primary
- * key (INSERT ... ON CONFLICT DO NOTHING semantics).
+ * user message). Both explicit-stop writers (the stop endpoint and the
+ * client's scoped marker save) compute the same id, so concurrent marker
+ * writes collapse into one row via the primary key (INSERT ... ON CONFLICT
+ * DO NOTHING semantics).
  */
 export function getStreamStoppedMarkerMessageId(
   conversationId: string,
   userMessageId: string,
 ): string {
   return `stopmsg-${conversationId}-${userMessageId}`;
+}
+
+/**
+ * Recovers the turn scope from a deterministic marker id. Returns null for
+ * foreign-conversation or malformed ids so callers can refuse the write
+ * instead of marking unscoped.
+ */
+export function parseStreamStoppedMarkerMessageId(
+  conversationId: string,
+  markerMessageId: string,
+): string | null {
+  const prefix = `stopmsg-${conversationId}-`;
+  if (!markerMessageId.startsWith(prefix)) return null;
+  const userMessageId = markerMessageId.slice(prefix.length);
+  return userMessageId.length > 0 ? userMessageId : null;
+}
+
+/** The single predicate behind the completion first-writer-wins drop check. */
+export function isStreamStoppedMarkerMessage(
+  message: { role: string; content: string } | null | undefined,
+): boolean {
+  return (
+    !!message &&
+    message.role === "ASSISTANT" &&
+    message.content === STREAM_STOPPED_BY_USER_MARKER
+  );
 }
