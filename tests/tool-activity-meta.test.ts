@@ -12,6 +12,7 @@ import {
   getToolResultMeta,
   getToolRowLabel,
   getToolSources,
+  NestedToolName,
   groupToolActivities,
   parseToolSources,
   summarizeToolRun,
@@ -52,6 +53,13 @@ test("maps connector prefixes to families, longest prefix first", () => {
   assert.equal(getToolRowLabel(ToolName.WEB_SEARCH), "Web search");
   assert.equal(getToolRowLabel(ToolName.DEEP_RESEARCH), "Research Agent");
 });
+test("maps nested activity types to distinct icons", () => {
+  assert.equal(getToolFamily(NestedToolName.THOUGHT).icon, "thought");
+  assert.equal(getToolFamily(NestedToolName.COMMAND).icon, "terminal");
+  assert.equal(getToolFamily(ToolName.WEB_SEARCH).icon, "search");
+  assert.equal(getToolFamily(NestedToolName.FETCH).icon, "fetch");
+});
+
 test("prefers human-readable args and falls back to identifiers", () => {
   assert.deepEqual(getToolKeyArg(activity("GMAIL_LIST_THREADS", { args: { query: "newer_than:1d" } })), {
     text: "newer_than:1d",

@@ -7,6 +7,9 @@ export type ToolIconKey =
   | "search"
   | "globe"
   | "research"
+  | "thought"
+  | "terminal"
+  | "fetch"
   | "gmail"
   | "calendar"
   | "drive"
@@ -25,7 +28,16 @@ interface ToolFamily {
   icon: ToolIconKey;
 }
 
+export const NestedToolName = {
+  THOUGHT: "thought_process",
+  COMMAND: "run_command",
+  FETCH: "fetch",
+} as const;
+
 const BUILT_IN_FAMILIES: Record<string, ToolFamily> = {
+  [NestedToolName.THOUGHT]: { key: NestedToolName.THOUGHT, label: "Thought process", icon: "thought" },
+  [NestedToolName.COMMAND]: { key: NestedToolName.COMMAND, label: "Run", icon: "terminal" },
+  [NestedToolName.FETCH]: { key: NestedToolName.FETCH, label: "Fetch", icon: "fetch" },
   [ToolName.WEB_SEARCH]: { key: ToolName.WEB_SEARCH, label: "Web search", icon: "search" },
   [ToolName.WEB_SCRAPE]: { key: ToolName.WEB_SCRAPE, label: "Read webpage", icon: "globe" },
   [ToolName.WEB_CRAWL]: { key: ToolName.WEB_CRAWL, label: "Crawl site", icon: "globe" },
@@ -104,6 +116,7 @@ interface ToolKeyArg {
 /** Ordered by how much they tell a human: intent first, ids last. */
 const USER_FACING_ARG_FIELDS = [
   "query",
+  "command",
   "subject",
   "title",
   "name",

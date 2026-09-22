@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { Globe, Plug, Presentation, Search } from "lucide-react";
+import { Brain, Globe, Plug, Presentation, Search, SquareTerminal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FC, SVGProps } from "react";
 import {
@@ -21,6 +21,9 @@ const TOOL_ICONS: Record<ToolIconKey, IconComponent> = {
   search: Search,
   globe: Globe,
   research: Search,
+  thought: Brain,
+  terminal: SquareTerminal,
+  fetch: Globe,
   gmail: GmailIcon,
   calendar: GoogleCalendarIcon,
   drive: GoogleDriveIcon,
