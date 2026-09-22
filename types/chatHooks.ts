@@ -14,6 +14,8 @@ export interface BaseChatContext {
   saveToCacheMutate: (data: { query: string; response: string; model: string; reasoningEffort?: ReasoningEffortLevel | null }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
   onArtifact?: (event: ArtifactEvent) => void;
+  branchId?: string;
+  onBranchIdUpdate?: (branchId: string) => void;
 }
 
 export interface SendMessageContext extends BaseChatContext {

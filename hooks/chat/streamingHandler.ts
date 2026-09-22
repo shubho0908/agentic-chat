@@ -35,6 +35,7 @@ interface StreamingContext {
   activeTool?: string | null;
   reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
+  branchId?: string;
 }
 
 interface StreamingCallbacks {
@@ -164,6 +165,7 @@ export async function handleStreamingResponse(
     activeTool,
     reasoningEffort,
     existingAssistantMessageId,
+    branchId,
   } = context;
 
   const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
@@ -300,6 +302,7 @@ export async function handleStreamingResponse(
         }
       },
       conversationId,
+      branchId,
       documentAttachmentIds: userAttachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;

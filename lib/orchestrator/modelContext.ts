@@ -10,10 +10,16 @@ function text(message: BaseMessage): string {
 function calls(message: BaseMessage) {
   return message instanceof AIMessage ? message.tool_calls ?? [] : [];
 }
+function budgetContent(message: BaseMessage): string {
+  const toolCalls = calls(message);
+  return toolCalls.length
+    ? JSON.stringify({ content: message.content, tool_calls: toolCalls })
+    : text(message);
+}
 function asBudgetMessages(messages: BaseMessage[]): Message[] {
   return messages.map((message) => ({
     role: message.type === "system" ? "system" : message.type === "ai" ? "assistant" : "user",
-    content: text(message),
+    content: budgetContent(message),
   } as Message));
 }
 function units(messages: BaseMessage[]): MessageUnit[] {

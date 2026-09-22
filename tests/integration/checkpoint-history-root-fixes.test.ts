@@ -74,6 +74,40 @@ test("bounded model context preserves the newest complete create_pdf pair", () =
   for (const message of bounded.messages) if (message instanceof ToolMessage) assert.ok(callIds.has(message.tool_call_id));
 });
 
+test("identical user text in separate turns receives distinct stable IDs", () => {
+  const converted = convertToLangChainMessages([
+    { role: "user", content: "continue" },
+    { role: "assistant", content: "ok" },
+    { role: "user", content: "continue" },
+  ]);
+  assert.notEqual(converted[0].id, converted[2].id);
+  assert.deepEqual(
+    convertToLangChainMessages([
+      { role: "user", content: "continue" },
+      { role: "assistant", content: "ok" },
+      { role: "user", content: "continue" },
+    ]).map((message) => message.id),
+    converted.map((message) => message.id),
+  );
+});
+
+test("tool-call arguments count toward the model budget", () => {
+  const huge = "large specification ".repeat(2_000);
+  const call = new AIMessage({ id: "large-call", content: "", tool_calls: [{ id: "c-large", name: "create_pdf", args: { spec: huge } }] });
+  assert.throws(
+    () => buildBoundedModelContext(new SystemMessage("system"), [call, new ToolMessage({ id: "large-result", tool_call_id: "c-large", content: "created" }), new HumanMessage({ id: "edit", content: "edit the PDF" })], "gpt-4o-mini", 1_000),
+    /exceeds the model token budget/,
+  );
+});
+
+test("long branch IDs preserve a collision-resistant suffix", () => {
+  const shared = "x".repeat(190);
+  const first = deriveThreadId("conversation", `${shared}a`);
+  const second = deriveThreadId("conversation", `${shared}b`);
+  assert.notEqual(first, second);
+  assert.ok(first.length <= "conv:conversation:branch:".length + 160);
+});
+
 test("PostgresSaver integration (real DB when TEST_DATABASE_URL is present)", { skip: !process.env.TEST_DATABASE_URL }, async () => {
   const { PostgresSaver } = await import("@langchain/langgraph-checkpoint-postgres");
   const saver = PostgresSaver.fromConnString(process.env.TEST_DATABASE_URL!, { schema: `checkpoint_e2e_${Date.now()}` });

@@ -32,6 +32,7 @@ export async function continueIncompleteConversation(
     onMessagesUpdate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    branchId,
   } = context;
 
   if (!conversationId) {
@@ -71,6 +72,7 @@ export async function continueIncompleteConversation(
       activeTool,
       reasoningEffort,
       existingAssistantMessageId,
+      branchId,
     },
     {
       onMessagesUpdate,
@@ -158,6 +160,7 @@ export async function handleSendMessage(
     onNavigate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    branchId,
   } = context;
 
   const model = getModel();
@@ -243,6 +246,7 @@ export async function handleSendMessage(
         conversationId: currentConversationId,
         userMessageContent: messageContent,
         userTimestamp: userMessage.timestamp ?? Date.now(),
+        userMessageId: savedMsgId ?? userMessage.id,
         userAttachments: attachments,
         model,
         abortSignal,
@@ -251,6 +255,7 @@ export async function handleSendMessage(
         activeTool,
         reasoningEffort,
         existingAssistantMessageId: placeholderAssistantId,
+        branchId,
       },
       {
         onMessagesUpdate,

@@ -54,6 +54,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
   const autoContinuedRef = useRef<string | null>(null);
+  const branchIdRef = useRef<string | undefined>(undefined);
   const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   const messagesRef = useRef<Message[]>(messages);
@@ -71,6 +72,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
       autoContinuedRef.current = null;
+      branchIdRef.current = undefined;
     }
   }, [initialConversationId, initialMessages, messages.length]);
 
@@ -105,6 +107,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           session,
           activeTool,
@@ -154,6 +158,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           activeTool,
           reasoningEffort
@@ -197,6 +203,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           activeTool,
           reasoningEffort
@@ -239,6 +247,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           session,
           activeTool,

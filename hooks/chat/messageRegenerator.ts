@@ -35,6 +35,7 @@ export async function handleRegenerateResponse(
     onMessagesUpdate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    onBranchIdUpdate,
   } = context;
 
   const messageIndex = messages.findIndex((m) => m.id === messageId);
@@ -89,6 +90,7 @@ export async function handleRegenerateResponse(
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
+    const branchId = `regenerate-${assistantMessage.id ?? previousUserMessage.id}-${crypto.randomUUID()}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
@@ -104,7 +106,7 @@ export async function handleRegenerateResponse(
         );
       },
       conversationId,
-      branchId: `regenerate-${assistantMessage.id ?? previousUserMessage.id}-${Date.now()}`,
+      branchId,
       documentAttachmentIds: previousUserMessage.attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
@@ -218,6 +220,7 @@ export async function handleRegenerateResponse(
         context.onArtifact?.(eventWithMessage);
       },
     });
+    onBranchIdUpdate?.(branchId);
 
     if (toolActivities.length > 0) {
       messageMetadata = { ...(messageMetadata || {}), toolActivities };

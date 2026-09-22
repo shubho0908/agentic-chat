@@ -116,6 +116,14 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           return;
         }
 
+        const requestBudgetCheck = checkTokenBudget(messages, model);
+        if (!requestBudgetCheck.ok) {
+          logWarn({ event: "orchestrator_client_budget_exceeded", conversationId, threadId, used: requestBudgetCheck.tokenUsage.used, limit: requestBudgetCheck.tokenUsage.limit });
+          stream.enqueue(encodeError(requestBudgetCheck.errorMessage ?? "Request exceeds the server token budget."));
+          closeStream();
+          return;
+        }
+
         let enhancedMessages = messages;
         const lastUserMessage = messages[messages.length - 1]?.content || "";
 
@@ -150,7 +158,10 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
         stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
 
         if (!budgetCheck.ok) {
-          logWarn({ event: "orchestrator_client_budget_exceeded", conversationId, threadId, used: budgetCheck.tokenUsage.used, limit: budgetCheck.tokenUsage.limit });
+          logWarn({ event: "orchestrator_enhanced_budget_exceeded", conversationId, threadId, used: budgetCheck.tokenUsage.used, limit: budgetCheck.tokenUsage.limit });
+          stream.enqueue(encodeError(budgetCheck.errorMessage ?? "Request exceeds the server token budget."));
+          closeStream();
+          return;
         }
 
         const connectedToolkits = await getConnectedToolkits(userId);
@@ -214,6 +225,10 @@ export function createOrchestratorStreamHandler(options: OrchestratorStreamOptio
           ? langChainMessages.filter((message) => !message.id || !storedIds.has(message.id))
           : langChainMessages;
         logInfo({ event: "orchestrator_checkpoint_input", conversationId, threadId, branchId, checkpointExists, incomingCount: langChainMessages.length, submittedCount: incrementalMessages.length });
+        if (checkpointExists && incrementalMessages.length === 0) {
+          closeStream();
+          return;
+        }
 
         const input = {
           messages: incrementalMessages,

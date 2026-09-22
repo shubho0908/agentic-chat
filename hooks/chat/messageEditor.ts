@@ -38,6 +38,7 @@ export async function handleEditMessage(
     onMessagesUpdate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    onBranchIdUpdate,
   } = context;
 
   const messageIndex = messages.findIndex((m) => m.id === messageId);
@@ -116,6 +117,7 @@ export async function handleEditMessage(
 
     let accumulatedContent = "";
     let thinkingBuffer = "";
+    const branchId = `edit-${messageToEdit.id}-${newEditedVersion.id}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
       model,
@@ -131,7 +133,7 @@ export async function handleEditMessage(
         );
       },
       conversationId,
-      branchId: `edit-${messageToEdit.id}-${newEditedVersion.id}`,
+      branchId,
       documentAttachmentIds: attachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
@@ -245,6 +247,7 @@ export async function handleEditMessage(
         context.onArtifact?.(eventWithMessage);
       },
     });
+    onBranchIdUpdate?.(branchId);
 
     if (toolActivities.length > 0) {
       messageMetadata = { ...messageMetadata, toolActivities };
