@@ -5,6 +5,7 @@ import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtil
 import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
 import { isValidConversationId } from '@/lib/validation';
 import { isRecord } from '@/lib/typeGuards';
+import { scheduleConversationCheckpointDelete } from '@/lib/orchestrator/checkpointPrune';
 
 interface BulkDeleteResponse {
   deleted: number;
@@ -55,6 +56,8 @@ export async function POST(request: NextRequest) {
         userId: user.id
       }
     });
+
+    scheduleConversationCheckpointDelete(Array.from(ownedIdSet));
 
     const response: BulkDeleteResponse = {
       deleted: result.count,

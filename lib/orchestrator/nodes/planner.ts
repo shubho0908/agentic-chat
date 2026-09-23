@@ -24,7 +24,7 @@ import { getJevMode } from "@/lib/jev/config";
 import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
 import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { logJevDecision } from "@/lib/jev/telemetry";
-import { createRequestId } from "@/lib/observability";
+import { createRequestId, logWarn } from "@/lib/observability";
 
 export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
 
@@ -116,6 +116,13 @@ async function runJevPlannerShadow(
     });
     const decision = mapJevPlannerResult(result);
     if (!decision) {
+      logWarn({
+        event: "jev_planner_invalid_response",
+        message: "Jev planner response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
       logJevDecision({
         checkpoint: JevCheckpoint.PLANNER,
         schemaVersion: "1.0.0",

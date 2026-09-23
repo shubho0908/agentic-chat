@@ -1,12 +1,17 @@
 import type { RetrievalCandidate } from "@/lib/rag/retrieval/hybrid";
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient, classifyJevFailure } from "./client";
+import {
+  JevDecisionClient,
+  JevInvalidResponseError,
+  classifyJevFailure,
+} from "./client";
 import { mapWithConcurrencyLimit } from "./concurrency";
-import { getJevMode } from "./config";
+import { getJevMode, getJevOnFailure } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
   JevMode,
+  JevOnFailure,
   type JevQuestions,
 } from "./types";
 
@@ -95,7 +100,10 @@ export async function gatePassages(
           probability(result.answers, "prompt_injection"),
         ];
         if (values.some((value) => value === null))
-          throw new Error("Passage gate returned incomplete answers");
+          throw new JevInvalidResponseError(
+            "Passage gate returned incomplete answers",
+            { responseBody: result.rawBody },
+          );
         const decision: PassageGateDecision = {
           relevant: values[0]!,
           usableEvidence: values[1]!,
@@ -127,12 +135,19 @@ export async function gatePassages(
     );
   } catch (error) {
     // Fail-fast: the first failure already aborted every sibling in flight,
-    // and the gate fails open for the whole batch instead of dripping out
-    // partial filtering behind a degraded provider.
+    // and the gate applies its failure posture to the whole batch instead of
+    // dripping out partial filtering behind a degraded provider.
+    const dropUnchecked =
+      mode === JevMode.ACTIVE &&
+      getJevOnFailure(JevCheckpoint.PASSAGE_GATE) === JevOnFailure.CLOSED;
     logWarn({
       event: "jev_passage_gate_fallback",
-      message: "Passage gate failed open",
+      message: dropUnchecked
+        ? "Passage gate failed closed; dropping unchecked passages"
+        : "Passage gate failed open",
       error: error instanceof Error ? error.message : String(error),
+      ...(error instanceof JevInvalidResponseError &&
+        error.responseBody && { responseBody: error.responseBody }),
       requestId: batchRequestId,
     });
     logJevDecision({
@@ -141,13 +156,13 @@ export async function gatePassages(
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - batchStarted,
-      outcome: "error_keep",
+      outcome: dropUnchecked ? "error_drop" : "error_keep",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId: batchRequestId,
       conversationId,
     });
-    return candidates;
+    return dropUnchecked ? [] : candidates;
   }
   if (mode === JevMode.SHADOW || mode === JevMode.AB) return candidates;
   const decisions = new Map(

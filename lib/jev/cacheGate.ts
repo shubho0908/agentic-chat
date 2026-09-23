@@ -2,14 +2,17 @@ import { createRequestId, logWarn } from "@/lib/observability";
 import {
   JevConfigurationError,
   JevDecisionClient,
+  JevInvalidResponseError,
   classifyJevFailure,
 } from "./client";
-import { getJevMode } from "./config";
+import { getJevMode, getJevOnFailure } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
   JevFallbackReason,
   JevMode,
+  JevOnFailure,
+  type JevModeValue,
   type JevQuestions,
 } from "./types";
 
@@ -81,6 +84,13 @@ export interface CacheGateOutcome {
   serve: boolean;
 }
 
+function cacheGateServesOnFailure(mode: JevModeValue): boolean {
+  return (
+    mode !== JevMode.ACTIVE ||
+    getJevOnFailure(JevCheckpoint.CACHE_GATE) === JevOnFailure.OPEN
+  );
+}
+
 /** In active mode the client pre-check must not serve or veto on its own:
  * the request falls through to the orchestrator, which performs the single
  * authoritative gated lookup. Two independent Jev evaluations of the same
@@ -118,7 +128,15 @@ export async function gateCacheHit(
     });
     const decision = mapJevCacheGateResult(result);
     if (!decision) {
-      const serve = mode !== JevMode.ACTIVE;
+      const serve = cacheGateServesOnFailure(mode);
+      logWarn({
+        event: "jev_cache_gate_fallback",
+        message: serve
+          ? "Cache gate returned an unusable response; serving unchecked hit"
+          : "Cache gate returned an unusable response; vetoing unchecked hit",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+      });
       logJevDecision({
         checkpoint: JevCheckpoint.CACHE_GATE,
         schemaVersion: JEV_CACHE_GATE_SCHEMA_VERSION,
@@ -164,13 +182,15 @@ export async function gateCacheHit(
     });
     return { serve };
   } catch (error) {
-    const serve = mode !== JevMode.ACTIVE;
+    const serve = cacheGateServesOnFailure(mode);
     logWarn({
       event: "jev_cache_gate_fallback",
       message: serve
         ? "Cache gate evaluation failed; serving unchecked hit"
         : "Cache gate evaluation failed; vetoing unchecked hit",
       error: error instanceof Error ? error.message : String(error),
+      ...(error instanceof JevInvalidResponseError &&
+        error.responseBody && { responseBody: error.responseBody }),
       requestId,
     });
     logJevDecision({

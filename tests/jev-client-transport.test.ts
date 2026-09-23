@@ -377,3 +377,100 @@ test("classifyJevFailure maps every failure family a checkpoint can see", async 
     resetJevBreaker();
   }
 });
+
+test("a retryable provider error gets exactly one attempt inside the budget", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  let fetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response("system_overloaded", { status: 529 });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => client.evaluate(evalInput()),
+      (error: unknown) => {
+        assert.equal(classifyJevFailure(error), "error");
+        return true;
+      },
+    );
+    assert.equal(
+      fetchCalls,
+      1,
+      "one attempt with the full budget; an in-deadline retry is starved and converts overload into timeouts",
+    );
+  } finally {
+    globalThis.fetch = original;
+    resetJevBreaker();
+  }
+});
+
+test("an invalid schema failure logs the raw response body", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    jsonResponse({
+      model: "jev-1.13.0",
+      answers: { q: { type: "noul", noul: 42 } },
+    })) as typeof fetch;
+  const logs = captureLogs();
+  try {
+    await assert.rejects(
+      () => client.evaluate(evalInput()),
+      (error: unknown) => {
+        assert.ok(error instanceof JevInvalidResponseError);
+        assert.match(error.responseBody ?? "", /"noul":42/);
+        return true;
+      },
+    );
+    const failure = logs.entries.find(
+      (entry) => entry.event === "jev_evaluate_failed",
+    );
+    assert.equal(failure?.reason, "invalid");
+    assert.match(String(failure?.responseBody), /"noul":42/);
+  } finally {
+    logs.restore();
+    globalThis.fetch = original;
+  }
+});
+
+test("a non-JSON response is an invalid failure with the body attached", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response("<html>bad gateway</html>", { status: 200 })) as typeof fetch;
+  try {
+    await assert.rejects(
+      () => client.evaluate(evalInput()),
+      (error: unknown) => {
+        assert.ok(error instanceof JevInvalidResponseError);
+        assert.equal(error.responseBody, "<html>bad gateway</html>");
+        assert.equal(classifyJevFailure(error), "invalid");
+        return true;
+      },
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a successful evaluate carries the truncated raw body for mapping evidence", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    jsonResponse({
+      model: "jev-1.13.0",
+      answers: { q: { type: "noul", noul: 0.5 } },
+    })) as typeof fetch;
+  try {
+    const result = await client.evaluate(evalInput());
+    assert.match(result.rawBody ?? "", /"noul":0\.5/);
+
+    const huge = { model: "m", answers: { q: { type: "noul", noul: 0.5 } }, pad: "x".repeat(5_000) };
+    globalThis.fetch = (async () => jsonResponse(huge)) as typeof fetch;
+    const truncated = await client.evaluate(evalInput());
+    assert.equal(truncated.rawBody?.length, 500);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

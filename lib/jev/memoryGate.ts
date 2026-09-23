@@ -1,10 +1,19 @@
 import { z } from "zod";
 import { createRequestId, logMetric, logWarn } from "@/lib/observability";
-import { JevDecisionClient, classifyJevFailure } from "./client";
-import { getJevMode } from "./config";
+import {
+  JevDecisionClient,
+  JevInvalidResponseError,
+  classifyJevFailure,
+} from "./client";
+import { getJevMode, getJevOnFailure } from "./config";
 import { logJevDecision } from "./telemetry";
 import { DegradedContextSource } from "@/types/chat";
-import { JevCheckpoint, JevMode, type JevQuestions } from "./types";
+import {
+  JevCheckpoint,
+  JevMode,
+  JevOnFailure,
+  type JevQuestions,
+} from "./types";
 
 const MEMORY_GATE_SCHEMA_VERSION = "1.0.0";
 const CACHE_TTL_MS = 5 * 60_000;
@@ -137,7 +146,9 @@ export async function mediateMemoryIntent(
       });
       const ans = result.answers.useful;
       if (ans?.type !== "noul")
-        throw new Error("incomplete memory gate answer");
+        throw new JevInvalidResponseError("incomplete memory gate answer", {
+          responseBody: result.rawBody,
+        });
       const p = ans.noul;
       const d = memoryGateDecisionSchema.parse({
         shouldQuery: p >= 0.65,
@@ -169,9 +180,14 @@ export async function mediateMemoryIntent(
       return d;
     } catch (error) {
       if (a.signal?.aborted) throw error;
+      const closed =
+        mode === JevMode.ACTIVE &&
+        getJevOnFailure(JevCheckpoint.MEMORY_GATE) === JevOnFailure.CLOSED;
       logWarn({
         event: "jev_memory_gate_fallback",
         error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof JevInvalidResponseError &&
+          error.responseBody && { responseBody: error.responseBody }),
         conversationId: a.conversationId,
       });
       logJevDecision({
@@ -180,20 +196,31 @@ export async function mediateMemoryIntent(
         modelVersion: "unknown",
         mode,
         latencyMs: Date.now() - started,
-        outcome: old.shouldQuery
-          ? "error_legacy_retrieve"
-          : "error_legacy_skip",
+        outcome: closed
+          ? "error_skip"
+          : old.shouldQuery
+            ? "error_legacy_retrieve"
+            : "error_legacy_skip",
         fallbackUsed: true,
         fallbackReason: classifyJevFailure(error),
         requestId,
         conversationId: a.conversationId,
       });
+      if (closed)
+        return {
+          shouldQuery: false,
+          probability: 0,
+          reasonCode: MemoryGateReason.PROVIDER_FAILURE,
+          modelVersion: "unknown",
+        };
       return old;
-    } finally {
-      inFlight.delete(k);
     }
   })();
   inFlight.set(k, evaluation);
+  const clearInFlight = () => {
+    if (inFlight.get(k) === evaluation) inFlight.delete(k);
+  };
+  evaluation.then(clearInFlight, clearInFlight);
   const d = await evaluation;
   return mode === JevMode.ACTIVE ? d : old;
 }

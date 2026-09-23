@@ -16,7 +16,7 @@ import { ASK_USER_TOOL_NAME } from "../tools";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 import { sanitizeToolOutput } from "@/lib/sanitize";
 import { logger } from "@/lib/logger";
-import { createRequestId } from "@/lib/observability";
+import { createRequestId, logWarn } from "@/lib/observability";
 import {
   ToolFailureKind,
   classifyToolFailure,
@@ -152,6 +152,13 @@ async function runJevToolDiagnosis(
     );
     const advice = mapJevDiagnosisResult(result);
     if (!advice) {
+      logWarn({
+        event: "jev_tool_diagnosis_invalid_response",
+        message: "Jev tool diagnosis response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
       logJevDecision({
         checkpoint: JevCheckpoint.TOOL_ROUTER,
         schemaVersion: "1.0.0",
