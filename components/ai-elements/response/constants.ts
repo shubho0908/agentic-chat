@@ -19,3 +19,7 @@ export const CODE_BLOCK_SHELL_CLASS =
 export const TYPEOF_STRING = "string";
 export const TYPEOF_OBJECT = "object";
 export const DEFAULT_CODE_LANGUAGE = "code";
+export const CODE_BLOCK_COLLAPSE_LINES = 30;
+export const CODE_BLOCK_COLLAPSE_CHARS = 4000;
+export const CODE_BLOCK_MAX_LINE_NUMBERS = 1000;
+export const CODE_BLOCK_MAX_HEIGHT_PX = 480;

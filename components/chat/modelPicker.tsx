@@ -133,7 +133,7 @@ export function ModelPicker({
         <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
           Model
         </p>
-        <div className="max-h-[400px] overflow-y-auto px-0.5">
+        <div className="scrollbar-hide max-h-[400px] overflow-y-auto px-0.5">
           {OPENAI_MODELS.map((model) => {
             const isSelected = selectedModel === model.id;
             const costMultiplier = getModelCostMultiplier(model);

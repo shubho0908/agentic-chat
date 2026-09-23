@@ -247,7 +247,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
             className="h-[100dvh] overflow-hidden border-0 bg-transparent p-0 shadow-none"
           >
             <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-t-[28px] border border-b-0 ${mobilePanelClass}`}>
-              <div className="relative rounded-t-[inherit] px-4 py-3">
+              <div className="relative shrink-0 rounded-t-[inherit] px-4 py-3">
                 <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b ${modalTheme.border}`} />
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
@@ -269,7 +269,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                   </button>
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+1rem)]">
                 {hasAvailableImages ? (
                   <div className="grid grid-cols-2 gap-3 p-3">
                     {visibleImages.map((image, index) => (
@@ -300,11 +300,11 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
         <Dialog open={showAllImages} onOpenChange={setShowAllImages}>
           <DialogContent
             variant="bare"
-            className="max-h-[92vh] w-[min(96vw,1240px)] max-w-[96vw] overflow-hidden border-0 bg-transparent p-0 shadow-none"
+            className="h-[92vh] max-h-[92vh] w-[min(96vw,1240px)] max-w-[96vw] overflow-hidden border-0 bg-transparent p-0 shadow-none"
             showCloseButton={false}
           >
             <div className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border ${modalTheme.panel}`}>
-              <div className="relative rounded-t-[inherit] px-4 py-3 sm:px-5">
+              <div className="relative shrink-0 rounded-t-[inherit] px-4 py-3 sm:px-5">
                 <div className={`pointer-events-none absolute inset-x-4 bottom-0 border-b sm:inset-x-5 ${modalTheme.border}`} />
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0">
@@ -326,7 +326,7 @@ export function SearchImages({ images, maxDisplay = 4 }: SearchImagesProps) {
                   </button>
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
                 {hasAvailableImages ? (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {visibleImages.map((image, index) => (

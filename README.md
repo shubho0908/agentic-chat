@@ -23,7 +23,7 @@
 - Message versioning with tree-based branching
 
 **Multi-Model Support**
-- GPT-5.5, GPT-5.4, GPT-5.2, and legacy GPT-5 family (up to 1.05M context)
+- GPT-6 family (Astra, Sol, Luna) and GPT-5.6 family (up to 1.05M context)
 - Vision capabilities across all models
 - Extended thinking with configurable effort levels
 

@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 
 test("persisted interrupt config wins over picker values", () => {
-  const result = resolveResumeConfig("gpt-5.6-sol", "low", [
-    { type: "human_in_the_loop", model: "gpt-5.5-pro", reasoningEffort: "xhigh" },
+  const result = resolveResumeConfig("gpt-6-sol", "low", [
+    { type: "human_in_the_loop", model: "gpt-6-astra", reasoningEffort: "xhigh" },
   ]);
-  assert.equal(result.model, "gpt-5.5-pro");
+  assert.equal(result.model, "gpt-6-astra");
   assert.equal(result.reasoningEffort, "xhigh");
   assert.equal(result.usedPersisted, true);
 });
@@ -57,14 +57,23 @@ test("garbage persisted effort string parses to null", () => {
 });
 
 test("empty interrupt list falls back to picker values", () => {
-  const result = resolveResumeConfig("gpt-5.5", "medium", []);
-  assert.equal(result.model, "gpt-5.5");
+  const result = resolveResumeConfig("gpt-6-luna", "medium", []);
+  assert.equal(result.model, "gpt-6-luna");
   assert.equal(result.reasoningEffort, "medium");
   assert.equal(result.usedPersisted, false);
 });
 
 test("non-record interrupt values are ignored", () => {
-  const result = resolveResumeConfig("gpt-5.5", "low", ["approved", null, undefined, 42]);
-  assert.equal(result.model, "gpt-5.5");
+  const result = resolveResumeConfig("gpt-6-luna", "low", ["approved", null, undefined, 42]);
+  assert.equal(result.model, "gpt-6-luna");
+  assert.equal(result.usedPersisted, false);
+});
+
+test("retired gpt-5.5 ids in a persisted payload are rejected, picker values kept", () => {
+  const result = resolveResumeConfig("gpt-6-sol", "low", [
+    { model: "gpt-5.5", reasoningEffort: "xhigh" },
+  ]);
+  assert.equal(result.model, "gpt-6-sol");
+  assert.equal(result.reasoningEffort, "low");
   assert.equal(result.usedPersisted, false);
 });

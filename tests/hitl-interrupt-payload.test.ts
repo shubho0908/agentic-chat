@@ -95,11 +95,11 @@ test("APPROVAL interrupt (dangerous action) persists the creating model and effo
     toolName: GMAIL_SEND_EMAIL_SLUG,
     toolCallId: "call_gmail_1",
     args: { to: "a@b.com", subject: "s", body: "b", gmailSendEmail: true, emailFrom: "a@b.com" },
-    orchestratorConfig: { model: "gpt-5.5", reasoningEffort: "xhigh" },
+    orchestratorConfig: { model: "gpt-6-luna", reasoningEffort: "xhigh" },
   });
   assert.equal(value.type, "hitl_request");
   assert.equal(value.requestKind, "approval");
-  assert.equal(value.model, "gpt-5.5");
+  assert.equal(value.model, "gpt-6-luna");
   assert.equal(value.reasoningEffort, "xhigh");
 });
 

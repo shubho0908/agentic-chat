@@ -77,28 +77,62 @@ interface OpenAIModel {
   supportedReasoningEfforts: readonly ReasoningEffortLevel[];
   /**
    * OpenAI's own default effort for this model; used when the app default
-   * effort is not in this model's supported set.
+   * effort is not in this model's supported set (e.g. gpt-6-astra does not
+   * accept "none").
    */
   defaultReasoningEffort: ReasoningEffortLevel;
   recommended?: boolean;
   /**
-   * USD per 1M tokens. Source: https://platform.openai.com/docs/pricing
+   * USD per 1M tokens. Source: https://developers.openai.com/api/docs/pricing
    * Used to compute relative cost multipliers in the model selector.
    */
   pricing?: { input: number; output: number };
 }
 
 /**
- * Models available as of 2026-09-03 — latest two OpenAI generations only.
- * Older families are deprecated or superseded:
- * https://platform.openai.com/docs/deprecations
+ * Effort levels for models that always run a reasoning pass: GPT-6 Astra
+ * rejects "none" and starts at "low".
+ * Source: https://developers.openai.com/api/docs/models/gpt-6-astra
+ */
+const EFFORTS_WITHOUT_NONE: readonly ReasoningEffortLevel[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+/**
+ * Models available as of 2026-09-23 — the latest two OpenAI generations: the
+ * GPT-6 family (Astra, Sol, Luna) and the GPT-5.6 family it supersedes. GPT-5.5
+ * and older are excluded: OpenAI's model selection guidance now starts at GPT-6
+ * (https://developers.openai.com/api/docs/models) and GPT-5.5 was retired from
+ * ChatGPT, ChatGPT Work, and Codex on 2026-10-14
+ * (https://help.openai.com/en/articles/6825453-chatgpt-release-notes).
+ *
+ * Per-model sources: https://developers.openai.com/api/docs/models/gpt-6-astra,
+ * .../gpt-6-sol, .../gpt-6-luna, .../gpt-5.6-sol, .../gpt-5.6-terra,
+ * .../gpt-5.6-luna; migration guide:
+ * https://developers.openai.com/api/docs/guides/latest-model. Deprecation
+ * schedule: https://developers.openai.com/api/docs/deprecations
  */
 export const OPENAI_MODELS: OpenAIModel[] = [
   {
-    id: "gpt-5.6-sol",
-    name: "GPT-5.6 Sol",
-    description:
-      "Flagship GPT-5.6 model for complex reasoning, coding, and professional tasks",
+    id: "gpt-6-astra",
+    name: "GPT-6 Astra",
+    description: "Our most capable model, built for the hardest end-to-end work",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    supportedReasoningEfforts: EFFORTS_WITHOUT_NONE,
+    defaultReasoningEffort: "medium",
+    pricing: { input: 10.0, output: 50.0 },
+  },
+  {
+    id: "gpt-6-sol",
+    name: "GPT-6 Sol",
+    description: "Built to power complex coding and agentic workflows",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
@@ -106,13 +140,36 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     recommended: true,
     supportedReasoningEfforts: REASONING_EFFORTS,
     defaultReasoningEffort: "medium",
+    pricing: { input: 2.0, output: 10.0 },
+  },
+  {
+    id: "gpt-6-luna",
+    name: "GPT-6 Luna",
+    description: "Our most efficient model for focused, high-volume tasks",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    supportedReasoningEfforts: REASONING_EFFORTS,
+    defaultReasoningEffort: "medium",
+    pricing: { input: 0.1, output: 0.5 },
+  },
+  {
+    id: "gpt-5.6-sol",
+    name: "GPT-5.6 Sol",
+    description: "Flagship model for complex professional work",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    supportedReasoningEfforts: REASONING_EFFORTS,
+    defaultReasoningEffort: "medium",
     pricing: { input: 4.0, output: 20.0 },
   },
   {
     id: "gpt-5.6-terra",
     name: "GPT-5.6 Terra",
-    description:
-      "GPT-5.6 model that balances intelligence and cost for everyday workloads",
+    description: "GPT-5.6 model that balances intelligence and cost",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
@@ -124,8 +181,7 @@ export const OPENAI_MODELS: OpenAIModel[] = [
   {
     id: "gpt-5.6-luna",
     name: "GPT-5.6 Luna",
-    description:
-      "Cost-optimised GPT-5.6 model for high-volume, latency-sensitive workloads",
+    description: "GPT-5.6 model optimized for cost-sensitive workloads",
     contextWindow: 1050000,
     category: "reasoning",
     capabilities: ["text", "vision"],
@@ -133,32 +189,6 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     supportedReasoningEfforts: REASONING_EFFORTS,
     defaultReasoningEffort: "medium",
     pricing: { input: 0.2, output: 1.2 },
-  },
-  {
-    id: "gpt-5.5",
-    name: "GPT-5.5",
-    description:
-      "Previous-generation flagship for coding and professional work",
-    contextWindow: 1050000,
-    category: "reasoning",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"] as const,
-    defaultReasoningEffort: "medium",
-    pricing: { input: 5.0, output: 30.0 },
-  },
-  {
-    id: "gpt-5.5-pro",
-    name: "GPT-5.5 Pro",
-    description:
-      "Higher-compute GPT-5.5 for the hardest problems (slower, more precise)",
-    contextWindow: 1050000,
-    category: "reasoning",
-    capabilities: ["text", "vision"],
-    hasReasoning: true,
-    supportedReasoningEfforts: ["medium", "high", "xhigh"] as const,
-    defaultReasoningEffort: "high",
-    pricing: { input: 30.0, output: 180.0 },
   },
 ];
 

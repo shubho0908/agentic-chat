@@ -21,15 +21,55 @@ export function validateRequestedModel(model: string): string | null {
   return model;
 }
 
-function supportsCustomTemperature(model: string): boolean {
-  const m = model.trim().toLowerCase();
-  return !m.startsWith("gpt-5");
+/**
+ * GPT reasoning series: "gpt-5", "gpt-5.6-terra", "gpt-6-astra". Non-reasoning
+ * families (gpt-4o, gpt-4.1, the o-series) deliberately do not match.
+ */
+const REASONING_SERIES_PATTERN = /^gpt-(\d+)(?:\.(\d+))?(?:\b|-|$)/;
+
+/** First major version of the reasoning series; GPT-4.x and earlier are out. */
+const FIRST_REASONING_SERIES_MAJOR = 5;
+
+/** First GPT-5 point release that accepts reasoning effort "none". */
+const NONE_EFFORT_FIRST_MINOR = 1;
+
+interface ReasoningSeriesVersion {
+  major: number;
+  minor: number;
 }
 
-function getReasoningSeriesMinorVersion(model: string): number | null {
-  const match = model.trim().toLowerCase().match(/^gpt-5(?:\.(\d+))?(?:\b|-|$)/);
+/**
+ * Parses the generation and point release of a reasoning-series model id:
+ * "gpt-5" → {5, 0}, "gpt-5.6-terra" → {5, 6}, "gpt-6-astra" → {6, 0}.
+ * Returns null for anything outside the reasoning series.
+ */
+function getReasoningSeriesVersion(model: string): ReasoningSeriesVersion | null {
+  const match = model.trim().toLowerCase().match(REASONING_SERIES_PATTERN);
   if (!match) return null;
-  return match[1] ? Number(match[1]) : 0;
+  const major = Number(match[1]);
+  if (major < FIRST_REASONING_SERIES_MAJOR) return null;
+  return { major, minor: match[2] ? Number(match[2]) : 0 };
+}
+
+/**
+ * Custom temperature (and top_p) is rejected while a reasoning pass runs, so it
+ * is omitted for every model from the GPT-5 series onwards rather than tracking
+ * the per-request effort.
+ * Source: https://developers.openai.com/api/docs/guides/latest-model
+ */
+function supportsCustomTemperature(model: string): boolean {
+  return getReasoningSeriesVersion(model) === null;
+}
+
+/**
+ * Tool calling on the GPT-6 family requires the Responses API: Chat
+ * Completions supports function calling for GPT-6 Sol/Luna only with
+ * reasoning effort "none", and not at all for GPT-6 Astra.
+ * Source: https://developers.openai.com/api/docs/guides/latest-model#update-api-and-model-parameters
+ */
+export function requiresResponsesApiForToolCalling(model: string): boolean {
+  const version = getReasoningSeriesVersion(model);
+  return version !== null && version.major >= 6;
 }
 
 /**
@@ -49,13 +89,20 @@ export function parseReasoningEffortParam(value: unknown): ReasoningEffortLevel 
  * which does not accept "none").
  */
 export function getChatReasoningEffort(model: string, effort?: ReasoningEffortLevel | null): ReasoningEffort | undefined {
-  const minorVersion = getReasoningSeriesMinorVersion(model);
-  if (minorVersion === null) return undefined;
+  const version = getReasoningSeriesVersion(model);
+  if (version === null) return undefined;
   const resolved =
     effort && isReasoningEffortSupported(model, effort)
       ? effort
       : getDefaultReasoningEffort(model);
-  if (resolved === "none") return minorVersion >= 1 ? "none" : "minimal";
+  if (resolved === "none") {
+    // "none" landed with the GPT-5.1 series; the base GPT-5.0 series predates
+    // it and answers without a reasoning pass through "minimal" instead.
+    return version.major > FIRST_REASONING_SERIES_MAJOR ||
+      version.minor >= NONE_EFFORT_FIRST_MINOR
+      ? "none"
+      : "minimal";
+  }
   return resolved;
 }
 
