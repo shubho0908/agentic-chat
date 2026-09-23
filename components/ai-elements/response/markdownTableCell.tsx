@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, type ReactNode } from "react";
+import { memo, type CSSProperties, type ReactNode } from "react";
 import { Check, Minus, X } from "lucide-react";
 
 import { classifyTableCell } from "./markdownTableUtils";
@@ -8,6 +8,7 @@ import { getTextFromChildren } from "./plainTextUtils";
 
 interface MarkdownTableCellProps {
   children?: ReactNode;
+  style?: CSSProperties;
 }
 
 const CELL_BASE_CLASS =
@@ -20,18 +21,23 @@ const CELL_BASE_CLASS =
  */
 export const MarkdownTableCell = memo(function MarkdownTableCell({
   children,
+  style,
 }: MarkdownTableCellProps) {
   const rawText = getTextFromChildren(children);
   const kind = classifyTableCell(rawText);
 
   if (kind === "text") {
-    return <td className={CELL_BASE_CLASS}>{children}</td>;
+    return (
+      <td className={CELL_BASE_CLASS} style={style}>
+        {children}
+      </td>
+    );
   }
 
   const label = kind === "check" ? "Yes" : kind === "cross" ? "No" : "Not applicable";
 
   return (
-    <td className={CELL_BASE_CLASS} title={rawText}>
+    <td className={CELL_BASE_CLASS} style={style} title={rawText}>
       <span className="inline-flex items-center justify-center">
         {kind === "check" ? (
           <Check aria-hidden="true" className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />

@@ -154,15 +154,28 @@ export const components: Components = {
       {children}
     </tr>
   ),
-  th: ({ children, ...props }) => (
-    <th
-      className="min-w-[6rem] px-2.5 py-2 text-left text-[10px] font-semibold tracking-wider text-zinc-600 uppercase sm:min-w-[7rem] sm:px-3 sm:text-[11px] dark:text-zinc-400"
-      {...withoutMarkdownNode(props)}
-    >
-      {children}
-    </th>
-  ),
-  td: ({ children }) => <MarkdownTableCell>{children}</MarkdownTableCell>,
+  th: ({ children, style, ...props }) => {
+    const textAlign =
+      typeof style === "object" && style !== null && "textAlign" in style
+        ? (style as { textAlign?: unknown }).textAlign
+        : undefined;
+    const alignClass =
+      textAlign === "center"
+        ? "text-center"
+        : textAlign === "right"
+          ? "text-right"
+          : "text-left";
+    return (
+      <th
+        className={`min-w-[6rem] px-2.5 py-2 ${alignClass} text-[10px] font-semibold tracking-wider text-zinc-600 uppercase sm:min-w-[7rem] sm:px-3 sm:text-[11px] dark:text-zinc-400`}
+        style={style}
+        {...withoutMarkdownNode(props)}
+      >
+        {children}
+      </th>
+    );
+  },
+  td: ({ children, style }) => <MarkdownTableCell style={style}>{children}</MarkdownTableCell>,
   input: ({ type, checked, ...props }) => (
     <input
       type={type}

@@ -40,6 +40,19 @@ test("MarkdownTableCell leaves real data alone", () => {
   assert.doesNotMatch(html, /lucide-check/);
 });
 
+test("MarkdownTableCell preserves GFM column alignment", () => {
+  const center = renderToStaticMarkup(
+    createElement(MarkdownTableCell, { style: { textAlign: "center" } }, "b"),
+  );
+  assert.match(center, /text-align:center/);
+  const right = renderToStaticMarkup(
+    createElement(MarkdownTableCell, { style: { textAlign: "right" } }, "c"),
+  );
+  assert.match(right, /text-align:right/);
+  const plain = renderToStaticMarkup(createElement(MarkdownTableCell, null, "a"));
+  assert.doesNotMatch(plain, /text-align/);
+});
+
 test("MarkdownCodeBlock renders header, gutter, and code", () => {
   const html = renderToStaticMarkup(
     createElement(MarkdownCodeBlock, { className: "language-ts" }, "const a = 1;\nconst b = 2;"),
