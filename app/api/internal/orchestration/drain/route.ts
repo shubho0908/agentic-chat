@@ -11,6 +11,7 @@ import { pruneCheckpointsOnSchedule } from '@/lib/orchestrator/checkpointPrune';
 
 const DEFAULT_DRAIN_BATCH_SIZE = 5;
 const MAX_DRAIN_BATCH_SIZE = 25;
+const DRAIN_ROUTE_BUDGET_MS = 270_000;
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +74,7 @@ async function readMaxJobs(request: NextRequest): Promise<
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   if (!isAuthorized(request)) {
     return errorResponse('Unauthorized', undefined, HTTP_STATUS.UNAUTHORIZED);
   }
@@ -86,7 +88,9 @@ export async function POST(request: NextRequest) {
     maxJobs: parsedBody.maxJobs,
     leaseOwner: 'orchestration-drain',
   });
-  const checkpointPrune = await pruneCheckpointsOnSchedule();
+  const checkpointPrune = await pruneCheckpointsOnSchedule({
+    deadline: startedAt + DRAIN_ROUTE_BUDGET_MS,
+  });
 
   if (result.atCapacity && result.processed === 0) {
     return jsonResponse({

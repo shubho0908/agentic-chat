@@ -13,7 +13,7 @@ import { MessageRole } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
-import { deleteConversationCheckpoints } from '@/lib/orchestrator/checkpointPrune';
+import { scheduleConversationCheckpointDelete } from '@/lib/orchestrator/checkpointPrune';
 
 interface MessageAttachment {
   id: string;
@@ -331,7 +331,7 @@ export async function DELETE(
       return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
 
-    await deleteConversationCheckpoints([conversationId]);
+    scheduleConversationCheckpointDelete([conversationId]);
 
     return jsonResponse({ success: true });
   } catch (error) {
