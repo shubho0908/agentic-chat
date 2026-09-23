@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
-import { getAuthenticatedUser, errorResponse, jsonResponse } from "@/lib/apiUtils";
+import {
+  getAuthenticatedUser,
+  errorResponse,
+  jsonResponse,
+} from "@/lib/apiUtils";
 import { HTTP_STATUS } from "@/constants/errors";
 import { logger } from "@/lib/logger";
 import { parseJevStatsQuery, queryJevStats } from "@/lib/jev/stats";
@@ -22,12 +26,20 @@ export async function GET(request: NextRequest) {
     return jsonResponse({
       window: {
         days: parsed.days,
-        since: new Date(Date.now() - parsed.days * 24 * 60 * 60 * 1000).toISOString(),
+        checkpoint: parsed.checkpoint,
+        mode: parsed.mode,
+        since: new Date(
+          Date.now() - parsed.days * 24 * 60 * 60 * 1000,
+        ).toISOString(),
       },
       checkpoints,
     });
   } catch (error) {
     logger.error("[Jev Stats] Failed to load decision stats:", error);
-    return errorResponse("Internal server error", undefined, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+    return errorResponse(
+      "Internal server error",
+      undefined,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+    );
   }
 }

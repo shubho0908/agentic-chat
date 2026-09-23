@@ -4,11 +4,7 @@ import { JevDecisionClient, classifyJevFailure } from "./client";
 import { getJevMode } from "./config";
 import { logJevDecision } from "./telemetry";
 import { DegradedContextSource } from "@/types/chat";
-import {
-  JevCheckpoint,
-  JevMode,
-  type JevQuestions,
-} from "./types";
+import { JevCheckpoint, JevMode, type JevQuestions } from "./types";
 
 const MEMORY_GATE_SCHEMA_VERSION = "1.0.0";
 const CACHE_TTL_MS = 5 * 60_000;
@@ -172,6 +168,7 @@ export async function mediateMemoryIntent(
       });
       return d;
     } catch (error) {
+      if (a.signal?.aborted) throw error;
       logWarn({
         event: "jev_memory_gate_fallback",
         error: error instanceof Error ? error.message : String(error),
@@ -183,20 +180,15 @@ export async function mediateMemoryIntent(
         modelVersion: "unknown",
         mode,
         latencyMs: Date.now() - started,
-        outcome: "error_skip",
+        outcome: old.shouldQuery
+          ? "error_legacy_retrieve"
+          : "error_legacy_skip",
         fallbackUsed: true,
         fallbackReason: classifyJevFailure(error),
         requestId,
         conversationId: a.conversationId,
       });
-      return mode === JevMode.ACTIVE
-        ? ({
-            shouldQuery: false,
-            probability: 0,
-            reasonCode: MemoryGateReason.PROVIDER_FAILURE,
-            modelVersion: "fallback",
-          } satisfies MemoryGateDecision)
-        : old;
+      return old;
     } finally {
       inFlight.delete(k);
     }
