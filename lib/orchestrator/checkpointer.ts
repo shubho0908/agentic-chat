@@ -1,6 +1,8 @@
 import pg from "pg";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 
+export const CHECKPOINT_SCHEMA = "langgraph";
+
 let checkpointerPromise: Promise<PostgresSaver> | null = null;
 
 export async function getCheckpointer(): Promise<PostgresSaver> {
@@ -31,7 +33,7 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
       query_timeout: 20_000,
     });
     const checkpointer = new PostgresSaver(pool, undefined, {
-      schema: "langgraph",
+      schema: CHECKPOINT_SCHEMA,
     });
     await checkpointer.setup();
     return checkpointer;

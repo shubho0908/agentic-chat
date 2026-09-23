@@ -7,6 +7,7 @@ import {
 } from '@/lib/orchestration/documentJobs';
 import { logWarn } from '@/lib/observability';
 import { isRecord } from '@/lib/typeGuards';
+import { pruneCheckpointsOnSchedule } from '@/lib/orchestrator/checkpointPrune';
 
 const DEFAULT_DRAIN_BATCH_SIZE = 5;
 const MAX_DRAIN_BATCH_SIZE = 25;
@@ -85,12 +86,14 @@ export async function POST(request: NextRequest) {
     maxJobs: parsedBody.maxJobs,
     leaseOwner: 'orchestration-drain',
   });
+  const checkpointPrune = await pruneCheckpointsOnSchedule();
 
   if (result.atCapacity && result.processed === 0) {
     return jsonResponse({
       success: true,
       message: 'Document workers are already at capacity',
       processed: 0,
+      checkpointPrune,
     });
   }
 
@@ -99,6 +102,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'No queued document jobs',
       processed: 0,
+      checkpointPrune,
     });
   }
 
@@ -110,5 +114,8 @@ export async function POST(request: NextRequest) {
     requeued: result.requeued,
     atCapacity: result.atCapacity,
     result,
+    checkpointPrune,
   });
 }
+
+export const GET = POST;
