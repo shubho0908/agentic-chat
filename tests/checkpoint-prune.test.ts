@@ -7,11 +7,12 @@ import {
   CHECKPOINT_PRUNE_MAX_THREADS,
   CHECKPOINT_PRUNE_PAGE_SIZE,
   CHECKPOINT_STALE_AFTER_MS,
-  CONVERSATION_DELETE_MAX_THREADS,
+  CONVERSATION_DELETE_BATCH_SIZE,
   CONVERSATION_THREADS_SQL,
   EXPIRED_THREAD_LOCK_BATCH,
   EXPIRED_THREAD_LOCKS_SQL,
   LATEST_CHECKPOINT_SQL,
+  LIVE_THREAD_LOCKS_SQL,
   THREAD_PAGE_SQL,
   conversationIdFromThreadId,
   deleteConversationCheckpoints,
@@ -28,6 +29,7 @@ interface PrismaStub {
   queries: Array<{ query: string; params: unknown[] }>;
   findManyCalls: number;
   expiredLocks: number;
+  liveLocks: string[];
   failQuery?: boolean;
 }
 
@@ -51,6 +53,11 @@ function answer(stub: PrismaStub, query: string, params: unknown[]): unknown[] {
       thread_id,
       ts: stub.latestTs[thread_id] ?? null,
     }));
+  }
+  if (query === LIVE_THREAD_LOCKS_SQL) {
+    return (params[0] as string[])
+      .filter((id) => stub.liveLocks.includes(id))
+      .map((thread_id) => ({ thread_id }));
   }
   throw new Error(`unexpected query: ${query}`);
 }
@@ -93,6 +100,7 @@ function stub(partial: Partial<PrismaStub>): PrismaStub {
     queries: [],
     findManyCalls: 0,
     expiredLocks: 0,
+    liveLocks: [],
     ...partial,
   };
 }
@@ -294,12 +302,49 @@ test("prune stops at its deadline and defers the rest", async () => {
   assert.equal(result.exhausted, false);
 });
 
-test("conversation delete caps threads removed per call", async () => {
-  const threadIds = Array.from({ length: CONVERSATION_DELETE_MAX_THREADS + 5 }, (_, index) =>
+test("conversation delete keeps going past the first batch", async () => {
+  const threadIds = Array.from({ length: CONVERSATION_DELETE_BATCH_SIZE * 2 + 5 }, (_, index) =>
     deriveThreadId("big", `b-${index}`),
   );
   const state = stub({ threadIds });
   const deleter = recordingDeleter();
   await withPrisma(state, () => deleteConversationCheckpoints(["big"], deleter));
-  assert.equal(deleter.deleted.length, CONVERSATION_DELETE_MAX_THREADS);
+  assert.equal(deleter.deleted.length, threadIds.length);
+});
+
+test("prune skips threads that hold a live lock", async () => {
+  const busy = deriveThreadId("orphan-busy");
+  const state = stub({
+    threadIds: [busy, deriveThreadId("orphan-idle")],
+    liveLocks: [busy],
+  });
+  const deleter = recordingDeleter();
+  const result = await withPrisma(state, () =>
+    pruneCheckpointsOnSchedule({ now: SUNDAY, dependency: deleter }),
+  );
+  assert.deepEqual(deleter.deleted, [deriveThreadId("orphan-idle")]);
+  assert.equal(result.kept, 1);
+  assert.equal(result.pruned, 1);
+});
+
+test("conversation delete stops at its time budget", async () => {
+  const threadIds = Array.from({ length: 5 }, (_, index) => deriveThreadId("slow", `b-${index}`));
+  const state = stub({ threadIds });
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  const deleted: string[] = [];
+  try {
+    await withPrisma(state, () =>
+      deleteConversationCheckpoints(["slow"], {
+        async deleteThread(threadId: string) {
+          deleted.push(threadId);
+          clock += 5_000;
+        },
+      }),
+    );
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(deleted.length, 2);
 });

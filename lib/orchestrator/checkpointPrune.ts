@@ -30,7 +30,8 @@ export const CHECKPOINT_PRUNE_MAX_THREADS = 500;
 export const CHECKPOINT_PRUNE_PAGE_SIZE = 500;
 export const CHECKPOINT_PRUNE_TIME_BUDGET_MS = 60_000;
 export const CHECKPOINT_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
-export const CONVERSATION_DELETE_MAX_THREADS = 100;
+export const CONVERSATION_DELETE_BATCH_SIZE = 100;
+export const CONVERSATION_DELETE_TIME_BUDGET_MS = 8_000;
 export const EXPIRED_THREAD_LOCK_BATCH = 1_000;
 
 const THREAD_ROOT_PREFIX = "conv-";
@@ -75,6 +76,9 @@ LEFT JOIN LATERAL (
   WHERE c.thread_id = t.thread_id AND c.checkpoint_ns = ''
   ORDER BY c.checkpoint_id DESC LIMIT 1
 ) latest ON true`;
+
+export const LIVE_THREAD_LOCKS_SQL = `SELECT thread_id FROM thread_locks
+WHERE thread_id = ANY($1::text[]) AND expires_at > now()`;
 
 export const EXPIRED_THREAD_LOCKS_SQL = `DELETE FROM thread_locks WHERE thread_id IN (
   SELECT thread_id FROM thread_locks WHERE expires_at < now() - interval '1 hour' LIMIT ${EXPIRED_THREAD_LOCK_BATCH}
@@ -139,18 +143,29 @@ export async function deleteConversationCheckpoints(
       .filter((threadId) =>
         conversationIds.some((id) => isThreadIdForConversation(threadId, id)),
       );
-    const batch = owned.slice(0, CONVERSATION_DELETE_MAX_THREADS);
-    const { failed } = await deleteThreads(batch, deleter, Number.POSITIVE_INFINITY);
-    const deferred = owned.length - batch.length;
-    if (failed > 0 || deferred > 0) {
-      logWarn({
-        event: "conversation_checkpoint_delete_incomplete",
-        conversationCount: conversationIds.length,
-        threadCount: owned.length,
-        failed,
-        deferred,
-      });
+    const deadline = Date.now() + CONVERSATION_DELETE_TIME_BUDGET_MS;
+    let deleted = 0;
+    let failed = 0;
+    let deferred = 0;
+    for (let start = 0; start < owned.length; start += CONVERSATION_DELETE_BATCH_SIZE) {
+      const batch = owned.slice(start, start + CONVERSATION_DELETE_BATCH_SIZE);
+      const outcome = await deleteThreads(batch, deleter, deadline);
+      deleted += outcome.deleted;
+      failed += outcome.failed;
+      if (outcome.remaining > 0) {
+        deferred = owned.length - start - batch.length + outcome.remaining;
+        break;
+      }
     }
+    const log = failed > 0 || deferred > 0 ? logWarn : logInfo;
+    log({
+      event: "conversation_checkpoint_delete_completed",
+      conversationCount: conversationIds.length,
+      threadCount: owned.length,
+      deleted,
+      failed,
+      deferred,
+    });
   } catch (error) {
     logWarn({
       event: "conversation_checkpoint_delete_failed",
@@ -259,7 +274,20 @@ export async function pruneCheckpointsOnSchedule(
         }
       }
 
-      const prunable = [...orphans, ...idleStale];
+      const candidates = [...orphans, ...idleStale];
+      const live =
+        candidates.length === 0
+          ? new Set<string>()
+          : new Set(
+              (
+                await prisma.$queryRawUnsafe<Array<{ thread_id: string }>>(
+                  LIVE_THREAD_LOCKS_SQL,
+                  candidates,
+                )
+              ).map((row) => row.thread_id),
+            );
+      const prunable = candidates.filter((threadId) => !live.has(threadId));
+      result.kept += candidates.length - prunable.length;
       const batch = prunable.slice(0, budget);
       result.deferred += prunable.length - batch.length;
       const { deleted, failed, remaining } = await deleteThreads(batch, deleter, deadline);
