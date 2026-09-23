@@ -290,7 +290,7 @@ export function createOrchestratorStreamHandler(
         ) {
           try {
             const embedding = await generateEmbedding(
-              queryText,
+              `user: ${queryText}`,
               userId,
               workSignal,
             );

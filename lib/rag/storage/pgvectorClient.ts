@@ -49,6 +49,6 @@ export function getPgPool(): Pool {
   return pool;
 }
 
-export const SIMILARITY_THRESHOLD = 0.85;
+export const SIMILARITY_THRESHOLD = 0.82;
 export const CACHE_TTL_SECONDS = getCacheTtlSeconds();
 export const EMBEDDING_DIMENSIONS = getEmbeddingDimensions();
