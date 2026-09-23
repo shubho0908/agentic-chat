@@ -21,6 +21,12 @@ export const JevMode = {
 } as const;
 export type JevModeValue = (typeof JevMode)[keyof typeof JevMode];
 
+export const JevOnFailure = {
+  OPEN: "open",
+  CLOSED: "closed",
+} as const;
+export type JevOnFailureValue = (typeof JevOnFailure)[keyof typeof JevOnFailure];
+
 export const JevFallbackReason = {
   TIMEOUT: "timeout",
   CANCELLED: "cancelled",

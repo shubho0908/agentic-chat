@@ -14,7 +14,9 @@ const TYPESAFE_API_URL = "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL_ID = "jev-latest";
 const CIRCUIT_BREAKER_NAME = "jev-decision-client";
 const DEFAULT_TIMEOUT_MS = 2_000;
-const MAX_RETRIES = 1;
+/** Raw response bodies are logged on malformed responses so the invalid class
+ * has evidence; capped so a runaway body cannot flood the log sink. */
+const RESPONSE_BODY_LOG_CHARS = 500;
 
 let legacyProviderWarned = false;
 
@@ -51,10 +53,17 @@ class JevCircuitOpenError extends Error {
 }
 
 export class JevInvalidResponseError extends Error {
-  constructor(message: string) {
+  readonly responseBody?: string;
+
+  constructor(message: string, options?: { responseBody?: string }) {
     super(message);
     this.name = "JevInvalidResponseError";
+    this.responseBody = options?.responseBody;
   }
+}
+
+export function truncateJevResponseBody(body: string): string {
+  return body.slice(0, RESPONSE_BODY_LOG_CHARS);
 }
 
 /** The evaluation spent its own budget. Expected in shadow mode (cold starts
@@ -104,9 +113,15 @@ export interface JevEvaluateResult {
   modelVersion: string;
   usage?: JevUsage;
   latencyMs: number;
+  /** Truncated raw response body, logged when per-checkpoint mapping rejects
+   * a schema-valid response. Never persisted to the decision record. */
+  rawBody?: string;
 }
 
-function parseResponse(raw: unknown): {
+function parseResponse(
+  raw: unknown,
+  rawBody: string,
+): {
   answers: JevAnswers;
   modelVersion: string;
   usage?: JevUsage;
@@ -115,11 +130,14 @@ function parseResponse(raw: unknown): {
   if (!parsed.success) {
     throw new JevInvalidResponseError(
       parsed.error.issues[0]?.message ?? "Invalid Jev response",
+      { responseBody: truncateJevResponseBody(rawBody) },
     );
   }
   const { model, answers, usage } = parsed.data;
   if (Object.keys(answers).length === 0) {
-    throw new JevInvalidResponseError("Jev response answers object is empty");
+    throw new JevInvalidResponseError("Jev response answers object is empty", {
+      responseBody: truncateJevResponseBody(rawBody),
+    });
   }
   return { answers, modelVersion: model ?? "unknown", usage };
 }
@@ -181,16 +199,26 @@ export class JevDecisionClient {
       });
     }
     try {
-      // No per-attempt timeout here: `deadlineController` is the single budget
-      // for the whole call, and withRetry enforces it as a hard bound.
-      const raw = await withRetry((signal) => this.invoke(input, signal), {
-        retries: MAX_RETRIES,
-        initialDelayMs: 300,
-        signal: deadlineController.signal,
-      });
-      const validated = parseResponse(raw);
+      // One attempt with the full budget. An in-deadline retry is starved by
+      // whatever the first attempt burned plus its backoff, so a provider
+      // overload surfaced as a timeout instead of a clean error; a retry with
+      // its own budget would break the caller's deadline. withRetry with zero
+      // retries still enforces the deadline as a hard bound even if a
+      // transport ignores the abort signal.
+      const { raw, rawBody } = await withRetry(
+        (signal) => this.invoke(input, signal),
+        {
+          retries: 0,
+          signal: deadlineController.signal,
+        },
+      );
+      const validated = parseResponse(raw, rawBody);
       breaker.recordSuccess();
-      return { ...validated, latencyMs: Date.now() - startedAt };
+      return {
+        ...validated,
+        latencyMs: Date.now() - startedAt,
+        rawBody: truncateJevResponseBody(rawBody),
+      };
     } catch (error) {
       const cancelled = externalSignal?.aborted === true;
       const timedOut =
@@ -214,6 +242,8 @@ export class JevDecisionClient {
         latencyMs: Date.now() - startedAt,
         errorName: failure instanceof Error ? failure.name : typeof failure,
         error: failure instanceof Error ? failure.message : String(failure),
+        ...(failure instanceof JevInvalidResponseError &&
+          failure.responseBody && { responseBody: failure.responseBody }),
       };
 
       // One taxonomy for both the log line and the durable fallback record, so
@@ -244,7 +274,7 @@ export class JevDecisionClient {
   private async invoke(
     input: JevEvaluateInput,
     signal?: AbortSignal,
-  ): Promise<unknown> {
+  ): Promise<{ raw: unknown; rawBody: string }> {
     const response = await fetch(TYPESAFE_API_URL, {
       method: "POST",
       headers: {
@@ -259,8 +289,11 @@ export class JevDecisionClient {
       signal,
     });
 
+    // No catch here: an abort mid-body-read must surface as the deadline or
+    // cancellation it is, not as a parse failure on an empty string.
+    const body = await response.text();
+
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
       const error = new Error(
         `Jev request failed with status ${response.status}: ${body.slice(0, 200)}`,
       );
@@ -268,7 +301,13 @@ export class JevDecisionClient {
       throw error;
     }
 
-    return response.json();
+    try {
+      return { raw: JSON.parse(body) as unknown, rawBody: body };
+    } catch {
+      throw new JevInvalidResponseError("Jev response was not valid JSON", {
+        responseBody: truncateJevResponseBody(body),
+      });
+    }
   }
 }
 

@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { createRequestId, logWarn } from "@/lib/observability";
-import { JevDecisionClient, classifyJevFailure } from "./client";
-import { getJevMode } from "./config";
+import {
+  JevDecisionClient,
+  JevInvalidResponseError,
+  classifyJevFailure,
+} from "./client";
+import { getJevMode, getJevOnFailure } from "./config";
 import { logJevDecision } from "./telemetry";
 import {
   JevCheckpoint,
   JevMode,
+  JevOnFailure,
+  type JevModeValue,
   type JevQuestions,
 } from "./types";
 const VERSION = "1.0.0",
@@ -19,6 +25,13 @@ const memoryEvidenceSchema = z.object({
 type MemoryEvidence = z.infer<typeof memoryEvidenceSchema>;
 export const safeEvidenceFallback = (r: MemoryEvidence[]) =>
   r.filter((x) => (x.score ?? 0) >= HIGH);
+
+/** Failure posture: active mode defaults to closed (only high-confidence
+ * records survive an unevaluated batch); JEV_MEMORY_EVIDENCE_ON_FAILURE=open
+ * returns the batch unfiltered. Non-active modes never filter. */
+const failsClosed = (mode: JevModeValue) =>
+  mode === JevMode.ACTIVE &&
+  getJevOnFailure(JevCheckpoint.MEMORY_EVIDENCE) === JevOnFailure.CLOSED;
 const stale = (r: MemoryEvidence) =>
   Boolean(
     r.updatedAt &&
@@ -65,8 +78,7 @@ export async function gateMemoryEvidence(
     return records;
   const client = dependency ?? JevDecisionClient.createIfConfigured();
   if (mode === JevMode.OFF) return records;
-  if (!client)
-    return mode === JevMode.ACTIVE ? safeEvidenceFallback(records) : records;
+  if (!client) return failsClosed(mode) ? safeEvidenceFallback(records) : records;
   const questions: JevQuestions = Object.fromEntries(
     records.map((_, i) => [
       `accept_${i}`,
@@ -99,7 +111,10 @@ export async function gateMemoryEvidence(
     const probabilities = Object.fromEntries(
       records.map((_, i) => {
         const a = result.answers[`accept_${i}`];
-        if (a?.type !== "noul") throw new Error("incomplete evidence answer");
+        if (a?.type !== "noul")
+          throw new JevInvalidResponseError("incomplete evidence answer", {
+            responseBody: result.rawBody,
+          });
         return [`accept_${i}`, a.noul];
       }),
     );
@@ -120,9 +135,12 @@ export async function gateMemoryEvidence(
     });
     return mode === JevMode.ACTIVE ? accepted : records;
   } catch (error) {
+    const closed = failsClosed(mode);
     logWarn({
       event: "jev_memory_evidence_fallback",
       error: error instanceof Error ? error.message : String(error),
+      ...(error instanceof JevInvalidResponseError &&
+        error.responseBody && { responseBody: error.responseBody }),
       requestId,
     });
     logJevDecision({
@@ -131,12 +149,12 @@ export async function gateMemoryEvidence(
       modelVersion: "unknown",
       mode,
       latencyMs: Date.now() - started,
-      outcome: "error_high_confidence_only",
+      outcome: closed ? "error_high_confidence_only" : "error_unfiltered",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
       requestId,
       conversationId,
     });
-    return mode === JevMode.ACTIVE ? safeEvidenceFallback(records) : records;
+    return closed ? safeEvidenceFallback(records) : records;
   }
 }

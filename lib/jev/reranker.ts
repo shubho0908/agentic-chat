@@ -1,4 +1,5 @@
 import type { RerankDocument, RerankResult } from "@/types/rag";
+import { JevInvalidResponseError } from "./client";
 import type { JevDecisionClient, JevEvaluateResult } from "./client";
 import { mapWithConcurrencyLimit } from "./concurrency";
 import { JevCheckpoint, type JevQuestions } from "./types";
@@ -63,7 +64,10 @@ export async function rerankWithJev(
       }
       const score = mapJevRerankScore(result);
       if (score === null) {
-        throw new Error("Jev rerank returned an invalid score");
+        throw new JevInvalidResponseError(
+          "Jev rerank returned an invalid score",
+          { responseBody: result.rawBody },
+        );
       }
       return {
         content: doc.content,

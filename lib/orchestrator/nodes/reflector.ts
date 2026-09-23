@@ -4,7 +4,7 @@ import type { AIMessage, BaseMessage } from "@langchain/core/messages";
 import { GraphNode } from "../constants";
 import type { AgentStateType } from "../state";
 import { logger } from "@/lib/logger";
-import { createRequestId } from "@/lib/observability";
+import { createRequestId, logWarn } from "@/lib/observability";
 import {
   failureRoundsSinceLastHuman,
   hasConsecutiveErrorStreak,
@@ -90,6 +90,13 @@ async function runJevToolRouterShadow(
     });
     const decision = mapJevToolRouterResult(result);
     if (!decision) {
+      logWarn({
+        event: "jev_tool_router_invalid_response",
+        message: "Jev tool router response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
       logJevDecision({
         checkpoint: JevCheckpoint.TOOL_ROUTER,
         schemaVersion: "1.0.0",

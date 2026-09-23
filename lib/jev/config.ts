@@ -1,8 +1,10 @@
 import {
   JevCheckpoint,
   JevMode,
+  JevOnFailure,
   type JevCheckpointName,
   type JevModeValue,
+  type JevOnFailureValue,
 } from "./types";
 
 const ENV_BY_CHECKPOINT: Record<JevCheckpointName, string> = {
@@ -26,4 +28,44 @@ export function getJevMode(checkpoint: JevCheckpointName): JevModeValue {
 
 export function isJevEnabled(checkpoint: JevCheckpointName): boolean {
   return getJevMode(checkpoint) !== JevMode.OFF;
+}
+
+/** Failure posture for gates with a real open/closed polarity, keyed beside
+ * the mode vars so one place owns every Jev env read. Open keeps serving
+ * through a provider failure (serve the hit, keep the passages, fall back to
+ * the legacy heuristic); closed refuses unevaluated content. Defaults match
+ * the behavior each gate shipped with. Shadow-only checkpoints and the
+ * deterministic-fallback checkpoints (planner, tool router, HITL, rerank)
+ * have no second posture to configure, so they take no var. */
+const ON_FAILURE_POLICY = {
+  [JevCheckpoint.CACHE_GATE]: {
+    env: "JEV_CACHE_GATE_ON_FAILURE",
+    fallback: JevOnFailure.CLOSED,
+  },
+  [JevCheckpoint.PASSAGE_GATE]: {
+    env: "JEV_PASSAGE_GATE_ON_FAILURE",
+    fallback: JevOnFailure.OPEN,
+  },
+  [JevCheckpoint.MEMORY_GATE]: {
+    env: "JEV_MEMORY_GATE_ON_FAILURE",
+    fallback: JevOnFailure.OPEN,
+  },
+  [JevCheckpoint.MEMORY_EVIDENCE]: {
+    env: "JEV_MEMORY_EVIDENCE_ON_FAILURE",
+    fallback: JevOnFailure.CLOSED,
+  },
+} as const;
+
+export type JevFailurePolicyCheckpoint = keyof typeof ON_FAILURE_POLICY;
+
+const ON_FAILURE_VALUES = new Set<string>(Object.values(JevOnFailure));
+
+export function getJevOnFailure(
+  checkpoint: JevFailurePolicyCheckpoint,
+): JevOnFailureValue {
+  const { env, fallback } = ON_FAILURE_POLICY[checkpoint];
+  const raw = process.env[env]?.trim().toLowerCase();
+  return raw && ON_FAILURE_VALUES.has(raw)
+    ? (raw as JevOnFailureValue)
+    : fallback;
 }

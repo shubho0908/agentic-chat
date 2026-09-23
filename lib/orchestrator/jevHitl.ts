@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDangerousAction } from "@/lib/tools/composio/config";
 import { ToolName } from "@/lib/tools/constants";
-import { createRequestId } from "@/lib/observability";
+import { createRequestId, logWarn } from "@/lib/observability";
 import { logger } from "@/lib/logger";
 import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { getJevMode } from "@/lib/jev/config";
@@ -118,6 +118,13 @@ async function runJevHitlShadow(
     });
     const decision = mapJevHitlEscalationResult(result);
     if (!decision) {
+      logWarn({
+        event: "jev_hitl_invalid_response",
+        message: "Jev HITL escalation response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
       logHitlRecord(mode, "invalid_response", {
         modelVersion: result.modelVersion,
         latencyMs: Date.now() - startedAt,
@@ -194,6 +201,14 @@ async function evaluateJevHitlActive(
     });
     const decision = mapJevHitlEscalationResult(result);
     if (!decision) {
+      logWarn({
+        event: "jev_hitl_invalid_response",
+        message:
+          "Jev HITL escalation response failed checkpoint mapping; proceeding without added review",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
       logHitlRecord(JevMode.ACTIVE, "invalid_response_proceed", {
         modelVersion: result.modelVersion,
         latencyMs: Date.now() - startedAt,

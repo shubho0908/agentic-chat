@@ -7,6 +7,7 @@ import { JevCheckpoint, JevMode } from "@/lib/jev/types";
 import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { getJevMode } from "@/lib/jev/config";
 import { logJevDecision } from "@/lib/jev/telemetry";
+import { JevInvalidResponseError } from "@/lib/jev/client";
 import { rerankWithJev } from "@/lib/jev/reranker";
 
 /** Deterministic 50/50 bucket for A/B mode. Same key always lands in the
@@ -159,6 +160,8 @@ export async function rerankDocuments(
         event: "jev_rerank_fallback",
         message: "Jev rerank failed, falling back to Cohere",
         error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof JevInvalidResponseError &&
+          error.responseBody && { responseBody: error.responseBody }),
         requestId,
       });
       logJevDecision({
