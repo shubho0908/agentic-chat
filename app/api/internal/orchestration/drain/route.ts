@@ -24,8 +24,11 @@ function secretEquals(provided: string | null, expected: string): boolean {
 }
 
 function isAuthorized(request: NextRequest): boolean {
-  const expectedSecret = process.env.ORCHESTRATION_DRAIN_SECRET || process.env.CRON_SECRET;
-  if (!expectedSecret) {
+  const expectedSecrets = [
+    process.env.ORCHESTRATION_DRAIN_SECRET,
+    process.env.CRON_SECRET,
+  ].filter((secret): secret is string => Boolean(secret));
+  if (expectedSecrets.length === 0) {
     return false;
   }
 
@@ -35,7 +38,10 @@ function isAuthorized(request: NextRequest): boolean {
     ? authorization.slice('Bearer '.length)
     : null;
 
-  return secretEquals(provided, expectedSecret) || secretEquals(bearerToken, expectedSecret);
+  return expectedSecrets.some(
+    (expectedSecret) =>
+      secretEquals(provided, expectedSecret) || secretEquals(bearerToken, expectedSecret)
+  );
 }
 
 function normalizeMaxJobs(value: unknown): number {
@@ -84,12 +90,12 @@ export async function POST(request: NextRequest) {
     return errorResponse(parsedBody.error, undefined, HTTP_STATUS.BAD_REQUEST);
   }
 
+  const checkpointPrune = await pruneCheckpointsOnSchedule({
+    deadline: startedAt + DRAIN_ROUTE_BUDGET_MS,
+  });
   const result = await drainQueuedDocumentJobs({
     maxJobs: parsedBody.maxJobs,
     leaseOwner: 'orchestration-drain',
-  });
-  const checkpointPrune = await pruneCheckpointsOnSchedule({
-    deadline: startedAt + DRAIN_ROUTE_BUDGET_MS,
   });
 
   if (result.atCapacity && result.processed === 0) {

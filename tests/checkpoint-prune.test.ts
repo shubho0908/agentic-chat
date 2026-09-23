@@ -348,3 +348,25 @@ test("conversation delete stops at its time budget", async () => {
   }
   assert.equal(deleted.length, 2);
 });
+
+test("a thread idle for exactly seven days is kept and one a millisecond older is pruned", async () => {
+  const boundary = new Date(SUNDAY.getTime() - CHECKPOINT_STALE_AFTER_MS);
+  const older = new Date(boundary.getTime() - 1);
+  const state = stub({
+    threadIds: [deriveThreadId("edge"), deriveThreadId("past")],
+    conversations: [
+      { id: "edge", updatedAt: boundary },
+      { id: "past", updatedAt: older },
+    ],
+    latestTs: {
+      [deriveThreadId("edge")]: boundary.toISOString(),
+      [deriveThreadId("past")]: older.toISOString(),
+    },
+  });
+  const deleter = recordingDeleter();
+  const result = await withPrisma(state, () =>
+    pruneCheckpointsOnSchedule({ now: SUNDAY, dependency: deleter }),
+  );
+  assert.deepEqual(deleter.deleted, [deriveThreadId("past")]);
+  assert.equal(result.kept, 1);
+});
