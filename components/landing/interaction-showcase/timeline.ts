@@ -4,17 +4,17 @@ import {
   SCENE_ORDER,
   SCENE_TOTALS,
 } from "@/components/landing/interaction-showcase/constants";
-import type {
+import {
   DeviceKind,
   SceneKind,
-  TimelinePosition,
+  type TimelinePosition,
 } from "@/components/landing/interaction-showcase/types";
 
 export function getTimelinePosition(elapsed: number): TimelinePosition {
   if (LOOP_DURATION === 0) {
     return {
       cycle: 0,
-      scene: "web",
+      scene: SceneKind.WebSearch,
       sceneIndex: 0,
       sceneElapsed: 0,
       step: 0,
@@ -66,7 +66,7 @@ export function getTimelinePosition(elapsed: number): TimelinePosition {
 
   return {
     cycle: 0,
-    scene: "web",
+    scene: SceneKind.WebSearch,
     sceneIndex: 0,
     sceneElapsed: 0,
     step: 0,
@@ -142,34 +142,26 @@ export function getDeviceKind(
   viewportHeight: number,
 ): DeviceKind {
   if (showcaseWidth >= 620) {
-    return "desktop";
+    return DeviceKind.Desktop;
   }
 
   const isCompactLandscape = viewportWidth > viewportHeight && viewportHeight < 560;
 
   if (isCompactLandscape && showcaseWidth >= 360) {
-    return "tablet";
+    return DeviceKind.Tablet;
   }
 
   if (viewportWidth < 640 && showcaseWidth < 410) {
-    return "phone";
+    return DeviceKind.Phone;
   }
 
   if (showcaseWidth >= 410) {
-    return "tablet";
+    return DeviceKind.Tablet;
   }
 
   if (viewportWidth >= 640) {
-    return "tablet";
+    return DeviceKind.Tablet;
   }
 
-  return "phone";
-}
-
-export function getSceneTitle(scene: SceneKind): string {
-  switch (scene) {
-    case "orchestration": return "Orchestration";
-    case "deep-research": return "Deep research";
-    default: return "Web search";
-  }
+  return DeviceKind.Phone;
 }

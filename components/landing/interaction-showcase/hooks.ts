@@ -98,10 +98,7 @@ export function useInteractionTimeline(prefersReducedMotion: boolean) {
     ? getCompletedScenePosition(SCENE_ORDER[staticSceneIndex])
     : getTimelinePosition(effectiveElapsed);
 
-  const navigateScene = useCallback((direction: -1 | 1) => {
-    const nextSceneIndex =
-      (timeline.sceneIndex + direction + SCENE_ORDER.length) % SCENE_ORDER.length;
-
+  const selectScene = useCallback((nextSceneIndex: number) => {
     if (prefersReducedMotion) {
       setStaticSceneIndex(nextSceneIndex);
       return;
@@ -111,10 +108,17 @@ export function useInteractionTimeline(prefersReducedMotion: boolean) {
       elapsedAtAnchor: elapsed,
       timelineElapsed: getSceneLoopOffset(SCENE_ORDER[nextSceneIndex]),
     });
-  }, [elapsed, prefersReducedMotion, timeline.sceneIndex]);
+  }, [elapsed, prefersReducedMotion]);
+
+  const navigateScene = useCallback((direction: -1 | 1) => {
+    const nextSceneIndex =
+      (timeline.sceneIndex + direction + SCENE_ORDER.length) % SCENE_ORDER.length;
+    selectScene(nextSceneIndex);
+  }, [selectScene, timeline.sceneIndex]);
 
   return {
     timeline,
     navigateScene,
+    selectScene,
   };
 }

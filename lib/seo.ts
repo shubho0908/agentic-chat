@@ -3,7 +3,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 
 export const siteConfig = {
   name: "Agentic Chat",
-  defaultTitle: "Agentic Chat — AI-Powered Research, Documents & Workflow Automation",
+  defaultTitle: "Agentic Chat | AI-Powered Research, Documents & Workflow Automation",
   description:
     "Your AI workspace that researches, reads documents, remembers context, and connects to the tools you already use. One chat to rule them all.",
   fullDescription:
