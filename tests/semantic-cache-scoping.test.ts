@@ -48,8 +48,8 @@ test("cache lookup is scoped by model and reasoning effort with null-safe effort
 
 test("null effort binds SQL NULL so only no-effort entries match", async () => {
   await withCapturedPrisma(async (calls) => {
-    await searchSemanticCacheEntry([0.1], "user-1", undefined, "gpt-5.5", null);
-    assert.equal(calls[0].params[4], "gpt-5.5");
+    await searchSemanticCacheEntry([0.1], "user-1", undefined, "gpt-6-luna", null);
+    assert.equal(calls[0].params[4], "gpt-6-luna");
     assert.equal(calls[0].params[5], null);
   });
 });

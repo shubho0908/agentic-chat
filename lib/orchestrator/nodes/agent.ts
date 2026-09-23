@@ -13,6 +13,7 @@ import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   getChatReasoningEffort,
   getSupportedTemperature,
+  requiresResponsesApiForToolCalling,
 } from "@/lib/modelPolicy";
 import {
   TOOLKIT_DISPLAY_NAMES,
@@ -342,6 +343,8 @@ export function createAgentNode(
     streaming: true,
     maxTokens: MAX_RESPONSE_TOKENS,
     timeout: AGENT_LLM_TIMEOUT_MS,
+    // This node binds tools, and GPT-6 tool calling is Responses-only.
+    ...(requiresResponsesApiForToolCalling(model) ? { useResponsesApi: true } : {}),
     ...(supportedTemperature !== undefined
       ? { temperature: supportedTemperature }
       : {}),

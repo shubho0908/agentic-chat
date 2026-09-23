@@ -10,8 +10,18 @@ const FALLBACK_IMAGE_TOKEN_PRICING: Omit<ImageTokenPricing, "pattern"> = {
   tileTokens: 170,
 };
 
+/**
+ * Image token pricing for the families in OpenAI's base/tile table. Newer
+ * families are patch-budget priced rather than tile priced — the model sizing
+ * table documents 2,500 patches at "high" detail and a 30,000-patch rejection
+ * limit for the GPT-5.6 and GPT-6 families — so they fall through to
+ * FALLBACK_IMAGE_TOKEN_PRICING instead of borrowing a tile rate.
+ * Source: https://developers.openai.com/api/docs/guides/images-vision
+ */
 const IMAGE_TOKEN_PRICING_BY_MODEL: ImageTokenPricing[] = [
-  { pattern: /^gpt-5(?:[.-]|$)/i, baseTokens: 70, tileTokens: 140 },
+  // gpt-5 is the newest base/tile row published for the GPT-5 series (it is
+  // marked deprecated); GPT-5.x point releases are patch-budget sized instead.
+  { pattern: /^gpt-5(?!\.\d)/i, baseTokens: 70, tileTokens: 140 },
   { pattern: /^gpt-4o-mini(?:[.-]|$)/i, baseTokens: 2833, tileTokens: 5667 },
   { pattern: /^gpt-4o(?:[.-]|$)/i, baseTokens: 85, tileTokens: 170 },
   { pattern: /^gpt-4\.1(?:[.-]|$)/i, baseTokens: 85, tileTokens: 170 },

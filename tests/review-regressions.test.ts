@@ -43,9 +43,15 @@ test("file filtering treats known unsupported vision extensions as unsupported i
   assert.deepEqual(result.validImages, []);
 });
 
-test("image token estimates follow model-family tile pricing", () => {
+test("image token estimates follow the documented vision sizing families", () => {
+  // Base/tile table families: 70 base tokens + 6 default tiles at 140.
   assert.equal(estimateImageTokensForModel("gpt-5"), 910);
-  assert.equal(estimateImageTokensForModel("gpt-5.5"), 910);
   assert.equal(estimateImageTokensForModel("gpt-4.1"), 1105);
+  // GPT-5.x point releases and the GPT-6 family are patch-budget sized (2,500
+  // patches at "high" detail, 30,000-patch rejection limit), so the tile
+  // estimator falls back instead of borrowing a tile rate.
+  assert.equal(estimateImageTokensForModel("gpt-5.6-terra"), 1105);
+  assert.equal(estimateImageTokensForModel("gpt-6-sol"), 1105);
+  assert.equal(estimateImageTokensForModel("gpt-6-astra"), 1105);
   assert.equal(estimateImageTokensForModel("unknown-model"), 1105);
 });
