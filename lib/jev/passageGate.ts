@@ -64,8 +64,7 @@ export function shouldKeepPassage(decision: PassageGateDecision): boolean {
   );
 }
 /** Default is off. Shadow records decisions but never changes context. Active
- * filters only confident injection/irrelevance decisions and fails open on
- * evaluation failure unless JEV_PASSAGE_GATE_ON_FAILURE=closed. */
+ * filters only confident injection/irrelevance decisions and fails open. */
 export async function gatePassages(
   query: string,
   candidates: RetrievalCandidate[],
@@ -137,9 +136,7 @@ export async function gatePassages(
   } catch (error) {
     // Fail-fast: the first failure already aborted every sibling in flight,
     // and the gate applies its failure posture to the whole batch instead of
-    // dripping out partial filtering behind a degraded provider. Default is
-    // open (unchecked passages are served); JEV_PASSAGE_GATE_ON_FAILURE=
-    // closed refuses them in active mode.
+    // dripping out partial filtering behind a degraded provider.
     const dropUnchecked =
       mode === JevMode.ACTIVE &&
       getJevOnFailure(JevCheckpoint.PASSAGE_GATE) === JevOnFailure.CLOSED;

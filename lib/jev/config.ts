@@ -30,13 +30,6 @@ export function isJevEnabled(checkpoint: JevCheckpointName): boolean {
   return getJevMode(checkpoint) !== JevMode.OFF;
 }
 
-/** Failure posture for gates with a real open/closed polarity, keyed beside
- * the mode vars so one place owns every Jev env read. Open keeps serving
- * through a provider failure (serve the hit, keep the passages, fall back to
- * the legacy heuristic); closed refuses unevaluated content. Defaults match
- * the behavior each gate shipped with. Shadow-only checkpoints and the
- * deterministic-fallback checkpoints (planner, tool router, HITL, rerank)
- * have no second posture to configure, so they take no var. */
 const ON_FAILURE_POLICY = {
   [JevCheckpoint.CACHE_GATE]: {
     env: "JEV_CACHE_GATE_ON_FAILURE",

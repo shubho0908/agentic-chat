@@ -26,9 +26,6 @@ type MemoryEvidence = z.infer<typeof memoryEvidenceSchema>;
 export const safeEvidenceFallback = (r: MemoryEvidence[]) =>
   r.filter((x) => (x.score ?? 0) >= HIGH);
 
-/** Failure posture: active mode defaults to closed (only high-confidence
- * records survive an unevaluated batch); JEV_MEMORY_EVIDENCE_ON_FAILURE=open
- * returns the batch unfiltered. Non-active modes never filter. */
 const failsClosed = (mode: JevModeValue) =>
   mode === JevMode.ACTIVE &&
   getJevOnFailure(JevCheckpoint.MEMORY_EVIDENCE) === JevOnFailure.CLOSED;

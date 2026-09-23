@@ -84,9 +84,6 @@ export interface CacheGateOutcome {
   serve: boolean;
 }
 
-/** Failure posture: non-active modes never change behavior, so they serve;
- * active mode follows JEV_CACHE_GATE_ON_FAILURE (default closed: an
- * unevaluated entry is never served). */
 function cacheGateServesOnFailure(mode: JevModeValue): boolean {
   return (
     mode !== JevMode.ACTIVE ||
@@ -105,10 +102,9 @@ export function cacheGateDefersToOrchestrator(): boolean {
 }
 
 /** Default is off. Shadow and ab record the decision but always serve the
- * hit. Active vetoes confident no-serve verdicts and by default refuses any
- * hit the gate could not evaluate: an unevaluated entry is never served, so
- * a Jev outage costs fresh generations instead of stale or off-topic answers.
- * JEV_CACHE_GATE_ON_FAILURE=open flips the failure posture to serve. */
+ * hit. Active vetoes confident no-serve verdicts and refuses any hit the
+ * gate could not evaluate: an unevaluated entry is never served, so a Jev
+ * outage costs fresh generations instead of stale or off-topic answers. */
 export async function gateCacheHit(
   state: JevCacheGateState,
   conversationId?: string,

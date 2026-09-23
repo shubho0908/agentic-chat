@@ -14,8 +14,6 @@ const TYPESAFE_API_URL = "https://api.typesafe.ai/v1/systemone";
 const JEV_MODEL_ID = "jev-latest";
 const CIRCUIT_BREAKER_NAME = "jev-decision-client";
 const DEFAULT_TIMEOUT_MS = 2_000;
-/** Raw response bodies are logged on malformed responses so the invalid class
- * has evidence; capped so a runaway body cannot flood the log sink. */
 const RESPONSE_BODY_LOG_CHARS = 500;
 
 let legacyProviderWarned = false;
@@ -113,8 +111,6 @@ export interface JevEvaluateResult {
   modelVersion: string;
   usage?: JevUsage;
   latencyMs: number;
-  /** Truncated raw response body, logged when per-checkpoint mapping rejects
-   * a schema-valid response. Never persisted to the decision record. */
   rawBody?: string;
 }
 
@@ -199,12 +195,6 @@ export class JevDecisionClient {
       });
     }
     try {
-      // One attempt with the full budget. An in-deadline retry is starved by
-      // whatever the first attempt burned plus its backoff, so a provider
-      // overload surfaced as a timeout instead of a clean error; a retry with
-      // its own budget would break the caller's deadline. withRetry with zero
-      // retries still enforces the deadline as a hard bound even if a
-      // transport ignores the abort signal.
       const { raw, rawBody } = await withRetry(
         (signal) => this.invoke(input, signal),
         {
@@ -289,8 +279,6 @@ export class JevDecisionClient {
       signal,
     });
 
-    // No catch here: an abort mid-body-read must surface as the deadline or
-    // cancellation it is, not as a parse failure on an empty string.
     const body = await response.text();
 
     if (!response.ok) {

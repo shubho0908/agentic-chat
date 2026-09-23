@@ -180,9 +180,6 @@ export async function mediateMemoryIntent(
       return d;
     } catch (error) {
       if (a.signal?.aborted) throw error;
-      // Default failure posture is open: the legacy heuristic decides. Closed
-      // (JEV_MEMORY_GATE_ON_FAILURE=closed, active mode only) skips retrieval
-      // the gate could not vet; the degradation mapper already surfaces that.
       const closed =
         mode === JevMode.ACTIVE &&
         getJevOnFailure(JevCheckpoint.MEMORY_GATE) === JevOnFailure.CLOSED;
@@ -219,10 +216,6 @@ export async function mediateMemoryIntent(
       return old;
     }
   })();
-  // Cleanup must be chained, not run inside the evaluation: an evaluation
-  // that settles synchronously (e.g. Jev unconfigured) would delete the key
-  // before it was ever set, leaking a settled decision that later calls
-  // replay under a different mode or failure posture.
   inFlight.set(k, evaluation);
   const clearInFlight = () => {
     if (inFlight.get(k) === evaluation) inFlight.delete(k);
