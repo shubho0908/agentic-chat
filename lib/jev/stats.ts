@@ -219,6 +219,8 @@ export const JEV_STATS_QUERY_DEADLINE_MS =
 export const JEV_STATS_TRANSACTION_MAX_WAIT_MS = 5_000;
 export const JEV_STATS_TRANSACTION_TIMEOUT_MS =
   JEV_STATS_QUERY_DEADLINE_MS - JEV_STATS_TRANSACTION_MAX_WAIT_MS;
+export const JEV_STATS_STATEMENT_TIMEOUT_MS =
+  JEV_STATS_TRANSACTION_TIMEOUT_MS / 2;
 
 export async function queryJevStats(
   query: JevStatsQuery,
@@ -230,7 +232,7 @@ export async function queryJevStats(
     async (tx) => {
       await tx.$executeRawUnsafe(
         `SELECT set_config('statement_timeout', $1, true)`,
-        String(JEV_STATS_TRANSACTION_TIMEOUT_MS),
+        String(JEV_STATS_STATEMENT_TIMEOUT_MS),
       );
       const outcomeRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,

@@ -10,6 +10,7 @@ import {
   JEV_STATS_CACHE_TTL_ENV,
   JEV_STATS_ROUTE_MAX_DURATION_SECONDS,
   JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+  JEV_STATS_STATEMENT_TIMEOUT_MS,
   JEV_STATS_TRANSACTION_TIMEOUT_MS,
 } from "@/lib/jev/stats";
 
@@ -140,8 +141,12 @@ test("stats route serves the owner", async () => {
   assert.equal(result.databaseQueries, 2);
   assert.equal(result.transactions, 1);
   assert.deepEqual(result.statementTimeouts, [
-    String(JEV_STATS_TRANSACTION_TIMEOUT_MS),
+    String(JEV_STATS_STATEMENT_TIMEOUT_MS),
   ]);
+  assert.ok(
+    result.databaseQueries * JEV_STATS_STATEMENT_TIMEOUT_MS <=
+      JEV_STATS_TRANSACTION_TIMEOUT_MS,
+  );
   assert.deepEqual(result.transactionOptions, [
     {
       maxWait: JEV_STATS_TRANSACTION_MAX_WAIT_MS,
