@@ -66,7 +66,6 @@ export function proxy(request: NextRequest) {
 
   const accept = request.headers.get("accept") ?? "";
 
-  // Markdown content negotiation
   if (accept.includes("text/markdown")) {
     const md = pageToMarkdown(pathname);
     return new NextResponse(md, {
@@ -79,7 +78,6 @@ export function proxy(request: NextRequest) {
     });
   }
 
-  // Add Link headers to normal HTML responses
   const response = NextResponse.next();
   response.headers.set("Link", buildLinkHeaders(appBaseUrl));
   response.headers.append("Vary", "Accept");

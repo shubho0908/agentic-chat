@@ -109,7 +109,6 @@ const KEY_ARG_MAX_LENGTH = 120;
 interface ToolKeyArg {
   text: string;
   href?: string;
-  /** Opaque ids render in mono so they read as identifiers, not prose. */
   isIdentifier: boolean;
 }
 
@@ -239,7 +238,6 @@ function extractToolResultText(result: JsonValue): string | null {
 const NO_RESULT_PATTERN =
   /\bnot found\b|\bno\s+(?:results?|matches?|messages?|threads?|events?|files?|documents?|items?|records?)\b/i;
 
-/** Parses the `URL: …` shapes emitted by the web-search tools. */
 export function parseToolSources(result: JsonValue): ToolSource[] {
   const content = extractToolResultText(result);
   if (!content) return [];
@@ -378,7 +376,6 @@ export interface ToolRunSummary {
   hasFailures: boolean;
 }
 
-/** Groups consecutive calls of the same toolkit while preserving run order. */
 export function groupToolActivities(activities: ToolActivity[]): ToolRunGroup[] {
   const groups: ToolRunGroup[] = [];
 

@@ -146,7 +146,6 @@ export function setReasoningEffortForModel(
   }
 }
 
-/** Effort for the currently selected model. */
 export function getReasoningEffort(): ReasoningEffortLevel {
   return getReasoningEffortForModel(getModel() ?? DEFAULT_MODEL);
 }

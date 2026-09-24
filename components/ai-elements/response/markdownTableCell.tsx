@@ -14,11 +14,6 @@ interface MarkdownTableCellProps {
 const CELL_BASE_CLASS =
   "min-w-[6rem] max-w-[18rem] px-2.5 py-2 align-top break-words sm:min-w-[7rem] sm:max-w-[22rem] sm:px-3";
 
-/**
- * Table data cell with conservative comparison-matrix affordance.
- * Boolean-ish tokens render as icon + sr text (clean matrix look);
- * everything else renders untouched so real data is never mis-shaped.
- */
 export const MarkdownTableCell = memo(function MarkdownTableCell({
   children,
   style,

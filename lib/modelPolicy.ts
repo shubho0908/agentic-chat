@@ -72,10 +72,6 @@ export function requiresResponsesApiForToolCalling(model: string): boolean {
   return version !== null && version.major >= 6;
 }
 
-/**
- * Validates a client-supplied reasoning effort level. Returns the level or
- * null when the value is missing/not one of the supported levels.
- */
 export function parseReasoningEffortParam(value: unknown): ReasoningEffortLevel | null {
   const parsed = reasoningEffortSchema.safeParse(value);
   return parsed.success ? parsed.data : null;

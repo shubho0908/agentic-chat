@@ -220,9 +220,6 @@ export function getModelCostMultiplier(model: OpenAIModel): number | null {
   return blended / CHEAPEST_BLENDED_COST;
 }
 
-/**
- * Formats a multiplier for display: "1x", "2.2x", "25x".
- */
 export function formatCostMultiplier(multiplier: number): string {
   if (multiplier >= 10) return `${Math.round(multiplier)}x`;
   if (multiplier >= 1.05) return `${multiplier.toFixed(1)}x`;
@@ -237,7 +234,6 @@ export function getModelById(modelId: string): OpenAIModel | undefined {
   return OPENAI_MODELS_BY_ID.get(modelId);
 }
 
-/** Whether a model accepts the given reasoning effort level. */
 export function isReasoningEffortSupported(
   modelId: string,
   effort: ReasoningEffortLevel
@@ -246,7 +242,6 @@ export function isReasoningEffortSupported(
   return model ? model.supportedReasoningEfforts.includes(effort) : false;
 }
 
-/** Effort levels to offer for a model in the composer. */
 export function getSupportedReasoningEfforts(
   modelId: string
 ): readonly ReasoningEffortLevel[] {

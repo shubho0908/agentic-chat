@@ -11,7 +11,6 @@ import {
   shouldShowCodeLineNumbers,
 } from "@/components/ai-elements/response/markdownCodeBlockUtils";
 
-// Table cell classification: conservative exact-match only.
 test("classifies check cells", () => {
   for (const value of ["yes", "Yes", " YES ", "true", "supported", "included", "available", "✓", "✔", "✅"]) {
     assert.equal(classifyTableCell(value), "check", `expected check for ${JSON.stringify(value)}`);
@@ -36,7 +35,6 @@ test("leaves real data as text (no over-inference)", () => {
   }
 });
 
-// Code utils.
 test("normalizes CRLF and strips one trailing newline", () => {
   assert.equal(normalizeCodeText("a\r\nb\r\n"), "a\nb");
   assert.equal(normalizeCodeText("a\rb"), "a\nb");

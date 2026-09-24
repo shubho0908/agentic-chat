@@ -16,10 +16,10 @@ export function useComposioConnectors(opts?: { onActionComplete?: () => void }) 
       return (await res.json()).services;
     },
     staleTime: 5 * 60 * 1000,       // 5 min — status rarely changes without user action
-    gcTime: 10 * 60 * 1000,         // 10 min garbage collection
-    refetchOnWindowFocus: false,     // no refetch on tab switch
-    refetchOnMount: false,           // trust cache if fresh
-    refetchOnReconnect: true,        // refetch after network recovery
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: true,
   });
 
   const connectMutation = useMutation({

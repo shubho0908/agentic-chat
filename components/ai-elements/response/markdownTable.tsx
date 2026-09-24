@@ -6,12 +6,6 @@ interface MarkdownTableProps {
   children?: ReactNode;
 }
 
-/**
- * Universal scroll shell for LLM markdown tables.
- * Original design (not a Pro-clone): horizontal + capped vertical scroll,
- * sticky header support, rounded shell. Never lets wide/tall tables break
- * chat layout — content scrolls inside instead of overflowing.
- */
 export const MarkdownTable = memo(function MarkdownTable({
   children,
 }: MarkdownTableProps) {

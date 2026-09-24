@@ -28,11 +28,6 @@ const CROSS_TOKENS = new Set([
 
 const DASH_TOKENS = new Set(["—", "–", "-", "n/a", "na", "none"]);
 
-/**
- * Conservative exact-match classifier for comparison-matrix cells.
- * Only maps unambiguous boolean-ish tokens; everything else stays "text"
- * so real data ("x", "+1", "Partial", "See line 12") is never mis-rendered.
- */
 export function classifyTableCell(value: string): TableCellKind {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return "text";

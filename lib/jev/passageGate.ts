@@ -67,8 +67,6 @@ export function shouldKeepPassage(decision: PassageGateDecision): boolean {
       decision.contradiction >= 0.5)
   );
 }
-/** Default is off. Shadow records decisions but never changes context. Active
- * filters only confident injection/irrelevance decisions and fails open. */
 export async function gatePassages(
   query: string,
   candidates: RetrievalCandidate[],

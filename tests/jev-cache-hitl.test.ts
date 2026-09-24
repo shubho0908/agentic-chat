@@ -69,8 +69,6 @@ const VETO = {
   staleness_risk: { type: "noul", noul: 0.9 },
 };
 
-// ---------- config ----------
-
 test("Phase 5 checkpoints default to off and read valid modes", () => {
   withEnv(
     { JEV_CACHE_GATE_MODE: undefined, JEV_HITL_ESCALATION_MODE: undefined },
@@ -103,8 +101,6 @@ test("cache gate defers the pre-check to the orchestrator only in active mode", 
     });
   }
 });
-
-// ---------- cache gate mapping ----------
 
 test("mapJevCacheGateResult maps a valid response", () => {
   const decision = mapJevCacheGateResult(fakeResult(SERVE));
@@ -149,8 +145,6 @@ test("shouldServeCachedAnswer requires both signals to agree", () => {
     false,
   );
 });
-
-// ---------- cache gate behavior ----------
 
 test("cache gate off mode serves without a client", async () => {
   await withEnv({ JEV_CACHE_GATE_MODE: undefined }, async () => {
@@ -310,8 +304,6 @@ test("cache gate active still serves a confidently evaluated marginal hit", asyn
   });
 });
 
-// ---------- HITL escalation mapping ----------
-
 test("mapJevHitlEscalationResult maps a valid response", () => {
   const decision = mapJevHitlEscalationResult(
     fakeResult({
@@ -368,8 +360,6 @@ test("shouldJevEscalate enforces the additive-only thresholds", () => {
     false,
   );
 });
-
-// ---------- HITL signature and verdict ----------
 
 test("jevHitlSignature is stable and distinguishes tool-call sets", () => {
   const calls = [

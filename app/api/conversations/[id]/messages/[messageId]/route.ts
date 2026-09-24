@@ -353,7 +353,6 @@ export async function PATCH(
     if (existingMessage.role === "USER" && assistantContent) {
       const result = await prisma.$transaction(
         async (tx) => {
-          // Parallelize independent reads inside the transaction for atomicity
           const [siblingIndex, existingAssistantMessage] = await Promise.all([
             getNextSiblingIndex(tx, parentId),
             hasAssistantMessageId

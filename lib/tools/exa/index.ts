@@ -157,14 +157,12 @@ function isLikelyContentImage(url: string): boolean {
 }
 
 function pickBestImage(result: Record<string, unknown>): string | undefined {
-  // Prefer extras.imageLinks (actual in-page images) over og:image metadata
   const extras = result.extras as { imageLinks?: string[] } | undefined;
   if (extras?.imageLinks?.length) {
     const valid = extras.imageLinks.find(isLikelyContentImage);
     if (valid) return valid;
   }
 
-  // Fall back to og:image only if it passes quality filter
   const ogImage = result.image as string | undefined;
   if (ogImage && isLikelyContentImage(ogImage)) return ogImage;
 

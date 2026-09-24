@@ -39,7 +39,6 @@ test("searchNode bumps searchRound by exactly 1 per invocation (round counter in
   try {
     const node = searchNode();
 
-    // First invocation from a fresh state.
     const first = await node(createResearchState({ searchRound: 0, searchQueries: ["q"] }));
     assert.equal(first.searchRound, 1, "first round must advance from 0 to 1");
 
@@ -47,7 +46,6 @@ test("searchNode bumps searchRound by exactly 1 per invocation (round counter in
     const second = await node(createResearchState({ searchRound: 1, searchQueries: ["q2"] }));
     assert.equal(second.searchRound, 2, "second round must advance from 1 to 2");
 
-    // Final invocation right at the cap.
     const final = await node(createResearchState({ searchRound: 5, searchQueries: ["q3"] }));
     assert.equal(final.searchRound, 6, "round counter must reach maxRounds when allowed to run");
   } finally {

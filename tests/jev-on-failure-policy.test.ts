@@ -90,8 +90,6 @@ const candidate = (id: string): RetrievalCandidate => ({
   metadata: { chunkId: id, attachmentId: "a", fileName: "a.pdf" },
 });
 
-// ---------- config ----------
-
 test("getJevOnFailure defaults match shipped behavior", () => {
   withEnv(
     {
@@ -139,8 +137,6 @@ test("getJevOnFailure reads valid values and rejects garbage", () => {
   });
 });
 
-// ---------- cache gate ----------
-
 test("cache gate active vetoes on failure by default and serves when open", async () => {
   const error = new Error("provider down");
   const closed = await withEnv({ JEV_CACHE_GATE_MODE: "active" }, () =>
@@ -184,8 +180,6 @@ test("cache gate active open serves and logs the body on an unusable response", 
   assert.equal(fallback?.responseBody, '{"answers":{"wrong":true}}');
 });
 
-// ---------- passage gate ----------
-
 test("passage gate active drops unchecked passages only when closed", async () => {
   const error = new Error("provider down");
   const candidates = [candidate("a"), candidate("b")];
@@ -217,8 +211,6 @@ test("passage gate active drops unchecked passages only when closed", async () =
     "shadow never changes behavior, even under a closed posture",
   );
 });
-
-// ---------- memory evidence gate ----------
 
 test("memory evidence gate keeps high-confidence records by default and all when open", async () => {
   const records = [
@@ -254,8 +246,6 @@ test("memory evidence gate keeps high-confidence records by default and all when
     ["high confidence fact", "mid confidence fact"],
   );
 });
-
-// ---------- memory gate ----------
 
 test("memory gate active closed skips unvettable retrieval, open keeps the legacy heuristic", async () => {
   const env = {

@@ -21,15 +21,6 @@ interface MarkdownCodeBlockProps {
   children?: ReactNode;
 }
 
-/**
- * Premium code surface (original design): file header with language +
- * line-count, wrap toggle, collapse for long output, clipboard-clean
- * line-number gutter (select-none + aria-hidden, copied text comes from
- * the raw prop so numbers never pollute pastes), hljs spans preserved
- * untouched for highlighting (diff tint arrives via hljs-addition/deletion).
- * Bounded by MAX_MARKDOWN_RENDER_CHARS upstream + line-number cap here,
- * so worst-case DOM stays finite during streaming.
- */
 export const MarkdownCodeBlock = memo(function MarkdownCodeBlock({
   className,
   children,
