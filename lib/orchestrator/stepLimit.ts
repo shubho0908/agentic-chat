@@ -13,6 +13,7 @@ export const GRAPH_RUN_LIMITS = { recursionLimit: RECURSION_LIMIT } as const;
 
 const CLOSE_MARGIN_MS = 3_000;
 const ANSWER_RECHECK_MS = 1_000;
+const MAX_ANSWER_DEFER_MS = 30_000;
 
 type ThreadConfig = { configurable: { thread_id: string } };
 
@@ -34,11 +35,15 @@ export function isGraphRecursionError(error: unknown): boolean {
   );
 }
 
-export function createAnswerDue(afterMs: number, isAnswering: () => boolean) {
+export function createAnswerDue(
+  afterMs: number,
+  isAnswering: () => boolean,
+  maxDeferMs = MAX_ANSWER_DEFER_MS,
+) {
   const controller = new AbortController();
-  if (afterMs <= 0) return { signal: controller.signal, dispose: () => {} };
+  const cutoff = Date.now() + afterMs + maxDeferMs;
   const check = () => {
-    if (isAnswering()) timer = setTimeout(check, ANSWER_RECHECK_MS);
+    if (isAnswering() && Date.now() < cutoff) timer = setTimeout(check, ANSWER_RECHECK_MS);
     else controller.abort(new DOMException("Final answer due", "TimeoutError"));
   };
   let timer = setTimeout(check, afterMs);
@@ -67,9 +72,10 @@ export async function closeTurnAtLimit(
     if (signal.aborted) throw error;
     return { values: undefined };
   });
-  const fallback = () => new AIMessage({ content: buildRecoveryMessage(state.values?.messages ?? [], reason) });
-  let answer: BaseMessage = fallback();
-  if (state.values?.messages?.length) {
+  const notice = buildRecoveryMessage(state.values?.messages ?? [], reason);
+  const partial = reason === RecoveryReason.TIME_LIMIT ? mapper.streamedAnswer().trim() : "";
+  let answer: BaseMessage = new AIMessage({ content: partial ? `${partial}\n\n${notice}` : notice });
+  if (!partial && state.values?.messages?.length) {
     const budget = AbortSignal.timeout(Math.max(0, deadlineAt - Date.now() - CLOSE_MARGIN_MS));
     try {
       [answer] = (
@@ -91,5 +97,5 @@ export async function closeTurnAtLimit(
       ...context,
     });
   }
-  mapper.appendAnswer(writer, extractText(answer.content));
+  mapper.appendAnswer(writer, partial ? notice : extractText(answer.content));
 }

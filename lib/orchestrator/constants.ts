@@ -18,6 +18,8 @@ export const ORCHESTRATOR_STREAM_DEADLINE_MS = 285_000;
 
 export const FINAL_ANSWER_RESERVE_MS = 45_000;
 
+export const MIN_TURN_WORK_MS = 15_000;
+
 /**
  * Fail-fast lock wait for approvals: they are interactive, and a held lease
  * means another response is actively generating, so surface that as a

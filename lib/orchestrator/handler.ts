@@ -22,6 +22,7 @@ import { isGraphInterrupt } from "@langchain/langgraph";
 import {
   FINAL_ANSWER_RESERVE_MS,
   MIN_CACHEABLE_QUERY_LENGTH,
+  MIN_TURN_WORK_MS,
   ORCHESTRATOR_STREAM_DEADLINE_MS,
   RecoveryReason,
   STREAM_HEARTBEAT_INTERVAL_MS,
@@ -384,6 +385,7 @@ export function createOrchestratorStreamHandler(
         try {
           threadLock = await acquireThreadLock(threadId, {
             signal: workSignal,
+            waitTimeoutMs: deadlineAt - FINAL_ANSWER_RESERVE_MS - MIN_TURN_WORK_MS - Date.now(),
           });
         } catch (lockError) {
           if (lockError instanceof ThreadLockTimeoutError) {
@@ -405,7 +407,7 @@ export function createOrchestratorStreamHandler(
         }
         const answerDue = createAnswerDue(
           deadlineAt - FINAL_ANSWER_RESERVE_MS - Date.now(),
-          mapper.isAnswering,
+          () => mapper.streamedAnswer().trim().length > 0,
         );
         try {
           const existingState = await abortAware(

@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
           const mapper = createStreamEventMapper();
           const answerDue = createAnswerDue(
             deadlineAt - FINAL_ANSWER_RESERVE_MS - Date.now(),
-            mapper.isAnswering,
+            () => mapper.streamedAnswer().trim().length > 0,
           );
           const finishStream = () => {
             stream.finish({

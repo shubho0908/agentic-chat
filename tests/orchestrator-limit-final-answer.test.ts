@@ -18,7 +18,16 @@ import {
   isGraphRecursionError,
   limitReason,
 } from "@/lib/orchestrator/stepLimit";
-import { GraphNode, MAX_TOOL_ROUNDS, RECURSION_LIMIT, RecoveryReason, type RecoveryReasonValue } from "@/lib/orchestrator/constants";
+import {
+  FINAL_ANSWER_RESERVE_MS,
+  GraphNode,
+  MAX_TOOL_ROUNDS,
+  MIN_TURN_WORK_MS,
+  ORCHESTRATOR_STREAM_DEADLINE_MS,
+  RECURSION_LIMIT,
+  RecoveryReason,
+  type RecoveryReasonValue,
+} from "@/lib/orchestrator/constants";
 import type { StreamWriter } from "@/lib/chat/safeStream";
 import { ACTIVITY_ONLY_ASSISTANT_CONTENT, getPersistableAssistantContent } from "@/hooks/chat/conversationManager";
 import { shouldAutoContinueConversation } from "@/hooks/chat/autoContinue";
@@ -166,7 +175,7 @@ async function runTurn(
   const mapper = createStreamEventMapper();
   const config = { configurable: { thread_id: threadId } };
   const workSignal = new AbortController().signal;
-  const answerDue = createAnswerDue(options.answerDueMs ?? 60_000, mapper.isAnswering);
+  const answerDue = createAnswerDue(options.answerDueMs ?? 60_000, () => mapper.streamedAnswer().trim().length > 0);
   const closeTurn = (reason: RecoveryReasonValue) =>
     closeTurnAtLimit(
       graph as never,
@@ -462,7 +471,7 @@ test("running low on time falls back to a deterministic answer when the final mo
   }
 });
 
-test("answer-due waits for an answer already streaming and never fires without budget", async () => {
+test("answer-due waits for an answer already streaming, but only up to its cap", async () => {
   let answering = true;
   const due = createAnswerDue(10, () => answering);
   await new Promise((resolve) => setTimeout(resolve, 60));
@@ -472,18 +481,18 @@ test("answer-due waits for an answer already streaming and never fires without b
   assert.equal(due.signal.aborted, true);
   assert.equal(limitReason(new Error("x"), due.signal), RecoveryReason.TIME_LIMIT);
 
-  const spent = createAnswerDue(0, () => false);
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(spent.signal.aborted, false);
-  assert.equal(limitReason(new Error("x"), spent.signal), null);
+  const endless = createAnswerDue(10, () => true, 50);
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  assert.equal(endless.signal.aborted, true);
 
   const disposed = createAnswerDue(10, () => false);
   disposed.dispose();
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(disposed.signal.aborted, false);
+  assert.equal(limitReason(new Error("x"), disposed.signal), null);
 });
 
-test("the mapper reports answering only while answer text streams after the last tool call", () => {
+test("the mapper tracks answer text streamed after the last tool call", () => {
   const { writer } = createWriter();
   const mapper = createStreamEventMapper();
   const agentChunk = (content: string) => ({
@@ -491,9 +500,9 @@ test("the mapper reports answering only while answer text streams after the last
     metadata: { langgraph_node: GraphNode.AGENT },
     data: { chunk: { content } },
   });
-  assert.equal(mapper.isAnswering(), false);
+  assert.equal(mapper.streamedAnswer(), "");
   mapper.map(writer, agentChunk("Let me check."));
-  assert.equal(mapper.isAnswering(), true);
+  assert.equal(mapper.streamedAnswer(), "Let me check.");
   mapper.map(writer, {
     event: "on_tool_start",
     name: "web_search",
@@ -501,9 +510,56 @@ test("the mapper reports answering only while answer text streams after the last
     metadata: { langgraph_node: GraphNode.TOOLS },
     data: { input: {} },
   });
-  assert.equal(mapper.isAnswering(), false);
+  assert.equal(mapper.streamedAnswer(), "");
   mapper.map(writer, agentChunk("   "));
-  assert.equal(mapper.isAnswering(), false);
+  assert.equal(mapper.streamedAnswer().trim(), "");
+});
+
+test("an answer cut off by the time limit is kept and closed with a notice, never re-asked or duplicated", async () => {
+  const model = stubModel(() => completionStream("should never be requested"));
+  try {
+    const { graph } = buildGraph({ agent: toolCallingAgent() });
+    const threadId = "time-limit-partial";
+    await runTurn(graph, threadId, userTurn("compare every vendor"), { recursionLimit: 4 });
+    const requestsBefore = model.requests.length;
+
+    const sink = createWriter();
+    const mapper = createStreamEventMapper();
+    mapper.map(sink.writer, {
+      event: "on_chat_model_stream",
+      metadata: { langgraph_node: GraphNode.AGENT },
+      data: { chunk: { content: "Vendor A is cheapest, and Vendor B" } },
+    });
+    await closeTurnAtLimit(
+      graph as never,
+      createFinalAnswerNode("sk-test", MODEL),
+      RecoveryReason.TIME_LIMIT,
+      threadId,
+      sink.writer,
+      mapper,
+      new AbortController().signal,
+      Date.now() + 10_000,
+      {},
+    );
+    mapper.flush(sink.writer);
+
+    const notice = buildRecoveryMessage([], RecoveryReason.TIME_LIMIT);
+    assert.equal(model.requests.length, requestsBefore);
+    assert.equal(sink.events.filter((event) => "error" in event).length, 0);
+    assert.equal(sink.text(), `Vendor A is cheapest, and Vendor B\n\n${notice}`);
+    const last = (await graph.getState({ configurable: { thread_id: threadId } })).values.messages.at(-1) as BaseMessage;
+    assert.equal(last.type, "ai");
+    assert.equal(extractText(last.content), sink.text());
+  } finally {
+    model.restore();
+  }
+});
+
+test("the chat route stops waiting for the thread lock while a full working window and answer reserve remain", () => {
+  const source = readFileSync(join(process.cwd(), "lib/orchestrator/handler.ts"), "utf8");
+  const call = source.slice(source.indexOf("acquireThreadLock(threadId"), source.indexOf("acquireThreadLock(threadId") + 300);
+  assert.match(call, /waitTimeoutMs: deadlineAt - FINAL_ANSWER_RESERVE_MS - MIN_TURN_WORK_MS - Date\.now\(\)/);
+  assert.ok(MIN_TURN_WORK_MS > 0 && FINAL_ANSWER_RESERVE_MS + MIN_TURN_WORK_MS < ORCHESTRATOR_STREAM_DEADLINE_MS);
 });
 
 test("recovery reasons are classified from the turn shape", () => {
