@@ -20,6 +20,7 @@ import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import {
   buildMessagesForAPI,
   getPersistableAssistantContent,
+  hasVisibleAssistantOutput,
 } from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
@@ -81,6 +82,8 @@ export async function handleRegenerateResponse(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
+  let accumulatedContent = "";
+  let thinkingBuffer = "";
 
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
@@ -116,8 +119,6 @@ export async function handleRegenerateResponse(
       previousUserMessage.id,
     );
 
-    let accumulatedContent = "";
-    let thinkingBuffer = "";
     const branchId = `regenerate-${assistantMessage.id ?? previousUserMessage.id}-${crypto.randomUUID()}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -396,9 +397,12 @@ export async function handleRegenerateResponse(
     });
 
     if (
-      responseContent ||
-      messageMetadata?.pdfs?.length ||
-      messageMetadata?.artifacts?.length
+      hasVisibleAssistantOutput(
+        accumulatedContent,
+        messageMetadata,
+        toolActivities,
+        thinkingBuffer,
+      )
     ) {
       messageMetadata = {
         ...messageMetadata,
@@ -412,9 +416,9 @@ export async function handleRegenerateResponse(
                 ...msg,
                 content:
                   getPersistableAssistantContent(
-                    responseContent,
+                    accumulatedContent,
                     messageMetadata,
-                  ) ?? responseContent,
+                  ) ?? accumulatedContent,
                 metadata: messageMetadata,
               }
             : msg,

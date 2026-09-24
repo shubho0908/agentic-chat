@@ -14,7 +14,8 @@ export function shouldAutoContinueConversation(messages: Message[]): boolean {
   const lastMessage = messages[messages.length - 1];
   if (
     lastMessage?.role === MessageRole.ASSISTANT &&
-    lastMessage.metadata?.humanInTheLoopStatus === "pending"
+    (lastMessage.metadata?.humanInTheLoopStatus === "pending" ||
+      lastMessage.metadata?.streamStatus === "error")
   ) {
     return false;
   }

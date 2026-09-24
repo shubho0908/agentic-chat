@@ -5,6 +5,7 @@ import {
   type MessageContentPart,
   type Message,
   type MessageMetadata,
+  type ToolActivity,
   MessageRole,
 } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
@@ -90,6 +91,19 @@ export function getPersistableAssistantContent(
   }
 
   return null;
+}
+
+export function hasVisibleAssistantOutput(
+  content: string,
+  metadata: MessageMetadata | undefined,
+  toolActivities: readonly ToolActivity[],
+  thinking: string,
+): boolean {
+  return (
+    getPersistableAssistantContent(content, metadata) !== null ||
+    toolActivities.length > 0 ||
+    thinking.trim().length > 0
+  );
 }
 
 function formatArtifactForModelContext(artifact: ArtifactMetadata): string {

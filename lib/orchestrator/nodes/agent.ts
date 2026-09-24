@@ -8,7 +8,13 @@ import {
 import type { BaseMessage } from "@langchain/core/messages";
 import type { AgentStateType } from "../state";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
-import { AGENT_LLM_TIMEOUT_MS, MAX_RESPONSE_TOKENS } from "../constants";
+import {
+  AGENT_LLM_TIMEOUT_MS,
+  MAX_RESPONSE_TOKENS,
+  MAX_TOOL_ROUNDS,
+  RecoveryReason,
+  type RecoveryReasonValue,
+} from "../constants";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   getChatReasoningEffort,
@@ -25,6 +31,7 @@ import { buildBoundedModelContext } from "../modelContext";
 import { logInfo, logWarn } from "@/lib/observability";
 import { withRetry } from "@/lib/retry";
 import { resolveJevHitlVerdict } from "../jevHitl";
+import { buildRecoveryMessage, classifyRecovery, hasAnswerText } from "./reflector";
 import {
   ARTIFACT_QUALITY_PROMPT,
   PROMPT_CONTEXT_BOUNDARY,
@@ -58,7 +65,7 @@ const RESEARCH_TOOL_RULES = `Research tool policy:
 - If the user names a site without a URL, use web_search to find the URL before scraping or crawling it.`;
 
 const EXECUTION_BUDGET_PROMPT = `Execution budget:
-- Use at most about 15 tool-call rounds per user message.
+- Use at most about ${MAX_TOOL_ROUNDS} tool-call rounds per user message.
 - If a tool fails, try one materially different approach.
 - Do not retry the same failing tool call with identical arguments.
 - If two attempts cannot resolve the task, answer with what is known and explain what failed.
@@ -326,24 +333,20 @@ interface AgentNodeOptions {
   ephemeralContext?: BaseMessage[];
 }
 
-export function createAgentNode(
-  tools: DynamicStructuredTool[],
+function createAgentLlm(
   apiKey: string,
   model: string,
-  options: AgentNodeOptions = {},
-) {
-  const { reasoningEffort, temperature, ephemeralContext = [] } = options;
+  options: AgentNodeOptions,
+): ChatOpenAI {
+  const resolvedEffort = getChatReasoningEffort(model, options.reasoningEffort);
+  const supportedTemperature = getSupportedTemperature(model, options.temperature);
 
-  const resolvedEffort = getChatReasoningEffort(model, reasoningEffort);
-  const supportedTemperature = getSupportedTemperature(model, temperature);
-
-  const llm = new ChatOpenAI({
+  return new ChatOpenAI({
     modelName: model,
     apiKey,
     streaming: true,
     maxTokens: MAX_RESPONSE_TOKENS,
     timeout: AGENT_LLM_TIMEOUT_MS,
-    // This node binds tools, and GPT-6 tool calling is Responses-only.
     ...(requiresResponsesApiForToolCalling(model) ? { useResponsesApi: true } : {}),
     ...(supportedTemperature !== undefined
       ? { temperature: supportedTemperature }
@@ -352,17 +355,67 @@ export function createAgentNode(
       ? { reasoning: { effort: resolvedEffort, summary: "detailed" as const } }
       : {}),
   });
+}
 
-  return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
-    const incomingMessages: BaseMessage[] = [...state.messages];
-    const plannerHints = incomingMessages.flatMap((msg) =>
+function splitPlannerHints(messages: BaseMessage[]): {
+  plannerHints: string[];
+  conversationMessages: BaseMessage[];
+} {
+  return {
+    plannerHints: messages.flatMap((msg) =>
       isPlannerHint(msg) ? [getMessageText(msg)] : [],
-    );
-
-    const conversationMessages = incomingMessages.filter((message, index) => {
+    ),
+    conversationMessages: messages.filter((message, index) => {
       if (isPlannerHint(message)) return false;
       return !(index === 0 && message.type === "system");
+    }),
+  };
+}
+
+function boundModelContext(
+  systemPrompt: string,
+  conversation: BaseMessage[],
+  model: string,
+  conversationId: string | undefined,
+) {
+  let bounded;
+  try {
+    bounded = buildBoundedModelContext(
+      new SystemMessage(systemPrompt),
+      reconcileDanglingToolCalls(conversation),
+      model,
+    );
+  } catch (error) {
+    logWarn({
+      event: "orchestrator_model_budget_rejected",
+      conversationId,
+      error: error instanceof Error ? error.message : "unknown",
     });
+    throw error;
+  }
+  if (bounded.trimmed > 0)
+    logInfo({
+      event: "orchestrator_context_trimmed",
+      conversationId,
+      trimmed: bounded.trimmed,
+      protectedPdfPairs: bounded.protectedPdfPairs,
+    });
+  return bounded;
+}
+
+export function createAgentNode(
+  tools: DynamicStructuredTool[],
+  apiKey: string,
+  model: string,
+  options: AgentNodeOptions = {},
+) {
+  const { ephemeralContext = [] } = options;
+  const llm = createAgentLlm(apiKey, model, options);
+
+  return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
+    const { plannerHints, conversationMessages } = splitPlannerHints([
+      ...state.messages,
+    ]);
 
     const latestUserText = getLatestHumanText(conversationMessages);
     const connectedServices = state.connectedServices ?? [];
@@ -389,31 +442,12 @@ export function createAgentNode(
         : `${baseSystemPrompt}${availableToolsLine ? `\n\n${availableToolsLine}` : ""}`;
     const runnable =
       selectedTools.length > 0 ? llm.bindTools(selectedTools) : llm;
-    let bounded;
-    try {
-      bounded = buildBoundedModelContext(
-        new SystemMessage(systemPrompt),
-        reconcileDanglingToolCalls([
-          ...ephemeralContext,
-          ...conversationMessages,
-        ]),
-        model,
-      );
-    } catch (error) {
-      logWarn({
-        event: "orchestrator_model_budget_rejected",
-        conversationId: state.conversationId,
-        error: error instanceof Error ? error.message : "unknown",
-      });
-      throw error;
-    }
-    if (bounded.trimmed > 0)
-      logInfo({
-        event: "orchestrator_context_trimmed",
-        conversationId: state.conversationId,
-        trimmed: bounded.trimmed,
-        protectedPdfPairs: bounded.protectedPdfPairs,
-      });
+    const bounded = boundModelContext(
+      systemPrompt,
+      [...ephemeralContext, ...conversationMessages],
+      model,
+      state.conversationId,
+    );
     const response = await withRetry(
       (signal) =>
         runnable.invoke(bounded.messages, { ...(config ?? {}), signal }),
@@ -439,5 +473,85 @@ export function createAgentNode(
       return null;
     });
     return { messages: [response], jevHitlEscalation };
+  };
+}
+
+const FINAL_ANSWER_INSTRUCTIONS: Record<RecoveryReasonValue, string> = {
+  [RecoveryReason.ROUND_LIMIT]: `Final answer required:
+- The tool budget for this turn (${MAX_TOOL_ROUNDS} rounds) is used up. No more tool calls are possible.
+- Answer the latest user request now, using everything the tool results in this conversation already show.
+- Be concrete about what you found. Then say briefly what is still unfinished and that the user can ask you to continue.`,
+  [RecoveryReason.TOOL_FAILURES]: `Final answer required:
+- The tools needed for this request kept failing, so no more tool calls are possible this turn.
+- Answer the latest user request with whatever the successful tool results and the conversation already show.
+- Name what failed in plain words and say how the user can proceed.`,
+  [RecoveryReason.EMPTY_ANSWER]: `Final answer required:
+- Your previous reply was empty. No more tool calls are possible this turn.
+- Answer the latest user request now, using the conversation and the tool results already gathered.`,
+};
+
+export function createFinalAnswerNode(
+  apiKey: string,
+  model: string,
+  options: AgentNodeOptions = {},
+) {
+  const { ephemeralContext = [] } = options;
+  const llm = createAgentLlm(apiKey, model, options);
+
+  return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
+    const reason = classifyRecovery(state.messages);
+    const fallback = () => ({
+      messages: [new AIMessage({ content: buildRecoveryMessage(state.messages) })],
+    });
+
+    try {
+      const { conversationMessages } = splitPlannerHints(
+        state.messages.filter(
+          (message) =>
+            !isAiMessage(message) ||
+            hasAnswerText(message) ||
+            collectCallIds(message).length > 0,
+        ),
+      );
+      const bounded = boundModelContext(
+        `${buildSystemPrompt(state.connectedServices ?? [])}\n\n${FINAL_ANSWER_INSTRUCTIONS[reason]}`,
+        [...ephemeralContext, ...conversationMessages],
+        model,
+        state.conversationId,
+      );
+      const response = (await withRetry(
+        (signal) => llm.invoke(bounded.messages, { ...(config ?? {}), signal }),
+        {
+          retries: 1,
+          initialDelayMs: 400,
+          timeoutMs: AGENT_LLM_TIMEOUT_MS,
+          signal: config?.signal,
+        },
+      )) as AIMessage;
+
+      if ((response.tool_calls?.length ?? 0) > 0 || !hasAnswerText(response)) {
+        logWarn({
+          event: "orchestrator_final_answer_unusable",
+          conversationId: state.conversationId,
+          reason,
+        });
+        return fallback();
+      }
+      logInfo({
+        event: "orchestrator_final_answer",
+        conversationId: state.conversationId,
+        reason,
+      });
+      return { messages: [response] };
+    } catch (error) {
+      if (config?.signal?.aborted) throw error;
+      logWarn({
+        event: "orchestrator_final_answer_failed",
+        conversationId: state.conversationId,
+        reason,
+        error: error instanceof Error ? error.name : "unknown",
+      });
+      return fallback();
+    }
   };
 }

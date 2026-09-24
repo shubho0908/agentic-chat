@@ -12,7 +12,6 @@ import { reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
 import { createToolNode } from "@/lib/orchestrator/nodes/tools";
 import {
   buildRecoveryMessage,
-  createRecoveryNode,
   routeAfterAgent,
 } from "@/lib/orchestrator/nodes/reflector";
 import {
@@ -24,6 +23,7 @@ import {
 } from "@/lib/orchestrator/tools";
 import { MessageRole, type Message } from "@/lib/schemas/chat";
 import type { AgentStateType } from "@/lib/orchestrator/state";
+import { MAX_TOOL_ROUNDS } from "@/lib/orchestrator/constants";
 import {
   COMPOSIO_TOOLKITS,
   notConnectedMessage,
@@ -343,16 +343,16 @@ test("tool routing limits execution rounds, not parallel tool result count", () 
   assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
 });
 
-test("tool routing stops after the configured number of request rounds", () => {
-  const messages = [
+test("tool routing stops exactly at the configured number of request rounds", () => {
+  const rounds = (count: number) => [
     new HumanMessage("do something"),
-    ...Array.from({ length: 15 }, (_, index) =>
+    ...Array.from({ length: count }, (_, index) =>
       createToolCallingMessage(`call-${index}`)
     ),
-    createToolCallingMessage("call-final"),
   ];
 
-  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
+  assert.equal(routeAfterAgent({ messages: rounds(MAX_TOOL_ROUNDS - 1) } as AgentStateType), "tools");
+  assert.equal(routeAfterAgent({ messages: rounds(MAX_TOOL_ROUNDS) } as AgentStateType), "recovery");
 });
 
 test("tool routing ignores tool calls from prior turns (before last HumanMessage)", () => {
@@ -498,12 +498,7 @@ test("guard-stopped turns close with a resolved assistant message, not dangling 
 
   assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
 
-  const node = createRecoveryNode();
-  const update = await node({ messages } as AgentStateType);
-  const finalMessage = update.messages[0] as AIMessage;
-  assert.equal(finalMessage.type, "ai");
-  assert.equal((finalMessage.tool_calls ?? []).length, 0);
-  const text = String(finalMessage.content);
+  const text = buildRecoveryMessage(messages);
   assert.ok(text.includes("get_refund"), "names the failing tool");
   assert.ok(
     text.toLowerCase().includes("failing"),
@@ -561,10 +556,9 @@ test("recovery message shows the real error, never the failure-envelope marker",
 test("recovery message for the round limit mentions the step limit", () => {
   const messages = [
     new HumanMessage("do something"),
-    ...Array.from({ length: 15 }, (_, index) =>
+    ...Array.from({ length: MAX_TOOL_ROUNDS }, (_, index) =>
       createToolCallingMessage(`call-${index}`)
     ),
-    createToolCallingMessage("call-final"),
   ];
 
   const text = buildRecoveryMessage(messages);

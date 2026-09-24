@@ -1,7 +1,11 @@
 import { END } from "@langchain/langgraph";
-import { AIMessage as AIMessageClass } from "@langchain/core/messages";
 import type { AIMessage, BaseMessage } from "@langchain/core/messages";
-import { GraphNode } from "../constants";
+import {
+  GraphNode,
+  MAX_TOOL_ROUNDS,
+  RecoveryReason,
+  type RecoveryReasonValue,
+} from "../constants";
 import type { AgentStateType } from "../state";
 import { logger } from "@/lib/logger";
 import { createRequestId, logWarn } from "@/lib/observability";
@@ -22,8 +26,6 @@ import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
 import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
 import { logJevDecision } from "@/lib/jev/telemetry";
 import { extractText } from "./planner";
-
-const MAX_TOOL_ROUNDS = 15;
 
 const jevClient = JevDecisionClient.createIfConfigured();
 
@@ -168,6 +170,20 @@ function queueJevToolRouterShadow(
 
 type ToolRoute = "tools" | typeof GraphNode.RECOVERY | typeof END;
 
+export function hasAnswerText(message: BaseMessage | undefined): boolean {
+  return !!message && extractText(message.content).trim().length > 0;
+}
+
+export function classifyRecovery(messages: BaseMessage[]): RecoveryReasonValue {
+  const lastMessage = messages[messages.length - 1] as AIMessage | undefined;
+  if (!lastMessage?.tool_calls || lastMessage.tool_calls.length === 0) {
+    return RecoveryReason.EMPTY_ANSWER;
+  }
+  return countToolRoundsSinceLastHuman(messages) >= MAX_TOOL_ROUNDS
+    ? RecoveryReason.ROUND_LIMIT
+    : RecoveryReason.TOOL_FAILURES;
+}
+
 /** The graph must never terminate on an AI message whose tool_calls went
  * nowhere: the user would get silence instead of an answer. Every guard that
  * stops tool execution routes to the recovery node, which closes the turn
@@ -176,7 +192,9 @@ export function routeAfterAgent(state: AgentStateType): ToolRoute {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage | undefined;
 
   if (!lastMessage?.tool_calls || lastMessage.tool_calls.length === 0) {
-    return END;
+    if (hasAnswerText(lastMessage)) return END;
+    logger.warn("[ToolRouter] Empty final answer; recovering turn");
+    return GraphNode.RECOVERY;
   }
 
   const roundNumber = countToolRoundsSinceLastHuman(state.messages);
@@ -233,8 +251,6 @@ function usefulErrorLine(text: string): string | null {
  * work left pending and the last failure so the user knows what happened
  * and how to proceed; no LLM call, so the recovery path can never fail. */
 export function buildRecoveryMessage(messages: BaseMessage[]): string {
-  const roundNumber = countToolRoundsSinceLastHuman(messages);
-
   let pendingTools: string[] = [];
   let lastError: string | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -259,26 +275,24 @@ export function buildRecoveryMessage(messages: BaseMessage[]): string {
   const toolList =
     pendingTools.length > 0 ? pendingTools.join(", ") : "the required tools";
 
-  if (roundNumber >= MAX_TOOL_ROUNDS) {
-    return (
-      `I hit the step limit for a single turn while working on this, with ${toolList} still pending, ` +
-      "so I stopped instead of churning. Ask me to continue and I will take it in smaller steps."
-    );
+  const reason = classifyRecovery(messages);
+  switch (reason) {
+    case RecoveryReason.ROUND_LIMIT:
+      return (
+        `I hit the step limit for a single turn while working on this, with ${toolList} still pending, ` +
+        "so I stopped instead of churning. Ask me to continue and I will pick up from here in smaller steps."
+      );
+    case RecoveryReason.TOOL_FAILURES:
+      return (
+        `I could not complete this: ${toolList} kept failing across several attempts, so I stopped rather than loop forever.` +
+        (lastError ? ` Last error: ${lastError}.` : "") +
+        " Rephrase the request or ask me to try again."
+      );
+    case RecoveryReason.EMPTY_ANSWER:
+      return "I finished working on this but could not put the answer into words. Ask me again and I will answer from what I found.";
+    default: {
+      const unreachable: never = reason;
+      return unreachable;
+    }
   }
-
-  return (
-    `I could not complete this: ${toolList} kept failing across several attempts, so I stopped rather than loop forever.` +
-    (lastError ? ` Last error: ${lastError}.` : "") +
-    " Rephrase the request or ask me to try again."
-  );
-}
-
-/** Terminal node for guard-stopped turns: appends a plain assistant answer
- * (no tool_calls) so every graph termination ends on a resolved message. */
-export function createRecoveryNode() {
-  return async (state: AgentStateType) => ({
-    messages: [
-      new AIMessageClass({ content: buildRecoveryMessage(state.messages) }),
-    ],
-  });
 }

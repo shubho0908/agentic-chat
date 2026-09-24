@@ -2,10 +2,10 @@ import { StateGraph, END } from "@langchain/langgraph";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { BaseMessage } from "@langchain/core/messages";
 import { AgentState } from "./state";
-import { createAgentNode } from "./nodes/agent";
+import { createAgentNode, createFinalAnswerNode } from "./nodes/agent";
 import { createToolNode } from "./nodes/tools";
 import { createPlannerNode } from "./nodes/planner";
-import { routeAfterAgent, createRecoveryNode } from "./nodes/reflector";
+import { routeAfterAgent } from "./nodes/reflector";
 import { getCheckpointer } from "./checkpointer";
 import { getToolsForRequest } from "./tools";
 import {
@@ -53,7 +53,13 @@ export async function createAgentGraph(
       }),
     )
     .addNode(GraphNode.TOOLS, createToolNode(tools, { model, reasoningEffort }))
-    .addNode(GraphNode.RECOVERY, createRecoveryNode())
+    .addNode(
+      GraphNode.RECOVERY,
+      createFinalAnswerNode(apiKey, model, {
+        reasoningEffort,
+        ephemeralContext,
+      }),
+    )
     .addEdge("__start__", GraphNode.PLANNER)
     .addEdge(GraphNode.PLANNER, GraphNode.AGENT)
     .addConditionalEdges(GraphNode.AGENT, routeAfterAgent, {

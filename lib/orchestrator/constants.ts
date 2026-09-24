@@ -4,7 +4,8 @@ export const HUMAN_IN_THE_LOOP_REQUEST_TYPE = "hitl_request" as const;
 export const TOOL_ERROR_STATUS = "error" as const;
 
 export const MAX_TOOLS = 128;
-export const RECURSION_LIMIT = 40;
+export const MAX_TOOL_ROUNDS = 20;
+export const RECURSION_LIMIT = 2 * MAX_TOOL_ROUNDS + 10;
 export const MAX_RESPONSE_TOKENS = 16384;
 export const MIN_CACHEABLE_QUERY_LENGTH = 80;
 
@@ -45,6 +46,14 @@ export const GraphNode = {
   TOOLS: "tools",
   RECOVERY: "recovery",
 } as const;
+
+export const RecoveryReason = {
+  ROUND_LIMIT: "round_limit",
+  TOOL_FAILURES: "tool_failures",
+  EMPTY_ANSWER: "empty_answer",
+} as const;
+export type RecoveryReasonValue =
+  (typeof RecoveryReason)[keyof typeof RecoveryReason];
 
 export const PlanComplexity = {
   DIRECT: "direct",

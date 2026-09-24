@@ -6,7 +6,7 @@ import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
-import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
+import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent, hasVisibleAssistantOutput } from "./conversationManager";
 import { saveAssistantMessage } from "./messageApi";
 import { logger } from "@/lib/logger";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -568,10 +568,13 @@ export async function handleStreamingResponse(
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
-    if (messageCreated && assistantContent.trim()) {
+    if (
+      messageCreated &&
+      hasVisibleAssistantOutput(assistantContent, messageMetadata, toolActivities, thinkingContent)
+    ) {
       messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
       updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: assistantContent, metadata: messageMetadata });
-      if (conversationId && !abortSignal.aborted) {
+      if (assistantContent.trim() && conversationId && !abortSignal.aborted) {
         void saveAssistantMessage(conversationId, assistantContent, messageMetadata).catch((saveError) => {
           logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
         });

@@ -30,6 +30,11 @@ import {
   type ThreadLock,
 } from "@/lib/orchestrator/threadLock";
 import { abortAware } from "@/lib/orchestrator/abortAware";
+import {
+  GRAPH_RUN_LIMITS,
+  closeTurnAtStepLimit,
+  isGraphRecursionError,
+} from "@/lib/orchestrator/stepLimit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -244,6 +249,7 @@ export async function POST(request: NextRequest) {
               new Command({ resume: resumeValue }),
               {
                 configurable: { thread_id: threadId },
+                ...GRAPH_RUN_LIMITS,
                 version: "v2",
                 signal: workSignal,
               }
@@ -283,6 +289,7 @@ export async function POST(request: NextRequest) {
               return;
             }
 
+            mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
             finishStream();
           } catch (err) {
             if (deadlineController.signal.aborted) {
@@ -292,6 +299,11 @@ export async function POST(request: NextRequest) {
             if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
               logger.warn("[Approve] Stream aborted by client");
               stream.abort();
+              return;
+            }
+            if (isGraphRecursionError(err)) {
+              await closeTurnAtStepLimit(resumeGraph, threadId, stream, mapper, workSignal, { requestId });
+              finishStream();
               return;
             }
             logger.error("[Approve] Error resuming graph:", err);

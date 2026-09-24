@@ -22,6 +22,7 @@ import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import {
   buildMessagesForAPI,
   getPersistableAssistantContent,
+  hasVisibleAssistantOutput,
 } from "./conversationManager";
 import {
   createNewVersion,
@@ -88,6 +89,8 @@ export async function handleEditMessage(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
+  let accumulatedContent = "";
+  let thinkingBuffer = "";
 
   const nextAssistantIndex = messages.findIndex(
     (m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT,
@@ -157,8 +160,6 @@ export async function handleEditMessage(
       messageToEdit.id,
     );
 
-    let accumulatedContent = "";
-    let thinkingBuffer = "";
     const branchId = `edit-${messageToEdit.id}-${newEditedVersion.id}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -505,9 +506,12 @@ export async function handleEditMessage(
       description: errorMessage,
     });
     if (
-      responseContent ||
-      messageMetadata.pdfs?.length ||
-      messageMetadata.artifacts?.length
+      hasVisibleAssistantOutput(
+        accumulatedContent,
+        messageMetadata,
+        toolActivities,
+        thinkingBuffer,
+      )
     ) {
       messageMetadata = {
         ...messageMetadata,
@@ -521,9 +525,9 @@ export async function handleEditMessage(
                 ...msg,
                 content:
                   getPersistableAssistantContent(
-                    responseContent,
+                    accumulatedContent,
                     messageMetadata,
-                  ) ?? responseContent,
+                  ) ?? accumulatedContent,
                 metadata: messageMetadata,
               }
             : msg,

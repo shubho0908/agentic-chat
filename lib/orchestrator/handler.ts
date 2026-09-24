@@ -19,7 +19,6 @@ import { createSafeStream } from "@/lib/chat/safeStream";
 import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { isGraphInterrupt } from "@langchain/langgraph";
 import {
-  RECURSION_LIMIT,
   MIN_CACHEABLE_QUERY_LENGTH,
   ORCHESTRATOR_STREAM_DEADLINE_MS,
   STREAM_HEARTBEAT_INTERVAL_MS,
@@ -45,6 +44,11 @@ import {
 } from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
 import { abortAware } from "./abortAware";
+import {
+  GRAPH_RUN_LIMITS,
+  closeTurnAtStepLimit,
+  isGraphRecursionError,
+} from "./stepLimit";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -126,18 +130,7 @@ export function createOrchestratorStreamHandler(
           return;
         }
 
-        const isRecursionError =
-          (error instanceof Error &&
-            (("lc_error_code" in error &&
-              (error as { lc_error_code?: string }).lc_error_code ===
-                "GRAPH_RECURSION_LIMIT") ||
-              error.name === "GraphRecursionError" ||
-              /recursion limit/i.test(error.message ?? ""))) ||
-          false;
-
-        const friendly = isRecursionError
-          ? `I couldn't complete this request in ${RECURSION_LIMIT} reasoning steps. Try breaking it into smaller asks or rephrasing.`
-          : toUserFriendlyError(error);
+        const friendly = toUserFriendlyError(error);
 
         logError({
           event: "orchestrator_sse_error",
@@ -424,6 +417,18 @@ export function createOrchestratorStreamHandler(
             submittedCount: incrementalMessages.length,
           });
           if (checkpointExists && incrementalMessages.length === 0) {
+            if (
+              mapper.ensureTerminalAnswer(stream, existingState.values?.messages)
+            ) {
+              logInfo({
+                event: "orchestrator_completed_turn_replayed",
+                conversationId,
+                threadId,
+                branchId,
+              });
+              closeStream();
+              return;
+            }
             stream.enqueue(
               encodeError(
                 "This request was already completed. Please send a new message.",
@@ -442,12 +447,12 @@ export function createOrchestratorStreamHandler(
 
           const config = {
             configurable: { thread_id: threadId },
-            recursionLimit: RECURSION_LIMIT,
             signal: workSignal,
           };
 
           const eventStream = await graph.streamEvents(input, {
             ...config,
+            ...GRAPH_RUN_LIMITS,
             version: "v2",
           });
 
@@ -484,6 +489,14 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
+          mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+          closeStream();
+        } catch (error) {
+          if (!isGraphRecursionError(error) || workSignal.aborted) throw error;
+          await closeTurnAtStepLimit(graph, threadId, stream, mapper, workSignal, {
+            conversationId,
+            branchId,
+          });
           closeStream();
         } finally {
           await threadLock.release();
