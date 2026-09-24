@@ -10,12 +10,8 @@ import {
 export const JEV_STATS_DEFAULT_DAYS = 30;
 export const JEV_STATS_MAX_DAYS = 90;
 
-/** Env holding the single email allowed to read /api/jev/stats. */
 export const JEV_STATS_ALLOWED_EMAIL_ENV = "JEV_STATS_ALLOWED_EMAIL";
 
-/** Owner-only gate for the stats endpoint: the session email must match the
- * configured email (case-insensitive). Fail-closed - an unset or blank env
- * denies everyone. Pure env read + string compare, no I/O. */
 export function isJevStatsAllowedEmail(
   email: string | null | undefined,
   allowedEmail: string | null | undefined,
@@ -223,27 +219,6 @@ export const JEV_STATS_QUERY_DEADLINE_MS =
 export const JEV_STATS_TRANSACTION_MAX_WAIT_MS = 5_000;
 export const JEV_STATS_TRANSACTION_TIMEOUT_MS =
   JEV_STATS_QUERY_DEADLINE_MS - JEV_STATS_TRANSACTION_MAX_WAIT_MS;
-export const JEV_STATS_STATEMENT_CANCEL_LEAD_MS = 1_000;
-export const JEV_STATS_STATEMENT_BUDGET_MS =
-  JEV_STATS_TRANSACTION_TIMEOUT_MS - JEV_STATS_STATEMENT_CANCEL_LEAD_MS;
-
-export class JevStatsDeadlineExceededError extends Error {
-  constructor() {
-    super("Jev stats query budget exhausted before the next statement");
-    this.name = "JevStatsDeadlineExceededError";
-  }
-}
-
-export function remainingJevStatsStatementTimeoutMs(
-  transactionStartedAt: number,
-  now: number,
-): number {
-  const remaining = Math.floor(
-    JEV_STATS_STATEMENT_BUDGET_MS - (now - transactionStartedAt),
-  );
-  if (remaining < 1) throw new JevStatsDeadlineExceededError();
-  return remaining;
-}
 
 export async function queryJevStats(
   query: JevStatsQuery,
@@ -253,15 +228,10 @@ export async function queryJevStats(
 
   const [rawOutcomeRows, rawLatencyRows] = await prisma.$transaction(
     async (tx) => {
-      const transactionStartedAt = Date.now();
-      const boundNextStatement = () =>
-        tx.$executeRawUnsafe(
-          `SELECT set_config('statement_timeout', $1, true)`,
-          String(
-            remainingJevStatsStatementTimeoutMs(transactionStartedAt, Date.now()),
-          ),
-        );
-      await boundNextStatement();
+      await tx.$executeRawUnsafe(
+        `SELECT set_config('statement_timeout', $1, true)`,
+        String(JEV_STATS_TRANSACTION_TIMEOUT_MS),
+      );
       const outcomeRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
@@ -280,7 +250,6 @@ export async function queryJevStats(
         checkpoint,
         mode,
       );
-      await boundNextStatement();
       const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
@@ -362,22 +331,10 @@ export async function computeJevStatsPayload(
   };
 }
 
-enum JevStatsCacheEntryState {
-  Pending = "pending",
-  Settled = "settled",
+interface JevStatsCacheEntry {
+  payload: Promise<JevStatsPayload>;
+  expiresAt: number;
 }
-
-type JevStatsCacheEntry =
-  | {
-      state: JevStatsCacheEntryState.Pending;
-      payload: Promise<JevStatsPayload>;
-      expiresAt: number;
-    }
-  | {
-      state: JevStatsCacheEntryState.Settled;
-      payload: Promise<JevStatsPayload>;
-      expiresAt: number;
-    };
 
 export interface JevStatsCacheOptions {
   compute: (query: JevStatsQuery) => Promise<JevStatsPayload>;
@@ -390,27 +347,12 @@ function jevStatsCacheKey(query: JevStatsQuery): string {
   return `${query.days}|${query.checkpoint ?? ""}|${query.mode ?? ""}`;
 }
 
-function isJevStatsCacheEntryLive(
-  entry: JevStatsCacheEntry,
-  now: number,
-): boolean {
-  switch (entry.state) {
-    case JevStatsCacheEntryState.Pending:
-    case JevStatsCacheEntryState.Settled:
-      return entry.expiresAt > now;
-    default: {
-      const unreachable: never = entry;
-      return unreachable;
-    }
-  }
-}
-
 export function createJevStatsCache(options: JevStatsCacheOptions) {
   const entries = new Map<string, JevStatsCacheEntry>();
 
   function evictExpired(now: number): void {
     for (const [key, entry] of entries) {
-      if (!isJevStatsCacheEntryLive(entry, now)) entries.delete(key);
+      if (entry.expiresAt <= now) entries.delete(key);
     }
   }
 
@@ -423,12 +365,11 @@ export function createJevStatsCache(options: JevStatsCacheOptions) {
     const now = options.now();
     const key = jevStatsCacheKey(query);
     const cached = entries.get(key);
-    if (cached && isJevStatsCacheEntryLive(cached, now)) return cached.payload;
+    if (cached && cached.expiresAt > now) return cached.payload;
 
     evictExpired(now);
     const payload = options.compute(query);
     const pending: JevStatsCacheEntry = {
-      state: JevStatsCacheEntryState.Pending,
       payload,
       expiresAt: now + options.pendingDeadlineMs,
     };
@@ -437,7 +378,6 @@ export function createJevStatsCache(options: JevStatsCacheOptions) {
       () => {
         if (entries.get(key) !== pending) return;
         entries.set(key, {
-          state: JevStatsCacheEntryState.Settled,
           payload,
           expiresAt: options.now() + options.ttlMs(),
         });

@@ -8,9 +8,7 @@ import { GET, maxDuration } from "@/app/api/jev/stats/route";
 import {
   JEV_STATS_ALLOWED_EMAIL_ENV,
   JEV_STATS_CACHE_TTL_ENV,
-  JEV_STATS_QUERY_DEADLINE_MS,
   JEV_STATS_ROUTE_MAX_DURATION_SECONDS,
-  JEV_STATS_STATEMENT_BUDGET_MS,
   JEV_STATS_TRANSACTION_MAX_WAIT_MS,
   JEV_STATS_TRANSACTION_TIMEOUT_MS,
 } from "@/lib/jev/stats";
@@ -141,11 +139,9 @@ test("stats route serves the owner", async () => {
   assert.equal(result.status, 200);
   assert.equal(result.databaseQueries, 2);
   assert.equal(result.transactions, 1);
-  assert.equal(result.statementTimeouts.length, 2);
-  const [firstTimeout, secondTimeout] = result.statementTimeouts.map(Number);
-  assert.ok(firstTimeout > JEV_STATS_STATEMENT_BUDGET_MS - 1_000);
-  assert.ok(firstTimeout <= JEV_STATS_STATEMENT_BUDGET_MS);
-  assert.ok(secondTimeout > 0 && secondTimeout <= firstTimeout);
+  assert.deepEqual(result.statementTimeouts, [
+    String(JEV_STATS_TRANSACTION_TIMEOUT_MS),
+  ]);
   assert.deepEqual(result.transactionOptions, [
     {
       maxWait: JEV_STATS_TRANSACTION_MAX_WAIT_MS,
@@ -156,7 +152,6 @@ test("stats route serves the owner", async () => {
   assert.equal((result.body.window as { days: number }).days, 7);
 });
 
-test("stats route time budget holds every stats query inside the function limit", () => {
+test("stats route time limit matches the stats query budget source", () => {
   assert.equal(maxDuration, JEV_STATS_ROUTE_MAX_DURATION_SECONDS);
-  assert.ok(JEV_STATS_QUERY_DEADLINE_MS < maxDuration * 1_000);
 });

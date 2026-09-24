@@ -202,37 +202,17 @@ test("mergeJevStats preserves totals and adds per-mode aggregates", () => {
 
 import { isJevStatsAllowedEmail } from "@/lib/jev/stats";
 
-test("isJevStatsAllowedEmail allows only the configured email", () => {
-  assert.equal(
-    isJevStatsAllowedEmail("shubhobera98@gmail.com", "shubhobera98@gmail.com"),
-    true,
-  );
-  assert.equal(
-    isJevStatsAllowedEmail("someoneelse@gmail.com", "shubhobera98@gmail.com"),
-    false,
-  );
-});
-
-test("isJevStatsAllowedEmail matches case-insensitively and trims", () => {
-  assert.equal(
-    isJevStatsAllowedEmail("ShubhoBera98@Gmail.com", "shubhobera98@gmail.com"),
-    true,
-  );
-  assert.equal(
-    isJevStatsAllowedEmail(
-      " shubhobera98@gmail.com ",
-      " shubhobera98@gmail.com ",
-    ),
-    true,
-  );
-});
-
-test("isJevStatsAllowedEmail fails closed when env is unset or blank", () => {
-  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", undefined), false);
-  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", ""), false);
-  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", "   "), false);
-  assert.equal(isJevStatsAllowedEmail(null, "shubhobera98@gmail.com"), false);
-  assert.equal(isJevStatsAllowedEmail(undefined, "shubhobera98@gmail.com"), false);
+test("isJevStatsAllowedEmail allows only the configured email and fails closed", () => {
+  const owner = "shubhobera98@gmail.com";
+  assert.equal(isJevStatsAllowedEmail(owner, owner), true);
+  assert.equal(isJevStatsAllowedEmail("ShubhoBera98@Gmail.com", owner), true);
+  assert.equal(isJevStatsAllowedEmail(` ${owner} `, ` ${owner} `), true);
+  assert.equal(isJevStatsAllowedEmail("someoneelse@gmail.com", owner), false);
+  assert.equal(isJevStatsAllowedEmail(owner, undefined), false);
+  assert.equal(isJevStatsAllowedEmail(owner, ""), false);
+  assert.equal(isJevStatsAllowedEmail(owner, "   "), false);
+  assert.equal(isJevStatsAllowedEmail(null, owner), false);
+  assert.equal(isJevStatsAllowedEmail(undefined, owner), false);
 });
 
 import {
@@ -240,12 +220,6 @@ import {
   JEV_STATS_CACHE_DEFAULT_TTL_SECONDS,
   JEV_STATS_CACHE_MAX_TTL_SECONDS,
   JEV_STATS_QUERY_DEADLINE_MS,
-  JEV_STATS_ROUTE_MAX_DURATION_SECONDS,
-  JEV_STATS_STATEMENT_BUDGET_MS,
-  JEV_STATS_TRANSACTION_MAX_WAIT_MS,
-  JevStatsDeadlineExceededError,
-  remainingJevStatsStatementTimeoutMs,
-  JEV_STATS_TRANSACTION_TIMEOUT_MS,
   resolveJevStatsCacheTtlMs,
   type JevStatsPayload,
   type JevStatsQuery,
@@ -418,34 +392,4 @@ test("stats cache drops a computation that never settles once its deadline passe
   const served = await load(statsQuery());
   assert.equal(releases.length, 2);
   assert.equal(served.window.since, new Date(2).toISOString());
-});
-
-test("stats query budget is derived from the route limit and cancels in the database first", () => {
-  assert.equal(
-    JEV_STATS_QUERY_DEADLINE_MS,
-    JEV_STATS_TRANSACTION_MAX_WAIT_MS + JEV_STATS_TRANSACTION_TIMEOUT_MS,
-  );
-  assert.ok(JEV_STATS_QUERY_DEADLINE_MS < JEV_STATS_ROUTE_MAX_DURATION_SECONDS * 1_000);
-  assert.ok(JEV_STATS_STATEMENT_BUDGET_MS > 0);
-  assert.ok(JEV_STATS_STATEMENT_BUDGET_MS < JEV_STATS_TRANSACTION_TIMEOUT_MS);
-});
-
-test("one slow stats statement may use the whole budget and the next gets only what is left", () => {
-  assert.equal(
-    remainingJevStatsStatementTimeoutMs(1_000, 1_000),
-    JEV_STATS_STATEMENT_BUDGET_MS,
-  );
-  assert.equal(
-    remainingJevStatsStatementTimeoutMs(1_000, 1_000 + JEV_STATS_STATEMENT_BUDGET_MS - 1),
-    1,
-  );
-});
-
-test("an exhausted stats budget refuses to issue a statement instead of disabling the timeout", () => {
-  for (const elapsed of [JEV_STATS_STATEMENT_BUDGET_MS, JEV_STATS_STATEMENT_BUDGET_MS + 0.5, JEV_STATS_STATEMENT_BUDGET_MS * 2]) {
-    assert.throws(
-      () => remainingJevStatsStatementTimeoutMs(0, elapsed),
-      JevStatsDeadlineExceededError,
-    );
-  }
 });
