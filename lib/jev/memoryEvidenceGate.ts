@@ -61,7 +61,9 @@ export async function gateMemoryEvidence(
       rejected: rejected.length,
       reasons: [...new Set(rejected)].sort(),
     });
-  const records = parsed.filter((r) => (r.score ?? 0) >= 0.15);
+  const records = parsed.filter(
+    (r) => r.score === undefined || r.score >= 0.15,
+  );
   if (!records.length) return [];
   const mode = getJevMode(JevCheckpoint.MEMORY_EVIDENCE);
   // One candidate with a strong score is safe to use directly. Multiple

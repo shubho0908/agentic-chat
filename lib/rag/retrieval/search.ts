@@ -2,7 +2,7 @@ import { PGVectorStore } from "@langchain/community/vectorstores/pgvector";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { RAG_CONFIG } from "../config";
 import { getUserApiKey } from "@/lib/apiUtils";
-import { rerankDocuments } from "./reranker";
+import { isRerankAvailable, rerankDocuments } from "./reranker";
 import { getPgPool } from "../storage/pgvectorClient";
 import { prisma } from "@/lib/prisma";
 import {
@@ -14,6 +14,7 @@ import {
 } from "./hybrid";
 import { logger } from "@/lib/logger";
 import { withRetry } from "@/lib/retry";
+import type { RerankResult } from "@/types/rag";
 
 async function getEmbeddings(userId: string) {
   return new OpenAIEmbeddings({
@@ -150,6 +151,18 @@ async function lexicalSearch(params: {
   }
 }
 
+export function toRankedCandidates(
+  reranked: RerankResult[],
+): RetrievalCandidate[] {
+  return reranked.map((result, index) => ({
+    content: result.content,
+    score: result.score,
+    scoreOrigin: result.scoreOrigin,
+    rankScore: reranked.length - index,
+    metadata: result.metadata,
+  }));
+}
+
 export async function searchDocumentChunks(
   query: string,
   userId: string,
@@ -231,7 +244,7 @@ export async function searchDocumentChunks(
     minPerAttachment:
       (attachmentIds?.length ?? 0) > 1 ? RAG_CONFIG.search.minPerAttachment : 0,
   });
-  if (useReranking && RAG_CONFIG.rerank.enabled) {
+  if (useReranking && isRerankAvailable()) {
     const reranked = await rerankDocuments(query, pre, {
       topN: Math.min(
         pre.length,
@@ -239,23 +252,14 @@ export async function searchDocumentChunks(
       ),
       conversationId,
     });
-    return diversifyCandidates(
-      reranked.map((result) => ({
-        content: result.content,
-        score: result.score,
-        scoreOrigin: result.scoreOrigin,
-        rankScore: result.score,
-        metadata: result.metadata,
-      })),
-      {
-        limit,
-        maxPerAttachment: RAG_CONFIG.search.maxPerAttachment,
-        minPerAttachment:
-          (attachmentIds?.length ?? 0) > 1
-            ? RAG_CONFIG.search.minPerAttachment
-            : 0,
-      },
-    );
+    return diversifyCandidates(toRankedCandidates(reranked), {
+      limit,
+      maxPerAttachment: RAG_CONFIG.search.maxPerAttachment,
+      minPerAttachment:
+        (attachmentIds?.length ?? 0) > 1
+          ? RAG_CONFIG.search.minPerAttachment
+          : 0,
+    });
   }
   return diversifyCandidates(pre, {
     limit,

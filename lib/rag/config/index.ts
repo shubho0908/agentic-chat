@@ -40,7 +40,6 @@ export const RAG_CONFIG = {
     maxEnrichedChunks: 18,
   },
   rerank: {
-    enabled: !!process.env.COHERE_API_KEY,
     get model() {
       return getRerankerModel();
     },

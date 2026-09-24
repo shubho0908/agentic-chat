@@ -87,6 +87,19 @@ export async function rerankWithCohere(
   return mapProviderRerankResults(documents, response.results, topN);
 }
 
+export function isRerankAvailable(): boolean {
+  if (process.env.COHERE_API_KEY) return true;
+  const mode = getJevMode(JevCheckpoint.RERANK);
+  switch (mode) {
+    case JevMode.ACTIVE:
+    case JevMode.AB:
+      return JevDecisionClient.createIfConfigured() !== null;
+    case JevMode.SHADOW:
+    case JevMode.OFF:
+      return false;
+  }
+}
+
 export async function rerankDocuments(
   query: string,
   documents: RerankDocument[],

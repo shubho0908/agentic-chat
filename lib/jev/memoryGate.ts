@@ -63,13 +63,14 @@ const QUESTIONS: JevQuestions = {
 const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 export const isExplicitMemoryRecall = (s: string) =>
   EXPLICIT.some((p) => p.test(norm(s)));
+const RECENT_CONVERSATION_CHARS = 1_500;
+const evaluatedRecentConversation = (a: MemoryGateArgs) =>
+  norm(a.recentConversation ?? "").slice(-RECENT_CONVERSATION_CHARS);
 function key(a: MemoryGateArgs) {
   return JSON.stringify([
     a.userId ?? "anonymous",
-    norm(a.messageText).toLowerCase(),
-    norm(a.recentConversation ?? "")
-      .toLowerCase()
-      .slice(-600),
+    norm(a.messageText),
+    evaluatedRecentConversation(a),
   ]);
 }
 function getCached(k: string) {
@@ -137,7 +138,7 @@ export async function mediateMemoryIntent(
         schemaVersion: MEMORY_GATE_SCHEMA_VERSION,
         state: {
           current_request: text,
-          recent_conversation: norm(a.recentConversation ?? "").slice(-1500),
+          recent_conversation: evaluatedRecentConversation(a),
         },
         questions: QUESTIONS,
         timeoutMs: 1500,
