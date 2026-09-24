@@ -105,7 +105,11 @@ const ArtifactRenderer = memo(function ArtifactRenderer({ artifact, viewMode }: 
         </div>
         {showCode && (
           <div className="absolute inset-0 z-10">
-            <CodeArtifact content={artifact.content} language={artifact.language ?? artifact.type} />
+            <CodeArtifact
+              content={artifact.content}
+              language={artifact.language ?? artifact.type}
+              isStreaming={artifact.isStreaming}
+            />
           </div>
         )}
       </div>
@@ -113,7 +117,13 @@ const ArtifactRenderer = memo(function ArtifactRenderer({ artifact, viewMode }: 
   }
 
   if (effectiveViewMode === ViewMode.CODE) {
-    return <CodeArtifact content={artifact.content} language={artifact.language ?? artifact.type} />;
+    return (
+      <CodeArtifact
+        content={artifact.content}
+        language={artifact.language ?? artifact.type}
+        isStreaming={artifact.isStreaming}
+      />
+    );
   }
 
   switch (artifact.type) {
@@ -124,9 +134,21 @@ const ArtifactRenderer = memo(function ArtifactRenderer({ artifact, viewMode }: 
     case ArtifactType.MARKDOWN:
       return <MarkdownArtifact content={artifact.content} />;
     case ArtifactType.CODE:
-      return <CodeArtifact content={artifact.content} language={artifact.language ?? "typescript"} />;
+      return (
+        <CodeArtifact
+          content={artifact.content}
+          language={artifact.language ?? "typescript"}
+          isStreaming={artifact.isStreaming}
+        />
+      );
     default:
-      return <CodeArtifact content={artifact.content} language="text" />;
+      return (
+        <CodeArtifact
+          content={artifact.content}
+          language="text"
+          isStreaming={artifact.isStreaming}
+        />
+      );
   }
 });
 

@@ -59,5 +59,8 @@ test("MarkdownCodeBlock renders header, gutter, and code", () => {
   );
   assert.match(html, /ts/);
   assert.match(html, /Copy code/);
+  assert.match(html, /Read-only code block/);
+  assert.match(html, /role="group"/);
+  assert.match(html, /data-read-only="true"/);
   assert.match(html, /const a/);
 });

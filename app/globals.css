@@ -198,7 +198,7 @@
 
   .hljs-comment,
   .hljs-quote {
-    color: hsl(240 4% 46%);
+    color: hsl(240 4% 41%);
   }
 
   .hljs-keyword,
@@ -206,7 +206,7 @@
   .hljs-literal,
   .hljs-section,
   .hljs-link {
-    color: hsl(221 83% 53%);
+    color: hsl(221 72% 43%);
   }
 
   .hljs-string,
@@ -217,7 +217,7 @@
   .hljs-symbol,
   .hljs-bullet,
   .hljs-addition {
-    color: hsl(160 84% 39%);
+    color: hsl(158 70% 30%);
   }
 
   .hljs-number,
@@ -225,17 +225,17 @@
   .hljs-template-variable,
   .hljs-regexp,
   .hljs-meta .hljs-string {
-    color: hsl(25 95% 53%);
+    color: hsl(25 80% 40%);
   }
 
   .hljs-built_in,
   .hljs-function,
   .hljs-class .hljs-title {
-    color: hsl(262 83% 58%);
+    color: hsl(262 68% 46%);
   }
 
   .hljs-deletion {
-    color: hsl(0 84% 60%);
+    color: hsl(0 70% 42%);
   }
 
   .dark .hljs-comment,
