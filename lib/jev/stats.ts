@@ -18,9 +18,7 @@ export const JEV_STATS_ALLOWED_EMAIL_ENV = "JEV_STATS_ALLOWED_EMAIL";
  * denies everyone. Pure env read + string compare, no I/O. */
 export function isJevStatsAllowedEmail(
   email: string | null | undefined,
-  allowedEmail: string | null | undefined = process.env[
-    JEV_STATS_ALLOWED_EMAIL_ENV
-  ],
+  allowedEmail: string | null | undefined,
 ): boolean {
   const allowed = allowedEmail?.trim();
   if (!allowed || !email) return false;
@@ -32,7 +30,7 @@ export const JEV_STATS_CACHE_DEFAULT_TTL_SECONDS = 30;
 export const JEV_STATS_CACHE_MAX_TTL_SECONDS = 300;
 
 export function resolveJevStatsCacheTtlMs(
-  raw: string | null | undefined = process.env[JEV_STATS_CACHE_TTL_ENV],
+  raw: string | null | undefined,
 ): number {
   const trimmed = raw?.trim();
   const parsed = trimmed ? Number(trimmed) : Number.NaN;
@@ -316,10 +314,18 @@ export async function computeJevStatsPayload(
   };
 }
 
-interface JevStatsCacheEntry {
-  expiresAt: number;
-  payload: Promise<JevStatsPayload>;
+enum JevStatsCacheEntryState {
+  Pending = "pending",
+  Settled = "settled",
 }
+
+type JevStatsCacheEntry =
+  | { state: JevStatsCacheEntryState.Pending; payload: Promise<JevStatsPayload> }
+  | {
+      state: JevStatsCacheEntryState.Settled;
+      payload: Promise<JevStatsPayload>;
+      expiresAt: number;
+    };
 
 export interface JevStatsCacheOptions {
   compute: (query: JevStatsQuery) => Promise<JevStatsPayload>;
@@ -331,18 +337,33 @@ function jevStatsCacheKey(query: JevStatsQuery): string {
   return `${query.days}|${query.checkpoint ?? ""}|${query.mode ?? ""}`;
 }
 
+function isJevStatsCacheEntryLive(
+  entry: JevStatsCacheEntry,
+  now: number,
+): boolean {
+  switch (entry.state) {
+    case JevStatsCacheEntryState.Pending:
+      return true;
+    case JevStatsCacheEntryState.Settled:
+      return entry.expiresAt > now;
+    default: {
+      const unreachable: never = entry;
+      return unreachable;
+    }
+  }
+}
+
 export function createJevStatsCache(options: JevStatsCacheOptions) {
   const entries = new Map<string, JevStatsCacheEntry>();
 
   function evictExpired(now: number): void {
     for (const [key, entry] of entries) {
-      if (entry.expiresAt <= now) entries.delete(key);
+      if (!isJevStatsCacheEntryLive(entry, now)) entries.delete(key);
     }
   }
 
   return function loadJevStats(query: JevStatsQuery): Promise<JevStatsPayload> {
-    const ttlMs = options.ttlMs();
-    if (ttlMs <= 0) {
+    if (options.ttlMs() <= 0) {
       entries.clear();
       return options.compute(query);
     }
@@ -350,21 +371,34 @@ export function createJevStatsCache(options: JevStatsCacheOptions) {
     const now = options.now();
     const key = jevStatsCacheKey(query);
     const cached = entries.get(key);
-    if (cached && cached.expiresAt > now) return cached.payload;
+    if (cached && isJevStatsCacheEntryLive(cached, now)) return cached.payload;
 
     evictExpired(now);
     const payload = options.compute(query);
-    const entry: JevStatsCacheEntry = { expiresAt: now + ttlMs, payload };
-    entries.set(key, entry);
-    payload.catch(() => {
-      if (entries.get(key) === entry) entries.delete(key);
-    });
+    const pending: JevStatsCacheEntry = {
+      state: JevStatsCacheEntryState.Pending,
+      payload,
+    };
+    entries.set(key, pending);
+    payload.then(
+      () => {
+        if (entries.get(key) !== pending) return;
+        entries.set(key, {
+          state: JevStatsCacheEntryState.Settled,
+          payload,
+          expiresAt: options.now() + options.ttlMs(),
+        });
+      },
+      () => {
+        if (entries.get(key) === pending) entries.delete(key);
+      },
+    );
     return payload;
   };
 }
 
 export const loadJevStats = createJevStatsCache({
   compute: computeJevStatsPayload,
-  ttlMs: () => resolveJevStatsCacheTtlMs(),
+  ttlMs: () => resolveJevStatsCacheTtlMs(process.env[JEV_STATS_CACHE_TTL_ENV]),
   now: Date.now,
 });

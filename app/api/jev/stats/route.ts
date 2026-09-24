@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { headers } from "next/headers";
 import {
   getAuthenticatedUser,
   errorResponse,
@@ -8,6 +7,7 @@ import {
 import { HTTP_STATUS } from "@/constants/errors";
 import { logger } from "@/lib/logger";
 import {
+  JEV_STATS_ALLOWED_EMAIL_ENV,
   isJevStatsAllowedEmail,
   loadJevStats,
   parseJevStatsQuery,
@@ -18,10 +18,15 @@ import {
  * day window (default 30, max 90). Records are redacted metadata only. */
 export async function GET(request: NextRequest) {
   try {
-    const { user, error } = await getAuthenticatedUser(await headers());
+    const { user, error } = await getAuthenticatedUser(request.headers);
     if (error) return error;
 
-    if (!isJevStatsAllowedEmail(user?.email)) {
+    if (
+      !isJevStatsAllowedEmail(
+        user?.email,
+        process.env[JEV_STATS_ALLOWED_EMAIL_ENV],
+      )
+    ) {
       return jsonResponse({ error: "Unauthorized" }, HTTP_STATUS.FORBIDDEN);
     }
 

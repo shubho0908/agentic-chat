@@ -350,3 +350,34 @@ test("stats cache never keeps a failed computation", async () => {
   assert.equal(calls, 2);
   assert.equal(recovered.window.since, new Date(2).toISOString());
 });
+
+test("stats cache shares an aggregation that outlives the TTL instead of starting another", async () => {
+  let clock = 0;
+  let calls = 0;
+  let release: (payload: JevStatsPayload) => void = () => {};
+  const load = createJevStatsCache({
+    compute: () => {
+      calls += 1;
+      return new Promise<JevStatsPayload>((resolve) => {
+        release = resolve;
+      });
+    },
+    ttlMs: () => 30_000,
+    now: () => clock,
+  });
+  const first = load(statsQuery());
+  clock += 120_000;
+  const second = load(statsQuery());
+  assert.equal(calls, 1);
+  assert.equal(second, first);
+  release(statsPayload(statsQuery(), 1));
+  await first;
+  clock += 29_999;
+  await load(statsQuery());
+  assert.equal(calls, 1);
+  clock += 1;
+  const refreshed = load(statsQuery());
+  assert.equal(calls, 2);
+  release(statsPayload(statsQuery(), 2));
+  await refreshed;
+});

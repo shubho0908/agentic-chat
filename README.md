@@ -44,7 +44,7 @@
 - Phase 5: the cache gate can veto a semantic-cache hit in active mode, and HITL escalation can add review when the deterministic blocklist did not
 - Jev can add a HITL interrupt but cannot suppress one required by the deterministic dangerous-action blocklist
 - Redacted decision metadata is stored in `jev_decisions`; raw evaluation state is not stored there
-- Authenticated `GET /api/jev/stats` reports outcomes, fallback rate, and p50/p95 latency by checkpoint for a 1-90 day window
+- Owner-only `GET /api/jev/stats` reports outcomes, fallback rate, and p50/p95 latency by checkpoint for a 1-90 day window
 
 **Tools**
 - **Web Search** — Real-time search via Exa with basic/advanced depth modes
@@ -86,7 +86,7 @@ Set `TYPESAFE_API_KEY` in deployment secrets to enable Jev calls. Each checkpoin
 
 The shared mode parser accepts `off`, `shadow`, `ab`, and `active`. A checkpoint only changes production behavior in the modes listed above. Shadow and A/B gate modes record decisions without filtering. Provider errors fail open. The RAG reranker falls back to Cohere when a Jev request fails.
 
-Use `GET /api/jev/stats?days=30` for all checkpoints or add `&checkpoint=planner` to filter the report. The endpoint requires an authenticated user. `days` defaults to 30 and is capped at 90.
+Use `GET /api/jev/stats?days=30` for all checkpoints or add `&checkpoint=planner` to filter the report. The endpoint requires a signed-in user whose email matches `JEV_STATS_ALLOWED_EMAIL`; any other user gets 403, and if the variable is unset or blank every request gets 403. Responses are reused in memory for `JEV_STATS_CACHE_TTL_SECONDS` (default 30, max 300, 0 always reads fresh). `days` defaults to 30 and is capped at 90.
 
 ---
 
