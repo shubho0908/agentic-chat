@@ -40,7 +40,7 @@ test("rerank availability covers Jev-only setups and nothing else", () => {
         JEV_RERANK_MODE: "ab",
         TYPESAFE_API_KEY: "t",
       },
-      true,
+      false,
     ],
     [
       {

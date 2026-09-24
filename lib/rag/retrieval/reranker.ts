@@ -92,8 +92,8 @@ export function isRerankAvailable(): boolean {
   const mode = getJevMode(JevCheckpoint.RERANK);
   switch (mode) {
     case JevMode.ACTIVE:
-    case JevMode.AB:
       return JevDecisionClient.createIfConfigured() !== null;
+    case JevMode.AB:
     case JevMode.SHADOW:
     case JevMode.OFF:
       return false;
