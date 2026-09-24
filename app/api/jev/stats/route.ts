@@ -16,6 +16,8 @@ import {
 /** Read-only view over persisted Jev decision records: per-checkpoint
  * outcome breakdown, fallback rate and latency percentiles over a sliding
  * day window (default 30, max 90). Records are redacted metadata only. */
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   try {
     const { user, error } = await getAuthenticatedUser(request.headers);

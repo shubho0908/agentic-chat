@@ -216,12 +216,34 @@ export function mergeJevStats(
   return [...byCheckpoint.values()].sort((a, b) => b.total - a.total);
 }
 
-export const JEV_STATS_STATEMENT_TIMEOUT_MS = 10_000;
+export const JEV_STATS_ROUTE_MAX_DURATION_SECONDS = 60;
+export const JEV_STATS_RESPONSE_MARGIN_MS = 5_000;
+export const JEV_STATS_QUERY_DEADLINE_MS =
+  JEV_STATS_ROUTE_MAX_DURATION_SECONDS * 1_000 - JEV_STATS_RESPONSE_MARGIN_MS;
 export const JEV_STATS_TRANSACTION_MAX_WAIT_MS = 5_000;
 export const JEV_STATS_TRANSACTION_TIMEOUT_MS =
-  2 * JEV_STATS_STATEMENT_TIMEOUT_MS;
-export const JEV_STATS_QUERY_DEADLINE_MS =
-  JEV_STATS_TRANSACTION_MAX_WAIT_MS + JEV_STATS_TRANSACTION_TIMEOUT_MS;
+  JEV_STATS_QUERY_DEADLINE_MS - JEV_STATS_TRANSACTION_MAX_WAIT_MS;
+export const JEV_STATS_STATEMENT_CANCEL_LEAD_MS = 1_000;
+export const JEV_STATS_STATEMENT_BUDGET_MS =
+  JEV_STATS_TRANSACTION_TIMEOUT_MS - JEV_STATS_STATEMENT_CANCEL_LEAD_MS;
+
+export class JevStatsDeadlineExceededError extends Error {
+  constructor() {
+    super("Jev stats query budget exhausted before the next statement");
+    this.name = "JevStatsDeadlineExceededError";
+  }
+}
+
+export function remainingJevStatsStatementTimeoutMs(
+  transactionStartedAt: number,
+  now: number,
+): number {
+  const remaining = Math.floor(
+    JEV_STATS_STATEMENT_BUDGET_MS - (now - transactionStartedAt),
+  );
+  if (remaining < 1) throw new JevStatsDeadlineExceededError();
+  return remaining;
+}
 
 export async function queryJevStats(
   query: JevStatsQuery,
@@ -231,10 +253,15 @@ export async function queryJevStats(
 
   const [rawOutcomeRows, rawLatencyRows] = await prisma.$transaction(
     async (tx) => {
-      await tx.$executeRawUnsafe(
-        `SELECT set_config('statement_timeout', $1, true)`,
-        String(JEV_STATS_STATEMENT_TIMEOUT_MS),
-      );
+      const transactionStartedAt = Date.now();
+      const boundNextStatement = () =>
+        tx.$executeRawUnsafe(
+          `SELECT set_config('statement_timeout', $1, true)`,
+          String(
+            remainingJevStatsStatementTimeoutMs(transactionStartedAt, Date.now()),
+          ),
+        );
+      await boundNextStatement();
       const outcomeRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
@@ -253,6 +280,7 @@ export async function queryJevStats(
         checkpoint,
         mode,
       );
+      await boundNextStatement();
       const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
