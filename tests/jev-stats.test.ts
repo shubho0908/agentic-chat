@@ -199,3 +199,38 @@ test("mergeJevStats preserves totals and adds per-mode aggregates", () => {
     ],
   });
 });
+
+import { isJevStatsAllowedEmail } from "@/lib/jev/stats";
+
+test("isJevStatsAllowedEmail allows only the configured email", () => {
+  assert.equal(
+    isJevStatsAllowedEmail("shubhobera98@gmail.com", "shubhobera98@gmail.com"),
+    true,
+  );
+  assert.equal(
+    isJevStatsAllowedEmail("someoneelse@gmail.com", "shubhobera98@gmail.com"),
+    false,
+  );
+});
+
+test("isJevStatsAllowedEmail matches case-insensitively and trims", () => {
+  assert.equal(
+    isJevStatsAllowedEmail("ShubhoBera98@Gmail.com", "shubhobera98@gmail.com"),
+    true,
+  );
+  assert.equal(
+    isJevStatsAllowedEmail(
+      " shubhobera98@gmail.com ",
+      " shubhobera98@gmail.com ",
+    ),
+    true,
+  );
+});
+
+test("isJevStatsAllowedEmail fails closed when env is unset or blank", () => {
+  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", undefined), false);
+  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", ""), false);
+  assert.equal(isJevStatsAllowedEmail("shubhobera98@gmail.com", "   "), false);
+  assert.equal(isJevStatsAllowedEmail(null, "shubhobera98@gmail.com"), false);
+  assert.equal(isJevStatsAllowedEmail(undefined, "shubhobera98@gmail.com"), false);
+});

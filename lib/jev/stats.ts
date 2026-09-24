@@ -10,6 +10,23 @@ import {
 export const JEV_STATS_DEFAULT_DAYS = 30;
 export const JEV_STATS_MAX_DAYS = 90;
 
+/** Env holding the single email allowed to read /api/jev/stats. */
+export const JEV_STATS_ALLOWED_EMAIL_ENV = "JEV_STATS_ALLOWED_EMAIL";
+
+/** Owner-only gate for the stats endpoint: the session email must match the
+ * configured email (case-insensitive). Fail-closed - an unset or blank env
+ * denies everyone. Pure env read + string compare, no I/O. */
+export function isJevStatsAllowedEmail(
+  email: string | null | undefined,
+  allowedEmail: string | null | undefined = process.env[
+    JEV_STATS_ALLOWED_EMAIL_ENV
+  ],
+): boolean {
+  const allowed = allowedEmail?.trim();
+  if (!allowed || !email) return false;
+  return email.trim().toLowerCase() === allowed.toLowerCase();
+}
+
 const checkpointSchema = z.enum(Object.values(JevCheckpoint));
 const modeSchema = z.enum(Object.values(JevMode));
 const outcomeRowSchema = z.object({
