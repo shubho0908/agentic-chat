@@ -20,6 +20,9 @@ import { GraphNode, MAX_TOOL_ROUNDS, RECURSION_LIMIT, RecoveryReason } from "@/l
 import type { StreamWriter } from "@/lib/chat/safeStream";
 import { ACTIVITY_ONLY_ASSISTANT_CONTENT, getPersistableAssistantContent } from "@/hooks/chat/conversationManager";
 import { shouldAutoContinueConversation } from "@/hooks/chat/autoContinue";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ChatMessage } from "@/components/chat/chatMessage";
 import { MessageRole, type Message } from "@/lib/schemas/chat";
 
 const MODEL = "gpt-5.6-luna";
@@ -503,6 +506,21 @@ test("errored turns persist streamed tool activity and thinking", () => {
   assert.equal(getPersistableAssistantContent("partial", undefined), "partial");
   assert.equal(getPersistableAssistantContent("", { toolActivities: [activity] } as never), ACTIVITY_ONLY_ASSISTANT_CONTENT);
   assert.equal(getPersistableAssistantContent("", { thinking: "thinking about it" } as never), ACTIVITY_ONLY_ASSISTANT_CONTENT);
+});
+
+test("the activity-only placeholder never renders as text", () => {
+  const html = renderToStaticMarkup(
+    createElement(ChatMessage, {
+      message: {
+        id: "a1",
+        role: MessageRole.ASSISTANT,
+        content: ACTIVITY_ONLY_ASSISTANT_CONTENT,
+        metadata: { streamStatus: "error", streamError: "boom", thinking: "checked the inbox" },
+      },
+    }),
+  );
+  assert.ok(html.includes("Response interrupted"));
+  assert.ok(!html.includes("activity_only"));
 });
 
 test("an errored turn is never silently auto-retried", () => {
