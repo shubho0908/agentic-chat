@@ -10,6 +10,33 @@ import {
 export const JEV_STATS_DEFAULT_DAYS = 30;
 export const JEV_STATS_MAX_DAYS = 90;
 
+export const JEV_STATS_ALLOWED_EMAIL_ENV = "JEV_STATS_ALLOWED_EMAIL";
+
+export function isJevStatsAllowedEmail(
+  email: string | null | undefined,
+  allowedEmail: string | null | undefined,
+): boolean {
+  const allowed = allowedEmail?.trim();
+  if (!allowed || !email) return false;
+  return email.trim().toLowerCase() === allowed.toLowerCase();
+}
+
+export const JEV_STATS_CACHE_TTL_ENV = "JEV_STATS_CACHE_TTL_SECONDS";
+export const JEV_STATS_CACHE_DEFAULT_TTL_SECONDS = 30;
+export const JEV_STATS_CACHE_MAX_TTL_SECONDS = 300;
+
+export function resolveJevStatsCacheTtlMs(
+  raw: string | null | undefined,
+): number {
+  const trimmed = raw?.trim();
+  const parsed = trimmed ? Number(trimmed) : Number.NaN;
+  const seconds =
+    Number.isInteger(parsed) && parsed >= 0
+      ? Math.min(parsed, JEV_STATS_CACHE_MAX_TTL_SECONDS)
+      : JEV_STATS_CACHE_DEFAULT_TTL_SECONDS;
+  return seconds * 1000;
+}
+
 const checkpointSchema = z.enum(Object.values(JevCheckpoint));
 const modeSchema = z.enum(Object.values(JevMode));
 const outcomeRowSchema = z.object({
@@ -185,14 +212,30 @@ export function mergeJevStats(
   return [...byCheckpoint.values()].sort((a, b) => b.total - a.total);
 }
 
+export const JEV_STATS_ROUTE_MAX_DURATION_SECONDS = 60;
+export const JEV_STATS_RESPONSE_MARGIN_MS = 5_000;
+export const JEV_STATS_QUERY_DEADLINE_MS =
+  JEV_STATS_ROUTE_MAX_DURATION_SECONDS * 1_000 - JEV_STATS_RESPONSE_MARGIN_MS;
+export const JEV_STATS_TRANSACTION_MAX_WAIT_MS = 5_000;
+export const JEV_STATS_TRANSACTION_TIMEOUT_MS =
+  JEV_STATS_QUERY_DEADLINE_MS - JEV_STATS_TRANSACTION_MAX_WAIT_MS;
+export const JEV_STATS_STATEMENT_TIMEOUT_MS =
+  JEV_STATS_TRANSACTION_TIMEOUT_MS / 2;
+
 export async function queryJevStats(
   query: JevStatsQuery,
 ): Promise<JevCheckpointStats[]> {
   const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
   const { checkpoint, mode } = query;
 
-  const rawOutcomeRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint,
+  const [rawOutcomeRows, rawLatencyRows] = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(
+        `SELECT set_config('statement_timeout', $1, true)`,
+        String(JEV_STATS_STATEMENT_TIMEOUT_MS),
+      );
+      const outcomeRows = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
        outcome,
@@ -205,12 +248,12 @@ export async function queryJevStats(
        (checkpoint, outcome),
        (checkpoint, mode, outcome)
      )`,
-    since,
-    checkpoint,
-    mode,
-  );
-  const rawLatencyRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint,
+        since,
+        checkpoint,
+        mode,
+      );
+      const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
        COUNT(*)::int AS total,
@@ -225,9 +268,16 @@ export async function queryJevStats(
        (checkpoint),
        (checkpoint, mode)
      )`,
-    since,
-    checkpoint,
-    mode,
+        since,
+        checkpoint,
+        mode,
+      );
+      return [outcomeRows, latencyRows] as const;
+    },
+    {
+      maxWait: JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+      timeout: JEV_STATS_TRANSACTION_TIMEOUT_MS,
+    },
   );
 
   const allOutcomeRows: OutcomeRow[] = z
@@ -254,3 +304,97 @@ export async function queryJevStats(
     modeLatencyRows,
   );
 }
+
+export interface JevStatsPayload {
+  window: {
+    days: number;
+    checkpoint: JevCheckpointName | null;
+    mode: JevModeValue | null;
+    since: string;
+  };
+  checkpoints: JevCheckpointStats[];
+}
+
+export async function computeJevStatsPayload(
+  query: JevStatsQuery,
+): Promise<JevStatsPayload> {
+  const since = new Date(
+    Date.now() - query.days * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const checkpoints = await queryJevStats(query);
+  return {
+    window: {
+      days: query.days,
+      checkpoint: query.checkpoint,
+      mode: query.mode,
+      since,
+    },
+    checkpoints,
+  };
+}
+
+interface JevStatsCacheEntry {
+  payload: Promise<JevStatsPayload>;
+  expiresAt: number;
+}
+
+export interface JevStatsCacheOptions {
+  compute: (query: JevStatsQuery) => Promise<JevStatsPayload>;
+  ttlMs: () => number;
+  pendingDeadlineMs: number;
+  now: () => number;
+}
+
+function jevStatsCacheKey(query: JevStatsQuery): string {
+  return `${query.days}|${query.checkpoint ?? ""}|${query.mode ?? ""}`;
+}
+
+export function createJevStatsCache(options: JevStatsCacheOptions) {
+  const entries = new Map<string, JevStatsCacheEntry>();
+
+  function evictExpired(now: number): void {
+    for (const [key, entry] of entries) {
+      if (entry.expiresAt <= now) entries.delete(key);
+    }
+  }
+
+  return function loadJevStats(query: JevStatsQuery): Promise<JevStatsPayload> {
+    if (options.ttlMs() <= 0) {
+      entries.clear();
+      return options.compute(query);
+    }
+
+    const now = options.now();
+    const key = jevStatsCacheKey(query);
+    const cached = entries.get(key);
+    if (cached && cached.expiresAt > now) return cached.payload;
+
+    evictExpired(now);
+    const payload = options.compute(query);
+    const pending: JevStatsCacheEntry = {
+      payload,
+      expiresAt: now + options.pendingDeadlineMs,
+    };
+    entries.set(key, pending);
+    payload.then(
+      () => {
+        if (entries.get(key) !== pending) return;
+        entries.set(key, {
+          payload,
+          expiresAt: options.now() + options.ttlMs(),
+        });
+      },
+      () => {
+        if (entries.get(key) === pending) entries.delete(key);
+      },
+    );
+    return payload;
+  };
+}
+
+export const loadJevStats = createJevStatsCache({
+  compute: computeJevStatsPayload,
+  ttlMs: () => resolveJevStatsCacheTtlMs(process.env[JEV_STATS_CACHE_TTL_ENV]),
+  pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
+  now: Date.now,
+});
