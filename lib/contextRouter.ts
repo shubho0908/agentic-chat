@@ -1,52 +1,55 @@
-import { getMemoryContextResult } from './memory';
-import { getRAGContext, getDocumentOverviewContext } from './rag/retrieval/context';
-import type { Message } from '@/lib/schemas/chat';
-import { MessageRole } from '@/lib/schemas/chat';
-import { RoutingDecision } from '@/types/chat';
-import { prisma } from './prisma';
-import { filterDocumentAttachments } from './rag/retrieval/statusHelpers';
-import { isSupportedDocumentExtension } from './fileValidation';
-import { extractTextFromMessage } from './chat/messageContent';
-import { mediateMemoryIntent } from './chat/requestMediator';
-import { estimateMemoryEntryCount } from './chat/memoryPolicy';
-import { extractTextQuery, isReferentialQuery } from './chat/referentialQuery';
-import { logWarn } from './observability';
+import { getMemoryContextResult } from "./memory";
+import { getRAGContext } from "./rag/retrieval/context";
+import type { Message } from "@/lib/schemas/chat";
+import { selectDocumentAttachmentsForTurn } from "./chat/attachmentRouting";
+import { MessageRole } from "@/lib/schemas/chat";
+import { DegradedContextSource, RoutingDecision } from "@/types/chat";
+import { prisma } from "./prisma";
+import { filterDocumentAttachments } from "./rag/retrieval/statusHelpers";
+import { isSupportedDocumentExtension } from "./fileValidation";
+import { extractTextFromMessage } from "./chat/messageContent";
+import { mediateMemoryIntent } from "./chat/requestMediator";
+import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
+import { memoryGateDegradation } from "./jev/memoryGate";
+import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
+import { logWarn } from "./observability";
 
 import { logger } from "@/lib/logger";
-import { safeFetch } from '@/lib/network/safeFetch';
+import { safeFetch } from "@/lib/network/safeFetch";
 
 const INLINE_ATTACHMENT_MAX_BYTES = 512 * 1024;
 
 const INLINE_ELIGIBLE_TYPES = new Set([
-  'text/plain',
-  'text/csv',
-  'text/markdown',
-  'application/json',
-  'application/xml',
-  'text/html',
-  'text/xml',
+  "text/plain",
+  "text/csv",
+  "text/markdown",
+  "application/json",
+  "application/xml",
+  "text/html",
+  "text/xml",
 ]);
 
 function isInlineEligibleType(fileType: string): boolean {
-  return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith('text/');
+  return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith("text/");
 }
 
 function sanitizeAttachedFileName(name: string): string {
   const sanitized = name
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/[\u0000-\u001F\u007F]+/g, " ")
     .trim()
     .slice(0, 256);
-  return sanitized || 'untitled';
+  return sanitized || "untitled";
 }
 
 async function tryInlineAttachmentContent(
   attachmentIds: string[],
   userId: string,
+  signal?: AbortSignal,
 ): Promise<{ context: string; documentCount: number } | null> {
   try {
     const attachments = await prisma.attachment.findMany({
@@ -54,12 +57,20 @@ async function tryInlineAttachmentContent(
         id: { in: attachmentIds },
         message: { conversation: { userId } },
       },
-      select: { id: true, fileName: true, fileUrl: true, fileSize: true, fileType: true },
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        fileSize: true,
+        fileType: true,
+      },
     });
 
     if (attachments.length === 0) return null;
 
-    const eligible = attachments.filter((a) => isInlineEligibleType(a.fileType));
+    const eligible = attachments.filter((a) =>
+      isInlineEligibleType(a.fileType),
+    );
     if (eligible.length === 0) return null;
 
     const totalSize = eligible.reduce((sum, a) => sum + a.fileSize, 0);
@@ -67,7 +78,11 @@ async function tryInlineAttachmentContent(
 
     const contents = await Promise.all(
       eligible.map(async (att) => {
-        const res = await safeFetch(att.fileUrl, { timeoutMs: 10000, maxResponseBytes: INLINE_ATTACHMENT_MAX_BYTES });
+        const res = await safeFetch(att.fileUrl, {
+          timeoutMs: 10000,
+          maxResponseBytes: INLINE_ATTACHMENT_MAX_BYTES,
+          signal,
+        });
         if (!res.ok) return null;
         const text = await res.text();
         return `<attached_file name="${sanitizeAttachedFileName(att.fileName)}">\n${text}\n</attached_file>`;
@@ -78,12 +93,14 @@ async function tryInlineAttachmentContent(
     if (validContents.length === 0) return null;
 
     const context =
-      '\n\nThe user has attached the following files. Use their FULL content to answer.\n' +
-      validContents.join('\n\n');
+      "\n\nThe user has attached the following files. Use their FULL content to answer.\n" +
+      validContents.join("\n\n");
 
     return { context, documentCount: validContents.length };
   } catch (error) {
-    logger.warn('[Context Router] Inline attachment fetch failed:', error);
+    if (signal?.aborted)
+      throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    logger.warn("[Context Router] Inline attachment fetch failed:", error);
     return null;
   }
 }
@@ -102,10 +119,11 @@ interface ContextRoutingMetadata {
     id: string;
     source: string;
     relevance: string;
+    score?: number;
     page?: number;
   }>;
   degradedContexts?: Array<{
-    source: string;
+    source: DegradedContextSource;
     reason: string;
   }>;
 }
@@ -117,14 +135,21 @@ interface ContextRoutingResult {
 
 const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
 
-function detectImages(content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>): number {
+function detectImages(
+  content:
+    | string
+    | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+): number {
   if (!Array.isArray(content)) return 0;
-  return content.filter(part => 
-    typeof part === 'object' && part !== null && 'image_url' in part
+  return content.filter(
+    (part) => typeof part === "object" && part !== null && "image_url" in part,
   ).length;
 }
 
-function getRecentConversationExcerpt(messages: Message[], maxMessages: number = 6): string {
+function getRecentConversationExcerpt(
+  messages: Message[],
+  maxMessages: number = 6,
+): string {
   const relevantMessages = messages
     .filter((message) => message.role !== MessageRole.SYSTEM)
     .slice(-maxMessages)
@@ -135,7 +160,7 @@ function getRecentConversationExcerpt(messages: Message[], maxMessages: number =
     })
     .filter((line): line is string => Boolean(line));
 
-  return relevantMessages.join('\n');
+  return relevantMessages.join("\n");
 }
 
 function uniqueQueries(queries: string[]): string[] {
@@ -143,7 +168,7 @@ function uniqueQueries(queries: string[]): string[] {
   const deduped: string[] = [];
 
   for (const query of queries) {
-    const normalized = query.trim().replace(/\s+/g, ' ');
+    const normalized = query.trim().replace(/\s+/g, " ");
     if (!normalized || seen.has(normalized)) {
       continue;
     }
@@ -157,7 +182,7 @@ function uniqueQueries(queries: string[]): string[] {
 function buildRetrievalQueries(
   textQuery: string,
   messages: Message[],
-  isReferential: boolean
+  isReferential: boolean,
 ): string[] {
   const trimmedQuery = textQuery.trim();
   const recentConversation = getRecentConversationExcerpt(messages);
@@ -168,10 +193,10 @@ function buildRetrievalQueries(
 
   const standaloneQuery =
     `Recent conversation about attached documents:\n${recentConversation}\n\n` +
-    `Current request:\n${trimmedQuery || 'Summarize the attached document.'}`;
+    `Current request:\n${trimmedQuery || "Summarize the attached document."}`;
 
   const focusedQuery =
-    `Document question: ${trimmedQuery || 'Summarize the attached document.'}\n\n` +
+    `Document question: ${trimmedQuery || "Summarize the attached document."}\n\n` +
     `Relevant recent conversation:\n${recentConversation}`;
 
   if (isReferential || trimmedQuery.length < 48) {
@@ -189,52 +214,43 @@ async function resolveDocumentContext(
     attachmentIds?: string[];
     waitForProcessing?: boolean;
     processingTimeoutMs?: number;
-  }
+    signal?: AbortSignal;
+    currentDocumentAttachmentIds?: string[];
+  },
 ) {
-  const attempts = queries.map((query, index) => ({
-    query,
-    limit: index === 0 ? 5 : 8,
-    scoreThreshold: index === 0 ? 0.7 : 0.55,
-    waitForProcessing: index === 0 ? options.waitForProcessing : false,
-  }));
-
-  const tryAttempt = async (index: number): Promise<ReturnType<typeof getRAGContext> | undefined> => {
-    if (index >= attempts.length) return undefined;
-    const attempt = attempts[index];
-    try {
-      const result = await getRAGContext(attempt.query, userId, {
-        conversationId: options.conversationId,
-        attachmentIds: options.attachmentIds,
-        limit: attempt.limit,
-        scoreThreshold: attempt.scoreThreshold,
-        waitForProcessing: attempt.waitForProcessing,
-        processingTimeoutMs: options.processingTimeoutMs,
-      });
-
-      if (result) return result;
-    } catch (error) {
-      logger.warn('[Context Router] RAG retrieval attempt failed:', error);
-    }
-    return tryAttempt(index + 1);
-  };
-
-  const ragResult = await tryAttempt(0);
-  if (ragResult) return ragResult;
-
-  return null;
+  if (!queries.length) return null;
+  // Retrieval owns cross-variant RRF. Processing is awaited once, while every
+  // rewrite contributes candidates instead of the first non-empty result winning.
+  try {
+    return await getRAGContext(queries[0], userId, {
+      conversationId: options.conversationId,
+      attachmentIds: options.attachmentIds,
+      limit: 8,
+      scoreThreshold: 0.55,
+      waitForProcessing: options.waitForProcessing,
+      processingTimeoutMs: options.processingTimeoutMs,
+      queryVariants: queries.slice(1),
+      signal: options.signal,
+    });
+  } catch (error) {
+    if (options.signal?.aborted)
+      throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
+    logger.warn("[Context Router] RAG multi-query retrieval failed:", error);
+    return null;
+  }
 }
 
 function buildMissingDocumentContext(query: string): string {
-  const normalizedQuery = query.trim() || 'the attached documents';
+  const normalizedQuery = query.trim() || "the attached documents";
 
   return (
-    '\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed.' +
-    '\n<document_processing_notice>' +
+    "\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed." +
+    "\n<document_processing_notice>" +
     `\nUser's request: ${normalizedQuery}` +
-    '\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge.' +
-    '\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again.' +
-    '\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay.' +
-    '\n</document_processing_notice>'
+    "\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge." +
+    "\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again." +
+    "\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay." +
+    "\n</document_processing_notice>"
   );
 }
 
@@ -244,22 +260,23 @@ function logMissingDocumentRetrieval(params: {
   query: string;
   documentCount: number;
   isReferential: boolean;
-  hadOverviewFallback: boolean;
 }): void {
   logWarn({
-    event: 'rag_context_missing_with_attachments',
+    event: "rag_context_missing_with_attachments",
     userId: params.userId,
     conversationId: params.conversationId,
     queryLength: params.query.trim().length,
     documentCount: params.documentCount,
     isReferential: params.isReferential,
-    hadOverviewFallback: params.hadOverviewFallback,
   });
 }
 
-async function getAttachmentInfo(conversationId: string, userId: string): Promise<{
+async function getAttachmentInfo(
+  conversationId: string,
+  userId: string,
+  currentTurnOnly: boolean,
+): Promise<{
   hasDocuments: boolean;
-  hasAny: boolean;
   documentCount: number;
   documentAttachmentIds: string[];
 }> {
@@ -272,6 +289,9 @@ async function getAttachmentInfo(conversationId: string, userId: string): Promis
         },
         isDeleted: false,
       },
+      ...(currentTurnOnly
+        ? { orderBy: { createdAt: "desc" as const }, take: 1 }
+        : {}),
       select: {
         attachments: {
           select: {
@@ -283,45 +303,62 @@ async function getAttachmentInfo(conversationId: string, userId: string): Promis
       },
     });
 
-    const allAttachments = messages.flatMap(m => m.attachments);
+    const allAttachments = selectDocumentAttachmentsForTurn(
+      messages,
+      !currentTurnOnly,
+    );
 
     if (allAttachments.length === 0) {
-      return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
+      return {
+        hasDocuments: false,
+        documentCount: 0,
+        documentAttachmentIds: [],
+      };
     }
 
-    const retrievableDocumentAttachments = filterDocumentAttachments(allAttachments);
-    const uiDocumentAttachments = retrievableDocumentAttachments.filter((att) =>
-      att.fileName && isSupportedDocumentExtension(att.fileName)
+    const retrievableDocumentAttachments =
+      filterDocumentAttachments(allAttachments);
+    const uiDocumentAttachments = retrievableDocumentAttachments.filter(
+      (att) => att.fileName && isSupportedDocumentExtension(att.fileName),
     );
 
     return {
       hasDocuments: retrievableDocumentAttachments.length > 0,
-      hasAny: true,
       documentCount: uiDocumentAttachments.length,
-      documentAttachmentIds: retrievableDocumentAttachments.map((attachment) => attachment.id),
+      documentAttachmentIds: retrievableDocumentAttachments
+        .map((attachment) => attachment.id)
+        .filter((id): id is string => Boolean(id)),
     };
   } catch (error) {
-    logger.warn('[Context Router] Failed to get attachment info:', error);
-    return { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
+    logger.warn("[Context Router] Failed to get attachment info:", error);
+    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
   }
 }
 
 export async function routeContext(
-  query: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
+  query:
+    | string
+    | Array<{ type: string; text?: string; image_url?: { url: string } }>,
   userId: string,
   messages: Message[],
   conversationId?: string,
-  _activeTool?: string | null,
-  memoryEnabled: boolean = false,
+  activeTool?: string | null,
+  memoryEnabled: boolean = true,
   options?: {
     apiKey?: string;
+    signal?: AbortSignal;
+    currentDocumentAttachmentIds?: string[];
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
   const imageCount = detectImages(query);
   const hasImages = imageCount > 0;
   const isReferential = isReferentialQuery(textQuery);
-  const retrievalQueries = buildRetrievalQueries(textQuery, messages, isReferential);
+  const retrievalQueries = buildRetrievalQueries(
+    textQuery,
+    messages,
+    isReferential,
+  );
 
   const metadata: ContextRoutingMetadata = {
     hasMemories: false,
@@ -331,11 +368,14 @@ export async function routeContext(
     memoryCount: 0,
     documentCount: 0,
     imageCount,
-    skippedMemory: !memoryEnabled,
+    skippedMemory:
+      !memoryEnabled ||
+      Boolean(activeTool) ||
+      process.env.MEMORY_ENABLED === "false",
     degradedContexts: [],
   };
 
-  const addDegradedContext = (source: string, reason: string) => {
+  const addDegradedContext = (source: DegradedContextSource, reason: string) => {
     metadata.degradedContexts = [
       ...(metadata.degradedContexts || []),
       { source, reason },
@@ -345,27 +385,35 @@ export async function routeContext(
   if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
-    return { context: '', metadata };
+    return { context: "", metadata };
   }
 
   const attachmentInfo = conversationId
-    ? await getAttachmentInfo(conversationId, userId)
-    : { hasDocuments: false, hasAny: false, documentCount: 0, documentAttachmentIds: [] };
+    ? options?.currentDocumentAttachmentIds?.length && !isReferential
+      ? {
+          hasDocuments: true,
+          documentCount: options.currentDocumentAttachmentIds.length,
+          documentAttachmentIds: options.currentDocumentAttachmentIds,
+        }
+      : await getAttachmentInfo(conversationId, userId, !isReferential)
+    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
 
     if (attachmentInfo.hasDocuments) {
       const inlineResult = await tryInlineAttachmentContent(
         attachmentInfo.documentAttachmentIds,
         userId,
+        options?.signal,
       );
 
       if (inlineResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = inlineResult.documentCount;
-        if (hasImages) metadata.routingDecision = RoutingDecision.Hybrid;
+        metadata.routingDecision = hasImages
+          ? RoutingDecision.Hybrid
+          : RoutingDecision.DocumentsOnly;
         return { context: inlineResult.context, metadata };
       }
 
@@ -374,34 +422,26 @@ export async function routeContext(
         attachmentIds: attachmentInfo.documentAttachmentIds,
         waitForProcessing: true,
         processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+        signal: options?.signal,
       });
 
       if (ragResult) {
         metadata.hasDocuments = true;
         metadata.documentCount = ragResult.documentCount;
         metadata.citations = ragResult.citations;
-        
+        metadata.routingDecision = hasImages
+          ? RoutingDecision.Hybrid
+          : RoutingDecision.DocumentsOnly;
+
         if (hasImages) {
           metadata.routingDecision = RoutingDecision.Hybrid;
           return { context: ragResult.context, metadata };
         }
-        
+
         return { context: ragResult.context, metadata };
       }
 
       metadata.documentCount = attachmentInfo.documentCount;
-      const overviewContext = await getDocumentOverviewContext(userId, {
-        conversationId,
-        attachmentIds: attachmentInfo.documentAttachmentIds,
-        waitForProcessing: false,
-      });
-
-      if (overviewContext) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = overviewContext.documentCount;
-        return { context: overviewContext.context, metadata };
-      }
-
       metadata.hasDocuments = true;
       logMissingDocumentRetrieval({
         userId,
@@ -409,29 +449,31 @@ export async function routeContext(
         query: textQuery,
         documentCount: attachmentInfo.documentCount,
         isReferential,
-        hadOverviewFallback: false,
       });
       return { context: buildMissingDocumentContext(textQuery), metadata };
     }
 
     if (hasImages) {
       metadata.routingDecision = RoutingDecision.VisionOnly;
-      return { context: '', metadata };
+      return { context: "", metadata };
     }
 
-    return { context: '', metadata };
+    return { context: "", metadata };
   }
 
   if (attachmentInfo.hasDocuments) {
     const inlineResult = await tryInlineAttachmentContent(
       attachmentInfo.documentAttachmentIds,
       userId,
+      options?.signal,
     );
 
     if (inlineResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = inlineResult.documentCount;
-      metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+      metadata.routingDecision = hasImages
+        ? RoutingDecision.Hybrid
+        : RoutingDecision.DocumentsOnly;
       return { context: inlineResult.context, metadata };
     }
 
@@ -440,45 +482,34 @@ export async function routeContext(
       attachmentIds: attachmentInfo.documentAttachmentIds,
       waitForProcessing: true,
       processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+      signal: options?.signal,
     });
 
     if (ragResult) {
       metadata.hasDocuments = true;
       metadata.documentCount = ragResult.documentCount;
       metadata.citations = ragResult.citations;
-      
+
       if (hasImages) {
         metadata.routingDecision = RoutingDecision.Hybrid;
         return { context: ragResult.context, metadata };
       }
-      
+
       metadata.routingDecision = RoutingDecision.DocumentsOnly;
       return { context: ragResult.context, metadata };
     }
 
-    metadata.skippedMemory = true;
-    metadata.routingDecision = RoutingDecision.DocumentsOnly;
-    metadata.hasDocuments = true;
+    // A current document was supplied but did not produce usable evidence.
+    // Never substitute personal memory for the user's requested document.
     metadata.documentCount = attachmentInfo.documentCount;
-
-    const overviewContext = await getDocumentOverviewContext(userId, {
-      conversationId,
-      attachmentIds: attachmentInfo.documentAttachmentIds,
-      waitForProcessing: false,
-    });
-
-    if (overviewContext) {
-      metadata.documentCount = overviewContext.documentCount;
-      return { context: overviewContext.context, metadata };
-    }
-
+    metadata.hasDocuments = true;
+    metadata.skippedMemory = true;
     logMissingDocumentRetrieval({
       userId,
       conversationId,
       query: textQuery,
       documentCount: attachmentInfo.documentCount,
       isReferential,
-      hadOverviewFallback: false,
     });
     return { context: buildMissingDocumentContext(textQuery), metadata };
   }
@@ -486,41 +517,52 @@ export async function routeContext(
   if (hasImages) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
-    return { context: '', metadata };
+    return { context: "", metadata };
   }
 
   if (!memoryEnabled || metadata.skippedMemory) {
-    return { context: '', metadata };
+    return { context: "", metadata };
   }
 
   const recentConversation = getRecentConversationExcerpt(messages);
   const memoryDecision = await mediateMemoryIntent({
     messageText: textQuery,
     recentConversation,
-    apiKey: options?.apiKey,
+    userId,
+    conversationId,
+    signal: options?.signal,
   });
 
   if (!memoryDecision.shouldQuery) {
-    return { context: '', metadata };
+    const degradation = memoryGateDegradation(memoryDecision);
+    if (degradation) addDegradedContext(degradation.source, degradation.reason);
+    return { context: "", metadata };
   }
 
   metadata.attemptedMemory = true;
 
   const memoryContextResult = await getMemoryContextResult(textQuery, userId, {
     recentConversation,
+    conversationId,
+    signal: options?.signal,
   });
 
   if (memoryContextResult.failed) {
-    addDegradedContext('memory', memoryContextResult.error || 'Memory retrieval failed');
-    return { context: '', metadata };
+    addDegradedContext(
+      DegradedContextSource.Memory,
+      memoryContextResult.error || "Memory retrieval failed",
+    );
+    return { context: "", metadata };
   }
 
   if (memoryContextResult.context) {
     metadata.hasMemories = true;
-    metadata.memoryCount = estimateMemoryEntryCount(memoryContextResult.context);
+    metadata.memoryCount = estimateMemoryEntryCount(
+      memoryContextResult.context,
+    );
     metadata.routingDecision = RoutingDecision.MemoryOnly;
     return { context: memoryContextResult.context, metadata };
   }
 
-  return { context: '', metadata };
+  return { context: "", metadata };
 }

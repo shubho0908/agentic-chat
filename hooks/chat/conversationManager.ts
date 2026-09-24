@@ -1,3 +1,5 @@
+import { STREAM_STOPPED_BY_USER_MARKER } from "@/lib/chat/stopMarker";
+export { STREAM_STOPPED_BY_USER_MARKER };
 import {
   type Attachment,
   type MessageContentPart,
@@ -60,8 +62,9 @@ export const HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT =
   "Awaiting your response.";
 export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
   "[[__artifact_only_assistant_content_v1__]]";
-export const STREAM_STOPPED_BY_USER_MARKER =
-  "[[__stream_stopped_by_user_v1__]]";
+export const PDF_ONLY_ASSISTANT_CONTENT =
+  "[[__pdf_only_assistant_content_v1__]]";
+
 
 export function getPersistableAssistantContent(
   assistantContent: string,
@@ -73,6 +76,10 @@ export function getPersistableAssistantContent(
 
   if (metadata?.artifacts && metadata.artifacts.length > 0) {
     return ARTIFACT_ONLY_ASSISTANT_CONTENT;
+  }
+
+  if (metadata?.pdfs && metadata.pdfs.length > 0) {
+    return PDF_ONLY_ASSISTANT_CONTENT;
   }
 
   if (
@@ -118,6 +125,7 @@ function buildAssistantContentForAPI(message: Message): string {
   const text = extractTextFromContent(message.content);
   const visibleText =
     text === ARTIFACT_ONLY_ASSISTANT_CONTENT ||
+    text === PDF_ONLY_ASSISTANT_CONTENT ||
     text === STREAM_STOPPED_BY_USER_MARKER
       ? ""
       : text;
@@ -137,16 +145,16 @@ function buildAssistantContentForAPI(message: Message): string {
 
 function getMessageContentForAPI(
   message: Message,
+  includeHistoricalImages = false,
 ): string | MessageContentPart[] {
   if (message.role === MessageRole.ASSISTANT) {
     return buildAssistantContentForAPI(message);
   }
 
   if (message.role === MessageRole.USER) {
-    return buildModelContentWithImageAttachments(
-      message.content,
-      message.attachments,
-    );
+    return includeHistoricalImages
+      ? buildModelContentWithImageAttachments(message.content, message.attachments)
+      : extractTextFromContent(message.content);
   }
 
   return message.content;
@@ -217,7 +225,8 @@ export function buildMessagesForAPI(
   systemPrompt: string,
   model: string,
   currentAttachments?: Attachment[],
-): Array<{ role: MessageRole; content: string | MessageContentPart[] }> {
+  newMessageId?: string,
+): Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }> {
   const isReferential = isReferentialQuery(newContent);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
   const hasCurrentDocumentAttachment =
@@ -237,16 +246,17 @@ export function buildMessagesForAPI(
           content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
         },
         ...recentMessages.flatMap((message) => {
-          const content = getMessageContentForAPI(message);
+          const content = getMessageContentForAPI(message, isReferential);
           if (
             content === "" ||
             (Array.isArray(content) && content.length === 0)
           )
             return [];
-          return [{ role: message.role as MessageRole, content }];
+          return [{ role: message.role as MessageRole, content, id: message.id }];
         }),
         {
           role: MessageRole.USER,
+          id: newMessageId,
           content: buildModelContentWithImageAttachments(
             newContent,
             currentAttachments,
@@ -272,10 +282,11 @@ export function buildMessagesForAPI(
         const content = getMessageContentForAPI(message);
         if (content === "" || (Array.isArray(content) && content.length === 0))
           return [];
-        return [{ role: message.role as MessageRole, content }];
+        return [{ role: message.role as MessageRole, content, id: message.id }];
       }),
       {
         role: MessageRole.USER,
+        id: newMessageId,
         content: buildModelContentWithImageAttachments(
           newContent,
           currentAttachments,
@@ -284,6 +295,18 @@ export function buildMessagesForAPI(
     ],
     model,
   );
+}
+
+async function discardEmptyConversation(conversationId: string): Promise<void> {
+  try {
+    await fetch(apiRoutes.conversation(conversationId), { method: "DELETE" });
+  } catch (err) {
+    try {
+      logger.warn("[conversationManager] Failed to discard empty conversation:", err);
+    } catch (logErr) {
+      emergencyLog(`logger.warn() threw in discardEmptyConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+    }
+  }
 }
 
 async function createNewConversation(
@@ -309,18 +332,25 @@ async function createNewConversation(
     const newConversation = await createResponse.json();
     const conversationId = newConversation.id;
 
-    onConversationIdReady?.(conversationId);
-
-    const userMessageId = await saveUserMessage(
-      conversationId,
-      userContent,
-      attachments,
-      signal,
-    );
+    let userMessageId: string | null;
+    try {
+      userMessageId = await saveUserMessage(
+        conversationId,
+        userContent,
+        attachments,
+        signal,
+      );
+    } catch (err) {
+      await discardEmptyConversation(conversationId);
+      throw err;
+    }
 
     if (!userMessageId) {
+      await discardEmptyConversation(conversationId);
       return null;
     }
+
+    onConversationIdReady?.(conversationId);
 
     if (earlyCreate) {
       return { conversationId, userMessageId, assistantMessageId: "" };
@@ -476,7 +506,7 @@ export async function handleConversationSaving(
   signal?: AbortSignal,
   metadata?: MessageMetadata,
   onConversationIdReady?: (conversationId: string) => void,
-): Promise<void> {
+): Promise<ConversationResult | null> {
   if (isNewConversation) {
     const result = await createNewConversation(
       userContent,
@@ -488,7 +518,11 @@ export async function handleConversationSaving(
       onConversationIdReady,
     );
 
-    if (result && onConversationCreated) {
+    if (!result) {
+      return null;
+    }
+
+    if (onConversationCreated) {
       if (earlyCreate) {
         updateQueryCacheWithUserMessage(
           queryClient,
@@ -503,24 +537,23 @@ export async function handleConversationSaving(
           assistantContent,
           metadata,
         );
-        if (!persistableAssistantContent) {
-          onConversationCreated(result);
-          return;
+        if (persistableAssistantContent) {
+          updateQueryCache(
+            queryClient,
+            result.conversationId,
+            userContent,
+            persistableAssistantContent,
+            result.userMessageId,
+            result.assistantMessageId,
+            userTimestamp,
+            attachments,
+            metadata,
+          );
         }
-        updateQueryCache(
-          queryClient,
-          result.conversationId,
-          userContent,
-          persistableAssistantContent,
-          result.userMessageId,
-          result.assistantMessageId,
-          userTimestamp,
-          attachments,
-          metadata,
-        );
       }
       onConversationCreated(result);
     }
+    return result;
   } else if (currentConversationId) {
     const persistableAssistantContent = getPersistableAssistantContent(
       assistantContent,
@@ -528,7 +561,7 @@ export async function handleConversationSaving(
     );
 
     if (!persistableAssistantContent) {
-      return;
+      return null;
     }
 
     const assistantMessageId = await saveAssistantMessage(
@@ -542,13 +575,17 @@ export async function handleConversationSaving(
         queryKey: queryKeys.conversation(currentConversationId),
       });
 
+      const created = {
+        conversationId: currentConversationId,
+        userMessageId: "",
+        assistantMessageId,
+      };
       if (onConversationCreated) {
-        onConversationCreated({
-          conversationId: currentConversationId,
-          userMessageId: "",
-          assistantMessageId,
-        });
+        onConversationCreated(created);
       }
+      return created;
     }
+    return null;
   }
+  return null;
 }

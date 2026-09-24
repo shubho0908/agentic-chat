@@ -6,12 +6,13 @@ import {
 } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { ActionButtons } from "./actionButtons";
-import { FileUploadButton } from "./fileUploadButton";
 import { ToolsMenu } from "./toolsMenu";
+import { ModelPicker } from "./modelPicker";
 import { FilePreview } from "./filePreview";
 import { TextSnippetPreview, type TextSnippet } from "./textSnippetPreview";
 import { DropZone } from "./dropZone";
-import type { ToolId } from "@/lib/tools/config";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
+import type { ReasoningEffortMap } from "@/lib/storage";
 import type { DragState } from "@/hooks/useDragAndDrop";
 import type { UploadPhase } from "@/hooks/useChatFileUpload";
 import { VALIDATION_LIMITS } from "@/constants/validation";
@@ -26,25 +27,21 @@ interface FormState {
   getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
   disabled: boolean;
-  activeTool: ToolId | null;
-  memoryEnabled: boolean;
-  thinkingEnabled: boolean;
+  effortByModel: ReasoningEffortMap;
+  selectedModel: string;
 }
 
 interface FormHandlers {
   onSubmit: (e: FormEvent) => void;
   onInputChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onInput: (e: React.FormEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
-  onToolSelected: (toolId: ToolId) => void;
-  onMemoryToggle: (enabled: boolean) => void;
-  onThinkingToggle?: (enabled: boolean) => void;
+  onReasoningEffortChange: (modelId: string, effort: ReasoningEffortLevel) => void;
+  onModelSelect: (modelId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
-  onAuthRequired?: () => void;
 }
 
 interface ChatInputFormProps {
@@ -87,24 +84,20 @@ export function ChatInputForm({
     getFilePreviewUrl,
     isSending,
     disabled,
-    activeTool,
-    memoryEnabled,
-    thinkingEnabled,
+    effortByModel,
+    selectedModel,
   } = state;
   const {
     onSubmit,
     onInputChange,
     onKeyDown,
-    onInput,
     onPaste,
     onRemoveFile,
     onRemoveSnippet,
-    onToolSelected,
-    onMemoryToggle,
-    onThinkingToggle,
+    onReasoningEffortChange,
+    onModelSelect,
     onFilesSelected,
     onStop,
-    onAuthRequired,
   } = handlers;
 
   const visibleFiles = useMemo(() => {
@@ -121,12 +114,13 @@ export function ChatInputForm({
   const showCounter = input.length >= warningThreshold;
   const isOverLimit = input.length >= maxLength;
 
+  // max-h must equal MAX_TEXTAREA_HEIGHT in useChatTextarea (single source
+  // of truth for the grow cap); overflow stays hidden until JS flips it on.
   const textareaClassName = centered
-    ? "min-h-[96px] max-h-[280px] resize-none border-0 bg-transparent px-6 py-4 pr-28 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
-    : "min-h-[88px] max-h-[280px] resize-none border-0 bg-transparent px-5 py-4 pr-24 text-base leading-relaxed align-top focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60";
+    ? "block min-h-[52px] max-h-[200px] w-full resize-none rounded-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0"
+    : "block min-h-[24px] max-h-[200px] w-full resize-none rounded-none border-0 bg-transparent shadow-none px-0 py-0 text-[15px] leading-6 overflow-y-hidden focus-visible:ring-0 focus-visible:ring-offset-0";
 
   const buttonSize = centered ? "large" : "default";
-  const buttonPosition = centered ? "bottom-3 right-3" : "bottom-2 right-2";
 
   return (
     <form onSubmit={onSubmit} className="relative">
@@ -136,7 +130,7 @@ export function ChatInputForm({
         dropZoneRef={dropZoneRef}
         handlers={dragHandlers}
       >
-        <div className="relative isolate overflow-hidden rounded-2xl border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,248,250,0.94))] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-all duration-200 ease-out focus-within:border-black/10 focus-within:ring-1 focus-within:ring-black/6 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,24,28,0.96),rgba(12,12,15,0.96))] dark:shadow-[0_8px_24px_rgba(0,0,0,0.18)] dark:focus-within:border-white/[0.14] dark:focus-within:ring-white/10 group">
+        <div className="relative isolate overflow-hidden rounded-3xl border border-black/[0.07] bg-[rgb(252_252_253)] shadow-[0_2px_6px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(15,23,42,0.08)] transition-all duration-200 ease-out focus-within:border-black/[0.12] focus-within:shadow-[0_2px_6px_rgba(15,23,42,0.05),0_16px_40px_-8px_rgba(15,23,42,0.12)] dark:border-white/[0.09] dark:bg-[rgb(24_24_27)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.25),0_16px_40px_-12px_rgba(0,0,0,0.5)] dark:focus-within:border-white/[0.16] group [&_textarea]:[scrollbar-width:thin] [&_textarea]:[scrollbar-color:transparent_transparent] [&_textarea:hover]:[scrollbar-color:rgba(120,120,128,0.35)_transparent]">
           <FilePreview
             files={visibleFiles}
             getFileKey={getFileId}
@@ -152,70 +146,86 @@ export function ChatInputForm({
             disabled={isSending}
             isUploading={isUploading}
           />
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            onInput={onInput}
-            onPaste={onPaste}
-            placeholder={placeholder}
-            disabled={disabled || isLoading || isUploading || isSending}
-            rows={1}
-            className={textareaClassName}
-          />
 
-          {showCounter && (
-            <div
-              className={`px-5 pb-1 text-xs ${isOverLimit ? "text-destructive" : "text-muted-foreground"}`}
-            >
-              {input.length.toLocaleString()} / {maxLength.toLocaleString()}
-            </div>
-          )}
+          <div
+            className={`relative ${
+              centered ? "px-5 pt-4" : "px-4 pt-3.5"
+            }`}
+          >
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              aria-label={placeholder}
+              disabled={disabled || isLoading || isUploading || isSending}
+              rows={1}
+              className={textareaClassName}
+            />
+            {input.length === 0 && (
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-x-0 top-0 overflow-hidden ${
+                  centered ? "px-5 pt-4" : "px-4 pt-3.5"
+                }`}
+              >
+                <span className="block w-full truncate text-[15px] leading-6 text-muted-foreground">
+                  {placeholder}
+                </span>
+              </span>
+            )}
+          </div>
 
-          <div className={`absolute ${buttonPosition} flex items-center gap-1`}>
-            <div className="hidden md:block">
-              <FileUploadButton
-                disabled={
-                  disabled ||
-                  isLoading ||
-                  isUploading ||
-                  isSending ||
-                  maxFilesReached
-                }
-                onFilesSelected={onFilesSelected}
-                fileCount={selectedFiles.length}
-              />
-            </div>
-            <div className="mr-1">
+          <div
+            className={`flex items-center gap-1.5 ${
+              centered ? "px-3 pb-3 pt-2" : "px-2.5 pb-2.5 pt-2"
+            }`}
+          >
+            <div className="shrink-0">
               <ToolsMenu
                 disabled={disabled || isLoading || isUploading || isSending}
-                onToolSelected={onToolSelected}
-                activeTool={activeTool}
-                memoryEnabled={memoryEnabled}
-                onMemoryToggle={onMemoryToggle}
-                thinkingEnabled={thinkingEnabled}
-                onThinkingToggle={onThinkingToggle}
                 onFilesSelected={onFilesSelected}
                 fileCount={selectedFiles.length}
-                onAuthRequired={onAuthRequired}
               />
             </div>
-            <ActionButtons
-              status={
-                isLoading
-                  ? "loading"
-                  : isUploading
-                    ? "uploading"
-                    : isSending
-                      ? "sending"
-                      : "idle"
-              }
-              disabled={disabled}
-              hasInput={!!input.trim() || textSnippets.length > 0}
-              onStop={onStop}
-              size={buttonSize}
-            />
+
+            <div className="min-w-0 flex-1">
+              {showCounter && (
+                <p
+                  className={`text-right text-[11px] leading-none tabular-nums ${
+                    isOverLimit ? "text-destructive" : "text-muted-foreground/70"
+                  }`}
+                >
+                  {input.length.toLocaleString()} / {maxLength.toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ModelPicker
+                selectedModel={selectedModel}
+                effortByModel={effortByModel}
+                onModelSelect={onModelSelect}
+                onEffortChange={onReasoningEffortChange}
+                disabled={disabled || isLoading || isUploading || isSending}
+              />
+              <ActionButtons
+                status={
+                  isLoading
+                    ? "loading"
+                    : isUploading
+                      ? "uploading"
+                      : isSending
+                        ? "sending"
+                        : "idle"
+                }
+                disabled={disabled}
+                hasInput={!!input.trim() || textSnippets.length > 0}
+                onStop={onStop}
+                size={buttonSize}
+              />
+            </div>
           </div>
         </div>
       </DropZone>

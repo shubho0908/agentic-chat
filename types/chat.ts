@@ -6,6 +6,7 @@ import type {
   WebSearchSource,
 } from './tools';
 import type { ArtifactEvent } from './artifact';
+import type { ReasoningEffortLevel } from '@/constants/openai-models';
 
 export enum RoutingDecision {
   VisionOnly = 'vision-only',
@@ -34,6 +35,11 @@ export interface TokenUsage {
   };
 }
 
+export enum DegradedContextSource {
+  Memory = 'memory',
+  ContextRouter = 'context_router',
+}
+
 export interface MemoryStatus {
   hasMemories: boolean;
   attemptedMemory?: boolean;
@@ -46,7 +52,7 @@ export interface MemoryStatus {
   skippedMemory?: boolean;
   activeToolName?: string;
   degradedContexts?: Array<{
-    source: string;
+    source: DegradedContextSource;
     reason: string;
   }>;
   tokenUsage?: TokenUsage;
@@ -87,12 +93,12 @@ export interface VersionData {
 export interface UseChatOptions {
   initialMessages?: Message[];
   conversationId?: string | null;
+  activeBranchId?: string | null;
   onArtifact?: (event: ArtifactEvent) => void;
   autoContinue?: {
     session?: { user: { id: string } };
     activeTool?: string | null;
-    memoryEnabled?: boolean;
-    thinkingEnabled?: boolean;
+    reasoningEffort?: ReasoningEffortLevel;
   } | null;
 }
 
@@ -101,8 +107,7 @@ export interface SendMessageOptions {
   session?: { user: { id: string } };
   attachments?: Attachment[];
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 interface MessageSendResult {
@@ -114,8 +119,7 @@ export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
   activeTool?: string | null,
-  memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ) => Promise<MessageSendResult> | MessageSendResult;
 
 export interface EditMessageOptions {
@@ -124,24 +128,21 @@ export interface EditMessageOptions {
   attachments?: Attachment[];
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 export interface RegenerateMessageOptions {
   messageId: string;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 export interface ContinueConversationOptions {
   userMessage: Message;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 export interface UseChatReturn {
@@ -225,7 +226,8 @@ export interface HumanInTheLoopRequestEvent {
 }
 
 export interface StreamConfig {
-  messages: Array<{ role: MessageRole; content: string | MessageContentPart[] }>;
+  messages: Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }>;
+  branchId?: string;
   model: string;
   signal: AbortSignal;
   onChunk: (delta: string) => void;
@@ -238,8 +240,9 @@ export interface StreamConfig {
   onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  onResponseIncomplete?: (reason: "length") => void;
+  documentAttachmentIds?: string[];
+  reasoningEffort?: ReasoningEffortLevel;
 }
 
 export interface ApprovalStreamConfig {
@@ -248,6 +251,7 @@ export interface ApprovalStreamConfig {
   model: string;
   approved?: boolean;
   response?: string;
+  reasoningEffort?: ReasoningEffortLevel;
   signal: AbortSignal;
   onChunk: (delta: string) => void;
   onToolCall?: (toolCall: ToolCallEvent) => void;
@@ -256,4 +260,5 @@ export interface ApprovalStreamConfig {
   onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
+  onResponseIncomplete?: (reason: "length") => void;
 }

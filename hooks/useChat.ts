@@ -15,10 +15,12 @@ import type {
   ContinueConversationOptions,
 } from "@/types/chat";
 import { handleSendMessage, continueIncompleteConversation } from "./chat/messageSender";
+import { shouldAutoContinueConversation } from "./chat/autoContinue";
+import { apiRoutes } from "@/lib/routes";
 import { handleEditMessage } from "./chat/messageEditor";
 import { handleRegenerateResponse } from "./chat/messageRegenerator";
 import { useStreaming } from "@/contexts/streaming-context";
-import { getModel } from "@/lib/storage";
+import { getModel, getReasoningEffort } from "@/lib/storage";
 import { streamChatApproval } from "./chat/streamingApi";
 import { HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, getPersistableAssistantContent } from "./chat/conversationManager";
 import { saveAssistantMessage, updateAssistantMessage as updateSavedAssistantMessage } from "./chat/messageApi";
@@ -43,7 +45,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function useChat(options: UseChatOptions = {}): UseChatReturn {
-  const { initialMessages = [], conversationId: initialConversationId, autoContinue, onArtifact } = options;
+  const { initialMessages = [], conversationId: initialConversationId, activeBranchId: initialActiveBranchId, autoContinue, onArtifact } = options;
   const [messages, setMessages] = useState<Message[]>(() => dedupeMessagesById(initialMessages));
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId || null);
@@ -54,6 +56,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   const queryClient = useQueryClient();
   const prevConversationIdRef = useRef<string | null>(initialConversationId || null);
   const autoContinuedRef = useRef<string | null>(null);
+  const branchIdRef = useRef<string | undefined>(initialActiveBranchId ?? undefined);
   const { startStreaming, stopStreaming: stopStreamingContext, updateStreamingConversationId } = useStreaming();
 
   const messagesRef = useRef<Message[]>(messages);
@@ -71,16 +74,18 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       setConversationId(currentId);
       prevConversationIdRef.current = currentId;
       autoContinuedRef.current = null;
+      branchIdRef.current = initialActiveBranchId ?? undefined;
     }
-  }, [initialConversationId, initialMessages, messages.length]);
+  }, [initialActiveBranchId, initialConversationId, initialMessages, messages.length]);
 
   const sendMessage = useCallback(
-    async ({ content, session, attachments, activeTool, memoryEnabled, thinkingEnabled }: SendMessageOptions) => {
+    async ({ content, session, attachments, activeTool, reasoningEffort }: SendMessageOptions) => {
       if (!content.trim() || isLoading) {
         return { success: false, error: "Unable to send message" };
       }
 
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
       setIsLoading(true);
       setMemoryStatus(undefined);
       startStreaming(conversationId, abortControllerRef.current);
@@ -92,7 +97,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current!.signal,
+            abortSignal: requestController.signal,
             queryClient,
             onMessagesUpdate: setMessages,
             onConversationIdUpdate: (id: string) => {
@@ -104,11 +109,12 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           session,
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
         return result;
       } catch (error) {
@@ -118,21 +124,24 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
 
         return { success: false, error: "aborted" };
       } finally {
-        setIsLoading(false);
-        stopStreamingContext(false);
-        abortControllerRef.current = null;
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          stopStreamingContext(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [isLoading, saveToCache, conversationId, onArtifact, queryClient, startStreaming, stopStreamingContext, updateStreamingConversationId, router]
   );
 
   const editMessage = useCallback(
-    async ({ messageId, content, attachments, session, activeTool, memoryEnabled, thinkingEnabled }: EditMessageOptions) => {
+    async ({ messageId, content, attachments, session, activeTool, reasoningEffort }: EditMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -144,38 +153,42 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             session,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const regenerateResponse = useCallback(
-    async ({ messageId, session, activeTool, memoryEnabled, thinkingEnabled }: RegenerateMessageOptions) => {
+    async ({ messageId, session, activeTool, reasoningEffort }: RegenerateMessageOptions) => {
       if (isLoading) return;
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -185,38 +198,42 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             session,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
   );
 
   const continueConversation = useCallback(
-    async ({ userMessage, session, activeTool, memoryEnabled, thinkingEnabled }: ContinueConversationOptions) => {
+    async ({ userMessage, session, activeTool, reasoningEffort }: ContinueConversationOptions) => {
       if (isLoading || !conversationId) return;
 
       setIsLoading(true);
       setMemoryStatus(undefined);
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
 
       startStreaming(conversationId, abortControllerRef.current);
 
@@ -226,26 +243,29 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           {
             messages: messagesRef.current,
             conversationId,
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: requestController.signal,
             queryClient,
             onMessagesUpdate: setMessages,
             saveToCacheMutate: saveToCache.mutate,
             onMemoryStatusUpdate: setMemoryStatus,
             onArtifact,
+            branchId: branchIdRef.current,
+            onBranchIdUpdate: (branchId: string) => { branchIdRef.current = branchId; },
           },
           session,
           activeTool,
-          memoryEnabled,
-          thinkingEnabled
+          reasoningEffort
         );
       } catch (error) {
         if (!isAbortError(error)) {
           throw error;
         }
       } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-        stopStreamingContext(false);
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          stopStreamingContext(false);
+        }
       }
     },
     [isLoading, conversationId, onArtifact, saveToCache, queryClient, startStreaming, stopStreamingContext]
@@ -291,7 +311,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         );
       };
 
-      abortControllerRef.current = new AbortController();
+      const requestController = new AbortController();
+      abortControllerRef.current = requestController;
       setIsLoading(true);
       startStreaming(conversationId, abortControllerRef.current);
       updateLocalAssistantMessage({ content: "", metadata: messageMetadata });
@@ -303,7 +324,8 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           model,
           approved,
           response,
-          signal: abortControllerRef.current.signal,
+          reasoningEffort: getReasoningEffort(),
+          signal: requestController.signal,
           onChunk: (delta) => {
             resumedContent += delta;
             updateLocalAssistantMessage({
@@ -346,6 +368,10 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           onThinking: (delta) => {
             thinkingAccumulator += delta;
             updateLocalAssistantMessage({ thinking: thinkingAccumulator });
+          },
+          onResponseIncomplete: () => {
+            messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+            updateLocalAssistantMessage({ metadata: messageMetadata });
           },
           onArtifact: (event) => {
             const eventWithMessage = { ...event, messageId: assistantMessageId };
@@ -427,9 +453,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           toast.error(toUserFriendlyError(error, "Failed to process your response. Please try again."));
         }
       } finally {
-        setIsLoading(false);
-        stopStreamingContext(false);
-        abortControllerRef.current = null;
+        if (abortControllerRef.current === requestController) {
+          setIsLoading(false);
+          stopStreamingContext(false);
+          abortControllerRef.current = null;
+        }
       }
     },
     [conversationId, isLoading, onArtifact, queryClient, startStreaming, stopStreamingContext]
@@ -438,16 +466,11 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
   useEffect(() => {
     if (isLoading || messages.length === 0 || !autoContinue?.session) return;
 
-    const lastMessage = messages[messages.length - 1];
+    if (!shouldAutoContinueConversation(messages)) return;
+
     const lastUserMessage = messages.findLast(msg => msg.role === MessageRole.USER);
 
-    if (lastMessage?.role === MessageRole.ASSISTANT && lastMessage.metadata?.humanInTheLoopStatus === "pending") return;
-
-    const isIncomplete =
-      (lastMessage?.role === MessageRole.USER && lastMessage.id) ||
-      (lastMessage?.role === MessageRole.ASSISTANT && !lastMessage.content && !lastMessage.metadata?.humanInTheLoopRequest && lastUserMessage?.id);
-
-    if (isIncomplete && lastUserMessage?.id && conversationId) {
+    if (lastUserMessage?.id && conversationId) {
       const resumeKey = `${conversationId}:${lastUserMessage.id}`;
       if (autoContinuedRef.current === resumeKey) return;
 
@@ -458,8 +481,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
           userMessage: lastUserMessage,
           session: autoContinue.session,
           activeTool: autoContinue.activeTool ?? null,
-          memoryEnabled: autoContinue.memoryEnabled,
-          thinkingEnabled: autoContinue.thinkingEnabled,
+          reasoningEffort: autoContinue.reasoningEffort,
         });
       }, 0);
       return () => clearTimeout(timerId);
@@ -479,9 +501,25 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    // Lock-free explicit-stop marker: even if this tab dies right after the
+    // click, the stop is recorded and a later refresh can never auto-retry
+    // it. The user message id scopes the marker to this turn so a newer turn
+    // is never finalized by mistake; without a user message there is no turn
+    // to stop and nothing to record.
+    const lastUserMessageId = messagesRef.current.findLast(
+      (message) => message.role === MessageRole.USER,
+    )?.id;
+    if (conversationId && lastUserMessageId) {
+      void fetch(apiRoutes.chatStop, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, userMessageId: lastUserMessageId }),
+        keepalive: true,
+      }).catch(() => {});
+    }
     setIsLoading(false);
     stopStreamingContext(false);
-  }, [stopStreamingContext]);
+  }, [stopStreamingContext, conversationId]);
 
   useEffect(() => () => { abortControllerRef.current?.abort(); }, [abortControllerRef]);
 

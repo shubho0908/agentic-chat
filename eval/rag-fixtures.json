@@ -1,0 +1,13 @@
+{
+  "description": "Small deterministic smoke fixture. Replace/add domain labels from production documents before using metrics as a release gate.",
+  "labels": [
+    {"id":"refund-window","relevantChunkIds":["policy-refund"],"relevanceGrades":{"policy-refund":3,"policy-summary":1}},
+    {"id":"security-retention","relevantChunkIds":["security-retention"],"relevanceGrades":{"security-retention":3,"security-overview":1}},
+    {"id":"invoice-total","relevantChunkIds":["invoice-total"],"relevanceGrades":{"invoice-total":3}}
+  ],
+  "results": [
+    {"queryId":"refund-window","rankedChunkIds":["policy-refund","policy-summary","noise"]},
+    {"queryId":"security-retention","rankedChunkIds":["security-overview","security-retention","noise"]},
+    {"queryId":"invoice-total","rankedChunkIds":["invoice-total","noise"]}
+  ]
+}

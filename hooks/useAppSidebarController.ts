@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { usePathname, useRouter } from "next/navigation";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -82,7 +82,7 @@ export function useAppSidebarController() {
     INITIAL_SELECTION_STATE
   );
   const parentRef = useRef<HTMLDivElement>(null);
-  const { isMobile, openMobile } = useSidebar();
+  const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const fetchingRef = useRef(false);
   const loaderRef = useRef<HTMLDivElement>(null);
   const { isStreaming, stopStreaming } = useStreaming();
@@ -176,16 +176,27 @@ export function useAppSidebarController() {
     };
   }, [conversations.length, fetchNextPage, hasNextPage, isMobile, openMobile]);
 
-  const handleNewChat = () => {
+  const handleNewChat = (event: MouseEvent<HTMLAnchorElement>) => {
     if (isStreaming) {
+      event.preventDefault();
       setShowGuardDialog(true);
-    } else {
-      router.push("/");
+      return;
+    }
+
+    if (pathname === "/") {
+      event.preventDefault();
+    }
+
+    if (isMobile) {
+      setOpenMobile(false);
     }
   };
 
   const handleConfirmNewChat = () => {
     stopStreaming();
+    if (isMobile) {
+      setOpenMobile(false);
+    }
     router.push("/");
   };
 

@@ -94,6 +94,7 @@ model Conversation {
   userId    String
   title     String?  @db.VarChar(255)
   isPublic  Boolean  @default(false)
+  activeBranchId String? @db.VarChar(255)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -166,6 +167,8 @@ model SemanticCache {
   question       String                         @db.Text
   answer         String                         @db.Text
   embedding      Unsupported("vector(1536)")?
+  model          String?                        @map("model")
+  reasoningEffort String?                       @map("reasoning_effort")
   createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([userId], map: "semantic_cache_user_id_idx")
@@ -173,6 +176,29 @@ model SemanticCache {
   @@index([userId, conversationId], map: "semantic_cache_user_conv_idx")
   @@index([createdAt], map: "semantic_cache_created_at_idx")
   @@map("semantic_cache")
+}
+
+model JevDecision {
+  id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
+  checkpoint     String
+  schemaVersion  String   @map("schema_version")
+  modelVersion   String   @map("model_version")
+  mode           String
+  outcome        String
+  probabilities  Json?
+  confidence     Float?
+  fallbackUsed   Boolean  @map("fallback_used")
+  fallbackReason String?  @map("fallback_reason")
+  inputTokens    Int?     @map("input_tokens")
+  outputTokens   Int?     @map("output_tokens")
+  latencyMs      Int      @map("latency_ms")
+  requestId      String?  @map("request_id")
+  conversationId String?  @map("conversation_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([checkpoint, createdAt(sort: Desc)], map: "jev_decisions_checkpoint_created_idx")
+  @@index([createdAt], map: "jev_decisions_created_at_idx")
+  @@map("jev_decisions")
 }
 
 model OrchestrationJob {
@@ -199,4 +225,12 @@ model OrchestrationJob {
   @@map("orchestration_job")
 }
 
+model ThreadLock {
+  threadId   String   @id @map("thread_id")
+  ownerToken String   @map("owner_token")
+  acquiredAt DateTime @default(now()) @map("acquired_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
 
+  @@index([expiresAt], map: "thread_locks_expires_idx")
+  @@map("thread_locks")
+}

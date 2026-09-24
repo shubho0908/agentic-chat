@@ -1,315 +1,145 @@
-import { createElement } from "react";
-import { Search, Globe, Presentation, CheckCircle2, Loader, AlertCircle, Plug, ExternalLink } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import type { FC, SVGProps } from "react";
-import type { ToolActivity, JsonValue } from "@/lib/schemas/chat";
-import { ToolStatus } from "@/lib/schemas/chat";
+"use client";
+
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, BookOpen, Loader } from "lucide-react";
+import type { ToolActivity } from "@/lib/schemas/chat";
 import { ToolName } from "@/lib/tools/constants";
-import { extractDomain } from "@/lib/utils";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-  GmailIcon,
-  GoogleCalendarIcon,
-  GoogleDocsIcon,
-  GoogleSheetsIcon,
-  GoogleDriveIcon,
-  SlackIcon,
-  GitHubIcon,
-  NotionIcon,
-  LinearIcon,
-} from "../connectorIcons";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { summarizeToolRun } from "./toolActivityMeta";
+import { ToolCallRow } from "./toolCallRow";
+import { ToolIcon } from "./toolIcons";
+
+const RUN_ITEM_VALUE = "tool-run";
 
 interface ToolActivityDisplayProps {
   toolActivities: ToolActivity[];
 }
 
-type IconComponent = LucideIcon | FC<SVGProps<SVGSVGElement>>;
-
-function getToolIcon(toolName: string): IconComponent {
-  if (toolName === ToolName.WEB_SEARCH) return Search;
-  if (toolName === ToolName.WEB_SCRAPE) return Globe;
-  if (toolName === ToolName.DEEP_RESEARCH) return Search;
-  const upper = toolName.toUpperCase();
-  if (upper.startsWith("GMAIL")) return GmailIcon;
-  if (upper.startsWith("GOOGLECALENDAR")) return GoogleCalendarIcon;
-  if (upper.startsWith("GOOGLEDRIVE")) return GoogleDriveIcon;
-  if (upper.startsWith("GOOGLEDOCS")) return GoogleDocsIcon;
-  if (upper.startsWith("GOOGLESHEETS")) return GoogleSheetsIcon;
-  if (upper.startsWith("SLACK")) return SlackIcon;
-  if (upper.startsWith("NOTION")) return NotionIcon;
-  if (upper.startsWith("GITHUB")) return GitHubIcon;
-  if (upper.startsWith("LINEAR")) return LinearIcon;
-  if (upper.startsWith("GOOGLESLIDES")) return Presentation;
-  return Plug;
-}
-
-function getActionLabel(toolName: string): string {
-  if (toolName === ToolName.WEB_SEARCH) return "Web search";
-  if (toolName === ToolName.WEB_SCRAPE) return "Read webpage";
-  if (toolName === ToolName.DEEP_RESEARCH) return "Research Agent";
-
-  // Derive a human-readable label from the slug itself.
-  // Strip the toolkit prefix (e.g., "GMAIL_FETCH_EMAILS" → "Fetch emails")
-  // so labels stay correct even when Composio renames or adds slugs.
-  const parts = toolName.split("_");
-  if (parts.length > 1) {
-    const action = parts.slice(1).join(" ").toLowerCase();
-    return action.charAt(0).toUpperCase() + action.slice(1);
-  }
-  return toolName.replace(/_/g, " ");
-}
-
-function getServiceName(toolName: string): string | null {
-  const upper = toolName.toUpperCase();
-  if (upper.startsWith("GMAIL")) return "Gmail";
-  if (upper.startsWith("GOOGLECALENDAR")) return "Calendar";
-  if (upper.startsWith("GOOGLEDRIVE")) return "Drive";
-  if (upper.startsWith("GOOGLEDOCS")) return "Docs";
-  if (upper.startsWith("GOOGLESHEETS")) return "Sheets";
-  if (upper.startsWith("GOOGLESLIDES")) return "Slides";
-  if (upper.startsWith("SLACK")) return "Slack";
-  if (upper.startsWith("NOTION")) return "Notion";
-  if (upper.startsWith("GITHUB")) return "GitHub";
-  if (upper.startsWith("LINEAR")) return "Linear";
-  return null;
-}
-
-function parseInputArgs(args: Record<string, unknown>): Record<string, unknown> {
-  if (typeof args.input === "string") {
-    try {
-      const parsed = JSON.parse(args.input);
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
-    } catch { /* noop */ }
-  }
-  return args;
-}
-
-function getKeyArg(activity: ToolActivity): string | null {
-  const { toolName, args } = activity;
-  if (!args) return null;
-
-  const resolved = parseInputArgs(args);
-
-  if (toolName === ToolName.WEB_SEARCH) return resolved.query as string || null;
-  if (toolName === ToolName.WEB_SCRAPE) {
-    const url = (resolved.url || args.url) as string;
-    if (!url) return null;
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return url;
-    }
-  }
-
-  return (resolved.query || resolved.subject || resolved.title || resolved.name || resolved.q || resolved.to) as string || null;
-}
-
-function extractResultContent(result: JsonValue): string | null {
-  if (typeof result === "string") return result;
-  if (result && typeof result === "object" && !Array.isArray(result)) {
-    const obj = result as Record<string, JsonValue>;
-    if (obj.kwargs && typeof obj.kwargs === "object" && !Array.isArray(obj.kwargs)) {
-      const kwargs = obj.kwargs as Record<string, JsonValue>;
-      if (typeof kwargs.content === "string") return kwargs.content;
-    }
-    if (typeof obj.content === "string") return obj.content;
-  }
-  return null;
-}
-
-function parseWebSearchResults(result: JsonValue): { count: number; sources: { domain: string; url: string }[] } | null {
-  const content = extractResultContent(result);
-  if (!content) return null;
-
-  // Match structured formats: "URL: https://..." or "[N] ...URL: ..." (exa) and standalone URLs on their own line
-  const structuredMatches = content.match(/(?:URL:\s+|^|\n)(https?:\/\/[^\s)\]"'<>]+)/gm);
-  if (!structuredMatches || structuredMatches.length === 0) return null;
-
-  const sources: { domain: string; url: string }[] = [];
-  const seen = new Set<string>();
-  for (const raw of structuredMatches) {
-    const urlMatch = raw.match(/https?:\/\/[^\s)\]"'<>]+/);
-    if (!urlMatch) continue;
-    try {
-      const fullUrl = urlMatch[0].replace(/[.,;]+$/, "");
-      if (seen.has(fullUrl)) continue;
-      seen.add(fullUrl);
-      const domain = extractDomain(fullUrl);
-      sources.push({ domain, url: fullUrl });
-    } catch { /* noop */ }
-  }
-  return sources.length > 0 ? { count: sources.length, sources } : null;
-}
-
-function isSearchTool(toolName: string): boolean {
-  return toolName === ToolName.WEB_SEARCH || toolName === ToolName.DEEP_RESEARCH;
-}
-
-function getResultMetadata(activity: ToolActivity): string | null {
-  const { toolName, result, status } = activity;
-  if (status !== ToolStatus.Completed || !result) return null;
-
-  if (isSearchTool(toolName)) {
-    const parsed = parseWebSearchResults(result);
-    if (parsed) return `${parsed.count} sources`;
-    const content = extractResultContent(result);
-    if (content && content.includes("No results")) return "No results";
-    return null;
-  }
-
-  if (toolName === ToolName.WEB_SCRAPE) {
-    const content = extractResultContent(result);
-    if (content) {
-      if (content.includes("Failed to extract")) return "Failed";
-      const chars = content.length;
-      if (chars > 0) return `${Math.round(chars / 100) / 10}k chars`;
-    }
-    return null;
-  }
-
-  if (typeof result === "string") {
-    if (result.includes("successfully")) return "Done";
-    if (result.includes("not found") || result.includes("No ")) return "Not found";
-  }
-
-  if (result && typeof result === "object" && !Array.isArray(result)) {
-    const obj = result as Record<string, JsonValue>;
-    if (obj.successfull === true || obj.successful === true) return "Done";
-    if (obj.error) return "Error";
-  }
-
-  return null;
-}
-
-function getWebSearchSources(activity: ToolActivity): { domain: string; url: string }[] {
-  if (!isSearchTool(activity.toolName) || activity.status !== ToolStatus.Completed || !activity.result) return [];
-  const parsed = parseWebSearchResults(activity.result);
-  return parsed?.sources || [];
-}
-
-function StatusIndicator({ status }: { status: string }) {
-  if (status === ToolStatus.Calling) {
-    return <Loader className="size-3 animate-spin text-muted-foreground" />;
-  }
-  if (status === ToolStatus.Completed) {
-    return <CheckCircle2 className="size-3 text-muted-foreground/70" />;
-  }
-  return <AlertCircle className="size-3 text-destructive/70" />;
-}
-
-function getKeyArgUrl(activity: ToolActivity): string | null {
-  const { toolName, args } = activity;
-  if (!args) return null;
-  if (toolName === ToolName.WEB_SCRAPE) {
-    const resolved = parseInputArgs(args);
-    return (resolved.url || args.url) as string || null;
-  }
-  return null;
-}
-
-const INLINE_SOURCE_LIMIT = 4;
-
-function SourcesSheet({ sources }: { sources: { domain: string; url: string }[] }) {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <button type="button" className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
-          +{sources.length - INLINE_SOURCE_LIMIT} more
-        </button>
-      </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{sources.length} sources</SheetTitle>
-        </SheetHeader>
-        <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
-          {sources.map((source, i) => (
-            <a
-              key={`${source.domain}-${i}`}
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-sm hover:bg-muted/60 transition-colors group"
-            >
-              <span className="text-muted-foreground shrink-0 tabular-nums text-xs">{i + 1}</span>
-              <span className="flex-1 min-w-0 truncate text-foreground/90">{source.domain}</span>
-              <ExternalLink className="size-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-            </a>
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
+/** A tool run reads as one collapsed line ("Gmail · 22 tool calls"), expands into
+ *  the individual calls, and each call expands into its args/result payload.
+ *
+ *  While calls are in flight the run stays open, and it folds away when the run
+ *  finishes — unless the reader opened or closed it by hand during that run. */
+export const ToolActivityDisplay = memo(function ToolActivityDisplay({
+  toolActivities,
+}: ToolActivityDisplayProps) {
+  const visible = useMemo(
+    () => toolActivities.filter((activity) => activity.toolName !== ToolName.ASK_USER),
+    [toolActivities],
   );
-}
 
-function ToolActivityRow({ activity }: { activity: ToolActivity }) {
-  const action = getActionLabel(activity.toolName);
-  const service = getServiceName(activity.toolName);
-  const keyArg = getKeyArg(activity);
-  const keyArgUrl = getKeyArgUrl(activity);
-  const meta = getResultMetadata(activity);
-  const sources = getWebSearchSources(activity);
-  const isDone = activity.status === ToolStatus.Completed;
-  const hasError = activity.status === ToolStatus.Error;
-  const inlineSources = sources.slice(0, INLINE_SOURCE_LIMIT);
-  const hasMoreSources = sources.length > INLINE_SOURCE_LIMIT;
+  const summary = useMemo(() => summarizeToolRun(visible), [visible]);
+  const isLive = summary.running > 0;
+  const [isOpen, setIsOpen] = useState(isLive);
+  const wasLiveRef = useRef(isLive);
+  const toggledByReaderRef = useRef(false);
 
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 min-w-0">
-        {createElement(getToolIcon(activity.toolName), { className: "size-3.5 shrink-0 text-muted-foreground" })}
-        <span className="text-[12px] font-medium text-foreground/80 truncate">
-          {service ? `${service} · ${action}` : action}
-        </span>
-        {keyArg && (
-          keyArgUrl ? (
-            <a href={keyArgUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground hover:text-foreground truncate max-w-[180px] underline underline-offset-2 decoration-muted-foreground/40">
-              {keyArg}
-            </a>
-          ) : (
-            <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-              {keyArg}
-            </span>
-          )
-        )}
-        <span className="ml-auto flex items-center gap-1.5 shrink-0">
-          {meta && (
-            <span className="text-[10px] text-muted-foreground">{meta}</span>
-          )}
-          <StatusIndicator status={activity.status} />
-        </span>
-      </div>
-      {isDone && sources.length > 0 && (
-        <div className="flex items-center gap-1 ml-5.5 flex-wrap">
-          {inlineSources.map((source, i) => (
-            <a key={`${source.domain}-${i}`} href={source.url} target="_blank" rel="noopener noreferrer" className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
-              {source.domain}
-            </a>
-          ))}
-          {hasMoreSources && <SourcesSheet sources={sources} />}
-        </div>
-      )}
-      {hasError && activity.error && (
-        <span className="text-[10px] text-destructive/70 ml-5.5 truncate">{activity.error}</span>
-      )}
-    </div>
-  );
-}
+  useEffect(() => {
+    const wasLive = wasLiveRef.current;
+    wasLiveRef.current = isLive;
+    if (wasLive === isLive) return;
 
-export function ToolActivityDisplay({ toolActivities }: ToolActivityDisplayProps) {
-  const visible = toolActivities.filter((a) => a.toolName !== ToolName.ASK_USER);
+    if (isLive) {
+      // A fresh run takes back control so progress is visible again.
+      toggledByReaderRef.current = false;
+      setIsOpen(true);
+      return;
+    }
+
+    if (!toggledByReaderRef.current) {
+      setIsOpen(false);
+    }
+  }, [isLive]);
+
   if (visible.length === 0) return null;
 
+  const handleValueChange = (value: string) => {
+    toggledByReaderRef.current = true;
+    setIsOpen(value === RUN_ITEM_VALUE);
+  };
+
+  const primaryLabel = isLive && summary.activeLabel ? summary.activeLabel : summary.countLabel;
+
   return (
-    <div className="flex flex-col gap-2">
-      {visible.map((activity) => (
-        <ToolActivityRow key={activity.toolCallId} activity={activity} />
-      ))}
-    </div>
+    <Accordion
+      type="single"
+      collapsible
+      value={isOpen ? RUN_ITEM_VALUE : ""}
+      onValueChange={handleValueChange}
+    >
+      <AccordionItem value={RUN_ITEM_VALUE} className="border-none">
+        <AccordionTrigger
+          // Stable hook for the /message-preview review harness.
+          data-tool-activity-summary
+          className="items-center gap-2 rounded-lg px-2 py-1 text-left text-sm font-medium transition-colors hover:bg-muted/40 hover:no-underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 focus-visible:outline-none [&>svg]:size-3.5 [&>svg]:text-muted-foreground/50"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            {isLive ? (
+              <Loader aria-hidden className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            ) : (
+              <ToolIcon icon={summary.icon} className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
+
+            <span className="flex min-w-0 items-baseline gap-1.5 truncate text-[12px]">
+              <span className="font-medium text-foreground/80">{summary.title}</span>
+              <span aria-hidden className="text-muted-foreground/40">·</span>
+              <span className="truncate text-[11px] text-muted-foreground">{primaryLabel}</span>
+            </span>
+
+            <span className="ml-auto flex shrink-0 items-center gap-2 pr-1">
+              {summary.progressLabel && (
+                <span className="text-[10px] tabular-nums text-muted-foreground/70">
+                  {summary.progressLabel}
+                </span>
+              )}
+              {summary.sourceCount > 0 && (
+                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <BookOpen aria-hidden className="size-3" />
+                  {summary.sourceCount} {summary.sourceCount === 1 ? "source" : "sources"}
+                </span>
+              )}
+              {summary.hasFailures && (
+                <span className="flex items-center gap-1 text-[10px] text-destructive/80">
+                  <AlertCircle aria-hidden className="size-3" />
+                  {summary.failed} failed
+                </span>
+              )}
+            </span>
+          </span>
+        </AccordionTrigger>
+
+        <AccordionContent className="pt-1 pb-1.5">
+          <ol className="max-h-72 overflow-y-auto overscroll-contain pl-3">
+            {visible.map((activity, index) => {
+              const isLast = index === visible.length - 1;
+
+              return (
+                <li
+                  key={`${activity.toolCallId}-${index}`}
+                  className="relative pl-3"
+                >
+                  <span
+                    aria-hidden
+                    className="absolute top-0 left-0 h-3 w-2.5 rounded-bl-[6px] border-b border-l border-foreground/20 dark:border-foreground/25"
+                  />
+                  {!isLast && (
+                    <span
+                      aria-hidden
+                      className="absolute top-3 bottom-0 left-0 border-l border-foreground/20 dark:border-foreground/25"
+                    />
+                  )}
+                  <ToolCallRow activity={activity} />
+                </li>
+              );
+            })}
+          </ol>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
-}
+});

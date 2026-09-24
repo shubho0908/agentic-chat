@@ -1,10 +1,14 @@
 import { StateGraph } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { createHash } from "node:crypto";
 import { ResearchState, type ResearchStateType, type ResearchSource } from "./state";
 import { ResearchNode, type ResearchNodeValue, Limit, CLARIFICATION_PREFIX } from "./constants";
+import { CustomEventName } from "../../constants";
+import { ToolName } from "@/lib/tools/constants";
 import { getRankedSources } from "./scoring";
 import { getCheckpointer } from "../../checkpointer";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   triageNode,
   decomposeNode,
@@ -47,18 +51,18 @@ function routeAfterCorrect(state: ResearchStateType): ResearchNodeValue | "__end
 async function createResearchGraph(
   apiKey: string,
   model: string,
-  options: { checkpoint: boolean }
+  options: { checkpoint: boolean; reasoningEffort?: ReasoningEffortLevel | null }
 ) {
   const builder = new StateGraph(ResearchState)
-    .addNode(ResearchNode.TRIAGE, triageNode(apiKey, model))
-    .addNode(ResearchNode.DECOMPOSE, decomposeNode(apiKey, model))
-    .addNode(ResearchNode.PLAN_QUERIES, planQueriesNode(apiKey, model))
+    .addNode(ResearchNode.TRIAGE, triageNode(apiKey, model, options.reasoningEffort))
+    .addNode(ResearchNode.DECOMPOSE, decomposeNode(apiKey, model, options.reasoningEffort))
+    .addNode(ResearchNode.PLAN_QUERIES, planQueriesNode(apiKey, model, options.reasoningEffort))
     .addNode(ResearchNode.SEARCH, searchNode())
-    .addNode(ResearchNode.EVALUATE, evaluateNode(apiKey, model))
+    .addNode(ResearchNode.EVALUATE, evaluateNode(apiKey, model, options.reasoningEffort))
     .addNode(ResearchNode.DEEP_SCRAPE, deepScrapeNode())
-    .addNode(ResearchNode.SYNTHESIZE, synthesizeNode(apiKey, model))
-    .addNode(ResearchNode.REFLEXION, reflexionNode(apiKey, model))
-    .addNode(ResearchNode.CORRECT, correctNode(apiKey, model))
+    .addNode(ResearchNode.SYNTHESIZE, synthesizeNode(apiKey, model, options.reasoningEffort))
+    .addNode(ResearchNode.REFLEXION, reflexionNode(apiKey, model, options.reasoningEffort))
+    .addNode(ResearchNode.CORRECT, correctNode(apiKey, model, options.reasoningEffort))
     .addEdge("__start__", ResearchNode.TRIAGE)
     .addConditionalEdges(ResearchNode.TRIAGE, routeAfterTriage, {
       [ResearchNode.DECOMPOSE]: ResearchNode.DECOMPOSE,
@@ -133,16 +137,43 @@ function buildResearchConfig(
   };
 }
 
+async function emitResearchSources(
+  config: LangGraphRunnableConfig,
+  sources: ResearchSource[]
+): Promise<void> {
+  const ranked = getRankedSources(sources, 8);
+  if (ranked.length === 0) return;
+  // Display-only emission: never let it fail the research run itself.
+  try {
+    await dispatchCustomEvent(
+      CustomEventName.SEARCH_SOURCES,
+      {
+        tool: ToolName.DEEP_RESEARCH,
+        sources: ranked.map((source, index) => ({
+          title: source.title || "Untitled",
+          url: source.url,
+          snippet: (source.snippet ?? "").slice(0, 300),
+          domain: source.domain,
+          position: index + 1,
+        })),
+      },
+      config
+    );
+  } catch (error) {
+    logger.warn("[ResearchAgent] Failed to emit research sources:", error);
+  }
+}
+
 export async function invokeResearchAgent(
   query: string,
   apiKey: string,
   model: string,
   config?: LangGraphRunnableConfig,
-  options?: { userContext?: string; signal?: AbortSignal; tokenBudget?: number }
+  options?: { userContext?: string; signal?: AbortSignal; tokenBudget?: number; reasoningEffort?: ReasoningEffortLevel | null }
 ): Promise<string> {
   const researchConfig = buildResearchConfig(query, config, options?.signal);
   throwIfAborted(researchConfig);
-  const graph = await createResearchGraph(apiKey, model, { checkpoint: hasThreadId(researchConfig) });
+  const graph = await createResearchGraph(apiKey, model, { checkpoint: hasThreadId(researchConfig), reasoningEffort: options?.reasoningEffort });
 
   const result = await graph.invoke(
     {
@@ -153,6 +184,8 @@ export async function invokeResearchAgent(
     },
     { ...researchConfig, recursionLimit: Limit.RECURSION_LIMIT }
   );
+
+  await emitResearchSources(researchConfig, result.sources ?? []);
 
   if (result.clarificationQuestions.length > 0) {
     return buildClarificationResponse(result.clarificationQuestions);

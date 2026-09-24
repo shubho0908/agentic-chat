@@ -2,7 +2,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import { z } from "zod";
-import { withRetry } from "@/lib/retry";
+import { withRetry, isAbortError } from "@/lib/retry";
 import { JSON_ONLY_RESPONSE_PROMPT, joinPromptSections } from "@/lib/prompts";
 import {
   logError,
@@ -43,7 +43,7 @@ interface InvokeJsonOptions<T> extends InvokeResearchLLMOptions {
 
 export type ResearchNodeUpdate = Partial<ResearchStateType>;
 
-export class ResearchTokenBudgetExceededError extends Error {
+class ResearchTokenBudgetExceededError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ResearchTokenBudgetExceededError";
@@ -54,10 +54,6 @@ function createAbortError(message = "Research request aborted"): Error {
   const error = new Error(message);
   error.name = "AbortError";
   return error;
-}
-
-export function isAbortError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message));
 }
 
 export function getAbortSignal(config?: LangGraphRunnableConfig): AbortSignal | undefined {

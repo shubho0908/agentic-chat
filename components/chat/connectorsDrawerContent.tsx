@@ -61,7 +61,7 @@ export function ConnectorsDrawerContent() {
               "relative flex flex-col items-center gap-2.5 p-3.5 rounded-xl border transition-all duration-200",
               isConnected
                 ? "border-primary/20 bg-primary/5"
-                : "border-border/50 bg-card"
+                : "border-black/10 bg-white dark:border-border/50 dark:bg-card"
             )}
           >
             {isConnected && (
@@ -72,7 +72,7 @@ export function ConnectorsDrawerContent() {
               "flex size-10 items-center justify-center rounded-lg",
               isConnected
                 ? "bg-primary/10"
-                : "bg-muted/40"
+                : "bg-black/[0.05] dark:bg-muted/40"
             )}>
               <Icon className="size-5" />
             </div>
@@ -105,7 +105,7 @@ export function ConnectorsDrawerContent() {
                   "transition-all duration-100",
                   isConnected
                     ? "bg-gradient-to-b from-secondary to-secondary/90 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/80"
-                    : "bg-gradient-to-b from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80"
+                    : "bg-gradient-to-b from-zinc-600 to-zinc-700 text-white hover:from-zinc-500 hover:to-zinc-600 dark:from-primary dark:to-primary/90 dark:text-primary-foreground dark:hover:from-primary/90 dark:hover:to-primary/80"
                 )}
               >
                 {isMutating ? (

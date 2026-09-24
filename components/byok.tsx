@@ -20,13 +20,10 @@ import {
 } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { OPENAI_MODELS, DEFAULT_MODEL } from "@/constants/openai-models";
 import { useApiKey, useApiKeyMutations } from "@/hooks/useApiKey";
-import { saveModel, getModel, removeModel } from "@/lib/storage";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/useMobile";
 import { ApiKeyInput } from "./apiKeyInput";
-import { ModelSelector } from "./modelSelector";
 import { isValidApiKey } from "../utils/byokUtils";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import { TOAST_SUCCESS_MESSAGES } from "@/constants/toasts";
@@ -38,20 +35,14 @@ interface ByokProps {
   hiddenTrigger?: boolean;
 }
 
-function getInitialModelSelection() {
-  return getModel() ?? DEFAULT_MODEL;
-}
-
 interface ByokContentProps {
   isConfigured: boolean;
   maskedKey?: string | null;
   updatedAt?: string | null;
   apiKey: string;
-  selectedModel: string;
   hasAnyChange: boolean;
   isSaving: boolean;
   onApiKeyChange: (value: string) => void;
-  onModelSelect: (value: string) => void;
   onSave: () => void;
   onClear: () => void;
   onClose: () => void;
@@ -62,18 +53,14 @@ function ByokFields({
   maskedKey,
   updatedAt,
   apiKey,
-  selectedModel,
   onApiKeyChange,
-  onModelSelect,
 }: Pick<
   ByokContentProps,
   | "isConfigured"
   | "maskedKey"
   | "updatedAt"
   | "apiKey"
-  | "selectedModel"
   | "onApiKeyChange"
-  | "onModelSelect"
 >) {
   return (
     <div className="grid gap-5 sm:gap-6">
@@ -107,7 +94,6 @@ function ByokFields({
         }
       />
 
-      <ModelSelector selectedModel={selectedModel} onModelSelect={onModelSelect} />
     </div>
   );
 }
@@ -116,7 +102,6 @@ function ByokActions({
   isConfigured,
   hasAnyChange,
   apiKey,
-  selectedModel,
   isSaving,
   onSave,
   onClear,
@@ -125,7 +110,6 @@ function ByokActions({
   | "isConfigured"
   | "hasAnyChange"
   | "apiKey"
-  | "selectedModel"
   | "isSaving"
   | "onSave"
   | "onClear"
@@ -143,7 +127,6 @@ function ByokActions({
         disabled={
           (!isConfigured && !apiKey.trim()) ||
           (isConfigured && !hasAnyChange) ||
-          !selectedModel ||
           (apiKey.trim() && !isValidApiKey(apiKey)) ||
           isSaving
         }
@@ -166,16 +149,13 @@ export function Byok({
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
-  const [selectedModel, setSelectedModel] = useState(getInitialModelSelection);
-  const [initialModel, setInitialModel] = useState(getInitialModelSelection);
 
   const { data: apiKeyData, isLoading } = useApiKey();
   const { saveApiKey: saveApiKeyMutation, deleteApiKey: deleteApiKeyMutation } = useApiKeyMutations();
 
   const isConfigured = apiKeyData?.exists ?? false;
   const hasApiKeyChange = apiKey.trim().length > 0;
-  const hasModelChange = selectedModel !== initialModel;
-  const hasAnyChange = hasApiKeyChange || hasModelChange;
+  const hasAnyChange = hasApiKeyChange;
 
   useEffect(() => {
     if (!isConfigured && autoOpen && !isLoading) {
@@ -189,11 +169,6 @@ export function Byok({
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setApiKey("");
-      const storedModel = getModel();
-      if (storedModel) {
-        setSelectedModel(storedModel);
-        setInitialModel(storedModel);
-      }
     }
     setOpen(newOpen);
   };
@@ -215,19 +190,10 @@ export function Byok({
       if (apiKey.trim()) {
         await saveApiKeyMutation.mutateAsync(apiKey);
       }
-      
-      const modelSaved = saveModel(selectedModel);
 
-      if (modelSaved) {
-        setApiKey("");
-        setInitialModel(selectedModel);
-        toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_SAVED, {
-          description: `Model: ${OPENAI_MODELS.find(m => m.id === selectedModel)?.name}`,
-        });
-        setOpen(false);
-      } else {
-        toast.error(TOAST_ERROR_MESSAGES.MODEL.FAILED_SAVE);
-      }
+      setApiKey("");
+      toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_SAVED);
+      setOpen(false);
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_SAVE, {
         description: toUserFriendlyError(error, "Please try again"),
@@ -238,10 +204,7 @@ export function Byok({
   const handleClear = async () => {
     try {
       await deleteApiKeyMutation.mutateAsync();
-      removeModel();
       setApiKey("");
-      setSelectedModel(DEFAULT_MODEL);
-      setInitialModel(DEFAULT_MODEL);
       toast.success(TOAST_SUCCESS_MESSAGES.SETTINGS_CLEARED);
     } catch (error) {
       toast.error(TOAST_ERROR_MESSAGES.API_KEY.FAILED_CLEAR, {
@@ -289,11 +252,9 @@ export function Byok({
     maskedKey: apiKeyData?.maskedKey,
     updatedAt: apiKeyData?.updatedAt,
     apiKey,
-    selectedModel,
     hasAnyChange,
     isSaving: saveApiKeyMutation.isPending,
     onApiKeyChange: setApiKey,
-    onModelSelect: setSelectedModel,
     onSave: handleSave,
     onClear: handleClear,
     onClose: () => handleOpenChange(false),
@@ -309,7 +270,7 @@ export function Byok({
               <div className="pr-10">
                 <DrawerTitle className="text-left text-lg leading-tight sm:text-xl">OpenAI API Configuration</DrawerTitle>
                 <DrawerDescription className="mt-1 text-left text-[13px] leading-5 text-muted-foreground sm:text-sm">
-                  Configure your OpenAI API key and select a model. Your credentials are stored securely in your browser.
+                  Configure your OpenAI API key. Your credentials are stored securely. Choose a model from the chat bar.
                 </DrawerDescription>
               </div>
               <button
@@ -342,8 +303,8 @@ export function Byok({
         <DialogHeader className="border-b p-4 pr-12 sm:px-5 sm:py-5">
           <DialogTitle className="text-lg leading-tight sm:text-xl">OpenAI API Configuration</DialogTitle>
           <DialogDescription className="text-[13px] leading-5 sm:text-sm">
-            Configure your OpenAI API key and select a model. Your credentials
-            are stored securely in your browser.
+            Configure your OpenAI API key. Your credentials are stored
+            securely. Choose a model from the chat bar.
           </DialogDescription>
         </DialogHeader>
 

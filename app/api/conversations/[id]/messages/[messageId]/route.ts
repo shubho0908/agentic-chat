@@ -1,27 +1,39 @@
-import { NextRequest, after } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { headers } from 'next/headers';
-import { getAuthenticatedUser, verifyConversationOwnership, errorResponse, jsonResponse } from '@/lib/apiUtils';
-import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateAttachmentInputs } from '@/lib/validation';
-import type { AttachmentInput } from '@/lib/schemas/chat';
-import { messageMetadataSchema } from '@/lib/schemas/chat';
-import { isSupportedForRAG } from '@/lib/rag/utils';
-import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
+import { NextRequest, after } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import {
+  getAuthenticatedUser,
+  verifyConversationOwnership,
+  errorResponse,
+  jsonResponse,
+} from "@/lib/apiUtils";
+import { API_ERROR_MESSAGES, HTTP_STATUS } from "@/constants/errors";
+import {
+  isValidConversationId,
+  validateAttachmentInputs,
+} from "@/lib/validation";
+import type { AttachmentInput } from "@/lib/schemas/chat";
+import { messageMetadataSchema } from "@/lib/schemas/chat";
+import { isSupportedForRAG } from "@/lib/rag/utils";
+import { runOrQueueDocumentProcessingJob } from "@/lib/orchestration/documentJobs";
 
 import { logger } from "@/lib/logger";
 function getRagAttachmentIds(
-  attachments?: Array<{ id: string; fileType: string }>
+  attachments?: Array<{ id: string; fileType: string }>,
 ): string[] {
   if (!attachments || attachments.length === 0) {
     return [];
   }
 
-  return attachments
-    .flatMap((attachment) => isSupportedForRAG(attachment.fileType) ? [attachment.id] : []);
+  return attachments.flatMap((attachment) =>
+    isSupportedForRAG(attachment.fileType) ? [attachment.id] : [],
+  );
 }
 
-function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
+function scheduleDocumentProcessing(
+  attachmentIds: string[],
+  userId: string,
+): void {
   if (attachmentIds.length === 0) {
     return;
   }
@@ -29,16 +41,22 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
   after(async () => {
     const results = await Promise.allSettled(
       attachmentIds.map((attachmentId) =>
-        runOrQueueDocumentProcessingJob(attachmentId, userId)
-      )
+        runOrQueueDocumentProcessingJob(attachmentId, userId),
+      ),
     );
 
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        logger.warn('[Message Version Route] Failed to schedule document processing:', {
-          attachmentId: attachmentIds[index],
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        });
+      if (result.status === "rejected") {
+        logger.warn(
+          "[Message Version Route] Failed to schedule document processing:",
+          {
+            attachmentId: attachmentIds[index],
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          },
+        );
       }
     });
   });
@@ -60,8 +78,11 @@ function buildAttachmentCreateInput(attachments?: AttachmentInput[] | null) {
 }
 
 async function getNextSiblingIndex(
-  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
-  parentId: string
+  tx: Omit<
+    typeof prisma,
+    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+  >,
+  parentId: string,
 ) {
   // Acquire a transaction-scoped advisory lock keyed on the parent.
   // Concurrent transactions assigning siblings under the same parent will block here
@@ -71,10 +92,7 @@ async function getNextSiblingIndex(
 
   const maxSibling = await tx.message.aggregate({
     where: {
-      OR: [
-        { id: parentId },
-        { parentMessageId: parentId },
-      ],
+      OR: [{ id: parentId }, { parentMessageId: parentId }],
     },
     _max: { siblingIndex: true },
   });
@@ -85,12 +103,15 @@ async function getNextSiblingIndex(
 const TRANSACTION_TIMEOUT_MS = 15_000;
 
 async function softDeleteDownstreamBranch(
-  tx: Omit<typeof prisma, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>,
+  tx: Omit<
+    typeof prisma,
+    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+  >,
   conversationId: string,
   messageId: string,
   parentMessageId: string | null,
   siblingIndex: number,
-  deletedAt: Date
+  deletedAt: Date,
 ) {
   if (parentMessageId) {
     await tx.message.updateMany({
@@ -122,15 +143,18 @@ async function softDeleteDownstreamBranch(
 }
 
 class MessageVersionRouteError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
     super(message);
-    this.name = 'MessageVersionRouteError';
+    this.name = "MessageVersionRouteError";
   }
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; messageId: string }> }
+  { params }: { params: Promise<{ id: string; messageId: string }> },
 ) {
   try {
     const { user, error } = await getAuthenticatedUser(await headers());
@@ -139,63 +163,128 @@ export async function PATCH(
     const { id: conversationId, messageId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        API_ERROR_MESSAGES.INVALID_CONVERSATION_ID,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    if (!messageId || typeof messageId !== 'string') {
-      return errorResponse('Invalid messageId', undefined, HTTP_STATUS.BAD_REQUEST);
+    if (!messageId || typeof messageId !== "string") {
+      return errorResponse(
+        "Invalid messageId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const body = await request.json();
 
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return errorResponse(
+        "Invalid request body",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    const { content, attachments, metadata, assistantContent, assistantMessageId, assistantMetadata } = body;
-    const hasAssistantMessageId = assistantMessageId !== undefined && assistantMessageId !== null;
+    const {
+      content,
+      attachments,
+      metadata,
+      assistantContent,
+      assistantMessageId,
+      assistantMetadata,
+      branchId,
+    } = body;
+    const hasAssistantMessageId =
+      assistantMessageId !== undefined && assistantMessageId !== null;
     let validatedAttachments: AttachmentInput[] | undefined;
 
-    if (!content || typeof content !== 'string') {
-      return errorResponse('Invalid content', undefined, HTTP_STATUS.BAD_REQUEST);
+    if (!content || typeof content !== "string") {
+      return errorResponse(
+        "Invalid content",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     if (metadata !== undefined && metadata !== null) {
       const metadataValidation = messageMetadataSchema.safeParse(metadata);
       if (!metadataValidation.success) {
-        return errorResponse('Invalid metadata structure', metadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          "Invalid metadata structure",
+          metadataValidation.error.message,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
     }
 
     if (assistantMetadata !== undefined && assistantMetadata !== null) {
-      const assistantMetadataValidation = messageMetadataSchema.safeParse(assistantMetadata);
+      const assistantMetadataValidation =
+        messageMetadataSchema.safeParse(assistantMetadata);
       if (!assistantMetadataValidation.success) {
-        return errorResponse('Invalid assistant metadata structure', assistantMetadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          "Invalid assistant metadata structure",
+          assistantMetadataValidation.error.message,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
     }
 
     if (attachments !== undefined && attachments !== null) {
       const attachmentValidation = validateAttachmentInputs(attachments);
       if (!attachmentValidation.valid) {
-        return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          attachmentValidation.error || "Invalid attachments",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
 
       validatedAttachments = attachmentValidation.attachments;
     }
 
-    if (assistantContent !== undefined && typeof assistantContent !== 'string') {
-      return errorResponse('Invalid assistantContent', undefined, HTTP_STATUS.BAD_REQUEST);
+    if (
+      branchId !== undefined &&
+      (typeof branchId !== "string" ||
+        branchId.length === 0 ||
+        branchId.length > 255)
+    ) {
+      return errorResponse(
+        "Invalid branchId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
+    if (
+      assistantContent !== undefined &&
+      typeof assistantContent !== "string"
+    ) {
+      return errorResponse(
+        "Invalid assistantContent",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     if (
       assistantMessageId !== undefined &&
       assistantMessageId !== null &&
-      typeof assistantMessageId !== 'string'
+      typeof assistantMessageId !== "string"
     ) {
-      return errorResponse('Invalid assistantMessageId', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Invalid assistantMessageId",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    const { error: convError } = await verifyConversationOwnership(conversationId, user.id);
+    const { error: convError } = await verifyConversationOwnership(
+      conversationId,
+      user.id,
+    );
     if (convError) return convError;
 
     const existingMessage = await prisma.message.findFirst({
@@ -213,66 +302,160 @@ export async function PATCH(
     });
 
     if (!existingMessage) {
-      return errorResponse('Message not found or already deleted', undefined, HTTP_STATUS.NOT_FOUND);
+      return errorResponse(
+        "Message not found or already deleted",
+        undefined,
+        HTTP_STATUS.NOT_FOUND,
+      );
     }
 
     const parentId = existingMessage.parentMessageId || messageId;
     const now = new Date();
 
     if (body.inPlace === true) {
-      if (existingMessage.role !== 'ASSISTANT') {
-        return errorResponse('In-place updates are only allowed for assistant messages', undefined, HTTP_STATUS.BAD_REQUEST);
+      if (existingMessage.role !== "ASSISTANT") {
+        return errorResponse(
+          "In-place updates are only allowed for assistant messages",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
 
-      const updated = await prisma.$transaction(async (tx) => {
-        const updatedMessage = await tx.message.update({
-          where: { id: messageId },
-          data: {
-            content,
-            ...(metadata !== undefined && { metadata: metadata ?? undefined }),
-          },
-          include: { attachments: true },
-        });
+      const updated = await prisma.$transaction(
+        async (tx) => {
+          const updatedMessage = await tx.message.update({
+            where: { id: messageId },
+            data: {
+              content,
+              ...(metadata !== undefined && {
+                metadata: metadata ?? undefined,
+              }),
+            },
+            include: { attachments: true },
+          });
 
-        await tx.conversation.update({
-          where: { id: conversationId },
-          data: { updatedAt: now },
-        });
+          await tx.conversation.update({
+            where: { id: conversationId },
+            data: {
+              updatedAt: now,
+              ...(branchId && { activeBranchId: branchId }),
+            },
+          });
 
-        return updatedMessage;
-      }, { timeout: TRANSACTION_TIMEOUT_MS });
+          return updatedMessage;
+        },
+        { timeout: TRANSACTION_TIMEOUT_MS },
+      );
 
       return jsonResponse(updated, HTTP_STATUS.OK);
     }
 
-    if (existingMessage.role === 'USER' && assistantContent) {
-      const result = await prisma.$transaction(async (tx) => {
-        // Parallelize independent reads inside the transaction for atomicity
-        const [siblingIndex, existingAssistantMessage] = await Promise.all([
-          getNextSiblingIndex(tx, parentId),
-          hasAssistantMessageId
-            ? tx.message.findFirst({
-                where: {
-                  id: assistantMessageId,
-                  conversationId,
-                  role: 'ASSISTANT',
-                  isDeleted: false,
-                },
-                select: {
-                  id: true,
-                  parentMessageId: true,
-                  siblingIndex: true,
-                },
-              })
-            : Promise.resolve(null),
-        ]);
+    if (existingMessage.role === "USER" && assistantContent) {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const [siblingIndex, existingAssistantMessage] = await Promise.all([
+            getNextSiblingIndex(tx, parentId),
+            hasAssistantMessageId
+              ? tx.message.findFirst({
+                  where: {
+                    id: assistantMessageId,
+                    conversationId,
+                    role: "ASSISTANT",
+                    isDeleted: false,
+                  },
+                  select: {
+                    id: true,
+                    parentMessageId: true,
+                    siblingIndex: true,
+                  },
+                })
+              : Promise.resolve(null),
+          ]);
 
-        const assistantParentId = existingAssistantMessage
-          ? existingAssistantMessage.parentMessageId || existingAssistantMessage.id
-          : null;
-        const assistantSiblingIndex = assistantParentId
-          ? await getNextSiblingIndex(tx, assistantParentId)
-          : 0;
+          const assistantParentId = existingAssistantMessage
+            ? existingAssistantMessage.parentMessageId ||
+              existingAssistantMessage.id
+            : null;
+          const assistantSiblingIndex = assistantParentId
+            ? await getNextSiblingIndex(tx, assistantParentId)
+            : 0;
+
+          await softDeleteDownstreamBranch(
+            tx,
+            conversationId,
+            messageId,
+            existingMessage.parentMessageId,
+            existingMessage.siblingIndex,
+            now,
+          );
+
+          const updatedMessage = await tx.message.create({
+            data: {
+              conversationId,
+              role: existingMessage.role,
+              content,
+              parentMessageId: parentId,
+              siblingIndex,
+              ...(metadata && { metadata }),
+              attachments: buildAttachmentCreateInput(validatedAttachments),
+            },
+            include: {
+              attachments: true,
+            },
+          });
+
+          if (existingAssistantMessage) {
+            await softDeleteDownstreamBranch(
+              tx,
+              conversationId,
+              existingAssistantMessage.id,
+              existingAssistantMessage.parentMessageId,
+              existingAssistantMessage.siblingIndex,
+              now,
+            );
+          }
+
+          const assistantMessage = await tx.message.create({
+            data: {
+              conversationId,
+              role: "ASSISTANT",
+              content: assistantContent,
+              parentMessageId: assistantParentId ?? updatedMessage.id,
+              siblingIndex: assistantSiblingIndex,
+              ...(assistantMetadata && { metadata: assistantMetadata }),
+            },
+            include: {
+              attachments: true,
+            },
+          });
+
+          await tx.conversation.update({
+            where: { id: conversationId },
+            data: {
+              updatedAt: now,
+              ...(branchId && { activeBranchId: branchId }),
+            },
+          });
+
+          return {
+            updatedMessage,
+            assistantMessage,
+          };
+        },
+        { timeout: TRANSACTION_TIMEOUT_MS },
+      );
+
+      scheduleDocumentProcessing(
+        getRagAttachmentIds(result.updatedMessage.attachments),
+        user.id,
+      );
+
+      return jsonResponse(result, HTTP_STATUS.OK);
+    }
+
+    const newVersion = await prisma.$transaction(
+      async (tx) => {
+        const siblingIndexForVersion = await getNextSiblingIndex(tx, parentId);
 
         await softDeleteDownstreamBranch(
           tx,
@@ -280,16 +463,16 @@ export async function PATCH(
           messageId,
           existingMessage.parentMessageId,
           existingMessage.siblingIndex,
-          now
+          now,
         );
 
-        const updatedMessage = await tx.message.create({
+        const createdVersion = await tx.message.create({
           data: {
             conversationId,
             role: existingMessage.role,
             content,
             parentMessageId: parentId,
-            siblingIndex,
+            siblingIndex: siblingIndexForVersion,
             ...(metadata && { metadata }),
             attachments: buildAttachmentCreateInput(validatedAttachments),
           },
@@ -298,95 +481,36 @@ export async function PATCH(
           },
         });
 
-        if (existingAssistantMessage) {
-          await softDeleteDownstreamBranch(
-            tx,
-            conversationId,
-            existingAssistantMessage.id,
-            existingAssistantMessage.parentMessageId,
-            existingAssistantMessage.siblingIndex,
-            now
-          );
-        }
-
-        const assistantMessage = await tx.message.create({
-          data: {
-            conversationId,
-            role: 'ASSISTANT',
-            content: assistantContent,
-            parentMessageId: assistantParentId ?? updatedMessage.id,
-            siblingIndex: assistantSiblingIndex,
-            ...(assistantMetadata && { metadata: assistantMetadata }),
-          },
-          include: {
-            attachments: true,
-          },
-        });
-
         await tx.conversation.update({
           where: { id: conversationId },
-          data: { updatedAt: now },
+          data: { updatedAt: new Date() },
         });
 
-        return {
-          updatedMessage,
-          assistantMessage,
-        };
-      }, { timeout: TRANSACTION_TIMEOUT_MS });
+        return createdVersion;
+      },
+      { timeout: TRANSACTION_TIMEOUT_MS },
+    );
 
-      scheduleDocumentProcessing(getRagAttachmentIds(result.updatedMessage.attachments), user.id);
-
-      return jsonResponse(result, HTTP_STATUS.OK);
-    }
-
-    const newVersion = await prisma.$transaction(async (tx) => {
-      const siblingIndexForVersion = await getNextSiblingIndex(tx, parentId);
-
-      await softDeleteDownstreamBranch(
-        tx,
-        conversationId,
-        messageId,
-        existingMessage.parentMessageId,
-        existingMessage.siblingIndex,
-        now
-      );
-
-      const createdVersion = await tx.message.create({
-        data: {
-          conversationId,
-          role: existingMessage.role,
-          content,
-          parentMessageId: parentId,
-          siblingIndex: siblingIndexForVersion,
-          ...(metadata && { metadata }),
-          attachments: buildAttachmentCreateInput(validatedAttachments),
-        },
-        include: {
-          attachments: true,
-        },
-      });
-
-      await tx.conversation.update({
-        where: { id: conversationId },
-        data: { updatedAt: new Date() },
-      });
-
-      return createdVersion;
-    }, { timeout: TRANSACTION_TIMEOUT_MS });
-
-    scheduleDocumentProcessing(getRagAttachmentIds(newVersion.attachments), user.id);
+    scheduleDocumentProcessing(
+      getRagAttachmentIds(newVersion.attachments),
+      user.id,
+    );
 
     return jsonResponse(newVersion, HTTP_STATUS.OK);
   } catch (error) {
-    logger.error('[Message Version Route] Failed to update message:', error);
+    logger.error("[Message Version Route] Failed to update message:", error);
     return errorResponse(
-      error instanceof MessageVersionRouteError ? error.message : 'Failed to update message',
+      error instanceof MessageVersionRouteError
+        ? error.message
+        : "Failed to update message",
       error instanceof MessageVersionRouteError
         ? undefined
         : error instanceof Error
           ? error.message
           : undefined,
-      error instanceof MessageVersionRouteError ? error.status : HTTP_STATUS.INTERNAL_SERVER_ERROR
+      error instanceof MessageVersionRouteError
+        ? error.status
+        : HTTP_STATUS.INTERNAL_SERVER_ERROR,
     );
   }
 }

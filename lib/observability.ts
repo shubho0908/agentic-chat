@@ -51,7 +51,7 @@ function readObservabilityVerbose(): boolean {
     if (!proc || !proc.env || typeof proc.env !== "object") {
       return false;
     }
-    return proc.env.OBSERVABILITY_VERBOSE === "true";
+    return proc.env.OBSERVABILITY_VERBOSE === "true" || proc.env.ORCHESTRATOR_VERBOSE_LOGGING === "true";
   } catch {
     return false;
   }

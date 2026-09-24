@@ -5,7 +5,10 @@ import type { Options } from "react-markdown";
 export const MAX_MARKDOWN_RENDER_CHARS = 50_000;
 export const COMPLETE_CODE_FENCE_PATTERN =
   /(?:^|\n)(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?\n(?:`{3,}|~{3,})[ \t]*(?=\n|$)/;
-export const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath];
+export const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [
+  remarkGfm,
+  [remarkMath, { singleDollarTextMath: false }],
+];
 export const URL_PATTERN = /\b((?:https?:\/\/|www\.)[^\s<>{}[\]"]+)/gi;
 export const TRAILING_PUNCTUATION_PATTERN = /[.,!?;:]+$/;
 export const MERMAID_LOADING_TEXT = "Rendering diagram preview...";
@@ -16,3 +19,7 @@ export const CODE_BLOCK_SHELL_CLASS =
 export const TYPEOF_STRING = "string";
 export const TYPEOF_OBJECT = "object";
 export const DEFAULT_CODE_LANGUAGE = "code";
+export const CODE_BLOCK_COLLAPSE_LINES = 30;
+export const CODE_BLOCK_COLLAPSE_CHARS = 4000;
+export const CODE_BLOCK_MAX_LINE_NUMBERS = 1000;
+export const CODE_BLOCK_MAX_HEIGHT_PX = 480;

@@ -38,6 +38,7 @@
   --sidebar-ring: hsl(217 91% 60%);
   --chat-user-bubble: hsl(240 8% 94%);
   --chat-user-bubble-border: hsl(240 7% 87%);
+  --surface-overlay: hsl(240 16% 96%);
 }
 
 .dark {
@@ -70,6 +71,7 @@
   --sidebar-ring: hsl(217 91% 60%);
   --chat-user-bubble: hsl(240 4% 16%);
   --chat-user-bubble-border: hsl(240 4% 23%);
+  --surface-overlay: hsl(240 6% 14%);
 }
 
 @theme inline {
@@ -105,6 +107,7 @@
   --color-sidebar: var(--sidebar);
   --color-chat-user-bubble: var(--chat-user-bubble);
   --color-chat-user-bubble-border: var(--chat-user-bubble-border);
+  --color-surface-overlay: var(--surface-overlay);
   --shadow-apple: 0 8px 30px rgba(0, 0, 0, 0.12);
   --shadow-apple-dark: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
@@ -298,6 +301,27 @@
     }
     66% {
       transform: translate3d(10px, -10px, 0);
+    }
+  }
+
+  @keyframes pixel-on {
+    0%, 100% {
+      opacity: 0.15;
+    }
+    18%, 42% {
+      opacity: 1;
+    }
+    62% {
+      opacity: 0.15;
+    }
+  }
+
+  @keyframes shimmer-text {
+    from {
+      background-position: 150% center;
+    }
+    to {
+      background-position: -50% center;
     }
   }
 

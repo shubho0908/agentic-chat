@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { END } from "@langchain/langgraph";
 import { z } from "zod";
 
 import { toJsonValue } from "@/lib/json";
@@ -11,7 +10,11 @@ import { parsePaginationInteger } from "@/lib/pagination";
 import { encodeToolResult } from "@/lib/chat/streamingHelpers";
 import { reconcileDanglingToolCalls } from "@/lib/orchestrator/nodes/agent";
 import { createToolNode } from "@/lib/orchestrator/nodes/tools";
-import { routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
+import {
+  buildRecoveryMessage,
+  createRecoveryNode,
+  routeAfterAgent,
+} from "@/lib/orchestrator/nodes/reflector";
 import {
   ASK_USER_TOOL_NAME,
   filterToolsForContext,
@@ -108,7 +111,7 @@ test("connector tool auth failures normalize per toolkit", async () => {
         throw new Error("401 unauthorized");
       },
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -119,7 +122,10 @@ test("connector tool auth failures normalize per toolkit", async () => {
     ],
   }));
 
-  assert.equal(result.messages[0].content, notConnectedMessage("gmail"));
+  assert.equal(
+    result.messages[0].content,
+    `[tool-failure:auth|terminal]\n${notConnectedMessage("gmail")}\nHint: Do not retry. Tell the user which account to reconnect.`
+  );
 });
 
 test("successful connector payloads with auth-like substrings are not rewritten as disconnected", async () => {
@@ -135,7 +141,7 @@ test("successful connector payloads with auth-like substrings are not rewritten 
       schema: z.object({}),
       func: async () => successEnvelope,
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -163,7 +169,7 @@ test("failed connector envelope with an auth error normalizes to a not-connected
           successful: false,
         }),
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -174,7 +180,10 @@ test("failed connector envelope with an auth error normalizes to a not-connected
     ],
   }));
 
-  assert.equal(result.messages[0].content, notConnectedMessage("github"));
+  assert.equal(
+    result.messages[0].content,
+    `[tool-failure:auth|terminal]\n${notConnectedMessage("github")}\nHint: Do not retry. Tell the user which account to reconnect.`
+  );
 });
 
 test("failed connector envelope with a non-auth error is passed through verbatim", async () => {
@@ -190,7 +199,7 @@ test("failed connector envelope with a non-auth error is passed through verbatim
       schema: z.object({}),
       func: async () => errorEnvelope,
     }),
-  ]);
+  ], { model: "test-model" });
 
   const result = await node(createAgentState({
     messages: [
@@ -343,7 +352,7 @@ test("tool routing stops after the configured number of request rounds", () => {
     createToolCallingMessage("call-final"),
   ];
 
-  assert.equal(routeAfterAgent({ messages } as AgentStateType), END);
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
 });
 
 test("tool routing ignores tool calls from prior turns (before last HumanMessage)", () => {
@@ -360,6 +369,206 @@ test("tool routing ignores tool calls from prior turns (before last HumanMessage
 
   // Only 1 tool round in current turn — should continue
   assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+function createFailingRound(callId: string, name: string, args: unknown): Array<AIMessage | ToolMessage> {
+  return [
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: callId, name, args: args as Record<string, unknown> },
+      ],
+    }),
+    new ToolMessage({
+      content: "Tool execution failed: boom",
+      tool_call_id: callId,
+      status: "error",
+    }),
+  ];
+}
+
+test("tool routing ends on three identical consecutive failures", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
+});
+
+test("tool routing continues under the repeat threshold", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c3", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing ignores successes when counting repeats", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c2", name: "get_refund", args: { id: "1" } }],
+    }),
+    new ToolMessage({ content: "ok", tool_call_id: "c2" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing ends after three total-failure rounds", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "tool_a", {}),
+    ...createFailingRound("c2", "tool_b", {}),
+    ...createFailingRound("c3", "tool_c", {}),
+    createToolCallingMessage("c4"),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
+});
+
+test("tool routing resets the streak on mixed rounds", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "tool_a", {}),
+    ...createFailingRound("c2", "tool_b", {}),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c3", name: "tool_c", args: {} }],
+    }),
+    new ToolMessage({ content: "ok", tool_call_id: "c3" }),
+    ...createFailingRound("c4", "tool_d", {}),
+    createToolCallingMessage("c5"),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("tool routing scopes failure guards to the current turn", () => {
+  const prior = [
+    ...createFailingRound("old-1", "get_refund", { id: "1" }),
+    ...createFailingRound("old-2", "get_refund", { id: "1" }),
+    ...createFailingRound("old-3", "get_refund", { id: "1" }),
+    ...createFailingRound("old-4", "get_refund", { id: "1" }),
+  ];
+  const messages = [
+    new HumanMessage("old question"),
+    ...prior,
+    new HumanMessage("new question"),
+    ...createFailingRound("new-1", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "new-2", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "tools");
+});
+
+test("guard-stopped turns close with a resolved assistant message, not dangling tool calls", async () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  assert.equal(routeAfterAgent({ messages } as AgentStateType), "recovery");
+
+  const node = createRecoveryNode();
+  const update = await node({ messages } as AgentStateType);
+  const finalMessage = update.messages[0] as AIMessage;
+  assert.equal(finalMessage.type, "ai");
+  assert.equal((finalMessage.tool_calls ?? []).length, 0);
+  const text = String(finalMessage.content);
+  assert.ok(text.includes("get_refund"), "names the failing tool");
+  assert.ok(
+    text.toLowerCase().includes("failing"),
+    "explains the stop to the user",
+  );
+});
+
+test("recovery message names pending tools and the last error", () => {
+  const messages = [
+    new HumanMessage("refund order 1"),
+    ...createFailingRound("c1", "get_refund", { id: "1" }),
+    ...createFailingRound("c2", "get_refund", { id: "1" }),
+    ...createFailingRound("c3", "get_refund", { id: "1" }),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("get_refund"));
+  assert.ok(text.includes("Tool execution failed: boom"));
+});
+
+test("recovery message shows the real error, never the failure-envelope marker", () => {
+  const enveloped = (callId: string) => [
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: callId, name: "get_refund", args: { id: "1" } }],
+    }),
+    new ToolMessage({
+      content:
+        "[tool-failure:unknown|retryable]\nTool execution failed: boom\nHint: Retry once. If it fails again, try a different call.",
+      tool_call_id: callId,
+      status: "error",
+    }),
+  ];
+  const messages = [
+    new HumanMessage("refund order 1"),
+    ...enveloped("c1"),
+    ...enveloped("c2"),
+    ...enveloped("c3"),
+    new AIMessage({
+      content: "",
+      tool_calls: [{ id: "c4", name: "get_refund", args: { id: "1" } }],
+    }),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("Tool execution failed: boom"));
+  assert.ok(!text.includes("[tool-failure:"), "no internal marker");
+  assert.ok(!text.includes("Hint:"), "no hint line");
+});
+
+test("recovery message for the round limit mentions the step limit", () => {
+  const messages = [
+    new HumanMessage("do something"),
+    ...Array.from({ length: 15 }, (_, index) =>
+      createToolCallingMessage(`call-${index}`)
+    ),
+    createToolCallingMessage("call-final"),
+  ];
+
+  const text = buildRecoveryMessage(messages);
+  assert.ok(text.includes("step limit"));
 });
 
 test("toJsonValue preserves metadata without throwing on circular or non-JSON values", () => {

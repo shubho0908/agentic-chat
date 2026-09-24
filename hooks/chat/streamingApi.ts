@@ -1,4 +1,4 @@
-import type { ApprovalStreamConfig, HumanInTheLoopRequestEvent, MemoryStatus, StreamConfig } from "@/types/chat";
+import { DegradedContextSource, type ApprovalStreamConfig, type HumanInTheLoopRequestEvent, type MemoryStatus, type StreamConfig } from "@/types/chat";
 import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { ToolArgs } from "@/lib/schemas/chat";
 import { apiRoutes } from "@/lib/routes";
@@ -14,15 +14,55 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
-function readerToIterable(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncIterable<Uint8Array> {
-  return {
-    [Symbol.asyncIterator]() {
-      return {
-        next: () => reader.read().then(({ done, value }) => ({ done: !!done, value: value! })),
-        return: () => reader.cancel().then(() => ({ done: true as const, value: undefined })),
-      };
-    },
-  };
+/**
+ * Longest silence tolerated on a chat stream before the client gives up. The
+ * server emits an SSE heartbeat comment every few seconds while a stream is
+ * open, so a gap this long means the backend is gone, not thinking. Without
+ * this watchdog any backend stall (lock wait, model hang, tool hang) left the
+ * UI processing forever.
+ */
+export const CHAT_STREAM_STALL_TIMEOUT_MS = 65_000;
+
+export interface ChatStreamReadOptions {
+  /** Overrides the stall watchdog window; mainly for tests. */
+  stallTimeoutMs?: number;
+}
+
+export function createStreamStallError(): Error {
+  const error = new Error(
+    "The response stopped arriving from the server. Please try again.",
+  );
+  error.name = "ChatStreamStallError";
+  return error;
+}
+
+async function readWithStallTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  stallTimeoutMs: number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (!(stallTimeoutMs > 0)) {
+    return reader.read();
+  }
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        timer = null;
+        void reader.cancel().catch((cancelError) => {
+          if (!isAbortError(cancelError)) {
+            logger.warn("Failed to cancel stalled chat stream reader:", cancelError);
+          }
+        });
+        reject(createStreamStallError());
+      }, stallTimeoutMs);
+      reader.read().then(resolve, reject);
+    });
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 type StreamCallbacks = Pick<
@@ -36,6 +76,7 @@ type StreamCallbacks = Pick<
   | "onUsageUpdated"
   | "onThinking"
   | "onArtifact"
+  | "onResponseIncomplete"
 >;
 
 async function assertOkResponse(response: Response): Promise<void> {
@@ -85,7 +126,7 @@ function normalizeHumanInTheLoopRequest(parsed: Record<string, unknown>): HumanI
   };
 }
 
-async function readChatStream(response: Response, callbacks: StreamCallbacks): Promise<string> {
+export async function readChatStream(response: Response, callbacks: StreamCallbacks, options: ChatStreamReadOptions = {}): Promise<string> {
   await assertOkResponse(response);
   const reader = response.body?.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: false });
@@ -106,7 +147,9 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     onUsageUpdated,
     onThinking,
     onArtifact,
+    onResponseIncomplete,
   } = callbacks;
+  let receivedDone = false;
 
   function optionalString(value: unknown): string | undefined {
     return typeof value === "string" ? value : undefined;
@@ -124,6 +167,21 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     return value && typeof value === "object" && !Array.isArray(value)
       ? value as Record<string, unknown>
       : undefined;
+  }
+
+  const DEGRADED_SOURCES = new Set<string>(Object.values(DegradedContextSource));
+
+  function optionalDegradedContexts(value: unknown): MemoryStatus["degradedContexts"] {
+    if (!Array.isArray(value)) return undefined;
+    const parsed = value.flatMap((entry) => {
+      const record = optionalRecord(entry);
+      if (!record) return [];
+      const { source, reason } = record;
+      if (typeof source !== "string" || !DEGRADED_SOURCES.has(source)) return [];
+      if (typeof reason !== "string") return [];
+      return [{ source: source as DegradedContextSource, reason }];
+    });
+    return parsed.length > 0 ? parsed : undefined;
   }
 
   function processParsedEvent(parsed: Record<string, unknown>): void {
@@ -145,6 +203,7 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
         routingDecision: optionalString(parsed.routingDecision) as MemoryStatus["routingDecision"],
         skippedMemory: optionalBoolean(parsed.skippedMemory),
         activeToolName: optionalString(parsed.activeToolName),
+        degradedContexts: optionalDegradedContexts(parsed.degradedContexts),
         tokenUsage: optionalRecord(parsed.tokenUsage) as MemoryStatus["tokenUsage"],
       });
     }
@@ -193,6 +252,10 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
       });
     }
 
+    if (parsedType === 'response_incomplete' && parsed.reason === 'length') {
+      onResponseIncomplete?.('length');
+    }
+
     if ((parsedType === ArtifactEventType.START || parsedType === ArtifactEventType.CHUNK || parsedType === ArtifactEventType.END) && onArtifact) {
       onArtifact(parsed as unknown as ArtifactEvent);
     }
@@ -204,8 +267,11 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
   }
 
   const SSE_DATA_PREFIX = "data:";
+  const stallTimeoutMs = options.stallTimeoutMs ?? CHAT_STREAM_STALL_TIMEOUT_MS;
   try {
-    for await (const value of readerToIterable(reader)) {
+    for (;;) {
+      const { done, value } = await readWithStallTimeout(reader, stallTimeoutMs);
+      if (done) break;
       const chunk = decoder.decode(value, { stream: true });
       buffer += chunk;
 
@@ -218,7 +284,10 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
         if (!trimmed || !trimmed.startsWith(SSE_DATA_PREFIX)) continue;
 
         const data = trimmed.slice(SSE_DATA_PREFIX.length).trim();
-        if (data === '[DONE]') continue;
+        if (data === '[DONE]') {
+          receivedDone = true;
+          continue;
+        }
 
         try {
           processParsedEvent(JSON.parse(data));
@@ -232,7 +301,9 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     const trailing = buffer.trim();
     if (trailing.startsWith(SSE_DATA_PREFIX)) {
       const data = trailing.slice(SSE_DATA_PREFIX.length).trim();
-      if (data !== '[DONE]') {
+      if (data === '[DONE]') {
+        receivedDone = true;
+      } else {
         try {
           processParsedEvent(JSON.parse(data));
         } catch (err) {
@@ -250,11 +321,15 @@ async function readChatStream(response: Response, callbacks: StreamCallbacks): P
     throw error;
   }
 
+  if (!receivedDone) {
+    throw new Error('The response stream ended before completion.');
+  }
+
   return contentParts.join('');
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, conversationId, memoryEnabled, thinkingEnabled } = config;
+  const { messages, model, signal, conversationId, branchId, documentAttachmentIds, reasoningEffort } = config;
 
   const requestPayload: Record<string, unknown> = {
     model,
@@ -266,11 +341,12 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
   if (conversationId) {
     requestPayload.conversationId = conversationId;
   }
-  if (memoryEnabled !== undefined && memoryEnabled !== true) {
-    requestPayload.memoryEnabled = memoryEnabled;
+  if (branchId) requestPayload.branchId = branchId;
+  if (documentAttachmentIds?.length) {
+    requestPayload.documentAttachmentIds = documentAttachmentIds;
   }
-  if (thinkingEnabled) {
-    requestPayload.thinkingEnabled = thinkingEnabled;
+  if (reasoningEffort) {
+    requestPayload.reasoningEffort = reasoningEffort;
   }
 
   const response = await fetch(apiRoutes.chatCompletions, {
@@ -284,12 +360,12 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
 }
 
 export async function streamChatApproval(config: ApprovalStreamConfig): Promise<string> {
-  const { conversationId, threadId, model, approved, response: userResponse, signal } = config;
+  const { conversationId, threadId, model, approved, response: userResponse, signal, reasoningEffort } = config;
 
   const response = await fetch(apiRoutes.chatApprove, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ conversationId, threadId, model, approved, response: userResponse }),
+    body: JSON.stringify({ conversationId, threadId, model, approved, response: userResponse, reasoningEffort }),
     signal,
   });
 

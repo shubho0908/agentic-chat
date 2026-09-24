@@ -1,4 +1,5 @@
 import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
 import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
@@ -6,6 +7,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
 import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
+import { saveAssistantMessage } from "./messageApi";
+import { logger } from "@/lib/logger";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { HOOK_ERROR_MESSAGES } from "@/constants/errors";
 import { persistConversationMemoryIfEligible } from "./memoryPersistence";
@@ -23,20 +26,21 @@ interface StreamingContext {
   conversationId: string;
   userMessageContent: string | Message["content"];
   userTimestamp: number;
+  userMessageId?: string;
   userAttachments?: Message["attachments"];
   model: string;
   abortSignal: AbortSignal;
   queryClient: QueryClient;
   session?: { user: { id: string } };
   activeTool?: string | null;
-  memoryEnabled?: boolean;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel;
   existingAssistantMessageId?: string;
+  branchId?: string;
 }
 
 interface StreamingCallbacks {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string }) => void;
+  saveToCacheMutate: (data: { query: string; response: string; model: string; reasoningEffort?: ReasoningEffortLevel | null }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
   onArtifact?: (event: ArtifactEvent) => void;
 }
@@ -47,7 +51,7 @@ interface StreamingResult {
   assistantMessageId?: string;
 }
 
-function extractMetadataFromProgress(
+export function extractMetadataFromProgress(
   progress: { details?: Record<string, unknown> },
   currentMetadata?: MessageMetadata
 ): MessageMetadata | undefined {
@@ -58,7 +62,18 @@ function extractMetadataFromProgress(
   if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
     const details = progress.details as { sources?: MessageMetadata['sources'] };
     if (details.sources && details.sources.length > 0) {
-      metadata = { ...metadata, sources: details.sources };
+      // Union by URL: several searches can run in one turn and a later event
+      // must not drop earlier batches.
+      const seenUrls = new Set((currentMetadata?.sources ?? []).map((source) => source.url));
+      const mergedSources = [...(currentMetadata?.sources ?? [])];
+      for (const source of details.sources) {
+        if (!source.url || seenUrls.has(source.url)) continue;
+        seenUrls.add(source.url);
+        mergedSources.push(source);
+      }
+      if (mergedSources.length > 0) {
+        metadata = { ...metadata, sources: mergedSources };
+      }
     }
   }
 
@@ -66,6 +81,26 @@ function extractMetadataFromProgress(
     const details = progress.details as { images?: MessageMetadata['images'] };
     if (details.images && details.images.length > 0) {
       metadata = { ...metadata, images: details.images };
+    }
+  }
+
+  if ('pdf' in progress.details) {
+    const raw = progress.details.pdf;
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const record = raw as Record<string, unknown>;
+      if (typeof record.url === 'string' && typeof record.name === 'string') {
+        const pdf: NonNullable<MessageMetadata['pdfs']>[number] = {
+          url: record.url,
+          name: record.name,
+          ...(typeof record.title === 'string' ? { title: record.title } : {}),
+          ...(typeof record.size === 'number' ? { size: record.size } : {}),
+          ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+        };
+        const existing = currentMetadata?.pdfs ?? [];
+        if (!existing.some((item) => item.url === pdf.url)) {
+          metadata = { ...metadata, pdfs: [...existing, pdf] };
+        }
+      }
     }
   }
 
@@ -83,6 +118,21 @@ function extractMetadataFromProgress(
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+export function extractPdfFromToolResult(result: unknown): NonNullable<MessageMetadata['pdfs']>[number] | undefined {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+  const raw = (result as Record<string, unknown>).pdf;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (typeof record.url !== 'string' || typeof record.name !== 'string') return undefined;
+  return {
+    url: record.url,
+    name: record.name,
+    ...(typeof record.title === 'string' ? { title: record.title } : {}),
+    ...(typeof record.size === 'number' ? { size: record.size } : {}),
+    ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+  };
 }
 
 function toHumanInTheLoopMetadata(request: HumanInTheLoopRequestEvent): MessageMetadata["humanInTheLoopRequest"] {
@@ -106,15 +156,16 @@ export async function handleStreamingResponse(
     conversationId,
     userMessageContent,
     userTimestamp,
+    userMessageId,
     userAttachments,
     model,
     abortSignal,
     queryClient,
     session,
     activeTool,
-    memoryEnabled = true,
-    thinkingEnabled = false,
+    reasoningEffort,
     existingAssistantMessageId,
+    branchId,
   } = context;
 
   const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
@@ -127,6 +178,7 @@ export async function handleStreamingResponse(
   let thinkingContent = "";
   let thinkingStartTime = 0;
   let humanInTheLoopPending = false;
+  let responseIncompleteReason: "length" | undefined;
   const artifactCollector = createArtifactMetadataCollector();
 
   const replaceAssistantMessageId = (savedAssistantMessageId: string, metadata?: MessageMetadata) => {
@@ -173,6 +225,8 @@ export async function handleStreamingResponse(
       attachments: userAttachments,
       abortSignal,
       activeTool,
+      model,
+      reasoningEffort,
     });
 
     if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
@@ -214,7 +268,6 @@ export async function handleStreamingResponse(
         userMessageContent,
         assistantContent,
         userId: session?.user?.id,
-        memoryEnabled,
         activeTool,
         userAttachments,
         flow: "send",
@@ -223,7 +276,7 @@ export async function handleStreamingResponse(
       return { success: true, assistantMessageId };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments);
+    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments, userMessageId);
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -249,6 +302,8 @@ export async function handleStreamingResponse(
         }
       },
       conversationId,
+      branchId,
+      documentAttachmentIds: userAttachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);
@@ -294,6 +349,15 @@ export async function handleStreamingResponse(
         }
       },
       onToolResult: (toolResult) => {
+        const resultPdf = extractPdfFromToolResult(toolResult.result);
+        if (resultPdf) {
+          const existing = messageMetadata?.pdfs ?? [];
+          if (!existing.some((item) => item.url === resultPdf.url)) {
+            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            ensureAssistantMessage();
+            updateAssistantMessage(onMessagesUpdate, assistantMessageId, { metadata: messageMetadata });
+          }
+        }
         const activityIndex = toolActivities.findIndex(
           (a) => a.toolCallId === toolResult.toolCallId
         );
@@ -312,6 +376,12 @@ export async function handleStreamingResponse(
         }
       },
       onToolProgress: (progress) => {
+        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
+        if (messageCreated && messageMetadata) {
+          updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+            metadata: messageMetadata,
+          });
+        }
         if (currentMemoryStatus && onMemoryStatusUpdate) {
           const updatedStatus: MemoryStatus = {
             ...currentMemoryStatus,
@@ -327,11 +397,9 @@ export async function handleStreamingResponse(
           };
           currentMemoryStatus = updatedStatus;
           onMemoryStatusUpdate(updatedStatus);
-          messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
         }
       },
-      memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
       onHumanInTheLoopRequest: (request) => {
         humanInTheLoopPending = true;
         messageMetadata = {
@@ -378,6 +446,9 @@ export async function handleStreamingResponse(
           });
         }
       },
+      onResponseIncomplete: (reason) => {
+        responseIncompleteReason = reason;
+      },
       onArtifact: (event) => {
         const eventWithMessage = { ...event, messageId: assistantMessageId };
         artifactCollector.push(eventWithMessage);
@@ -411,6 +482,10 @@ export async function handleStreamingResponse(
       messageMetadata = { ...messageMetadata, toolActivities };
     }
 
+    if (responseIncompleteReason === "length") {
+      messageMetadata = { ...messageMetadata, streamStatus: "incomplete" };
+    }
+
     if (artifacts.length > 0) {
       messageMetadata = { ...messageMetadata, artifacts };
     }
@@ -430,10 +505,12 @@ export async function handleStreamingResponse(
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent && artifacts.length === 0) {
+      if (cacheQuery && assistantContent && artifacts.length === 0 && !messageMetadata?.pdfs?.length && !responseIncompleteReason) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
+          model,
+          reasoningEffort,
         });
       }
 
@@ -464,7 +541,6 @@ export async function handleStreamingResponse(
           userMessageContent,
           assistantContent: persistableAssistantContent,
           userId: session?.user?.id,
-          memoryEnabled,
           activeTool,
           userAttachments,
           memoryStatus: currentMemoryStatus,
@@ -492,7 +568,15 @@ export async function handleStreamingResponse(
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
-    if (messageCreated) {
+    if (messageCreated && assistantContent.trim()) {
+      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: assistantContent, metadata: messageMetadata });
+      if (conversationId && !abortSignal.aborted) {
+        void saveAssistantMessage(conversationId, assistantContent, messageMetadata).catch((saveError) => {
+          logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
+        });
+      }
+    } else if (messageCreated) {
       onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
     }
     return { success: false, error: errorMessage };

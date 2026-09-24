@@ -1,8 +1,9 @@
 import type { Components } from "react-markdown";
-import { CodeCopyButton } from "./codeCopyButton";
-import { CODE_BLOCK_SHELL_CLASS } from "./constants";
+import { MarkdownCodeBlock } from "./markdownCodeBlock";
+import { MarkdownTable } from "./markdownTable";
+import { MarkdownTableCell } from "./markdownTableCell";
 import { MermaidPreview } from "./mermaidPreview";
-import { getTextFromChildren, normalizeLanguageLabel } from "./plainTextUtils";
+import { getTextFromChildren } from "./plainTextUtils";
 import { isMermaidCodeBlock } from "@/lib/markdown/rendering";
 
 function withoutMarkdownNode<Props extends { node?: unknown }>(props: Props): Omit<Props, "node"> {
@@ -18,9 +19,9 @@ export const components: Components = {
   code({ className, children, ...props }) {
     const codeContent = getTextFromChildren(children).replace(/\n$/, "");
     const isBlock = codeContent.includes("\n");
-    const languageLabel = normalizeLanguageLabel(className);
     const isMermaidBlock = isMermaidCodeBlock(className);
     const domProps = withoutMarkdownNode(props);
+    void domProps;
 
     if (isMermaidBlock) {
       return <MermaidPreview source={codeContent} />;
@@ -28,25 +29,9 @@ export const components: Components = {
 
     if (className || isBlock) {
       return (
-        <div className={CODE_BLOCK_SHELL_CLASS}>
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 bg-zinc-100/70 px-3 py-2 sm:px-3.5 dark:border-zinc-800/80 dark:bg-zinc-900/70">
-            <div className="min-w-0">
-              <span className="block truncate text-[11px] font-medium lowercase tracking-wide text-zinc-600 dark:text-zinc-400">
-                {languageLabel}
-              </span>
-            </div>
-            <CodeCopyButton content={codeContent} />
-          </div>
-
-          <pre className="no-scrollbar max-w-full overflow-x-auto bg-transparent">
-            <code
-              className={`${className || ""} block min-w-max px-3 py-3 text-[12px] leading-5 font-mono text-zinc-900 sm:px-4 sm:py-3.5 sm:text-[13px] dark:text-zinc-100`}
-              {...domProps}
-            >
-              {children}
-            </code>
-          </pre>
-        </div>
+        <MarkdownCodeBlock className={className}>
+          {children}
+        </MarkdownCodeBlock>
       );
     }
 
@@ -152,37 +137,45 @@ export const components: Components = {
       {children}
     </blockquote>
   ),
-  table: ({ children, ...props }) => (
-    <div className="my-2 sm:my-3 overflow-x-auto rounded-lg border border-border/40 -mx-1 sm:mx-0">
-      <table className="w-full min-w-0 text-[11px] sm:text-sm" {...withoutMarkdownNode(props)}>
-        {children}
-      </table>
-    </div>
-  ),
+  table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
   thead: ({ children, ...props }) => (
     <thead
-      className="bg-foreground/[0.04] border-b border-border/30"
+      className="sticky top-0 z-10 border-b border-zinc-200/90 bg-zinc-100/95 backdrop-blur-sm dark:border-zinc-800/90 dark:bg-zinc-900/95"
       {...withoutMarkdownNode(props)}
     >
       {children}
     </thead>
   ),
-  th: ({ children, ...props }) => (
-    <th
-      className="px-2 sm:px-3 py-1.5 sm:py-2 text-left text-[10px] sm:text-xs font-semibold text-foreground/80 dark:text-muted-foreground/70 uppercase tracking-wider"
+  tr: ({ children, ...props }) => (
+    <tr
+      className="border-t border-zinc-200/50 transition-colors first:border-t-0 hover:bg-zinc-900/[0.03] dark:border-zinc-800/50 dark:hover:bg-white/[0.04]"
       {...withoutMarkdownNode(props)}
     >
       {children}
-    </th>
+    </tr>
   ),
-  td: ({ children, ...props }) => (
-    <td
-      className="px-2 sm:px-3 py-1.5 sm:py-2 border-t border-border/20"
-      {...withoutMarkdownNode(props)}
-    >
-      {children}
-    </td>
-  ),
+  th: ({ children, style, ...props }) => {
+    const textAlign =
+      typeof style === "object" && style !== null && "textAlign" in style
+        ? (style as { textAlign?: unknown }).textAlign
+        : undefined;
+    const alignClass =
+      textAlign === "center"
+        ? "text-center"
+        : textAlign === "right"
+          ? "text-right"
+          : "text-left";
+    return (
+      <th
+        className={`min-w-[6rem] px-2.5 py-2 ${alignClass} text-[10px] font-semibold tracking-wider text-zinc-600 uppercase sm:min-w-[7rem] sm:px-3 sm:text-[11px] dark:text-zinc-400`}
+        style={style}
+        {...withoutMarkdownNode(props)}
+      >
+        {children}
+      </th>
+    );
+  },
+  td: ({ children, style }) => <MarkdownTableCell style={style}>{children}</MarkdownTableCell>,
   input: ({ type, checked, ...props }) => (
     <input
       type={type}

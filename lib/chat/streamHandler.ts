@@ -9,7 +9,7 @@ import type {
 } from 'openai/resources/responses/responses';
 import type { Message, MessageContentPart } from '@/lib/schemas/chat';
 import { MessageRole } from '@/lib/schemas/chat';
-import type { MemoryStatus } from '@/types/chat';
+import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { routeContext } from '@/lib/contextRouter';
 import { parseOpenAIError } from '@/lib/openaiErrors';
 import { injectContextToMessages } from '@/lib/chat/messageHelpers';
@@ -24,6 +24,7 @@ import {
 } from './streamingHelpers';
 import { checkTokenBudget } from '@/lib/chat/tokenBudget';
 import { getChatReasoningEffort } from '@/lib/modelPolicy';
+import type { ReasoningEffortLevel } from '@/constants/openai-models';
 import { withRetry } from '@/lib/retry';
 import { createSafeStream } from './safeStream';
 
@@ -39,7 +40,7 @@ interface StreamHandlerOptions {
   userId?: string;
   conversationId?: string;
   requestId?: string;
-  thinkingEnabled?: boolean;
+  reasoningEffort?: ReasoningEffortLevel | null;
 }
 
 function toChatCompletionContentPart(part: MessageContentPart): ChatCompletionContentPart {
@@ -109,7 +110,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     model,
     openai,
     userId,
-    thinkingEnabled = false,
+    reasoningEffort,
   } = options;
   let memoryStatusInfo: MemoryStatus = { ...options.memoryStatusInfo };
   let enhancedMessages = messages;
@@ -195,7 +196,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           memoryStatusInfo.degradedContexts = [
             ...(memoryStatusInfo.degradedContexts || []),
             {
-              source: 'context_router',
+              source: DegradedContextSource.ContextRouter,
               reason: error instanceof Error ? error.message : String(error),
             },
           ];
@@ -210,9 +211,9 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           return;
         }
         
-        const reasoningEffort = getChatReasoningEffort(model, thinkingEnabled);
+        const resolvedEffort = getChatReasoningEffort(model, reasoningEffort);
 
-        if (thinkingEnabled && reasoningEffort && reasoningEffort !== 'none') {
+        if (resolvedEffort && resolvedEffort !== 'none' && resolvedEffort !== 'minimal') {
           const responseStream = await withRetry(
             () =>
               openai.responses.create(
@@ -220,7 +221,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   model,
                   input: toOpenAIResponseInput(enhancedMessages),
                   stream: true,
-                  reasoning: { effort: reasoningEffort, summary: 'detailed' },
+                  reasoning: { effort: resolvedEffort, summary: 'detailed' },
                 },
                 { signal: abortSignal }
               ),
@@ -247,7 +248,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   model,
                   messages: toOpenAIChatMessages(enhancedMessages),
                   stream: true,
-                  ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+                  ...(resolvedEffort ? { reasoning_effort: resolvedEffort } : {}),
                 },
                 { signal: abortSignal }
               ),

@@ -7,6 +7,7 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import { PlanComplexity, CustomEventName } from "../constants";
 import type { PlanComplexityValue } from "../constants";
 import { logger } from "@/lib/logger";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import {
   getChatReasoningEffort,
   getSupportedTemperature,
@@ -14,6 +15,16 @@ import {
 import { z } from "zod";
 import { withRetry } from "@/lib/retry";
 import { JSON_ONLY_RESPONSE_PROMPT } from "@/lib/prompts";
+import {
+  evaluatePlannerWithJev,
+  mapJevPlannerResult,
+  type JevPlannerState,
+} from "@/lib/jev/planner";
+import { getJevMode } from "@/lib/jev/config";
+import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
+import { logJevDecision } from "@/lib/jev/telemetry";
+import { createRequestId, logWarn } from "@/lib/observability";
 
 export const PLANNER_SYSTEM_PROMPT = `You are a planning module. Given the user's message and conversation context, produce a brief execution plan.
 
@@ -40,6 +51,152 @@ Rules:
 
 const MIN_PLANNABLE_LENGTH = 10;
 const PLANNER_TIMEOUT_MS = 15_000;
+const JEV_SHADOW_TAIL_TURNS = 4;
+const JEV_SHADOW_TAIL_CONTENT_CHARS = 500;
+
+const jevClient = JevDecisionClient.createIfConfigured();
+
+export function extractText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join(" ");
+  }
+  return JSON.stringify(content);
+}
+
+function plannerConversationTail(messages: AgentStateType["messages"]): string {
+  return messages
+    .filter((message) => message.type === "human" || message.type === "ai")
+    .map((message) => ({ message, text: extractText(message.content).trim() }))
+    .filter(({ text }) => text.length > 0)
+    .slice(-6)
+    .map(
+      ({ message, text }) =>
+        `${message.type === "human" ? "User" : "Assistant"}: ${text.slice(0, 1200)}`,
+    )
+    .join("\n");
+}
+
+function buildShadowState(
+  messages: AgentStateType["messages"],
+  latestMessage: string,
+  connectedServices: string[],
+): JevPlannerState {
+  return {
+    latestMessage,
+    conversationTail: messages
+      .slice(-(JEV_SHADOW_TAIL_TURNS + 1), -1)
+      .map((m) => ({
+        role:
+          m._getType() === "human" ? ("user" as const) : ("assistant" as const),
+        content: extractText(m.content).slice(0, JEV_SHADOW_TAIL_CONTENT_CHARS),
+      }))
+      .filter((m) => m.content.length > 0),
+    connectedToolkits: connectedServices,
+  };
+}
+
+/** Runs Jev alongside the current planner and logs a redacted comparison
+ * record. Shadow-only: never throws, never affects the production plan. */
+async function runJevPlannerShadow(
+  state: JevPlannerState,
+  productionPlan: AgentToolPlan | null,
+  conversationId: string | undefined,
+): Promise<void> {
+  if (!jevClient) return;
+  const requestId = createRequestId("jev_planner");
+  const startedAt = Date.now();
+  try {
+    const result = await evaluatePlannerWithJev(jevClient, state, {
+      requestId,
+      conversationId,
+    });
+    const decision = mapJevPlannerResult(result);
+    if (!decision) {
+      logWarn({
+        event: "jev_planner_invalid_response",
+        message: "Jev planner response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
+      logJevDecision({
+        checkpoint: JevCheckpoint.PLANNER,
+        schemaVersion: "1.0.0",
+        modelVersion: result.modelVersion,
+        mode: JevMode.SHADOW,
+        latencyMs: Date.now() - startedAt,
+        outcome: "invalid_response",
+        fallbackUsed: true,
+        fallbackReason: JevFallbackReason.INVALID,
+        requestId,
+        conversationId,
+      });
+      return;
+    }
+
+    const productionComplexity = productionPlan?.complexity ?? null;
+    logJevDecision({
+      checkpoint: JevCheckpoint.PLANNER,
+      schemaVersion: "1.0.0",
+      modelVersion: result.modelVersion,
+      mode: JevMode.SHADOW,
+      latencyMs: result.latencyMs,
+      outcome:
+        productionComplexity === null
+          ? "no_production_baseline"
+          : decision.complexity === productionComplexity
+            ? "agree"
+            : "disagree",
+      probabilities: decision.complexityProbabilities,
+      confidence: decision.complexityConfidence,
+      fallbackUsed: false,
+      inputTokens: result.usage?.input_tokens,
+      outputTokens: result.usage?.output_tokens,
+      requestId,
+      conversationId,
+    });
+  } catch (error) {
+    logJevDecision({
+      checkpoint: JevCheckpoint.PLANNER,
+      schemaVersion: "1.0.0",
+      modelVersion: "unknown",
+      mode: JevMode.SHADOW,
+      latencyMs: Date.now() - startedAt,
+      outcome: "error",
+      fallbackUsed: true,
+      fallbackReason: classifyJevFailure(error),
+      requestId,
+      conversationId,
+    });
+  }
+}
+
+/** Fire-and-forget wrapper. Building the shadow state runs outside the
+ * async function, so this catches sync throws too and the planner never
+ * depends on shadow. */
+function queueJevPlannerShadow(
+  messages: AgentStateType["messages"],
+  latestMessage: string,
+  connectedServices: string[],
+  productionPlan: AgentToolPlan | null,
+  conversationId: string | undefined,
+): void {
+  try {
+    void runJevPlannerShadow(
+      buildShadowState(messages, latestMessage, connectedServices),
+      productionPlan,
+      conversationId,
+    ).catch((error) =>
+      logger.warn("[Planner] Jev shadow evaluation failed:", error),
+    );
+  } catch (error) {
+    logger.warn("[Planner] Jev shadow evaluation failed:", error);
+  }
+}
 
 const plannerResponseSchema = z.object({
   complexity: z.string().optional(),
@@ -59,29 +216,44 @@ export function createPlannerNode(
   tools: DynamicStructuredTool[],
   apiKey: string,
   model: string,
+  options: {
+    reasoningEffort?: ReasoningEffortLevel | null;
+    ephemeralContext?: AgentStateType["messages"];
+  } = {},
 ) {
   const toolNames = tools.map((t) => t.name);
   const toolNameSet = new Set(toolNames);
 
-  const reasoningEffort = getChatReasoningEffort(model, false);
+  const resolvedEffort = getChatReasoningEffort(model, options.reasoningEffort);
   const supportedTemperature = getSupportedTemperature(model, 0);
+
+  // Reasoning models count reasoning tokens against max_completion_tokens,
+  // so leave headroom when the planner is asked to think.
+  const plannerMaxTokens =
+    resolvedEffort && resolvedEffort !== "none" && resolvedEffort !== "minimal"
+      ? 1024
+      : 150;
 
   const llm = new ChatOpenAI({
     modelName: model,
     apiKey,
-    maxTokens: 150,
+    maxTokens: plannerMaxTokens,
     timeout: PLANNER_TIMEOUT_MS,
     ...(supportedTemperature !== undefined
       ? { temperature: supportedTemperature }
       : {}),
-    ...(reasoningEffort && reasoningEffort !== "none"
-      ? { reasoning: { effort: reasoningEffort } }
-      : reasoningEffort === "none"
+    ...(resolvedEffort && resolvedEffort !== "none"
+      ? { reasoning: { effort: resolvedEffort } }
+      : resolvedEffort === "none"
         ? { reasoningEffort: "none" }
         : {}),
   });
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
+    const planningMessages = [
+      ...(options.ephemeralContext ?? []),
+      ...state.messages,
+    ];
     const lastMessage = state.messages[state.messages.length - 1];
     if (!lastMessage) return { messages: [] };
 
@@ -101,6 +273,8 @@ export function createPlannerNode(
       return { messages: [] };
     }
 
+    const jevShadow = getJevMode(JevCheckpoint.PLANNER) === JevMode.SHADOW;
+
     try {
       const connected = state.connectedServices ?? [];
       const connectedContext =
@@ -112,7 +286,9 @@ export function createPlannerNode(
         new SystemMessage(
           `${PLANNER_SYSTEM_PROMPT}\n\nAvailable tools: ${toolNames.join(", ")}${connectedContext}`,
         ),
-        new HumanMessage(content),
+        new HumanMessage(
+          `Recent conversation:\n${plannerConversationTail(planningMessages)}\n\nPlan the latest user request.`,
+        ),
       ];
 
       const response = await withRetry(
@@ -133,7 +309,7 @@ export function createPlannerNode(
         parsed.complexity,
       )
         ? parsed.complexity
-        : PlanComplexity.DIRECT;
+        : PlanComplexity.TOOL_NEEDED;
 
       const plan: AgentToolPlan = {
         complexity,
@@ -142,6 +318,16 @@ export function createPlannerNode(
           : [],
         plan: typeof parsed.plan === "string" ? parsed.plan : "",
       };
+
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          connected,
+          plan,
+          state.conversationId,
+        );
+      }
 
       await dispatchCustomEvent(
         CustomEventName.PLANNING,
@@ -162,11 +348,32 @@ export function createPlannerNode(
 
       return { messages: [], toolPlan: plan };
     } catch (error) {
+      if (jevShadow) {
+        queueJevPlannerShadow(
+          state.messages,
+          content,
+          state.connectedServices ?? [],
+          null,
+          state.conversationId,
+        );
+      }
       logger.warn(
-        "[Planner] Failed to produce a valid plan; continuing without planner hint:",
+        "[Planner] Failed to produce a valid plan; using conservative tool-capable fallback:",
         error,
       );
-      return { messages: [] };
+      const fallbackPlan: AgentToolPlan = {
+        complexity: PlanComplexity.TOOL_NEEDED,
+        tools_needed: [],
+        plan: "Planner output was invalid; preserve deterministic tool selection.",
+      };
+      return {
+        toolPlan: fallbackPlan,
+        messages: [
+          new SystemMessage(
+            "[PLAN] Planner fallback: preserve deterministic tool selection for this turn.",
+          ),
+        ],
+      };
     }
   };
 }

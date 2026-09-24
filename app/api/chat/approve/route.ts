@@ -6,21 +6,33 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { Command } from "@langchain/langgraph";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
+import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
-import { validateRequestedModel } from "@/lib/modelPolicy";
+import { DEFAULT_MODEL, REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from "@/constants/openai-models";
+import { validateRequestedModel, parseReasoningEffortParam } from "@/lib/modelPolicy";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { isRecord } from "@/lib/typeGuards";
-import { createRequestId, logError } from "@/lib/observability";
+import { createRequestId, logError, logWarn } from "@/lib/observability";
 import { isValidConversationId } from "@/lib/validation";
+import { deriveThreadId, isThreadIdForConversation } from "@/lib/orchestrator/threadIdentity";
+import {
+  APPROVAL_LOCK_WAIT_TIMEOUT_MS,
+  ORCHESTRATOR_STREAM_DEADLINE_MS,
+  STREAM_HEARTBEAT_INTERVAL_MS,
+} from "@/lib/orchestrator/constants";
+import {
+  acquireThreadLock,
+  ThreadLockTimeoutError,
+  type ThreadLock,
+} from "@/lib/orchestrator/threadLock";
+import { abortAware } from "@/lib/orchestrator/abortAware";
 
-function deriveThreadIdFromConversation(conversationId: string): string {
-  return `conv-${conversationId}`;
-}
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const requestId = createRequestId("chat-approve");
@@ -64,34 +76,34 @@ export async function POST(request: NextRequest) {
       typeof body.threadId === "string" && body.threadId.trim()
         ? body.threadId.trim()
         : null;
-    const expectedThreadId = deriveThreadIdFromConversation(conversationId);
-    if (explicitThreadId && explicitThreadId !== expectedThreadId) {
+    // HITL interrupts fire on the branch thread when the user is on a branch
+    // (conv-<id>:branch:<branchId>), not only on the root thread. Validate the
+    // explicit thread id against every thread this conversation owns via the
+    // same encoder the orchestrator uses, then resume that exact thread;
+    // rejecting branch ids here stranded every branch approval with a 400.
+    if (explicitThreadId && !isThreadIdForConversation(explicitThreadId, conversationId)) {
       return errorResponse("threadId does not match conversationId", undefined, HTTP_STATUS.BAD_REQUEST);
     }
-    const threadId = expectedThreadId;
+    const threadId = explicitThreadId ?? deriveThreadId(conversationId);
 
-    const apiKey = await getUserApiKey(user.id);
-    const connectedToolkits = await getConnectedToolkits(user.id);
-    const graph = await createAgentGraph(user.id, apiKey, model, { thinkingEnabled: true, connectedToolkits });
-
-    const existingState = await graph.getState({ configurable: { thread_id: threadId } });
-    const hasPendingInterrupt = (existingState.tasks ?? []).some(
-      (task) => (task.interrupts ?? []).length > 0
-    );
-    if (!hasPendingInterrupt) {
-      logger.warn("[Approve] No pending interrupt for thread", { threadId, conversationId });
+    const reasoningEffort = parseReasoningEffortParam(body.reasoningEffort);
+    if (body.reasoningEffort !== undefined && reasoningEffort === null) {
       return errorResponse(
-        "This action has already been resolved or the session has expired.",
+        `reasoningEffort must be one of: ${REASONING_EFFORTS.join(", ")}`,
         undefined,
-        HTTP_STATUS.BAD_REQUEST
+        HTTP_STATUS.BAD_REQUEST,
       );
     }
 
-    const resumeValue = typeof response === "string"
-      ? response
-      : approved
-        ? HUMAN_IN_THE_LOOP_APPROVED
-        : HUMAN_IN_THE_LOOP_DENIED;
+    if (reasoningEffort && !isReasoningEffortSupported(model, reasoningEffort)) {
+      return errorResponse(
+        `reasoningEffort "${reasoningEffort}" is not supported by ${model}. Supported: ${getSupportedReasoningEfforts(model).join(", ")}`,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
+    }
+
+    const apiKey = await getUserApiKey(user.id);
 
     const abortController = new AbortController();
     request.signal.addEventListener(
@@ -102,82 +114,223 @@ export async function POST(request: NextRequest) {
       { once: true }
     );
 
-    const readableStream = new ReadableStream({
-      async start(controller) {
-        const stream = createSafeStream(controller, {
-          abortSignal: abortController.signal,
-          label: "Approve",
-        });
-        const mapper = createStreamEventMapper();
-        const finishStream = () => {
-          stream.finish({
-            done: encodeDone(),
-            flush: (writer) => mapper.flush(writer),
+    // Same deadline contract as the chat stream: abort resume work and emit a
+    // terminal SSE error before the platform hard-kills this 300s route
+    // mid-stream. One agent step can chain three bounded 180s model attempts,
+    // so an unbounded resume can outlive maxDuration while heartbeats keep
+    // the client watchdog quiet.
+    const deadlineController = new AbortController();
+    const deadlineTimer = setTimeout(() => {
+      deadlineController.abort(new Error("Approval stream deadline exceeded"));
+    }, ORCHESTRATOR_STREAM_DEADLINE_MS);
+    (deadlineTimer as { unref?: () => void }).unref?.();
+    const workSignal = AbortSignal.any([
+      abortController.signal,
+      deadlineController.signal,
+    ]);
+
+    // Resume mutates the same checkpoint thread the chat stream serializes,
+    // so it must hold the same lease. Without it two approvals can both
+    // observe the pending interrupt and resume concurrently, racing
+    // checkpoint writes and replaying side-effecting tool work. The
+    // pending-interrupt check below therefore runs only after the lease is
+    // held, closing the check-then-act window.
+    let threadLock: ThreadLock;
+    try {
+      threadLock = await acquireThreadLock(threadId, {
+        signal: workSignal,
+        waitTimeoutMs: APPROVAL_LOCK_WAIT_TIMEOUT_MS,
+      });
+    } catch (lockError) {
+      clearTimeout(deadlineTimer);
+      if (lockError instanceof ThreadLockTimeoutError) {
+        return errorResponse(
+          "Another response is still being generated for this chat. Please wait for it to finish, then try again.",
+          undefined,
+          HTTP_STATUS.CONFLICT,
+        );
+      }
+      throw lockError;
+    }
+
+    let streamOwnsLock = false;
+    try {
+      const connectedToolkits = await abortAware(
+        getConnectedToolkits(user.id),
+        workSignal,
+      );
+      const graph = await createAgentGraph(user.id, apiKey, model, { reasoningEffort, connectedToolkits });
+
+      const existingState = await abortAware(
+        graph.getState({ configurable: { thread_id: threadId } }),
+        workSignal,
+      );
+      const hasPendingInterrupt = (existingState.tasks ?? []).some(
+        (task) => (task.interrupts ?? []).length > 0
+      );
+      if (!hasPendingInterrupt) {
+        logger.warn("[Approve] No pending interrupt for thread", { threadId, conversationId });
+        return errorResponse(
+          "This action has already been resolved or the session has expired.",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST
+        );
+      }
+
+    const resumeConfig = resolveResumeConfig(
+      model,
+      reasoningEffort,
+      (existingState.tasks ?? [])
+        .flatMap((task) => task.interrupts ?? [])
+        .map((pending) => pending.value),
+    );
+    if (resumeConfig.usedPersisted && (resumeConfig.model !== model || resumeConfig.reasoningEffort !== reasoningEffort)) {
+      logger.log("[Approve] Resuming with interrupt-created config over picker config", {
+        requestId,
+        pickerModel: model,
+        resumeModel: resumeConfig.model,
+        pickerReasoningEffort: reasoningEffort,
+        resumeReasoningEffort: resumeConfig.reasoningEffort,
+      });
+    }
+    const resumeGraph =
+      resumeConfig.model === model && resumeConfig.reasoningEffort === reasoningEffort
+        ? graph
+        : await createAgentGraph(user.id, apiKey, resumeConfig.model, {
+            reasoningEffort: resumeConfig.reasoningEffort,
+            connectedToolkits,
           });
-        };
 
-        try {
-          const eventStream = await graph.streamEvents(
-            new Command({ resume: resumeValue }),
-            {
-              configurable: { thread_id: threadId },
-              version: "v2",
-              signal: abortController.signal,
-            }
-          );
+    const resumeValue = typeof response === "string"
+      ? response
+      : approved
+        ? HUMAN_IN_THE_LOOP_APPROVED
+        : HUMAN_IN_THE_LOOP_DENIED;
 
-          for await (const event of eventStream) {
-            if (abortController.signal.aborted) break;
-            mapper.map(stream, event as Record<string, unknown>);
-          }
-
-          if (abortController.signal.aborted) {
-            stream.abort();
-            return;
-          }
-
-          const finalState = await graph.getState({ configurable: { thread_id: threadId } });
-          const pendingInterrupts = (finalState.tasks ?? [])
-            .flatMap((task) => task.interrupts ?? []);
-
-          if (pendingInterrupts.length > 0) {
-            const firstValue = pendingInterrupts[0].value;
-            const interruptData = {
-              ...(typeof firstValue === "object" && firstValue !== null
-                ? firstValue as Record<string, unknown>
-                : {}),
+      let startBegan = false;
+      const readableStream = new ReadableStream({
+        async start(controller) {
+          startBegan = true;
+          const stream = createSafeStream(controller, {
+            abortSignal: abortController.signal,
+            label: "Approve",
+            heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
+          });
+          const mapper = createStreamEventMapper();
+          const finishStream = () => {
+            stream.finish({
+              done: encodeDone(),
+              flush: (writer) => mapper.flush(writer),
+            });
+          };
+          const timeoutStream = () => {
+            if (stream.isAborted) return;
+            logWarn({
+              event: "approval_stream_deadline",
+              requestId,
               threadId,
-            };
-            handleGraphInterrupt(stream, interruptData);
+              deadlineMs: ORCHESTRATOR_STREAM_DEADLINE_MS,
+            });
+            stream.enqueue(
+              encodeError(
+                "This response took too long and was stopped. Please try again, or break the request into smaller parts.",
+              ),
+            );
             finishStream();
-            return;
-          }
+          };
 
-          finishStream();
-        } catch (err) {
-          if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
-            logger.warn("[Approve] Stream aborted by client");
-            stream.abort();
-            return;
-          }
-          logger.error("[Approve] Error resuming graph:", err);
-          stream.enqueue(encodeError(toUserFriendlyError(err)));
-          finishStream();
-        }
-      },
-      cancel() {
-        abortController.abort();
-      },
-    });
+          try {
+            const eventStream = await resumeGraph.streamEvents(
+              new Command({ resume: resumeValue }),
+              {
+                configurable: { thread_id: threadId },
+                version: "v2",
+                signal: workSignal,
+              }
+            );
 
-    return new Response(readableStream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
+            for await (const event of eventStream) {
+              if (workSignal.aborted) break;
+              mapper.map(stream, event as Record<string, unknown>);
+            }
+
+            if (workSignal.aborted) {
+              if (deadlineController.signal.aborted) {
+                timeoutStream();
+              } else {
+                stream.abort();
+              }
+              return;
+            }
+
+            const finalState = await abortAware(
+              resumeGraph.getState({ configurable: { thread_id: threadId } }),
+              workSignal,
+            );
+            const pendingInterrupts = (finalState.tasks ?? [])
+              .flatMap((task) => task.interrupts ?? []);
+
+            if (pendingInterrupts.length > 0) {
+              const firstValue = pendingInterrupts[0].value;
+              const interruptData = {
+                ...(typeof firstValue === "object" && firstValue !== null
+                  ? firstValue as Record<string, unknown>
+                  : {}),
+                threadId,
+              };
+              handleGraphInterrupt(stream, interruptData);
+              finishStream();
+              return;
+            }
+
+            finishStream();
+          } catch (err) {
+            if (deadlineController.signal.aborted) {
+              timeoutStream();
+              return;
+            }
+            if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
+              logger.warn("[Approve] Stream aborted by client");
+              stream.abort();
+              return;
+            }
+            logger.error("[Approve] Error resuming graph:", err);
+            stream.enqueue(encodeError(toUserFriendlyError(err)));
+            finishStream();
+          } finally {
+            clearTimeout(deadlineTimer);
+            await threadLock.release();
+          }
+        },
+        cancel() {
+          abortController.abort();
+          // The lease stays with start(): releasing here while streamEvents
+          // and its checkpoint writes are still unwinding would let the next
+          // acquirer run concurrently with the aborted resume. start()'s
+          // finally releases once the unwind settles. Only when start never
+          // ran does cancel own the release, so the lease cannot leak.
+          if (!startBegan) {
+            clearTimeout(deadlineTimer);
+            void threadLock.release();
+          }
+        },
+      });
+
+      streamOwnsLock = true;
+      return new Response(readableStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    } finally {
+      if (!streamOwnsLock) {
+        clearTimeout(deadlineTimer);
+        await threadLock.release();
+      }
+    }
   } catch (error) {
     logError({
       event: "chat_approval_route_failed",

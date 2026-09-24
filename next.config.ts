@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   images: {
+    qualities: [70, 75],
     remotePatterns: [
       {
         protocol: 'https',
@@ -24,7 +25,6 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: [
     "pdf-parse",
-    "mammoth",
     "tiktoken",
     "@langchain/community",
     "@langchain/textsplitters",

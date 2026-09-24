@@ -206,6 +206,21 @@ test("buildMessagesForAPI rehydrates prior image attachments for referential art
   );
 });
 
+test("buildMessagesForAPI does not resend historical images on unrelated turns", () => {
+  const messages: Message[] = [{
+    role: MessageRole.USER,
+    content: "Use this product image later",
+    id: "user-image-unrelated",
+    attachments: [imageAttachment],
+  }];
+
+  const apiMessages = buildMessagesForAPI(messages, "What is the latest GitHub issue?", "System", "test-model");
+  const priorUserMessage = apiMessages.find((message) => message.role === MessageRole.USER);
+  assert.ok(priorUserMessage);
+  assert.equal(typeof priorUserMessage.content, "string");
+  assert.equal(priorUserMessage.content, "Use this product image later");
+});
+
 test("chat validation accepts trusted uploaded image URLs and rejects arbitrary image URLs", () => {
   const trusted = validateChatMessages([{
     role: MessageRole.USER,

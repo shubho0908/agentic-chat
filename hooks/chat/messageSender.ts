@@ -1,4 +1,5 @@
 import type { Message, Attachment, MessageContentPart } from "@/lib/schemas/chat";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { MessageRole } from "@/lib/schemas/chat";
 import type { ConversationResult } from "@/types/chat";
 import { toast } from "sonner";
@@ -14,15 +15,15 @@ import { queryKeys } from "@/lib/queryKeys";
 import { appRoutes } from "@/lib/routes";
 import { toUserFriendlyError } from "@/lib/errorMessages";
 import { logger, emergencyLog } from "@/lib/logger";
-import { appendMessagesDedupingIds, getPendingAssistantMessageId } from "./pendingAssistant";
+import { appendMessagesDedupingIds, getPendingAssistantMessageId, upsertMessageById } from "./pendingAssistant";
+import { getStreamStoppedMarkerMessageId } from "@/lib/chat/stopMarker";
 
 export async function continueIncompleteConversation(
   userMessage: Message,
   context: BaseChatContext,
   session?: { user: { id: string } },
   activeTool?: string | null,
-  memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -32,6 +33,7 @@ export async function continueIncompleteConversation(
     onMessagesUpdate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    branchId,
   } = context;
 
   if (!conversationId) {
@@ -62,15 +64,16 @@ export async function continueIncompleteConversation(
       conversationId,
       userMessageContent: reconstructedContent,
       userTimestamp: userMessage.timestamp ?? Date.now(),
+      userMessageId: userMessage.id,
       userAttachments: userMessage.attachments,
       model,
       abortSignal,
       queryClient,
       session,
       activeTool,
-      memoryEnabled,
-      thinkingEnabled,
+      reasoningEffort,
       existingAssistantMessageId,
+      branchId,
     },
     {
       onMessagesUpdate,
@@ -81,8 +84,24 @@ export async function continueIncompleteConversation(
   );
 
   if (!result.success && result.error === "aborted" && conversationId) {
+    // Optimistic local marker first: without it the conversation briefly ends
+    // at the user message and the auto-continue effect would retry the stop.
+    // The server marker (same deterministic id) stays the source of truth.
+    const markerMessageId = userMessage.id
+      ? getStreamStoppedMarkerMessageId(conversationId, userMessage.id)
+      : undefined;
+    if (markerMessageId) {
+      onMessagesUpdate((prev) => upsertMessageById(prev, {
+        role: MessageRole.ASSISTANT,
+        content: STREAM_STOPPED_BY_USER_MARKER,
+        id: markerMessageId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [],
+      }));
+    }
     try {
-      await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER);
+      await saveAssistantMessage(conversationId, STREAM_STOPPED_BY_USER_MARKER, undefined, markerMessageId);
     } catch (err) {
       try {
         logger.warn("[messageSender] Failed to save stream-stopped marker (continue):", err);
@@ -111,8 +130,7 @@ async function createAndSaveConversation(
   attachments: Attachment[] | undefined,
   abortSignal: AbortSignal,
 ): Promise<string> {
-  let conversationId: string | null = null;
-  await handleConversationSaving(
+  const creationResult = await handleConversationSaving(
     true,
     null,
     messageContent,
@@ -120,7 +138,6 @@ async function createAndSaveConversation(
     userMessage.timestamp ?? Date.now(),
     queryClient,
     (data: ConversationResult) => {
-      conversationId = data.conversationId;
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === userMessage.id ? { ...msg, id: data.userMessageId } : msg
@@ -134,13 +151,12 @@ async function createAndSaveConversation(
     abortSignal,
     undefined,
     (id: string) => {
-      conversationId = id;
       onConversationIdUpdate(id);
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
     }
   );
-  if (!conversationId) throw new Error("Failed to create conversation");
-  return conversationId;
+  if (!creationResult) throw new Error("Failed to create conversation");
+  return creationResult.conversationId;
 }
 
 export async function handleSendMessage(
@@ -149,8 +165,7 @@ export async function handleSendMessage(
   context: SendMessageContext,
   session?: { user: { id: string } },
   activeTool?: string | null,
-  memoryEnabled?: boolean,
-  thinkingEnabled?: boolean
+  reasoningEffort?: ReasoningEffortLevel
 ): Promise<{ success: boolean; error?: string }> {
   const {
     messages,
@@ -162,6 +177,7 @@ export async function handleSendMessage(
     onNavigate,
     saveToCacheMutate,
     onMemoryStatusUpdate,
+    branchId,
   } = context;
 
   const model = getModel();
@@ -171,7 +187,7 @@ export async function handleSendMessage(
   }
 
   const messageContent = buildMultimodalContent(content.trim(), attachments);
-  const userMessageId = `user-${Date.now()}`;
+  const userMessageId = crypto.randomUUID();
 
   const userMessage: Message = {
     role: MessageRole.USER,
@@ -219,7 +235,8 @@ export async function handleSendMessage(
         currentConversationId,
         messageContent,
         attachments,
-        abortSignal
+        abortSignal,
+        userMessage.id
       );
 
       if (!savedMsgId) {
@@ -246,15 +263,16 @@ export async function handleSendMessage(
         conversationId: currentConversationId,
         userMessageContent: messageContent,
         userTimestamp: userMessage.timestamp ?? Date.now(),
+        userMessageId: savedMsgId ?? userMessage.id,
         userAttachments: attachments,
         model,
         abortSignal,
         queryClient,
         session,
         activeTool,
-        memoryEnabled,
-        thinkingEnabled,
+        reasoningEffort,
         existingAssistantMessageId: placeholderAssistantId,
+        branchId,
       },
       {
         onMessagesUpdate,
@@ -265,8 +283,18 @@ export async function handleSendMessage(
     );
 
     if (!result.success && result.error === "aborted" && currentConversationId && userMessageWasPersisted) {
+      const stoppedUserMessageId = savedMsgId ?? userMessage.id;
+      const markerMessageId = getStreamStoppedMarkerMessageId(currentConversationId, stoppedUserMessageId);
+      onMessagesUpdate((prev) => upsertMessageById(prev, {
+        role: MessageRole.ASSISTANT,
+        content: STREAM_STOPPED_BY_USER_MARKER,
+        id: markerMessageId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [],
+      }));
       try {
-        await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER);
+        await saveAssistantMessage(currentConversationId, STREAM_STOPPED_BY_USER_MARKER, undefined, markerMessageId);
       } catch (err) {
         try {
           logger.warn("[messageSender] Failed to save stream-stopped marker:", err);

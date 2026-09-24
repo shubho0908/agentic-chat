@@ -58,17 +58,17 @@ export function ActionButtons({
       disabled={!hasInput || isBusy || disabled}
       size="icon"
       className={cn(
-        "size-8 rounded-full transition-all duration-300 ease-out",
+        "size-9 rounded-full transition-all duration-300 ease-out",
         isLarge ? "size-10" : "",
         hasInput 
           ? "bg-primary text-primary-foreground shadow-sm hover:scale-105 hover:bg-primary/90" 
-          : "bg-black/5 dark:bg-white/5 text-muted-foreground shadow-none"
+          : "bg-black/[0.06] dark:bg-white/[0.08] text-muted-foreground shadow-none"
       )}
     >
       {status === "uploading" || status === "sending" ? (
-        <Loader className={cn("size-4 animate-spin", isLarge && "size-5")} />
+        <Loader className={cn("size-[18px] animate-spin", isLarge && "size-5")} />
       ) : (
-        <ArrowUp className={cn("size-4", isLarge && "size-5")} />
+        <ArrowUp className={cn("size-[18px]", isLarge && "size-5")} strokeWidth={2.25} />
       )}
       <span className="sr-only">Send message</span>
     </Button>

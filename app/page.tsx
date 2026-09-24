@@ -64,9 +64,8 @@ const homeStructuredData = [
   },
 ];
 
-export default async function Home() {
+async function SessionGate({ currentYear }: { currentYear: number }) {
   let session = null;
-  const currentYear = new Date().getFullYear();
 
   try {
     session = await auth.api.getSession({ headers: await headers() });
@@ -74,25 +73,31 @@ export default async function Home() {
     session = null;
   }
 
+  return session?.user ? (
+    <HomeContent currentYear={currentYear} />
+  ) : (
+    <LandingEntry currentYear={currentYear} />
+  );
+}
+
+export default function Home() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <>
       <JsonLd data={homeStructuredData} />
-      {session?.user ? (
-        <Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader className="size-5 animate-spin" />
-                <span>Loading…</span>
-              </div>
+      <Suspense
+        fallback={
+          <div className="flex h-screen items-center justify-center">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader className="size-5 animate-spin" />
+              <span>Loading…</span>
             </div>
-          }
-        >
-          <HomeContent currentYear={currentYear} />
-        </Suspense>
-      ) : (
-        <LandingEntry currentYear={currentYear} />
-      )}
+          </div>
+        }
+      >
+        <SessionGate currentYear={currentYear} />
+      </Suspense>
     </>
   );
 }

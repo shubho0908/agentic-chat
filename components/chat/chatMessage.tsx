@@ -6,13 +6,14 @@ import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
 import { Response } from "../ai-elements/response";
 import { extractTextFromContent } from "@/lib/contentUtils";
-import { MessageHeader } from "./messageHeader";
+import { MessageTimestamp, MessageSources } from "./messageMeta";
 import { MessageEditForm } from "./messageEditForm";
 import { VersionNavigator } from "./versionNavigator";
 import { AttachmentDisplay } from "./attachmentDisplay";
 import { MessageActions } from "./messageActions";
 import { FollowUpQuestions } from "./followUpQuestions";
 import { SearchImages } from "./searchImages";
+import { PdfDocuments } from "./pdfDocuments";
 import { RichLink } from "../ai-elements/richLink";
 import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
 import type { MemoryStatus } from "@/types/chat";
@@ -20,8 +21,9 @@ import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
+import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
+import { Button } from "@/components/ui/button";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -75,7 +77,6 @@ function extractUserUrls(text: string) {
 
 interface ChatMessageProps {
   message: Message;
-  userName?: string | null;
   onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
@@ -102,6 +103,7 @@ interface MessageContentSurfaceProps {
   memoryStatus?: MemoryStatus;
   humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
+  onSendMessage?: (content: string) => void;
   renderUserTextContent: (text: string) => ReactNode;
 }
 
@@ -113,6 +115,7 @@ function MessageContentSurface({
   memoryStatus,
   humanInTheLoopRequest,
   onHumanInTheLoopDecision,
+  onSendMessage,
   renderUserTextContent,
 }: MessageContentSurfaceProps) {
   const isUser = variant === MessageRole.USER;
@@ -172,6 +175,14 @@ function MessageContentSurface({
         />
       )}
 
+      {!isUser && displayedMessage.metadata?.streamStatus && (
+        <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
+          <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
+          <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
+          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue response</Button>}
+        </div>
+      )}
+
       {!hidePlaceholderContent && textContent ? (
         isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
       ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
@@ -202,7 +213,7 @@ function renderUserTextContent(text: string): ReactNode[] | null {
   return nodes;
 }
 
-function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -222,15 +233,14 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   const artifactMetadata = !isUser ? displayedMessage.metadata?.artifacts ?? [] : [];
   const displayedMessageId = displayedMessage.id ?? message.id;
 
-  const modelName = "AI Assistant"
-
   const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
 
   const textContent = useMemo(() => {
-    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
+    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === PDF_ONLY_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
     return rawText;
   }, [rawText]);
-  const hideArtifactPlaceholder = artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT;
+  const hidePdfPlaceholder = (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 && rawText === PDF_ONLY_ASSISTANT_CONTENT;
+  const hideArtifactPlaceholder = (artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) || hidePdfPlaceholder;
   const hideStoppedMarker = rawText === STREAM_STOPPED_BY_USER_MARKER;
 
   const handleEditStart = useCallback(() => {
@@ -363,16 +373,6 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
       <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
         <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
           <div className={cn("flex min-w-0 flex-col", isUser ? "gap-1 items-end" : "gap-2 w-full items-start")}>
-            {!isUser && (
-              <MessageHeader
-                isUser={false}
-                userName={userName}
-                modelName={modelName}
-                timestamp={displayedMessage.timestamp}
-                citations={citations}
-              />
-            )}
-
             <AttachmentDisplay
               attachments={displayedAttachments}
               isUser={isUser}
@@ -406,6 +406,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                   memoryStatus={memoryStatus}
                   humanInTheLoopRequest={humanInTheLoopRequest}
                   onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+                  onSendMessage={onSendMessage}
                   renderUserTextContent={renderUserTextContent}
                 />
 
@@ -415,6 +416,10 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
                     messageId={displayedMessageId}
                     onOpenArtifact={onOpenArtifact}
                   />
+                )}
+
+                {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
+                  <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
                 )}
 
                 {isUser && userUrls.length > 0 && (
@@ -448,15 +453,35 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
 
                 {!isSharePage && (
                   <div className={cn(
-                    "mt-1 opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100",
-                    isUser ? "pr-2" : "pl-1"
+                    "mt-1 flex items-center gap-2",
+                    isUser ? "pr-2" : "pl-1 w-full"
                   )}>
-                    <MessageActions
-                      context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
-                      textContent={textContent}
-                      onEditStart={handleEditStart}
-                      onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
-                    />
+                    <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                      <MessageActions
+                        context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
+                        textContent={textContent}
+                        onEditStart={handleEditStart}
+                        onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
+                      />
+                    </div>
+                    {!isUser && !isThinking && (
+                      <div className="ml-auto flex items-center gap-2">
+                        {citations.length > 0 && (
+                          <MessageSources citations={citations} />
+                        )}
+                        <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isSharePage && !isUser && !isThinking && (
+                  <div className="mt-1 flex w-full items-center gap-2 pl-1">
+                    <div className="ml-auto flex items-center gap-2">
+                      {citations.length > 0 && (
+                        <MessageSources citations={citations} />
+                      )}
+                      <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                    </div>
                   </div>
                 )}
               </>
@@ -468,7 +493,7 @@ function ChatMessageComponent({ message, userName, onEditMessage, onRegenerateMe
   );
 }
 
-export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => {
+export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
   if (
     prevProps.message.id !== nextProps.message.id ||
     prevProps.message.content !== nextProps.message.content ||
@@ -501,6 +526,7 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
     prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
     prevMetadata?.images?.length !== nextMetadata?.images?.length ||
+    prevMetadata?.pdfs?.length !== nextMetadata?.pdfs?.length ||
     prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
     prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
   ) {
@@ -513,12 +539,14 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
 
     if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
       prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
+      prevStatus?.skippedMemory !== nextStatus?.skippedMemory ||
       prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||
       prevStatus?.documentCount !== nextStatus?.documentCount ||
       prevStatus?.imageCount !== nextStatus?.imageCount ||
-      prevStatus?.routingDecision !== nextStatus?.routingDecision) {
+      prevStatus?.routingDecision !== nextStatus?.routingDecision ||
+      prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length) {
       return false;
     }
 
@@ -534,4 +562,6 @@ export const ChatMessage = memo(ChatMessageComponent, (prevProps, nextProps) => 
   }
 
   return true;
-});
+}
+
+export const ChatMessage = memo(ChatMessageComponent, areChatMessagePropsEqual);

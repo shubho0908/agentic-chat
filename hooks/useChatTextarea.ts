@@ -1,38 +1,40 @@
-import { useState, useRef, KeyboardEvent } from "react";
+import { useState, useRef, useLayoutEffect, useCallback, KeyboardEvent } from "react";
+
+const MAX_TEXTAREA_HEIGHT = 200;
 
 export function useChatTextarea(onSend: () => void) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSend();
-    }
-  }
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        onSend();
+      }
+    },
+    [onSend],
+  );
 
-  function handleInput() {
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT);
+    textarea.style.height = `${nextHeight}px`;
+    // Default (uncapped) overflow-y:hidden comes from the textarea's class.
+    textarea.style.overflowY =
+      textarea.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "";
+  }, []);
+
+  // Covers programmatic value changes too, and runs pre-paint so no flicker.
+  useLayoutEffect(() => {
     adjustTextareaHeight();
-  }
-
-  function adjustTextareaHeight() {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
-  }
-
-  function resetTextareaHeight() {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = "auto";
-  }
+  }, [input, adjustTextareaHeight]);
 
   function clearInput() {
     setInput("");
-    resetTextareaHeight();
   }
 
   return {
@@ -40,7 +42,6 @@ export function useChatTextarea(onSend: () => void) {
     setInput,
     textareaRef,
     handleKeyDown,
-    handleInput,
     clearInput,
   };
 }

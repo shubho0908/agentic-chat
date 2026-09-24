@@ -13,6 +13,7 @@ import { MessageRole } from '@/lib/schemas/chat';
 import type { Prisma } from '@prisma/client';
 import { logger } from "@/lib/logger";
 import { isRecord } from '@/lib/typeGuards';
+import { scheduleConversationCheckpointDelete } from '@/lib/orchestrator/checkpointPrune';
 
 interface MessageAttachment {
   id: string;
@@ -206,7 +207,8 @@ export async function GET(
         title: conversation.title,
         isPublic: conversation.isPublic,
         createdAt: conversation.createdAt,
-        updatedAt: conversation.updatedAt
+        updatedAt: conversation.updatedAt,
+        activeBranchId: conversation.activeBranchId
       },
       messages: paginateResults(transformedMessages, limit),
       ...(tokenUsage && { tokenUsage })
@@ -244,13 +246,13 @@ export async function PATCH(
       return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const { title, isPublic } = body;
+    const { title, isPublic, activeBranchId } = body;
 
-    if (title === undefined && isPublic === undefined) {
+    if (title === undefined && isPublic === undefined && activeBranchId === undefined) {
       return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const updateData: { title?: string; isPublic?: boolean } = {};
+    const updateData: { title?: string; isPublic?: boolean; activeBranchId?: string | null } = {};
     if (title !== undefined) {
       if (typeof title !== 'string' || !title.trim()) {
         return errorResponse(API_ERROR_MESSAGES.TITLE_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
@@ -267,6 +269,12 @@ export async function PATCH(
       }
       updateData.isPublic = isPublic;
     }
+    if (activeBranchId !== undefined) {
+      if (activeBranchId !== null && (typeof activeBranchId !== 'string' || activeBranchId.length === 0 || activeBranchId.length > 255)) {
+        return errorResponse(API_ERROR_MESSAGES.INVALID_REQUEST_BODY, undefined, HTTP_STATUS.BAD_REQUEST);
+      }
+      updateData.activeBranchId = activeBranchId;
+    }
 
     const updatedConversation = await prisma.conversation.update({
       where: {
@@ -279,7 +287,8 @@ export async function PATCH(
         title: true,
         isPublic: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        activeBranchId: true
       }
     });
 
@@ -321,6 +330,8 @@ export async function DELETE(
     if (conversation.count === 0) {
       return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
     }
+
+    scheduleConversationCheckpointDelete([conversationId]);
 
     return jsonResponse({ success: true });
   } catch (error) {

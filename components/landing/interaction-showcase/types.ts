@@ -1,5 +1,19 @@
-export type DeviceKind = "desktop" | "tablet" | "phone";
-export type SceneKind = "web" | "orchestration" | "deep-research";
+export enum DeviceKind {
+  Desktop = "desktop",
+  Tablet = "tablet",
+  Phone = "phone",
+}
+
+export enum SceneKind {
+  WebSearch = "web",
+  Orchestration = "orchestration",
+  DeepResearch = "deep-research",
+}
+
+export enum DeviceOrientation {
+  Portrait = "portrait",
+  Landscape = "landscape",
+}
 
 export interface TimelinePosition {
   cycle: number;

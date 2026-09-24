@@ -7,6 +7,13 @@ export interface StreamWriter {
 interface SafeStreamOptions {
   abortSignal?: AbortSignal;
   label: string;
+  /**
+   * When set, an SSE comment (`:hb`) is enqueued at this interval while the
+   * stream is open. Heartbeats carry no data; they let the client distinguish
+   * "backend is thinking" from "backend is gone" so stalls surface as errors
+   * instead of endless processing.
+   */
+  heartbeatIntervalMs?: number;
 }
 
 interface FinishOptions {
@@ -25,9 +32,8 @@ export interface SafeStream extends StreamWriter {
 
 function isAbortError(error: unknown): boolean {
   return (
-    error instanceof DOMException && error.name === "AbortError"
-  ) || (
-    error instanceof Error && error.name === "AbortError"
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
   );
 }
 
@@ -40,18 +46,28 @@ function isClosedControllerError(error: unknown): boolean {
 
 export function createSafeStream(
   controller: ReadableStreamDefaultController,
-  { abortSignal, label }: SafeStreamOptions,
+  { abortSignal, label, heartbeatIntervalMs }: SafeStreamOptions,
 ): SafeStream {
   let aborted = abortSignal?.aborted ?? false;
   let finalized = aborted;
   let loggedUnexpectedFailure = false;
 
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
   const cleanupAbortListener = () => {
     abortSignal?.removeEventListener("abort", markAborted);
   };
 
+  const stopHeartbeat = () => {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
+
   function markFinalized(): void {
     finalized = true;
+    stopHeartbeat();
     cleanupAbortListener();
   }
 
@@ -150,6 +166,20 @@ export function createSafeStream(
   };
 
   abortSignal?.addEventListener("abort", markAborted, { once: true });
+
+  if (heartbeatIntervalMs !== undefined && heartbeatIntervalMs > 0) {
+    const heartbeatBytes = new TextEncoder().encode(":hb\n\n");
+    heartbeatTimer = setInterval(() => {
+      // enqueue no-ops once the stream is no longer writable, and the
+      // heartbeat stops itself on finalize/abort via markFinalized.
+      stream.enqueue(heartbeatBytes);
+    }, heartbeatIntervalMs);
+    // A pending heartbeat must never keep a serverless invocation alive.
+    (heartbeatTimer as { unref?: () => void }).unref?.();
+    if (stream.isFinalized) {
+      stopHeartbeat();
+    }
+  }
 
   return stream;
 }

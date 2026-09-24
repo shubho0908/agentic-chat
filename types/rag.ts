@@ -1,4 +1,4 @@
-import type { ProcessingStatus } from '@prisma/client';
+import type { ProcessingStatus } from "@prisma/client";
 
 export interface AttachmentStatus {
   id: string;
@@ -20,6 +20,8 @@ export interface RAGContextOptions {
   scoreThreshold?: number;
   waitForProcessing?: boolean;
   processingTimeoutMs?: number;
+  queryVariants?: string[];
+  signal?: AbortSignal;
 }
 
 export interface RAGContextResult {
@@ -30,27 +32,38 @@ export interface RAGContextResult {
     id: string;
     source: string;
     relevance: string;
+    score?: number;
     page?: number;
   }>;
 }
 
+/** Where a retrieval score came from. Only bounded similarity ("semantic")
+ * and reranker relevance ("rerank") values are honest to display as match
+ * percentages; raw lexical ranks are ordering signals, not probabilities. */
+export type RetrievalScoreOrigin = "semantic" | "lexical" | "rerank";
+
 export interface RerankDocument {
   content: string;
   score: number;
+  scoreOrigin?: RetrievalScoreOrigin;
   metadata: {
     attachmentId: string;
     fileName: string;
     page?: number;
+    chunkId?: string;
+    charStart?: number;
   };
 }
 
 export interface RerankResult {
   content: string;
   score: number;
-  originalScore: number;
+  scoreOrigin?: RetrievalScoreOrigin;
   metadata: {
     attachmentId: string;
     fileName: string;
     page?: number;
+    chunkId?: string;
+    charStart?: number;
   };
 }

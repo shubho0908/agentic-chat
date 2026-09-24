@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { isRateLimited, recordUsage, RATE_LIMITS } from "@/lib/rateLimit";
 import { createRequestId } from "@/lib/observability";
 import { ToolName } from "@/lib/tools/constants";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 
 const deepResearchSchema = z.object({
   query: z
@@ -17,7 +18,7 @@ const deepResearchSchema = z.object({
     .describe("Additional context or clarifications from the user (pass answers from ask_user here when re-invoking after clarification)"),
 });
 
-export function createDeepResearchTool(apiKey: string, model: string, userId?: string): DynamicStructuredTool {
+export function createDeepResearchTool(apiKey: string, model: string, userId?: string, reasoningEffort?: ReasoningEffortLevel | null): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: ToolName.DEEP_RESEARCH,
     description:
@@ -45,6 +46,7 @@ export function createDeepResearchTool(apiKey: string, model: string, userId?: s
         return await invokeResearchAgent(query, apiKey, model, config, {
           userContext,
           signal: toolConfig?.signal,
+          reasoningEffort,
         });
       } catch (error) {
         logger.error("[DeepResearch] Sub-agent failed:", { researchRunId, error });

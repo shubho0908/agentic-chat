@@ -28,9 +28,44 @@ function getRetryAfterMs(error: unknown): number | null {
 
 type AbortableOperation<T> = (signal?: AbortSignal) => Promise<T>;
 
+const ABORTED_MESSAGE = 'Operation aborted';
+
 function createAbortError(message: string): Error {
   const error = new Error(message);
   error.name = 'AbortError';
+  return error;
+}
+
+/** Aborts from any layer: our own AbortError, a native DOMException, or a
+ * transport error that only says so in its message. */
+export function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { name?: unknown; message?: unknown };
+  return (
+    candidate.name === 'AbortError' ||
+    (typeof candidate.message === 'string' && /abort/i.test(candidate.message))
+  );
+}
+
+function readAbortReasonMessage(reason: unknown): string | null {
+  if (!reason || typeof reason !== 'object') return null;
+  const candidate = reason as { name?: unknown; message?: unknown };
+  return candidate.name === 'AbortError' && typeof candidate.message === 'string' && candidate.message
+    ? candidate.message
+    : null;
+}
+
+/** AbortError that keeps the signal's own reason. Cancellation is classified by
+ * `name` (and reported by `message`), so the reason travels as the message and
+ * as `cause` instead of being flattened into a generic string. */
+function resolveAbortReason(signal?: AbortSignal): Error {
+  const reason: unknown = signal?.reason;
+  if (reason instanceof Error && reason.name === 'AbortError') return reason;
+
+  const detail =
+    reason instanceof Error ? reason.message : readAbortReasonMessage(reason);
+  const error = createAbortError(detail ?? ABORTED_MESSAGE);
+  if (reason && typeof reason === 'object') error.cause = reason;
   return error;
 }
 
@@ -74,7 +109,7 @@ function defaultShouldRetry(error: unknown): boolean {
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
-    return Promise.reject(createAbortError('Operation aborted'));
+    return Promise.reject(resolveAbortReason(signal));
   }
 
   return new Promise((resolve, reject) => {
@@ -86,58 +121,59 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     const onAbort = () => {
       clearTimeout(timeoutId);
       signal?.removeEventListener('abort', onAbort);
-      reject(createAbortError('Operation aborted'));
+      reject(resolveAbortReason(signal));
     };
 
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
+/** Races the operation against its cancellation sources, so a caller's signal is
+ * a hard bound even if the operation ignores it. */
 async function runWithTimeout<T>(
   operation: AbortableOperation<T>,
   timeoutMs?: number,
   signal?: AbortSignal
 ): Promise<T> {
-  if (!timeoutMs || timeoutMs <= 0) {
-    return operation(signal);
+  const hasTimeout = Boolean(timeoutMs && timeoutMs > 0);
+  if (!hasTimeout && !signal) {
+    return operation();
   }
 
   if (signal?.aborted) {
-    throw createAbortError('Operation aborted');
+    throw resolveAbortReason(signal);
   }
 
   const timeoutController = new AbortController();
-  const timeoutId = setTimeout(() => {
-    timeoutController.abort(createAbortError('Operation timed out'));
-  }, timeoutMs);
+  const timeoutId = hasTimeout
+    ? setTimeout(() => {
+        timeoutController.abort(createAbortError('Operation timed out'));
+      }, timeoutMs)
+    : undefined;
   const combinedController = new AbortController();
 
-  const abortCombined = (reason: unknown) => {
+  const abortCombined = (reason: Error) => {
     if (!combinedController.signal.aborted) {
-      combinedController.abort(
-        reason instanceof Error ? reason : createAbortError(String(reason ?? 'Operation aborted'))
-      );
+      combinedController.abort(reason);
     }
   };
 
   const onTimeoutAbort = () => {
-    abortCombined(timeoutController.signal.reason ?? createAbortError('Operation timed out'));
+    abortCombined(resolveAbortReason(timeoutController.signal));
   };
   const onSignalAbort = () => {
-    abortCombined(signal?.reason ?? createAbortError('Operation aborted'));
+    abortCombined(resolveAbortReason(signal));
   };
 
-  timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true });
+  if (hasTimeout) {
+    timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true });
+  }
   signal?.addEventListener('abort', onSignalAbort, { once: true });
 
   const abortPromise = new Promise<never>((_, reject) => {
     const onAbort = () => {
       combinedController.signal.removeEventListener('abort', onAbort);
-      reject(
-        combinedController.signal.reason instanceof Error
-          ? combinedController.signal.reason
-          : createAbortError('Operation aborted')
-      );
+      reject(resolveAbortReason(combinedController.signal));
     };
 
     combinedController.signal.addEventListener('abort', onAbort, { once: true });
@@ -146,7 +182,9 @@ async function runWithTimeout<T>(
   try {
     return await Promise.race([operation(combinedController.signal), abortPromise]);
   } finally {
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
     timeoutController.signal.removeEventListener('abort', onTimeoutAbort);
     signal?.removeEventListener('abort', onSignalAbort);
   }
@@ -168,7 +206,7 @@ export async function withRetry<T>(
 
   const attempt = async (index: number): Promise<T> => {
     if (signal?.aborted) {
-      throw createAbortError('Operation aborted');
+      throw resolveAbortReason(signal);
     }
 
     try {
@@ -176,6 +214,13 @@ export async function withRetry<T>(
     } catch (error) {
       if (index >= retries || !shouldRetry(error, index + 1)) {
         throw error;
+      }
+
+      // An aborted signal means the caller's budget is gone or the request was
+      // cancelled: retrying is dead work, and the backoff sleep would replace
+      // the real abort reason with a generic one.
+      if (signal?.aborted) {
+        throw resolveAbortReason(signal);
       }
 
       const rateLimited = isRateLimitError(error);

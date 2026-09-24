@@ -4,6 +4,12 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { DropdownMenuContent } from "./dropdownMenuContent"
 import { DropdownMenuItem } from "./dropdownMenuItem"
 import { DropdownMenuSeparator } from "./dropdownMenuSeparator"
+import {
+  DropdownMenuSub,
+  DropdownMenuPortal,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "./dropdownMenuSub"
 
 const DropdownMenu = DropdownMenuPrimitive.Root
 
@@ -15,4 +21,8 @@ export {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuPortal,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 }

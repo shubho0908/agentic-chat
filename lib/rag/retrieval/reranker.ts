@@ -1,76 +1,217 @@
-import { CohereClientV2 } from 'cohere-ai';
-import { RAG_CONFIG } from '../config';
-import type { RerankDocument, RerankResult } from '@/types/rag';
-import { logError, logWarn } from '@/lib/observability';
+import { createHash } from "node:crypto";
+import { CohereClientV2 } from "cohere-ai";
+import { RAG_CONFIG } from "../config";
+import type { RerankDocument, RerankResult } from "@/types/rag";
+import { createRequestId, logError, logWarn } from "@/lib/observability";
+import { JevCheckpoint, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
+import { getJevMode } from "@/lib/jev/config";
+import { logJevDecision } from "@/lib/jev/telemetry";
+import { JevInvalidResponseError } from "@/lib/jev/client";
+import { rerankWithJev } from "@/lib/jev/reranker";
+
+/** Deterministic 50/50 bucket for A/B mode. Same key always lands in the
+ * same arm so treatment and control stay comparable. Empty keys stay on
+ * control so unkeyed traffic never changes behavior. */
+function isJevRerankCohort(cohortKey: string): boolean {
+  if (!cohortKey) return false;
+  return createHash("sha256").update(cohortKey).digest()[0] < 128;
+}
+
+function passthrough(documents: RerankDocument[]): RerankResult[] {
+  return documents.map((doc) => ({
+    ...doc,
+  }));
+}
+
+export function mapProviderRerankResults(
+  documents: RerankDocument[],
+  results: Array<{ index: number; relevanceScore: number }>,
+  topN = documents.length,
+): RerankResult[] {
+  const seen = new Set<number>();
+  const mapped: RerankResult[] = [];
+  for (const result of results) {
+    if (
+      !Number.isInteger(result.index) ||
+      result.index < 0 ||
+      result.index >= documents.length ||
+      seen.has(result.index) ||
+      !Number.isFinite(result.relevanceScore)
+    )
+      continue;
+    seen.add(result.index);
+    const original = documents[result.index];
+    mapped.push({
+      content: original.content,
+      score: result.relevanceScore,
+      scoreOrigin: "rerank",
+      metadata: original.metadata,
+    });
+  }
+  if (!mapped.length) return passthrough(documents).slice(0, topN);
+  for (
+    let index = 0;
+    index < documents.length && mapped.length < topN;
+    index++
+  ) {
+    if (seen.has(index)) continue;
+    mapped.push({ ...documents[index] });
+  }
+  return mapped;
+}
+
+export async function rerankWithCohere(
+  apiKey: string,
+  query: string,
+  documents: RerankDocument[],
+  topN: number,
+): Promise<RerankResult[]> {
+  const cohere = new CohereClientV2({ token: apiKey });
+
+  const response = await cohere.rerank({
+    model: RAG_CONFIG.rerank.model,
+    query,
+    documents: documents.map((doc) => doc.content),
+    topN,
+  });
+
+  if (!response.results || response.results.length === 0) {
+    logWarn({
+      event: "reranker_empty_results",
+      message: "No results from reranking, returning original order",
+    });
+    return passthrough(documents);
+  }
+
+  return mapProviderRerankResults(documents, response.results, topN);
+}
+
+export function isRerankAvailable(): boolean {
+  if (process.env.COHERE_API_KEY) return true;
+  const mode = getJevMode(JevCheckpoint.RERANK);
+  switch (mode) {
+    case JevMode.ACTIVE:
+      return JevDecisionClient.createIfConfigured() !== null;
+    case JevMode.AB:
+    case JevMode.SHADOW:
+    case JevMode.OFF:
+      return false;
+  }
+}
 
 export async function rerankDocuments(
   query: string,
   documents: RerankDocument[],
   options: {
     topN?: number;
-  } = {}
+    conversationId?: string;
+    cohereRerank?: typeof rerankWithCohere;
+  } = {},
 ): Promise<RerankResult[]> {
   const apiKey = process.env.COHERE_API_KEY;
-  
-  if (!apiKey) {
-    logWarn({
-      event: 'reranker_disabled',
-      message: 'COHERE_API_KEY not set, skipping reranking',
-    });
-    return documents.map(doc => ({
-      ...doc,
-      originalScore: doc.score,
-    }));
-  }
+  const jevClient = JevDecisionClient.createIfConfigured();
+  const mode = getJevMode(JevCheckpoint.RERANK);
+  const topN = Math.min(options.topN ?? documents.length, documents.length);
 
   if (documents.length === 0) {
     return [];
   }
 
-  try {
-    const cohere = new CohereClientV2({
-      token: apiKey,
+  const cohortKey = options.conversationId
+    ? `${options.conversationId}\n${query}`
+    : query;
+  const conversationScope = options.conversationId
+    ? { conversationId: options.conversationId }
+    : {};
+  const inJevCohort =
+    mode === JevMode.ACTIVE ||
+    (mode === JevMode.AB && isJevRerankCohort(cohortKey));
+
+  if (mode === JevMode.AB && !inJevCohort) {
+    const requestId = createRequestId("jev_rerank");
+    logJevDecision({
+      checkpoint: JevCheckpoint.RERANK,
+      schemaVersion: "1.0.0",
+      modelVersion: `cohere/${RAG_CONFIG.rerank.model}`,
+      mode,
+      latencyMs: 0,
+      outcome: "control_cohere",
+      fallbackUsed: false,
+      requestId,
+      ...conversationScope,
     });
+  }
 
-    const topN = Math.min(options.topN ?? documents.length, documents.length);
-
-    const response = await cohere.rerank({
-      model: RAG_CONFIG.rerank.model,
-      query,
-      documents: documents.map(doc => doc.content),
-      topN,
-    });
-
-    if (!response.results || response.results.length === 0) {
-      logWarn({
-        event: 'reranker_empty_results',
-        message: 'No results from reranking, returning original order',
+  if (inJevCohort && jevClient) {
+    const requestId = createRequestId("jev_rerank");
+    const startedAt = Date.now();
+    try {
+      const { results, modelVersion } = await rerankWithJev(
+        jevClient,
+        query,
+        documents,
+        {
+          requestId,
+          ...conversationScope,
+        },
+      );
+      logJevDecision({
+        checkpoint: JevCheckpoint.RERANK,
+        schemaVersion: "1.0.0",
+        modelVersion,
+        mode,
+        latencyMs: Date.now() - startedAt,
+        outcome: `reranked_${results.length}`,
+        fallbackUsed: false,
+        requestId,
+        ...conversationScope,
       });
-      return documents.map(doc => ({
-        ...doc,
-        originalScore: doc.score,
-      }));
+      return results.slice(0, topN);
+    } catch (error) {
+      logWarn({
+        event: "jev_rerank_fallback",
+        message: "Jev rerank failed, falling back to Cohere",
+        error: error instanceof Error ? error.message : String(error),
+        ...(error instanceof JevInvalidResponseError &&
+          error.responseBody && { responseBody: error.responseBody }),
+        requestId,
+      });
+      logJevDecision({
+        checkpoint: JevCheckpoint.RERANK,
+        schemaVersion: "1.0.0",
+        modelVersion: "unknown",
+        mode,
+        latencyMs: Date.now() - startedAt,
+        outcome: "error",
+        fallbackUsed: true,
+        fallbackReason: classifyJevFailure(error),
+        requestId,
+        ...conversationScope,
+      });
     }
+  }
 
-    const rerankedResults = response.results.map((result) => {
-      const originalDoc = documents[result.index];
-      return {
-        content: originalDoc.content,
-        score: result.relevanceScore,
-        originalScore: originalDoc.score,
-        metadata: originalDoc.metadata,
-      };
+  if (!apiKey) {
+    logWarn({
+      event: "reranker_disabled",
+      message: "COHERE_API_KEY not set, skipping reranking",
     });
+    return passthrough(documents);
+  }
 
-    return rerankedResults;
+  try {
+    return await (options.cohereRerank ?? rerankWithCohere)(
+      apiKey,
+      query,
+      documents,
+      topN,
+    );
   } catch (error) {
     logError({
-      event: 'reranker_failed',
+      event: "reranker_failed",
       error: error instanceof Error ? error.message : String(error),
     });
-    return documents.map(doc => ({
-      ...doc,
-      originalScore: doc.score,
-    }));
+    return passthrough(documents);
   }
 }

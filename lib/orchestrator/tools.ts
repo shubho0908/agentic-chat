@@ -1,6 +1,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { exaSearchTool } from "@/lib/tools/exa";
+import { createPdfTool } from "@/lib/tools/pdf";
 import { webScrapeTool, webCrawlTool } from "@/lib/tools/scrape";
 import { getToolsForUser } from "@/lib/tools/composio";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
@@ -12,12 +13,14 @@ import {
 } from "@/lib/tools/composio/config";
 import { createDeepResearchTool } from "./sub-agents";
 import { MAX_TOOLS } from "./constants";
-import { DEFAULT_MODEL } from "@/constants/openai-models";
+import { DEFAULT_MODEL, type ReasoningEffortLevel } from "@/constants/openai-models";
 import { logger } from "@/lib/logger";
 import { ToolName } from "@/lib/tools/constants";
 import { RoutingDecision } from "@/types/chat";
 import type { Message } from "@/lib/schemas/chat";
 import { extractTextFromMessage } from "@/lib/chat/messageContent";
+import { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
+export { shouldBypassSemanticCacheForToolIntent } from "./cacheIntent";
 
 export const ASK_USER_TOOL_NAME = ToolName.ASK_USER;
 
@@ -408,6 +411,7 @@ export function selectToolsForAgentStep(
 
   addToolByName(selected, toolsByName, ToolName.ASK_USER);
   addToolByName(selected, toolsByName, ToolName.WEB_SEARCH);
+  addToolByName(selected, toolsByName, ToolName.CREATE_PDF);
   addToolByName(selected, toolsByName, ToolName.WEB_SCRAPE);
   addToolByName(selected, toolsByName, ToolName.WEB_CRAWL);
   addToolsByName(selected, toolsByName, plannedTools);
@@ -461,21 +465,6 @@ export function hasWebActionIntent(latestUserText: string): boolean {
   );
 }
 
-export function shouldBypassSemanticCacheForToolIntent(
-  latestUserText: string,
-  _connectedServices?: string[],
-): boolean {
-  void _connectedServices;
-  const rawText = latestUserText.toLowerCase();
-  return (
-    getAnyMentionedToolkits(latestUserText).length > 0 ||
-    matchesAnyTerm(rawText, WEB_SEARCH_TERMS) ||
-    matchesAnyTerm(rawText, CRAWL_INTENT_TERMS) ||
-    qualifiesForDeepResearch(latestUserText) ||
-    /https?:\/\//i.test(latestUserText)
-  );
-}
-
 function messagesHaveImageContent(messages: Message[]): boolean {
   return messages.some(
     (message) =>
@@ -510,7 +499,7 @@ export function shouldBypassSemanticCacheForMessageContext(
 export async function getToolsForRequest(
   userId: string,
   connectedToolkits?: ComposioToolkit[],
-  options?: { apiKey?: string; model?: string },
+  options?: { apiKey?: string; model?: string; reasoningEffort?: ReasoningEffortLevel | null },
 ): Promise<DynamicStructuredTool[]> {
   const baseTools: DynamicStructuredTool[] = [
     askUserTool,
@@ -522,12 +511,17 @@ export async function getToolsForRequest(
     baseTools.push(exaSearchTool);
   }
 
+  if (process.env.UPLOADTHING_TOKEN) {
+    baseTools.push(createPdfTool);
+  }
+
   if (options?.apiKey) {
     baseTools.push(
       createDeepResearchTool(
         options.apiKey,
         options.model ?? DEFAULT_MODEL,
         userId,
+        options.reasoningEffort,
       ),
     );
   }
@@ -578,7 +572,10 @@ export function filterToolsForContext(
     case RoutingDecision.VisionOnly:
     case RoutingDecision.DocumentsOnly:
       return allTools.filter(
-        (t) => alwaysInclude.includes(t.name) || t.name === ToolName.WEB_SCRAPE,
+        (t) =>
+          alwaysInclude.includes(t.name) ||
+          t.name === ToolName.WEB_SCRAPE ||
+          t.name === ToolName.CREATE_PDF,
       );
 
     default:

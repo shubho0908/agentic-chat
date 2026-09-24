@@ -7,6 +7,11 @@ export interface AgentToolPlan {
   plan: string;
 }
 
+export interface JevHitlEscalationVerdict {
+  signature: string;
+  escalate: boolean;
+}
+
 export const AgentState = Annotation.Root({
   ...MessagesAnnotation.spec,
   userId: Annotation<string>,
@@ -24,6 +29,10 @@ export const AgentState = Annotation.Root({
     default: () => null,
   }),
   toolPlan: Annotation<AgentToolPlan | null>({
+    reducer: (_current, update) => update,
+    default: () => null,
+  }),
+  jevHitlEscalation: Annotation<JevHitlEscalationVerdict | null>({
     reducer: (_current, update) => update,
     default: () => null,
   }),

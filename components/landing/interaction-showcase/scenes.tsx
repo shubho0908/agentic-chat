@@ -42,7 +42,7 @@ import {
   getStepStart,
   getTypedText,
 } from "@/components/landing/interaction-showcase/timeline";
-import type { DeviceKind } from "@/components/landing/interaction-showcase/types";
+import { DeviceKind, SceneKind } from "@/components/landing/interaction-showcase/types";
 import { ToolActivityDisplay } from "@/components/chat/aiThinkingAnimation/toolActivityDisplay";
 
 function getMotionProps(prefersReducedMotion: boolean) {
@@ -81,6 +81,18 @@ function TimelineItem({
 const TOOL_CARD_CLASS =
   "rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]";
 
+const IMAGE_GRID_CLASS: Record<DeviceKind, string> = {
+  [DeviceKind.Desktop]: "grid-cols-3",
+  [DeviceKind.Tablet]: "grid-cols-2",
+  [DeviceKind.Phone]: "grid-cols-1",
+};
+
+const IMAGE_SIZES: Record<DeviceKind, string> = {
+  [DeviceKind.Desktop]: "(max-width: 1023px) 33vw, 200px",
+  [DeviceKind.Tablet]: "(max-width: 719px) 100vw, 220px",
+  [DeviceKind.Phone]: "260px",
+};
+
 function PlanCard({ plan, done }: { plan: string; done: boolean }) {
   return (
     <div className={TOOL_CARD_CLASS}>
@@ -114,12 +126,12 @@ export function WebSearchScene({
   const response = getTypedText(
     WEB_RESPONSE,
     sceneElapsed,
-    getStepStart("web", 3),
-    getResponsiveTypingSpeed({ scene: "web", startStep: 3, target: WEB_RESPONSE, preferredSpeed: 6 }),
+    getStepStart(SceneKind.WebSearch, 3),
+    getResponsiveTypingSpeed({ scene: SceneKind.WebSearch, startStep: 3, target: WEB_RESPONSE, preferredSpeed: 6 }),
   );
   const chipTransition = prefersReducedMotion ? { duration: 0 } : { duration: 0.2 };
-  const showSources = device !== "phone";
-  const showImages = device === "desktop" ? step >= 2 : step >= 3;
+  const showSources = device !== DeviceKind.Phone;
+  const showImages = device === DeviceKind.Desktop ? step >= 2 : step >= 3;
   const timelineItems: Array<{ key: string; node: ReactNode }> = [];
 
   if (step >= 1) {
@@ -137,7 +149,7 @@ export function WebSearchScene({
                   initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={chipTransition}
-                  className={`rounded-lg px-2 py-0.5 text-[9px] font-medium text-muted-foreground/90 sm:text-[10px] ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}
+                  className={`rounded-lg px-2 py-0.5 text-[9px] font-medium text-muted-foreground/90 @[40rem]:text-[10px] ${CHIP_SURFACE_CLASS} ${SOFT_BORDER_CLASS}`}
                 >
                   {source}
                 </m.span>
@@ -153,7 +165,7 @@ export function WebSearchScene({
     timelineItems.push({
       key: "web-images",
       node: (
-        <div className={`grid gap-2 ${device === "desktop" ? "grid-cols-3" : device === "tablet" ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-2 ${IMAGE_GRID_CLASS[device]}`}>
           {WEB_IMAGE_ITEMS.map((item) => (
             <div key={item.key} className={`relative aspect-[16/9] min-w-0 overflow-hidden rounded-xl ${PANEL_SURFACE_CLASS} ${SURFACE_BORDER_CLASS}`}>
               <div className="absolute inset-0 overflow-hidden bg-muted/30">
@@ -161,15 +173,15 @@ export function WebSearchScene({
                   src={item.src}
                   alt={item.alt}
                   fill
-                  sizes={device === "desktop" ? "(max-width: 1023px) 33vw, 200px" : device === "tablet" ? "(max-width: 719px) 100vw, 220px" : "260px"}
+                  sizes={IMAGE_SIZES[device]}
                   quality={70}
                   className="object-cover"
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/55 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 px-2.5 pb-2">
                   <div className="min-w-0">
-                    <p className="truncate text-[9.5px] font-medium text-white sm:text-[10px]">{item.title}</p>
-                    <p className="truncate text-[8.5px] text-white/70 sm:text-[9px]">{item.source}</p>
+                    <p className="truncate text-[9.5px] font-medium text-white @[40rem]:text-[10px]">{item.title}</p>
+                    <p className="truncate text-[8.5px] text-white/70 @[40rem]:text-[9px]">{item.source}</p>
                   </div>
                 </div>
               </div>
@@ -189,7 +201,7 @@ export function WebSearchScene({
 
   return (
     <SceneFrame title="Web search" caption="Searches, verifies, then answers">
-      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 @[40rem]:gap-3">
         <UserBubble text="Find the most important product launches in AI search this week and show the strongest visuals too." />
         <AssistantShell>
           <AutoScrollStage>
@@ -217,8 +229,8 @@ export function OrchestrationScene({
   const response = getTypedText(
     ORCHESTRATION_RESPONSE,
     sceneElapsed,
-    getStepStart("orchestration", 7),
-    getResponsiveTypingSpeed({ scene: "orchestration", startStep: 7, target: ORCHESTRATION_RESPONSE, preferredSpeed: 6 }),
+    getStepStart(SceneKind.Orchestration, 7),
+    getResponsiveTypingSpeed({ scene: SceneKind.Orchestration, startStep: 7, target: ORCHESTRATION_RESPONSE, preferredSpeed: 6 }),
   );
   const timelineItems: Array<{ key: string; node: ReactNode }> = [];
 
@@ -274,7 +286,7 @@ export function OrchestrationScene({
 
   return (
     <SceneFrame title="Orchestration" caption="One prompt, executed step by step">
-      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 @[40rem]:gap-3">
         <UserBubble text="Search for the top 3 AI dev tools this week, scrape each homepage, then post a comparison table to Slack." />
         <AssistantShell>
           <AutoScrollStage>
@@ -302,8 +314,8 @@ export function DeepResearchScene({
   const response = getTypedText(
     DEEP_RESEARCH_RESPONSE,
     sceneElapsed,
-    getStepStart("deep-research", 7),
-    getResponsiveTypingSpeed({ scene: "deep-research", startStep: 7, target: DEEP_RESEARCH_RESPONSE, preferredSpeed: 5 }),
+    getStepStart(SceneKind.DeepResearch, 7),
+    getResponsiveTypingSpeed({ scene: SceneKind.DeepResearch, startStep: 7, target: DEEP_RESEARCH_RESPONSE, preferredSpeed: 5 }),
   );
   const timelineItems: Array<{ key: string; node: ReactNode }> = [];
 
@@ -347,7 +359,7 @@ export function DeepResearchScene({
 
   return (
     <SceneFrame title="Deep research" caption="Plans, sources, synthesizes">
-      <div className="flex h-full min-h-0 flex-col gap-2.5 sm:gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-2.5 @[40rem]:gap-3">
         <UserBubble text="Do a deep dive on how chain-of-thought prompting affects LLM reasoning accuracy across benchmarks." />
         <AssistantShell>
           <AutoScrollStage>

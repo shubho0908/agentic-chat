@@ -22,6 +22,7 @@ export function encodeMemoryStatus(
     routingDecision: memoryStatusInfo.routingDecision,
     skippedMemory: memoryStatusInfo.skippedMemory,
     activeToolName: memoryStatusInfo.activeToolName,
+    degradedContexts: memoryStatusInfo.degradedContexts,
     tokenUsage: memoryStatusInfo.tokenUsage
   });
 }
@@ -73,6 +74,10 @@ export function encodeChatChunk(content: string): Uint8Array {
 
 export function encodeThinkingChunk(content: string): Uint8Array {
   return encodeSSEMessage({ type: 'thinking', content });
+}
+
+export function encodeResponseIncomplete(reason: "length"): Uint8Array {
+  return encodeSSEMessage({ type: "response_incomplete", reason });
 }
 
 export function encodeError(message: string): Uint8Array {

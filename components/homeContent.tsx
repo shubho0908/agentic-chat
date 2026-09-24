@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useReducer, useRef, useState } from "react";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
 import { ChatContainer } from "@/components/chat/chatContainer";
@@ -15,7 +16,7 @@ import { useApiKey } from "@/hooks/useApiKey";
 import { toast } from "sonner";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
 import type { Attachment } from "@/lib/schemas/chat";
-import { getMemoryEnabled } from "@/lib/storage";
+import { getReasoningEffort } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 const SESSION_LOAD_TIMEOUT_MS = 10_000;
@@ -105,16 +106,16 @@ export function HomeContent({ currentYear }: HomeContentProps) {
   }
 
   const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const memoryEnabled = getMemoryEnabled();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, memoryEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
   };
 
   const handleRegenerate = (messageId: string) => {
-    const memoryEnabled = getMemoryEnabled();
-    return regenerateResponse({ messageId, session: session ?? undefined, memoryEnabled });
+    const reasoningEffort = getReasoningEffort();
+    return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
   };
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, memoryEnabled?: boolean, thinkingEnabled?: boolean) => {
+  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, reasoningEffort?: ReasoningEffortLevel) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -134,18 +135,18 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       byokTriggerRef.current?.click();
       return { success: false, error: "API key required" };
     }
-    return sendMessage({ content, session, attachments, memoryEnabled, thinkingEnabled });
+    return sendMessage({ content, session, attachments, reasoningEffort });
   };
 
   const handleFollowUpQuestion = async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
-    const memoryEnabled = getMemoryEnabled();
+    const reasoningEffort = getReasoningEffort();
     await sendMessage({
       content: question,
       session,
-      memoryEnabled,
+      reasoningEffort,
     });
   };
 
@@ -190,7 +191,6 @@ export function HomeContent({ currentYear }: HomeContentProps) {
       <ChatContainer
         messages={messages}
         isLoading={isLoading}
-        userName={session?.user?.name}
         onEditMessage={handleEdit}
         onRegenerateMessage={handleRegenerate}
         onSendMessage={handleFollowUpQuestion}

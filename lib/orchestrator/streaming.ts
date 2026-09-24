@@ -5,6 +5,7 @@ import {
   encodeToolResult,
   encodeThinkingChunk,
   encodeArtifactEvent,
+  encodeResponseIncomplete,
 } from "@/lib/chat/streamingHelpers";
 import type { StreamWriter } from "@/lib/chat/safeStream";
 
@@ -51,6 +52,36 @@ function extractToolOutput(output: unknown): string | Record<string, unknown> | 
     if (typeof obj.content === "string") return obj.content;
   }
   return output as string | Record<string, unknown> | unknown[];
+}
+
+function isPdfArtifact(value: unknown): value is Record<string, unknown> {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).url === "string"
+  );
+}
+function emitPdfReady(writer: StreamWriter, pdf: unknown): void {
+  if (!isPdfArtifact(pdf)) return;
+  writer.enqueue(
+    encodeToolProgress(ToolName.CREATE_PDF, ToolStatus.COMPLETED, "PDF ready", { pdf })
+  );
+}
+
+function extractToolOutputArtifact(output: unknown): unknown {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const obj = output as Record<string, unknown>;
+  if (isPdfArtifact(obj.artifact)) return obj.artifact;
+  const artifact = obj.artifact;
+  if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
+    const nested = (artifact as Record<string, unknown>).pdf;
+    if (isPdfArtifact(nested)) return nested;
+  }
+  if (obj.kwargs && typeof obj.kwargs === "object" && !Array.isArray(obj.kwargs)) {
+    return extractToolOutputArtifact(obj.kwargs);
+  }
+  return undefined;
 }
 
 interface StreamEventMapper {
@@ -119,6 +150,18 @@ export function createStreamEventMapper(): StreamEventMapper {
           break;
         }
 
+
+        case StreamEventType.CHAT_MODEL_END: {
+          if (getNode(event) !== GraphNode.AGENT) break;
+          const data = event.data as {
+            output?: { response_metadata?: { finish_reason?: unknown } };
+          } | undefined;
+          if (data?.output?.response_metadata?.finish_reason === "length") {
+            writer.enqueue(encodeResponseIncomplete("length"));
+          }
+          break;
+        }
+
         case StreamEventType.TOOL_START: {
           const name = event.name as string;
           if (name === ToolName.ASK_USER) {
@@ -144,8 +187,18 @@ export function createStreamEventMapper(): StreamEventMapper {
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { output?: unknown } | undefined;
           const result = extractToolOutput(data?.output);
-          writer.enqueue(encodeToolResult(name, runId, result));
+          const artifactPdf = name === ToolName.CREATE_PDF
+            ? extractToolOutputArtifact(data?.output)
+            : undefined;
+          writer.enqueue(
+            encodeToolResult(
+              name,
+              runId,
+              artifactPdf ? { content: result, pdf: artifactPdf } : result,
+            ),
+          );
           writer.enqueue(encodeToolProgress(name, ToolStatus.COMPLETED, `${name} completed`));
+          if (artifactPdf) emitPdfReady(writer, artifactPdf);
           break;
         }
 
@@ -180,6 +233,18 @@ export function createStreamEventMapper(): StreamEventMapper {
             if (images) {
               writer.enqueue(
                 encodeToolProgress(ToolName.WEB_SEARCH, ToolStatus.RUNNING, "Found images", { images })
+              );
+            }
+          }
+          if (eventName === CustomEventName.PDF_FILE) {
+            emitPdfReady(writer, customData?.pdf);
+          }
+          if (eventName === CustomEventName.SEARCH_SOURCES) {
+            const sources = Array.isArray(customData?.sources) ? customData.sources : undefined;
+            if (sources && sources.length > 0) {
+              const tool = customData?.tool === ToolName.DEEP_RESEARCH ? ToolName.DEEP_RESEARCH : ToolName.WEB_SEARCH;
+              writer.enqueue(
+                encodeToolProgress(tool, ToolStatus.COMPLETED, `Found ${sources.length} source${sources.length === 1 ? "" : "s"}`, { sources })
               );
             }
           }

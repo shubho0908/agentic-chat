@@ -1,21 +1,10 @@
-import { getEmbeddingModel, getRerankerModel } from '@/lib/env';
+import { getEmbeddingModel, getRerankerModel } from "@/lib/env";
 
 export const RAG_CONFIG = {
   chunking: {
     defaultSize: 800,
     defaultOverlap: 100,
-    separators: [
-      '\n\n\n',
-      '\n\n',
-      '\n',
-      '. ',
-      '! ',
-      '? ',
-      '; ',
-      ', ',
-      ' ',
-      '',
-    ],
+    separators: ["\n\n\n", "\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""],
     sizeByType: {
       pdf: { size: 1000, overlap: 150 },
       doc: { size: 800, overlap: 100 },
@@ -39,19 +28,21 @@ export const RAG_CONFIG = {
     scoreThreshold: 0.7,
     minScoreThreshold: 0.45,
     semanticCandidateMultiplier: 6,
-    lexicalFallbackLimit: 24,
+    lexicalFallbackLimit: 30,
+    lexicalLanguage: process.env.RAG_LEXICAL_LANGUAGE || "english",
     lexicalQueryMaxTerms: 8,
     preRerankPoolMultiplier: 3,
     maxPerAttachment: 3,
     minPerAttachment: 1,
-    rerankTopNCap: 24,
+    rerankTopNCap: 50,
+    rrfK: 60,
+    neighborChunksPerHit: 2,
+    maxEnrichedChunks: 18,
   },
   rerank: {
-    enabled: !!process.env.COHERE_API_KEY,
     get model() {
       return getRerankerModel();
     },
-    candidateMultiplier: 4,
   },
   embeddings: {
     get model() {
@@ -59,12 +50,12 @@ export const RAG_CONFIG = {
     },
   },
   supportedFileTypes: [
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-    'text/csv',
-    'text/plain',
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "text/plain",
   ],
 };

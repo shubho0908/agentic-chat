@@ -35,7 +35,7 @@ export function isSupportedImageExtension(filename: string): boolean {
   return (SUPPORTED_IMAGE_EXTENSIONS as readonly string[]).includes(ext);
 }
 
-export function isUnsupportedVisionExtension(filename: string): boolean {
+function isUnsupportedVisionExtension(filename: string): boolean {
   const ext = getFileExtension(filename);
   return (UNSUPPORTED_VISION_EXTENSIONS as readonly string[]).includes(ext);
 }

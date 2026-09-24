@@ -1,4 +1,5 @@
 import { ToolNode } from "@langchain/langgraph/prebuilt";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { interrupt } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import type { DynamicStructuredTool } from "@langchain/core/tools";
@@ -15,18 +16,31 @@ import { ASK_USER_TOOL_NAME } from "../tools";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 import { sanitizeToolOutput } from "@/lib/sanitize";
 import { logger } from "@/lib/logger";
+import { createRequestId, logWarn } from "@/lib/observability";
+import {
+  ToolFailureKind,
+  classifyToolFailure,
+  failureRoundsSinceLastHuman,
+  formatFailureMessage,
+  isAuthFailureText,
+  toolCallResultId,
+  toolCallSignature,
+  trailingIdenticalFailureCount,
+} from "../toolFailure";
+import { JevCheckpoint, JevFallbackReason, JevMode } from "@/lib/jev/types";
+import { JevDecisionClient, classifyJevFailure } from "@/lib/jev/client";
+import { getJevMode } from "@/lib/jev/config";
+import { logJevDecision } from "@/lib/jev/telemetry";
+import {
+  evaluateToolDiagnosisWithJev,
+  mapJevDiagnosisResult,
+  previewToolArgs,
+} from "@/lib/jev/toolRouter";
+import { jevHitlSignature } from "../jevHitl";
 
 type ToolCall = NonNullable<AIMessage["tool_calls"]>[number];
 
-function getToolCallId(toolCall: ToolCall, index: number): string {
-  return typeof toolCall.id === "string" && toolCall.id.trim()
-    ? toolCall.id
-    : `${toolCall.name || "tool"}-${index}`;
-}
-
-function isAuthFailureText(content: string): boolean {
-  return /(?:not connected|no connected account|connection not found|no account connected|invalid auth|authentication failed|unauthori[sz]ed|\b401\b|token_expired|refresh_failed|expired_token|invalid_token|token has expired|connection_expired|reauth|re-authenticate|session expired|oauth token)/i.test(content);
-}
+const jevClient = JevDecisionClient.createIfConfigured();
 
 function getConnectorFailureText(content: string): string | null {
   if (content.trimStart().startsWith("{")) {
@@ -71,7 +85,7 @@ function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMes
       );
 
       return new ToolMessage({
-        tool_call_id: getToolCallId(toolCall, index),
+        tool_call_id: toolCallResultId(toolCall, index),
         name: toolCall.name,
         content,
         status: TOOL_ERROR_STATUS,
@@ -84,6 +98,153 @@ function createToolErrorMessages(toolCalls: ToolCall[], error: unknown): ToolMes
   );
 }
 
+/** Best-effort Jev note on the first failure of the round. Shadow is
+ * observe-only by contract: it never mutates the tool messages the agent
+ * will read, never throws, and its result lives only in decision telemetry. */
+async function runJevToolDiagnosis(
+  toolCalls: ToolCall[],
+  messages: ToolMessage[],
+  history: AgentStateType["messages"],
+  conversationId: string | undefined,
+): Promise<void> {
+  if (!jevClient) return;
+
+  const byId = new Map(messages.map((m) => [m.tool_call_id, m]));
+  const first = toolCalls
+    .map((tc, index) => ({ tc, index, id: toolCallResultId(tc, index) }))
+    .find(({ id }) => {
+      const msg = byId.get(id);
+      return (
+        !!msg &&
+        typeof msg.content === "string" &&
+        classifyToolFailure(msg.content, msg.status) !== null
+      );
+    });
+  if (!first) return;
+
+  const target = byId.get(first.id);
+  if (!target || typeof target.content !== "string") return;
+  const kind =
+    classifyToolFailure(target.content, target.status) ??
+    ToolFailureKind.UNKNOWN;
+  if (kind !== ToolFailureKind.TRANSIENT && kind !== ToolFailureKind.UNKNOWN) {
+    return;
+  }
+
+  const requestId = createRequestId("jev_tool_diagnosis");
+  const startedAt = Date.now();
+  try {
+    const result = await evaluateToolDiagnosisWithJev(
+      jevClient,
+      {
+        toolName:
+          typeof first.tc.name === "string" && first.tc.name
+            ? first.tc.name
+            : "tool",
+        argsPreview: previewToolArgs(first.tc.args),
+        failureKind: kind,
+        identicalFailureCount: trailingIdenticalFailureCount(
+          failureRoundsSinceLastHuman(history),
+          toolCallSignature(first.tc.name, first.tc.args),
+        ),
+      },
+      { requestId, conversationId },
+    );
+    const advice = mapJevDiagnosisResult(result);
+    if (!advice) {
+      logWarn({
+        event: "jev_tool_diagnosis_invalid_response",
+        message: "Jev tool diagnosis response failed checkpoint mapping",
+        ...(result.rawBody && { responseBody: result.rawBody }),
+        requestId,
+        conversationId,
+      });
+      logJevDecision({
+        checkpoint: JevCheckpoint.TOOL_ROUTER,
+        schemaVersion: "1.0.0",
+        modelVersion: result.modelVersion,
+        mode: JevMode.SHADOW,
+        latencyMs: Date.now() - startedAt,
+        outcome: "invalid_response",
+        fallbackUsed: true,
+        fallbackReason: JevFallbackReason.INVALID,
+        requestId,
+        conversationId,
+      });
+      return;
+    }
+    logJevDecision({
+      checkpoint: JevCheckpoint.TOOL_ROUTER,
+      schemaVersion: "1.0.0",
+      modelVersion: result.modelVersion,
+      mode: JevMode.SHADOW,
+      latencyMs: result.latencyMs,
+      outcome: `diagnosed_${advice.fixDirection}_retry_${advice.retryWorthwhile.toFixed(2)}`,
+      fallbackUsed: false,
+      inputTokens: result.usage?.input_tokens,
+      outputTokens: result.usage?.output_tokens,
+      requestId,
+      conversationId,
+    });
+  } catch (error) {
+    logJevDecision({
+      checkpoint: JevCheckpoint.TOOL_ROUTER,
+      schemaVersion: "1.0.0",
+      modelVersion: "unknown",
+      mode: JevMode.SHADOW,
+      latencyMs: Date.now() - startedAt,
+      outcome: "error",
+      fallbackUsed: true,
+      fallbackReason: classifyJevFailure(error),
+      requestId,
+      conversationId,
+    });
+  }
+}
+
+/** Fire-and-forget wrapper. A shadow diagnosis must never delay the tool
+ * node or change what the agent sees, so it is queued, never awaited, and
+ * every failure path is swallowed into telemetry. */
+function queueJevToolDiagnosis(
+  toolCalls: ToolCall[],
+  messages: ToolMessage[],
+  history: AgentStateType["messages"],
+  conversationId: string | undefined,
+): void {
+  if (getJevMode(JevCheckpoint.TOOL_ROUTER) !== JevMode.SHADOW) return;
+  try {
+    void runJevToolDiagnosis(
+      toolCalls,
+      messages,
+      history,
+      conversationId,
+    ).catch((error) =>
+      logger.warn("[ToolNode] Jev diagnosis failed:", error),
+    );
+  } catch (error) {
+    logger.warn("[ToolNode] Jev diagnosis failed:", error);
+  }
+}
+/** Single choke point: every failure result leaving this node carries a
+ * structured header plus hint, however it was produced. Already-marked
+ * messages pass through untouched so envelopes never nest. */
+function wrapFailureEnvelope(message: ToolMessage): ToolMessage {
+  if (typeof message.content !== "string") return message;
+  if (message.content.startsWith("[tool-failure:")) return message;
+  const kind = classifyToolFailure(message.content, message.status);
+  if (kind === null) return message;
+  return new ToolMessage({
+    id: message.id,
+    name: message.name,
+    content: formatFailureMessage(kind, message.content),
+    tool_call_id: message.tool_call_id,
+    additional_kwargs: message.additional_kwargs,
+    response_metadata: message.response_metadata,
+    status: message.status,
+    artifact: message.artifact,
+    metadata: message.metadata,
+  });
+}
 function sanitizeToolMessage(message: ToolMessage): ToolMessage {
   if (typeof message.content !== "string") {
     return message;
@@ -104,7 +265,12 @@ function sanitizeToolMessage(message: ToolMessage): ToolMessage {
   });
 }
 
-export function createToolNode(tools: DynamicStructuredTool[]) {
+export interface ToolNodeConfig {
+  model: string;
+  reasoningEffort?: ReasoningEffortLevel | null;
+}
+
+export function createToolNode(tools: DynamicStructuredTool[], nodeConfig: ToolNodeConfig) {
   const toolNode = new ToolNode(tools);
 
   return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
@@ -119,11 +285,13 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
     if (askUserCalls.length > 0) {
       const primaryCall = askUserCalls[0];
       const primaryCallIndex = toolCalls.indexOf(primaryCall);
-      const primaryCallId = getToolCallId(primaryCall, primaryCallIndex);
+      const primaryCallId = toolCallResultId(primaryCall, primaryCallIndex);
       const args = primaryCall.args ?? {};
       const response: unknown = interrupt({
         type: HUMAN_IN_THE_LOOP_REQUEST_TYPE,
         requestKind: HumanInTheLoopRequestKind.ASK_USER,
+        model: nodeConfig.model,
+        reasoningEffort: nodeConfig.reasoningEffort ?? null,
         toolCallId: primaryCallId,
         question: typeof args.question === "string" ? args.question : "Can you clarify how to proceed?",
         reason: typeof args.reason === "string" ? args.reason : undefined,
@@ -141,7 +309,7 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
         messages: toolCalls.map(
           (tc, index) =>
             new ToolMessage({
-              tool_call_id: getToolCallId(tc, index),
+              tool_call_id: toolCallResultId(tc, index),
               content:
                 tc === primaryCall
                   ? answer
@@ -153,12 +321,30 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
 
     const dangerousCalls = toolCalls.filter((tc) => isDangerousAction(tc.name));
 
-    if (dangerousCalls.length > 0) {
+    // Jev HITL escalation (default off): the agent node evaluated this exact
+    // tool-call set in active mode and stored the verdict in graph state,
+    // keyed by signature, so this branch is identical across an interrupt
+    // resume and a denial can never be skipped. Jev can ADD human review;
+    // it can never suppress the deterministic blocklist.
+    let escalatedCalls = dangerousCalls;
+    if (escalatedCalls.length === 0) {
+      const verdict = state.jevHitlEscalation;
+      if (
+        verdict?.escalate &&
+        verdict.signature === jevHitlSignature(toolCalls)
+      ) {
+        escalatedCalls = [...toolCalls];
+      }
+    }
+
+    if (escalatedCalls.length > 0) {
       const approval: unknown = interrupt({
         type: HUMAN_IN_THE_LOOP_REQUEST_TYPE,
         requestKind: HumanInTheLoopRequestKind.APPROVAL,
-        toolCalls: dangerousCalls.map((tc) => ({
-          id: getToolCallId(tc, toolCalls.indexOf(tc)),
+        model: nodeConfig.model,
+        reasoningEffort: nodeConfig.reasoningEffort ?? null,
+        toolCalls: escalatedCalls.map((tc) => ({
+          id: toolCallResultId(tc, toolCalls.indexOf(tc)),
           name: tc.name,
           args: tc.args,
         })),
@@ -169,8 +355,8 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
           messages: toolCalls.map(
             (tc, index) =>
               new ToolMessage({
-                tool_call_id: getToolCallId(tc, index),
-                content: dangerousCalls.some((dangerousCall) => dangerousCall === tc)
+                tool_call_id: toolCallResultId(tc, index),
+                content: escalatedCalls.some((escalatedCall) => escalatedCall === tc)
                   ? `Action ${approval === HUMAN_IN_THE_LOOP_DENIED ? "denied" : "rejected"} by user.`
                   : "Skipped because another requested action was not approved.",
               })
@@ -191,7 +377,7 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
       );
       const missing: ToolMessage[] = [];
       toolCalls.forEach((tc, index) => {
-        const callId = getToolCallId(tc, index);
+        const callId = toolCallResultId(tc, index);
         if (observedCallIds.has(callId)) return;
         logger.warn("[ToolNode] Missing tool output — synthesizing error message", {
           callId,
@@ -208,10 +394,22 @@ export function createToolNode(tools: DynamicStructuredTool[]) {
         );
       });
 
-      return { messages: [...sanitized, ...missing] };
+      const enveloped = [...sanitized, ...missing].map(wrapFailureEnvelope);
+      queueJevToolDiagnosis(
+        toolCalls,
+        enveloped,
+        state.messages,
+        state.conversationId,
+      );
+
+      return { messages: enveloped };
     } catch (error) {
       logger.error("[ToolNode] Tool execution failed:", error);
-      return { messages: createToolErrorMessages(toolCalls, error) };
+      return {
+        messages: createToolErrorMessages(toolCalls, error).map(
+          wrapFailureEnvelope,
+        ),
+      };
     }
   };
 }

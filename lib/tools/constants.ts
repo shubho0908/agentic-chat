@@ -4,6 +4,7 @@ export const ToolName = {
   WEB_CRAWL: "web_crawl",
   ASK_USER: "ask_user",
   DEEP_RESEARCH: "deep_research",
+  CREATE_PDF: "create_pdf",
 } as const;
 
 export const HumanInTheLoopRequestKind = {
