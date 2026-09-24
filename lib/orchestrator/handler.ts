@@ -9,7 +9,7 @@ import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { createFinalAnswerNode } from "./nodes/agent";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
+import { createStreamEventMapper, handleGraphInterrupt, terminalAnswerText } from "./streaming";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -20,9 +20,12 @@ import { createSafeStream } from "@/lib/chat/safeStream";
 import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { isGraphInterrupt } from "@langchain/langgraph";
 import {
+  FINAL_ANSWER_RESERVE_MS,
   MIN_CACHEABLE_QUERY_LENGTH,
   ORCHESTRATOR_STREAM_DEADLINE_MS,
+  RecoveryReason,
   STREAM_HEARTBEAT_INTERVAL_MS,
+  type RecoveryReasonValue,
 } from "./constants";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
@@ -47,8 +50,9 @@ import { messageFingerprint } from "./messageIdentity";
 import { abortAware } from "./abortAware";
 import {
   GRAPH_RUN_LIMITS,
-  closeTurnAtStepLimit,
-  isGraphRecursionError,
+  closeTurnAtLimit,
+  createAnswerDue,
+  limitReason,
 } from "./stepLimit";
 
 interface OrchestratorStreamOptions {
@@ -118,6 +122,7 @@ export function createOrchestratorStreamHandler(
           : [deadlineController.signal],
       );
       const isDeadlineExceeded = () => deadlineController.signal.aborted;
+      const deadlineAt = Date.now() + ORCHESTRATOR_STREAM_DEADLINE_MS;
 
       const closeStream = () => {
         stream.finish({
@@ -363,6 +368,18 @@ export function createOrchestratorStreamHandler(
           ephemeralContext,
         });
         const graphConfig = { configurable: { thread_id: threadId } };
+        const closeTurn = (reason: RecoveryReasonValue) =>
+          closeTurnAtLimit(
+            graph,
+            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
+            reason,
+            threadId,
+            stream,
+            mapper,
+            workSignal,
+            deadlineAt,
+            { conversationId, branchId },
+          );
         let threadLock: ThreadLock;
         try {
           threadLock = await acquireThreadLock(threadId, {
@@ -386,6 +403,10 @@ export function createOrchestratorStreamHandler(
           }
           throw lockError;
         }
+        const answerDue = createAnswerDue(
+          deadlineAt - FINAL_ANSWER_RESERVE_MS - Date.now(),
+          mapper.isAnswering,
+        );
         try {
           const existingState = await abortAware(
             graph.getState(graphConfig),
@@ -446,15 +467,11 @@ export function createOrchestratorStreamHandler(
             connectedServices: connectedToolkits,
           };
 
-          const config = {
-            configurable: { thread_id: threadId },
-            signal: workSignal,
-          };
-
           const eventStream = await graph.streamEvents(input, {
-            ...config,
+            ...graphConfig,
             ...GRAPH_RUN_LIMITS,
             version: "v2",
+            signal: AbortSignal.any([workSignal, answerDue.signal]),
           });
 
           for await (const event of eventStream) {
@@ -490,21 +507,19 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
-          mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+          if (answerDue.signal.aborted && !terminalAnswerText(finalState.values?.messages)) {
+            await closeTurn(RecoveryReason.TIME_LIMIT);
+          } else {
+            mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+          }
           closeStream();
         } catch (error) {
-          if (!isGraphRecursionError(error) || workSignal.aborted) throw error;
-          await closeTurnAtStepLimit(
-            graph,
-            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
-            threadId,
-            stream,
-            mapper,
-            workSignal,
-            { conversationId, branchId },
-          );
+          const reason = limitReason(error, answerDue.signal);
+          if (workSignal.aborted || !reason) throw error;
+          await closeTurn(reason);
           closeStream();
         } finally {
+          answerDue.dispose();
           await threadLock.release();
         }
       } catch (error) {

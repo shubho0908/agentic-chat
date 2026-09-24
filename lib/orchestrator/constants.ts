@@ -16,6 +16,8 @@ export const MIN_CACHEABLE_QUERY_LENGTH = 80;
  */
 export const ORCHESTRATOR_STREAM_DEADLINE_MS = 285_000;
 
+export const FINAL_ANSWER_RESERVE_MS = 45_000;
+
 /**
  * Fail-fast lock wait for approvals: they are interactive, and a held lease
  * means another response is actively generating, so surface that as a
@@ -52,6 +54,7 @@ export const RecoveryReason = {
   TOOL_FAILURES: "tool_failures",
   EMPTY_ANSWER: "empty_answer",
   STEP_LIMIT: "step_limit",
+  TIME_LIMIT: "time_limit",
 } as const;
 export type RecoveryReasonValue =
   (typeof RecoveryReason)[keyof typeof RecoveryReason];

@@ -492,6 +492,10 @@ const FINAL_ANSWER_INSTRUCTIONS: Record<RecoveryReasonValue, string> = {
 - This turn used every step it is allowed. No more tool calls are possible.
 - Answer the latest user request now, using everything the tool results in this conversation already show.
 - Be concrete about what you found. Then say briefly what is still unfinished and that the user can ask you to continue.`,
+  [RecoveryReason.TIME_LIMIT]: `Final answer required:
+- This turn is out of time. No more tool calls are possible.
+- Answer the latest user request now, using everything the tool results in this conversation already show.
+- Be concrete about what you found. Then say briefly what is still unfinished and that the user can ask you to continue.`,
 };
 
 export function createFinalAnswerNode(

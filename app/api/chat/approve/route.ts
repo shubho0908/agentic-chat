@@ -9,7 +9,7 @@ import { createAgentGraph } from "@/lib/orchestrator/graph";
 import { createFinalAnswerNode } from "@/lib/orchestrator/nodes/agent";
 import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
-import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
+import { createStreamEventMapper, handleGraphInterrupt, terminalAnswerText } from "@/lib/orchestrator/streaming";
 import { encodeDone, encodeError } from "@/lib/chat/streamingHelpers";
 import { createSafeStream } from "@/lib/chat/safeStream";
 import { DEFAULT_MODEL, REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from "@/constants/openai-models";
@@ -22,8 +22,11 @@ import { isValidConversationId } from "@/lib/validation";
 import { deriveThreadId, isThreadIdForConversation } from "@/lib/orchestrator/threadIdentity";
 import {
   APPROVAL_LOCK_WAIT_TIMEOUT_MS,
+  FINAL_ANSWER_RESERVE_MS,
   ORCHESTRATOR_STREAM_DEADLINE_MS,
+  RecoveryReason,
   STREAM_HEARTBEAT_INTERVAL_MS,
+  type RecoveryReasonValue,
 } from "@/lib/orchestrator/constants";
 import {
   acquireThreadLock,
@@ -33,8 +36,9 @@ import {
 import { abortAware } from "@/lib/orchestrator/abortAware";
 import {
   GRAPH_RUN_LIMITS,
-  closeTurnAtStepLimit,
-  isGraphRecursionError,
+  closeTurnAtLimit,
+  createAnswerDue,
+  limitReason,
 } from "@/lib/orchestrator/stepLimit";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +138,7 @@ export async function POST(request: NextRequest) {
       abortController.signal,
       deadlineController.signal,
     ]);
+    const deadlineAt = Date.now() + ORCHESTRATOR_STREAM_DEADLINE_MS;
 
     // Resume mutates the same checkpoint thread the chat stream serializes,
     // so it must hold the same lease. Without it two approvals can both
@@ -223,12 +228,30 @@ export async function POST(request: NextRequest) {
             heartbeatIntervalMs: STREAM_HEARTBEAT_INTERVAL_MS,
           });
           const mapper = createStreamEventMapper();
+          const answerDue = createAnswerDue(
+            deadlineAt - FINAL_ANSWER_RESERVE_MS - Date.now(),
+            mapper.isAnswering,
+          );
           const finishStream = () => {
             stream.finish({
               done: encodeDone(),
               flush: (writer) => mapper.flush(writer),
             });
           };
+          const closeTurn = (reason: RecoveryReasonValue) =>
+            closeTurnAtLimit(
+              resumeGraph,
+              createFinalAnswerNode(apiKey, resumeConfig.model, {
+                reasoningEffort: resumeConfig.reasoningEffort,
+              }),
+              reason,
+              threadId,
+              stream,
+              mapper,
+              workSignal,
+              deadlineAt,
+              { requestId },
+            );
           const timeoutStream = () => {
             if (stream.isAborted) return;
             logWarn({
@@ -252,7 +275,7 @@ export async function POST(request: NextRequest) {
                 configurable: { thread_id: threadId },
                 ...GRAPH_RUN_LIMITS,
                 version: "v2",
-                signal: workSignal,
+                signal: AbortSignal.any([workSignal, answerDue.signal]),
               }
             );
 
@@ -290,11 +313,21 @@ export async function POST(request: NextRequest) {
               return;
             }
 
-            mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+            if (answerDue.signal.aborted && !terminalAnswerText(finalState.values?.messages)) {
+              await closeTurn(RecoveryReason.TIME_LIMIT);
+            } else {
+              mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+            }
             finishStream();
           } catch (err) {
             if (deadlineController.signal.aborted) {
               timeoutStream();
+              return;
+            }
+            const reason = limitReason(err, answerDue.signal);
+            if (reason && !abortController.signal.aborted) {
+              await closeTurn(reason);
+              finishStream();
               return;
             }
             if (abortController.signal.aborted || (err instanceof Error && err.name === "AbortError")) {
@@ -302,25 +335,11 @@ export async function POST(request: NextRequest) {
               stream.abort();
               return;
             }
-            if (isGraphRecursionError(err)) {
-              await closeTurnAtStepLimit(
-                resumeGraph,
-                createFinalAnswerNode(apiKey, resumeConfig.model, {
-                  reasoningEffort: resumeConfig.reasoningEffort,
-                }),
-                threadId,
-                stream,
-                mapper,
-                workSignal,
-                { requestId },
-              );
-              finishStream();
-              return;
-            }
             logger.error("[Approve] Error resuming graph:", err);
             stream.enqueue(encodeError(toUserFriendlyError(err)));
             finishStream();
           } finally {
+            answerDue.dispose();
             clearTimeout(deadlineTimer);
             await threadLock.release();
           }

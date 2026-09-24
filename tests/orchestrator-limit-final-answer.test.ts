@@ -9,14 +9,16 @@ import { Command, END, MemorySaver, StateGraph, interrupt } from "@langchain/lan
 import { AgentState, type AgentStateType } from "@/lib/orchestrator/state";
 import { createFinalAnswerNode } from "@/lib/orchestrator/nodes/agent";
 import { buildRecoveryMessage, classifyRecovery, routeAfterAgent } from "@/lib/orchestrator/nodes/reflector";
-import { createStreamEventMapper } from "@/lib/orchestrator/streaming";
+import { createStreamEventMapper, terminalAnswerText } from "@/lib/orchestrator/streaming";
 import { extractText } from "@/lib/orchestrator/nodes/planner";
 import {
   GRAPH_RUN_LIMITS,
-  closeTurnAtStepLimit,
+  closeTurnAtLimit,
+  createAnswerDue,
   isGraphRecursionError,
+  limitReason,
 } from "@/lib/orchestrator/stepLimit";
-import { GraphNode, MAX_TOOL_ROUNDS, RECURSION_LIMIT, RecoveryReason } from "@/lib/orchestrator/constants";
+import { GraphNode, MAX_TOOL_ROUNDS, RECURSION_LIMIT, RecoveryReason, type RecoveryReasonValue } from "@/lib/orchestrator/constants";
 import type { StreamWriter } from "@/lib/chat/safeStream";
 import { ACTIVITY_ONLY_ASSISTANT_CONTENT, getPersistableAssistantContent } from "@/hooks/chat/conversationManager";
 import { shouldAutoContinueConversation } from "@/hooks/chat/autoContinue";
@@ -93,6 +95,7 @@ function buildGraph(options: {
   agent: AgentBehavior;
   tool?: ToolBehavior;
   interruptOnRound?: number;
+  toolDelayMs?: number;
 }) {
   let agentCalls = 0;
   let toolRounds = 0;
@@ -107,6 +110,7 @@ function buildGraph(options: {
       const last = state.messages[state.messages.length - 1] as AIMessage;
       const round = toolRounds + 1;
       if (round === options.interruptOnRound) interrupt({ requestKind: "approval" });
+      if (options.toolDelayMs) await new Promise((resolve) => setTimeout(resolve, options.toolDelayMs));
       toolRounds = round;
       return {
         messages: (last.tool_calls ?? []).map((toolCall) => {
@@ -156,33 +160,51 @@ async function runTurn(
   graph: ReturnType<typeof buildGraph>["graph"],
   threadId: string,
   input: unknown,
-  limits: { recursionLimit: number } = GRAPH_RUN_LIMITS,
+  options: { recursionLimit?: number; answerDueMs?: number } = {},
 ) {
   const sink = createWriter();
   const mapper = createStreamEventMapper();
   const config = { configurable: { thread_id: threadId } };
+  const workSignal = new AbortController().signal;
+  const answerDue = createAnswerDue(options.answerDueMs ?? 60_000, mapper.isAnswering);
+  const closeTurn = (reason: RecoveryReasonValue) =>
+    closeTurnAtLimit(
+      graph as never,
+      createFinalAnswerNode("sk-test", MODEL),
+      reason,
+      threadId,
+      sink.writer,
+      mapper,
+      workSignal,
+      Date.now() + 10_000,
+      {},
+    );
   let error: unknown = null;
   try {
-    const events = await graph.streamEvents(input as never, { ...config, ...limits, version: "v2" });
+    const events = await graph.streamEvents(input as never, {
+      ...config,
+      recursionLimit: options.recursionLimit ?? GRAPH_RUN_LIMITS.recursionLimit,
+      version: "v2",
+      signal: AbortSignal.any([workSignal, answerDue.signal]),
+    });
     for await (const event of events) mapper.map(sink.writer, event as Record<string, unknown>);
     const state = await graph.getState(config);
     if ((state.tasks ?? []).every((task) => (task.interrupts ?? []).length === 0)) {
-      mapper.ensureTerminalAnswer(sink.writer, state.values.messages);
+      if (answerDue.signal.aborted && !terminalAnswerText(state.values.messages)) {
+        await closeTurn(RecoveryReason.TIME_LIMIT);
+      } else {
+        mapper.ensureTerminalAnswer(sink.writer, state.values.messages);
+      }
     }
   } catch (caught) {
     error = caught;
-    if (isGraphRecursionError(caught)) {
-      await closeTurnAtStepLimit(
-        graph as never,
-        createFinalAnswerNode("sk-test", MODEL),
-        threadId,
-        sink.writer,
-        mapper,
-        new AbortController().signal,
-        {},
-      );
+    const reason = limitReason(caught, answerDue.signal);
+    if (reason) {
+      await closeTurn(reason);
       error = null;
     }
+  } finally {
+    answerDue.dispose();
   }
   mapper.flush(sink.writer);
   const state = await graph.getState(config);
@@ -196,7 +218,7 @@ test("step budget always leaves room for every tool round plus planner, agent an
   assert.ok(RECURSION_LIMIT >= 2 * MAX_TOOL_ROUNDS + 3);
 });
 
-test("every graph stream call site runs with the shared step budget", () => {
+test("every graph stream call site runs with the shared step and time budgets", () => {
   const offenders: string[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir)) {
@@ -209,7 +231,7 @@ test("every graph stream call site runs with the shared step budget", () => {
       const source = readFileSync(path, "utf8");
       for (const match of source.matchAll(/\.streamEvents\(/g)) {
         const call = source.slice(match.index, match.index + 600);
-        if (!call.includes("GRAPH_RUN_LIMITS")) offenders.push(path);
+        if (!call.includes("GRAPH_RUN_LIMITS") || !call.includes("answerDue.signal")) offenders.push(path);
       }
     }
   };
@@ -390,6 +412,98 @@ test("hitting the graph step cap answers from the gathered results with a resolv
   } finally {
     model.restore();
   }
+});
+
+test("running low on time mid tool loop ends with a streamed, persisted answer from gathered results", async () => {
+  const model = stubModel(() => completionStream("Here is what I found before time ran out."));
+  try {
+    const { graph, agentCalls } = buildGraph({ agent: toolCallingAgent(), toolDelayMs: 40 });
+    const run = await runTurn(graph, "time-limit", userTurn("compare every vendor"), { answerDueMs: 150 });
+
+    assert.equal(run.error, null);
+    assert.ok(agentCalls() > 1 && agentCalls() < MAX_TOOL_ROUNDS);
+    assert.equal(run.events.filter((event) => "error" in event).length, 0);
+    assert.equal(run.text(), "Here is what I found before time ran out.");
+    assert.equal(run.last.type, "ai");
+    assert.equal(((run.last as AIMessage).tool_calls ?? []).length, 0);
+    assert.equal(extractText(run.last.content), run.text());
+    assert.deepEqual(run.state.next, []);
+
+    assert.equal(model.requests.length, 1);
+    const request = model.requests[0];
+    assert.equal(request.body.tools, undefined);
+    assert.match(systemText(request), /out of time/);
+    const outputs = request.body.input.filter((item) => item.type === "function_call_output");
+    const calls = request.body.input.filter((item) => item.type === "function_call");
+    assert.ok(outputs.length >= 1);
+    assert.deepEqual(calls.map((item) => item.call_id), outputs.map((item) => item.call_id));
+
+    const next = await runTurn(graph, "time-limit", userTurn("continue"));
+    assert.equal(next.error, null);
+    assert.ok(next.text().length > 0);
+  } finally {
+    model.restore();
+  }
+});
+
+test("running low on time falls back to a deterministic answer when the final model call fails", async () => {
+  const model = stubModel(() => new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 }));
+  try {
+    const { graph } = buildGraph({ agent: toolCallingAgent(), toolDelayMs: 40 });
+    const run = await runTurn(graph, "time-limit-fallback", userTurn("compare every vendor"), { answerDueMs: 100 });
+
+    assert.equal(run.error, null);
+    assert.equal(run.events.filter((event) => "error" in event).length, 0);
+    assert.match(run.text(), /ran out of time/);
+    assert.equal(run.last.content, run.text());
+    assert.equal(((run.last as AIMessage).tool_calls ?? []).length, 0);
+  } finally {
+    model.restore();
+  }
+});
+
+test("answer-due waits for an answer already streaming and never fires without budget", async () => {
+  let answering = true;
+  const due = createAnswerDue(10, () => answering);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.equal(due.signal.aborted, false);
+  answering = false;
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  assert.equal(due.signal.aborted, true);
+  assert.equal(limitReason(new Error("x"), due.signal), RecoveryReason.TIME_LIMIT);
+
+  const spent = createAnswerDue(0, () => false);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(spent.signal.aborted, false);
+  assert.equal(limitReason(new Error("x"), spent.signal), null);
+
+  const disposed = createAnswerDue(10, () => false);
+  disposed.dispose();
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(disposed.signal.aborted, false);
+});
+
+test("the mapper reports answering only while answer text streams after the last tool call", () => {
+  const { writer } = createWriter();
+  const mapper = createStreamEventMapper();
+  const agentChunk = (content: string) => ({
+    event: "on_chat_model_stream",
+    metadata: { langgraph_node: GraphNode.AGENT },
+    data: { chunk: { content } },
+  });
+  assert.equal(mapper.isAnswering(), false);
+  mapper.map(writer, agentChunk("Let me check."));
+  assert.equal(mapper.isAnswering(), true);
+  mapper.map(writer, {
+    event: "on_tool_start",
+    name: "web_search",
+    run_id: "r1",
+    metadata: { langgraph_node: GraphNode.TOOLS },
+    data: { input: {} },
+  });
+  assert.equal(mapper.isAnswering(), false);
+  mapper.map(writer, agentChunk("   "));
+  assert.equal(mapper.isAnswering(), false);
 });
 
 test("recovery reasons are classified from the turn shape", () => {

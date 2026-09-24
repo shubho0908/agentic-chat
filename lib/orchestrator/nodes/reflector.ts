@@ -294,6 +294,8 @@ export function buildRecoveryMessage(
       return "I finished working on this but could not put the answer into words. Ask me again and I will answer from what I found.";
     case RecoveryReason.STEP_LIMIT:
       return "I hit the step limit for a single turn while working on this, so I stopped here. Ask me to continue and I will pick up from where I left off.";
+    case RecoveryReason.TIME_LIMIT:
+      return "I ran out of time for a single turn while working on this, so I stopped here. Ask me to continue and I will pick up from where I left off.";
     default: {
       const unreachable: never = reason;
       return unreachable;

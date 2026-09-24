@@ -91,6 +91,7 @@ interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
   ensureTerminalAnswer(writer: StreamWriter, messages: BaseMessage[] | undefined): boolean;
   appendAnswer(writer: StreamWriter, text: string): void;
+  isAnswering(): boolean;
   flush(writer: StreamWriter): void;
 }
 
@@ -304,6 +305,7 @@ export function createStreamEventMapper(): StreamEventMapper {
       return true;
     },
     appendAnswer,
+    isAnswering: () => answerSegment.trim().length > 0,
     flush(writer) {
       releaseWhitespace(writer);
       emitParsedResults(writer, artifactParser.flush());
