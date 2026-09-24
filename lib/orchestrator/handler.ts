@@ -7,8 +7,9 @@ import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
+import { createFinalAnswerNode } from "./nodes/agent";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
+import { createStreamEventMapper, handleGraphInterrupt, terminalAnswerText } from "./streaming";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -19,10 +20,13 @@ import { createSafeStream } from "@/lib/chat/safeStream";
 import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { isGraphInterrupt } from "@langchain/langgraph";
 import {
-  RECURSION_LIMIT,
+  FINAL_ANSWER_RESERVE_MS,
   MIN_CACHEABLE_QUERY_LENGTH,
+  MIN_TURN_WORK_MS,
   ORCHESTRATOR_STREAM_DEADLINE_MS,
+  RecoveryReason,
   STREAM_HEARTBEAT_INTERVAL_MS,
+  type RecoveryReasonValue,
 } from "./constants";
 import { logger } from "@/lib/logger";
 import { toUserFriendlyError } from "@/lib/errorMessages";
@@ -45,6 +49,12 @@ import {
 } from "./threadLock";
 import { messageFingerprint } from "./messageIdentity";
 import { abortAware } from "./abortAware";
+import {
+  GRAPH_RUN_LIMITS,
+  closeTurnAtLimit,
+  createAnswerDue,
+  limitReason,
+} from "./stepLimit";
 
 interface OrchestratorStreamOptions {
   messages: Message[];
@@ -113,6 +123,7 @@ export function createOrchestratorStreamHandler(
           : [deadlineController.signal],
       );
       const isDeadlineExceeded = () => deadlineController.signal.aborted;
+      const deadlineAt = Date.now() + ORCHESTRATOR_STREAM_DEADLINE_MS;
 
       const closeStream = () => {
         stream.finish({
@@ -126,18 +137,7 @@ export function createOrchestratorStreamHandler(
           return;
         }
 
-        const isRecursionError =
-          (error instanceof Error &&
-            (("lc_error_code" in error &&
-              (error as { lc_error_code?: string }).lc_error_code ===
-                "GRAPH_RECURSION_LIMIT") ||
-              error.name === "GraphRecursionError" ||
-              /recursion limit/i.test(error.message ?? ""))) ||
-          false;
-
-        const friendly = isRecursionError
-          ? `I couldn't complete this request in ${RECURSION_LIMIT} reasoning steps. Try breaking it into smaller asks or rephrasing.`
-          : toUserFriendlyError(error);
+        const friendly = toUserFriendlyError(error);
 
         logError({
           event: "orchestrator_sse_error",
@@ -369,10 +369,23 @@ export function createOrchestratorStreamHandler(
           ephemeralContext,
         });
         const graphConfig = { configurable: { thread_id: threadId } };
+        const closeTurn = (reason: RecoveryReasonValue) =>
+          closeTurnAtLimit(
+            graph,
+            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
+            reason,
+            threadId,
+            stream,
+            mapper,
+            workSignal,
+            deadlineAt,
+            { conversationId, branchId },
+          );
         let threadLock: ThreadLock;
         try {
           threadLock = await acquireThreadLock(threadId, {
             signal: workSignal,
+            waitTimeoutMs: deadlineAt - FINAL_ANSWER_RESERVE_MS - MIN_TURN_WORK_MS - Date.now(),
           });
         } catch (lockError) {
           if (lockError instanceof ThreadLockTimeoutError) {
@@ -392,6 +405,10 @@ export function createOrchestratorStreamHandler(
           }
           throw lockError;
         }
+        const answerDue = createAnswerDue(
+          deadlineAt - FINAL_ANSWER_RESERVE_MS - Date.now(),
+          () => mapper.streamedAnswer().trim().length > 0,
+        );
         try {
           const existingState = await abortAware(
             graph.getState(graphConfig),
@@ -424,6 +441,18 @@ export function createOrchestratorStreamHandler(
             submittedCount: incrementalMessages.length,
           });
           if (checkpointExists && incrementalMessages.length === 0) {
+            if (
+              mapper.ensureTerminalAnswer(stream, existingState.values?.messages)
+            ) {
+              logInfo({
+                event: "orchestrator_completed_turn_replayed",
+                conversationId,
+                threadId,
+                branchId,
+              });
+              closeStream();
+              return;
+            }
             stream.enqueue(
               encodeError(
                 "This request was already completed. Please send a new message.",
@@ -440,15 +469,11 @@ export function createOrchestratorStreamHandler(
             connectedServices: connectedToolkits,
           };
 
-          const config = {
-            configurable: { thread_id: threadId },
-            recursionLimit: RECURSION_LIMIT,
-            signal: workSignal,
-          };
-
           const eventStream = await graph.streamEvents(input, {
-            ...config,
+            ...graphConfig,
+            ...GRAPH_RUN_LIMITS,
             version: "v2",
+            signal: AbortSignal.any([workSignal, answerDue.signal]),
           });
 
           for await (const event of eventStream) {
@@ -484,8 +509,19 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
+          if (answerDue.signal.aborted && !terminalAnswerText(finalState.values?.messages)) {
+            await closeTurn(RecoveryReason.TIME_LIMIT);
+          } else {
+            mapper.ensureTerminalAnswer(stream, finalState.values?.messages);
+          }
+          closeStream();
+        } catch (error) {
+          const reason = limitReason(error, answerDue.signal);
+          if (workSignal.aborted || !reason) throw error;
+          await closeTurn(reason);
           closeStream();
         } finally {
+          answerDue.dispose();
           await threadLock.release();
         }
       } catch (error) {

@@ -21,7 +21,7 @@ import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
+import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
 
@@ -236,11 +236,12 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
 
   const textContent = useMemo(() => {
-    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === PDF_ONLY_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
+    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === PDF_ONLY_ASSISTANT_CONTENT || rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
     return rawText;
   }, [rawText]);
   const hidePdfPlaceholder = (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 && rawText === PDF_ONLY_ASSISTANT_CONTENT;
-  const hideArtifactPlaceholder = (artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) || hidePdfPlaceholder;
+  const hideActivityPlaceholder = rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT;
+  const hideArtifactPlaceholder = (artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) || hidePdfPlaceholder || hideActivityPlaceholder;
   const hideStoppedMarker = rawText === STREAM_STOPPED_BY_USER_MARKER;
 
   const handleEditStart = useCallback(() => {

@@ -64,6 +64,8 @@ export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
   "[[__artifact_only_assistant_content_v1__]]";
 export const PDF_ONLY_ASSISTANT_CONTENT =
   "[[__pdf_only_assistant_content_v1__]]";
+export const ACTIVITY_ONLY_ASSISTANT_CONTENT =
+  "[[__activity_only_assistant_content_v1__]]";
 
 
 export function getPersistableAssistantContent(
@@ -87,6 +89,10 @@ export function getPersistableAssistantContent(
     metadata.humanInTheLoopRequest
   ) {
     return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
+  }
+
+  if (metadata?.toolActivities?.length || metadata?.thinking?.trim()) {
+    return ACTIVITY_ONLY_ASSISTANT_CONTENT;
   }
 
   return null;
@@ -126,6 +132,7 @@ function buildAssistantContentForAPI(message: Message): string {
   const visibleText =
     text === ARTIFACT_ONLY_ASSISTANT_CONTENT ||
     text === PDF_ONLY_ASSISTANT_CONTENT ||
+    text === ACTIVITY_ONLY_ASSISTANT_CONTENT ||
     text === STREAM_STOPPED_BY_USER_MARKER
       ? ""
       : text;

@@ -88,6 +88,8 @@ export async function handleEditMessage(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
+  let accumulatedContent = "";
+  let thinkingBuffer = "";
 
   const nextAssistantIndex = messages.findIndex(
     (m, idx) => idx > messageIndex && m.role === MessageRole.ASSISTANT,
@@ -157,8 +159,6 @@ export async function handleEditMessage(
       messageToEdit.id,
     );
 
-    let accumulatedContent = "";
-    let thinkingBuffer = "";
     const branchId = `edit-${messageToEdit.id}-${newEditedVersion.id}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -504,28 +504,25 @@ export async function handleEditMessage(
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    if (
-      responseContent ||
-      messageMetadata.pdfs?.length ||
-      messageMetadata.artifacts?.length
-    ) {
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingBuffer.trim() ? { thinking: thinkingBuffer } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(
+      accumulatedContent,
+      partialMetadata,
+    );
+    if (partialContent !== null) {
       messageMetadata = {
-        ...messageMetadata,
+        ...partialMetadata,
         streamStatus: "error",
         streamError: errorMessage,
       };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === placeholderAssistantId
-            ? {
-                ...msg,
-                content:
-                  getPersistableAssistantContent(
-                    responseContent,
-                    messageMetadata,
-                  ) ?? responseContent,
-                metadata: messageMetadata,
-              }
+            ? { ...msg, content: partialContent, metadata: messageMetadata }
             : msg,
         ),
       );

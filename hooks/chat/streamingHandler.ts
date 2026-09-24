@@ -568,11 +568,17 @@ export async function handleStreamingResponse(
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
-    if (messageCreated && assistantContent.trim()) {
-      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
-      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: assistantContent, metadata: messageMetadata });
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingContent.trim() ? { thinking: thinkingContent } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(assistantContent, partialMetadata);
+    if (messageCreated && partialContent !== null) {
+      messageMetadata = { ...partialMetadata, streamStatus: "error", streamError: errorMessage };
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: partialContent, metadata: messageMetadata });
       if (conversationId && !abortSignal.aborted) {
-        void saveAssistantMessage(conversationId, assistantContent, messageMetadata).catch((saveError) => {
+        void saveAssistantMessage(conversationId, partialContent, messageMetadata).catch((saveError) => {
           logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
         });
       }

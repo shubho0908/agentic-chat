@@ -81,6 +81,8 @@ export async function handleRegenerateResponse(
   const artifactCollector = createArtifactMetadataCollector();
   let responseIncomplete = false;
   let responseContent = "";
+  let accumulatedContent = "";
+  let thinkingBuffer = "";
 
   const messagesAfterAssistant = messages.slice(messageIndex + 1);
 
@@ -116,8 +118,6 @@ export async function handleRegenerateResponse(
       previousUserMessage.id,
     );
 
-    let accumulatedContent = "";
-    let thinkingBuffer = "";
     const branchId = `regenerate-${assistantMessage.id ?? previousUserMessage.id}-${crypto.randomUUID()}`;
     responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -395,28 +395,25 @@ export async function handleRegenerateResponse(
       description: errorMessage,
     });
 
-    if (
-      responseContent ||
-      messageMetadata?.pdfs?.length ||
-      messageMetadata?.artifacts?.length
-    ) {
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingBuffer.trim() ? { thinking: thinkingBuffer } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(
+      accumulatedContent,
+      partialMetadata,
+    );
+    if (partialContent !== null) {
       messageMetadata = {
-        ...messageMetadata,
+        ...partialMetadata,
         streamStatus: "error",
         streamError: errorMessage,
       };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessage.id
-            ? {
-                ...msg,
-                content:
-                  getPersistableAssistantContent(
-                    responseContent,
-                    messageMetadata,
-                  ) ?? responseContent,
-                metadata: messageMetadata,
-              }
+            ? { ...msg, content: partialContent, metadata: messageMetadata }
             : msg,
         ),
       );

@@ -13,6 +13,9 @@ import { ToolName } from "@/lib/tools/constants";
 import { CustomEventName, StreamEventType, ToolStatus, HUMAN_IN_THE_LOOP_REQUEST_TYPE, GraphNode } from "./constants";
 import { toJsonValue } from "@/lib/json";
 import { createArtifactStreamParser, type ArtifactSSE } from "./artifactParser";
+import type { AIMessage, BaseMessage } from "@langchain/core/messages";
+import { extractText } from "./nodes/planner";
+import { hasAnswerText } from "./nodes/reflector";
 
 const encoder = new TextEncoder();
 
@@ -86,11 +89,27 @@ function extractToolOutputArtifact(output: unknown): unknown {
 
 interface StreamEventMapper {
   map(writer: StreamWriter, event: Record<string, unknown>): void;
+  ensureTerminalAnswer(writer: StreamWriter, messages: BaseMessage[] | undefined): boolean;
+  appendAnswer(writer: StreamWriter, text: string): void;
+  streamedAnswer(): string;
   flush(writer: StreamWriter): void;
+}
+
+function compactText(text: string): string {
+  return text.replace(/\s+/g, "");
+}
+
+export function terminalAnswerText(messages: BaseMessage[] | undefined): string | null {
+  const last = messages?.[messages.length - 1];
+  if (!last || last.type !== "ai") return null;
+  if (((last as AIMessage).tool_calls?.length ?? 0) > 0) return null;
+  return hasAnswerText(last) ? extractText(last.content) : null;
 }
 
 export function createStreamEventMapper(): StreamEventMapper {
   let askUserPending = false;
+  let answerSegment = "";
+  let heldWhitespace = "";
   const artifactParser = createArtifactStreamParser();
 
   const getNode = (event: Record<string, unknown>): string | undefined => {
@@ -102,6 +121,30 @@ export function createStreamEventMapper(): StreamEventMapper {
     if (name === ToolName.DEEP_RESEARCH) return false;
     return getNode(event) !== GraphNode.TOOLS;
   };
+
+  function pushAnswerText(writer: StreamWriter, text: string) {
+    if (!text.trim()) {
+      heldWhitespace += text;
+      return;
+    }
+    const emitted = heldWhitespace + text;
+    heldWhitespace = "";
+    answerSegment += emitted;
+    emitParsedResults(writer, artifactParser.push(emitted));
+  }
+
+  function releaseWhitespace(writer: StreamWriter) {
+    if (!heldWhitespace) return;
+    answerSegment += heldWhitespace;
+    emitParsedResults(writer, artifactParser.push(heldWhitespace));
+    heldWhitespace = "";
+  }
+
+  function appendAnswer(writer: StreamWriter, text: string) {
+    heldWhitespace = "";
+    emitParsedResults(writer, artifactParser.flush());
+    pushAnswerText(writer, answerSegment.trim() ? `\n\n${text}` : text);
+  }
 
   function emitParsedResults(writer: StreamWriter, results: Array<{ text: string } | { event: ArtifactSSE }>) {
     for (const item of results) {
@@ -120,8 +163,7 @@ export function createStreamEventMapper(): StreamEventMapper {
       switch (eventType) {
         case StreamEventType.CHAT_MODEL_STREAM: {
           if (askUserPending) break;
-          const sourceNode = getNode(event);
-          if (sourceNode !== GraphNode.AGENT) break;
+          if (getNode(event) !== GraphNode.AGENT) break;
           const chunk = event.data as {
             chunk?: {
               content?: string | Array<{ type: string; text?: string; reasoning?: string }>;
@@ -137,13 +179,13 @@ export function createStreamEventMapper(): StreamEventMapper {
 
           const content = chunk?.chunk?.content;
           if (typeof content === "string" && content) {
-            emitParsedResults(writer, artifactParser.push(content));
+            pushAnswerText(writer, content);
           } else if (Array.isArray(content)) {
             for (const block of content) {
               if (block.type === "reasoning" && block.reasoning) {
                 writer.enqueue(encodeThinkingChunk(block.reasoning));
               } else if (block.type === "text" && block.text) {
-                emitParsedResults(writer, artifactParser.push(block.text));
+                pushAnswerText(writer, block.text);
               }
             }
           }
@@ -166,9 +208,13 @@ export function createStreamEventMapper(): StreamEventMapper {
           const name = event.name as string;
           if (name === ToolName.ASK_USER) {
             askUserPending = true;
+            releaseWhitespace(writer);
+            answerSegment = "";
             break;
           }
           if (isNestedToolEvent(event, name)) break;
+          releaseWhitespace(writer);
+          answerSegment = "";
           const runId = typeof event.run_id === "string" ? event.run_id : `${name}-${Date.now()}`;
           const data = event.data as { input?: Record<string, unknown> } | undefined;
           const args = extractToolArgs(data?.input ?? {});
@@ -252,7 +298,18 @@ export function createStreamEventMapper(): StreamEventMapper {
         }
       }
     },
+    ensureTerminalAnswer(writer, messages) {
+      const text = terminalAnswerText(messages);
+      if (!text) return false;
+      if (compactText(answerSegment).endsWith(compactText(text))) return false;
+      appendAnswer(writer, text);
+      return true;
+    },
+    appendAnswer,
+    streamedAnswer: () =>
+      artifactParser.isInsideArtifact() ? `${answerSegment}\n</artifact>` : answerSegment,
     flush(writer) {
+      releaseWhitespace(writer);
       emitParsedResults(writer, artifactParser.flush());
     },
   };
