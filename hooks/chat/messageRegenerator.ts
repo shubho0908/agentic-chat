@@ -20,7 +20,6 @@ import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import {
   buildMessagesForAPI,
   getPersistableAssistantContent,
-  hasVisibleAssistantOutput,
 } from "./conversationManager";
 import type { MemoryStatus } from "@/types/chat";
 import type { RegenerateContext } from "@/types/chatHooks";
@@ -396,31 +395,25 @@ export async function handleRegenerateResponse(
       description: errorMessage,
     });
 
-    if (
-      hasVisibleAssistantOutput(
-        accumulatedContent,
-        messageMetadata,
-        toolActivities,
-        thinkingBuffer,
-      )
-    ) {
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingBuffer.trim() ? { thinking: thinkingBuffer } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(
+      accumulatedContent,
+      partialMetadata,
+    );
+    if (partialContent !== null) {
       messageMetadata = {
-        ...messageMetadata,
+        ...partialMetadata,
         streamStatus: "error",
         streamError: errorMessage,
       };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessage.id
-            ? {
-                ...msg,
-                content:
-                  getPersistableAssistantContent(
-                    accumulatedContent,
-                    messageMetadata,
-                  ) ?? accumulatedContent,
-                metadata: messageMetadata,
-              }
+            ? { ...msg, content: partialContent, metadata: messageMetadata }
             : msg,
         ),
       );

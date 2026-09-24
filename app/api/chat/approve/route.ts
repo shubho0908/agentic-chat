@@ -6,6 +6,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 import { Command } from "@langchain/langgraph";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "@/lib/orchestrator/graph";
+import { createFinalAnswerNode } from "@/lib/orchestrator/nodes/agent";
 import { resolveResumeConfig } from "@/lib/orchestrator/resumeConfig";
 import { HUMAN_IN_THE_LOOP_APPROVED, HUMAN_IN_THE_LOOP_DENIED } from "@/lib/orchestrator/constants";
 import { createStreamEventMapper, handleGraphInterrupt } from "@/lib/orchestrator/streaming";
@@ -302,7 +303,17 @@ export async function POST(request: NextRequest) {
               return;
             }
             if (isGraphRecursionError(err)) {
-              await closeTurnAtStepLimit(resumeGraph, threadId, stream, mapper, workSignal, { requestId });
+              await closeTurnAtStepLimit(
+                resumeGraph,
+                createFinalAnswerNode(apiKey, resumeConfig.model, {
+                  reasoningEffort: resumeConfig.reasoningEffort,
+                }),
+                threadId,
+                stream,
+                mapper,
+                workSignal,
+                { requestId },
+              );
               finishStream();
               return;
             }

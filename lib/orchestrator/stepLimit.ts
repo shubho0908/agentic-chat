@@ -1,19 +1,22 @@
-import { AIMessage } from "@langchain/core/messages";
-import type { BaseMessage } from "@langchain/core/messages";
+import { AIMessage, type BaseMessage } from "@langchain/core/messages";
 import type { StreamWriter } from "@/lib/chat/safeStream";
 import { logWarn } from "@/lib/observability";
 import { abortAware } from "./abortAware";
-import { GraphNode, RECURSION_LIMIT } from "./constants";
+import { GraphNode, RECURSION_LIMIT, RecoveryReason } from "./constants";
+import type { createFinalAnswerNode } from "./nodes/agent";
+import { extractText } from "./nodes/planner";
+import { buildRecoveryMessage } from "./nodes/reflector";
+import type { AgentStateType } from "./state";
 import type { createStreamEventMapper } from "./streaming";
-
-export const STEP_LIMIT_ANSWER =
-  "I hit the step limit for a single turn while working on this, so I stopped here. Ask me to continue and I will pick up from where I left off.";
 
 export const GRAPH_RUN_LIMITS = { recursionLimit: RECURSION_LIMIT } as const;
 
+type ThreadConfig = { configurable: { thread_id: string } };
+
 interface StepLimitGraph {
+  getState(config: ThreadConfig): Promise<{ values?: Partial<AgentStateType> }>;
   updateState(
-    config: { configurable: { thread_id: string } },
+    config: ThreadConfig,
     values: { messages: BaseMessage[] },
     asNode: string,
   ): Promise<unknown>;
@@ -30,6 +33,7 @@ export function isGraphRecursionError(error: unknown): boolean {
 
 export async function closeTurnAtStepLimit(
   graph: StepLimitGraph,
+  finalAnswer: ReturnType<typeof createFinalAnswerNode>,
   threadId: string,
   writer: StreamWriter,
   mapper: ReturnType<typeof createStreamEventMapper>,
@@ -37,16 +41,18 @@ export async function closeTurnAtStepLimit(
   context: Record<string, unknown>,
 ): Promise<void> {
   logWarn({ event: "orchestrator_step_limit_closed", threadId, ...context });
+  const config = { configurable: { thread_id: threadId } };
+  const state = await abortAware(graph.getState(config), signal).catch((error) => {
+    if (signal.aborted) throw error;
+    return { values: undefined };
+  });
+  const [answer] = state.values?.messages?.length
+    ? (await finalAnswer(state.values as AgentStateType, { signal }, RecoveryReason.STEP_LIMIT)).messages
+    : [new AIMessage({ content: buildRecoveryMessage([], RecoveryReason.STEP_LIMIT) })];
   try {
-    await abortAware(
-      graph.updateState(
-        { configurable: { thread_id: threadId } },
-        { messages: [new AIMessage({ content: STEP_LIMIT_ANSWER })] },
-        GraphNode.RECOVERY,
-      ),
-      signal,
-    );
+    await abortAware(graph.updateState(config, { messages: [answer] }, GraphNode.RECOVERY), signal);
   } catch (error) {
+    if (signal.aborted) throw error;
     logWarn({
       event: "orchestrator_step_limit_checkpoint_failed",
       threadId,
@@ -54,5 +60,5 @@ export async function closeTurnAtStepLimit(
       ...context,
     });
   }
-  mapper.appendAnswer(writer, STEP_LIMIT_ANSWER);
+  mapper.appendAnswer(writer, extractText(answer.content));
 }

@@ -187,7 +187,7 @@ export function classifyRecovery(messages: BaseMessage[]): RecoveryReasonValue {
 /** The graph must never terminate on an AI message whose tool_calls went
  * nowhere: the user would get silence instead of an answer. Every guard that
  * stops tool execution routes to the recovery node, which closes the turn
- * with a deterministic user-facing explanation. */
+ * with an answer built from the results gathered so far. */
 export function routeAfterAgent(state: AgentStateType): ToolRoute {
   const lastMessage = state.messages[state.messages.length - 1] as AIMessage | undefined;
 
@@ -250,7 +250,10 @@ function usefulErrorLine(text: string): string | null {
 /** Deterministic closing message for a turn the guards stopped. Names the
  * work left pending and the last failure so the user knows what happened
  * and how to proceed; no LLM call, so the recovery path can never fail. */
-export function buildRecoveryMessage(messages: BaseMessage[]): string {
+export function buildRecoveryMessage(
+  messages: BaseMessage[],
+  reason: RecoveryReasonValue = classifyRecovery(messages),
+): string {
   let pendingTools: string[] = [];
   let lastError: string | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -275,7 +278,6 @@ export function buildRecoveryMessage(messages: BaseMessage[]): string {
   const toolList =
     pendingTools.length > 0 ? pendingTools.join(", ") : "the required tools";
 
-  const reason = classifyRecovery(messages);
   switch (reason) {
     case RecoveryReason.ROUND_LIMIT:
       return (
@@ -290,6 +292,8 @@ export function buildRecoveryMessage(messages: BaseMessage[]): string {
       );
     case RecoveryReason.EMPTY_ANSWER:
       return "I finished working on this but could not put the answer into words. Ask me again and I will answer from what I found.";
+    case RecoveryReason.STEP_LIMIT:
+      return "I hit the step limit for a single turn while working on this, so I stopped here. Ask me to continue and I will pick up from where I left off.";
     default: {
       const unreachable: never = reason;
       return unreachable;

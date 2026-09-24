@@ -98,8 +98,6 @@ function compactText(text: string): string {
   return text.replace(/\s+/g, "");
 }
 
-const ANSWER_NODES: ReadonlySet<string> = new Set([GraphNode.AGENT, GraphNode.RECOVERY]);
-
 export function terminalAnswerText(messages: BaseMessage[] | undefined): string | null {
   const last = messages?.[messages.length - 1];
   if (!last || last.type !== "ai") return null;
@@ -163,8 +161,7 @@ export function createStreamEventMapper(): StreamEventMapper {
       switch (eventType) {
         case StreamEventType.CHAT_MODEL_STREAM: {
           if (askUserPending) break;
-          const sourceNode = getNode(event);
-          if (!sourceNode || !ANSWER_NODES.has(sourceNode)) break;
+          if (getNode(event) !== GraphNode.AGENT) break;
           const chunk = event.data as {
             chunk?: {
               content?: string | Array<{ type: string; text?: string; reasoning?: string }>;
@@ -195,8 +192,7 @@ export function createStreamEventMapper(): StreamEventMapper {
 
 
         case StreamEventType.CHAT_MODEL_END: {
-          const sourceNode = getNode(event);
-          if (!sourceNode || !ANSWER_NODES.has(sourceNode)) break;
+          if (getNode(event) !== GraphNode.AGENT) break;
           const data = event.data as {
             output?: { response_metadata?: { finish_reason?: unknown } };
           } | undefined;

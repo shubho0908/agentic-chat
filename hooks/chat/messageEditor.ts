@@ -22,7 +22,6 @@ import { buildCacheQuery, shouldUseSemanticCache } from "./cacheHandler";
 import {
   buildMessagesForAPI,
   getPersistableAssistantContent,
-  hasVisibleAssistantOutput,
 } from "./conversationManager";
 import {
   createNewVersion,
@@ -505,31 +504,25 @@ export async function handleEditMessage(
     toast.error(TOAST_ERROR_MESSAGES.CHAT.FAILED_SEND, {
       description: errorMessage,
     });
-    if (
-      hasVisibleAssistantOutput(
-        accumulatedContent,
-        messageMetadata,
-        toolActivities,
-        thinkingBuffer,
-      )
-    ) {
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingBuffer.trim() ? { thinking: thinkingBuffer } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(
+      accumulatedContent,
+      partialMetadata,
+    );
+    if (partialContent !== null) {
       messageMetadata = {
-        ...messageMetadata,
+        ...partialMetadata,
         streamStatus: "error",
         streamError: errorMessage,
       };
       onMessagesUpdate((prev) =>
         prev.map((msg) =>
           msg.id === placeholderAssistantId
-            ? {
-                ...msg,
-                content:
-                  getPersistableAssistantContent(
-                    accumulatedContent,
-                    messageMetadata,
-                  ) ?? accumulatedContent,
-                metadata: messageMetadata,
-              }
+            ? { ...msg, content: partialContent, metadata: messageMetadata }
             : msg,
         ),
       );

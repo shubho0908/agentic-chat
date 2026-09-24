@@ -7,6 +7,7 @@ import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
+import { createFinalAnswerNode } from "./nodes/agent";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
 import { createStreamEventMapper, handleGraphInterrupt } from "./streaming";
 import {
@@ -493,10 +494,15 @@ export function createOrchestratorStreamHandler(
           closeStream();
         } catch (error) {
           if (!isGraphRecursionError(error) || workSignal.aborted) throw error;
-          await closeTurnAtStepLimit(graph, threadId, stream, mapper, workSignal, {
-            conversationId,
-            branchId,
-          });
+          await closeTurnAtStepLimit(
+            graph,
+            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
+            threadId,
+            stream,
+            mapper,
+            workSignal,
+            { conversationId, branchId },
+          );
           closeStream();
         } finally {
           await threadLock.release();

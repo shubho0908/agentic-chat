@@ -488,6 +488,10 @@ const FINAL_ANSWER_INSTRUCTIONS: Record<RecoveryReasonValue, string> = {
   [RecoveryReason.EMPTY_ANSWER]: `Final answer required:
 - Your previous reply was empty. No more tool calls are possible this turn.
 - Answer the latest user request now, using the conversation and the tool results already gathered.`,
+  [RecoveryReason.STEP_LIMIT]: `Final answer required:
+- This turn used every step it is allowed. No more tool calls are possible.
+- Answer the latest user request now, using everything the tool results in this conversation already show.
+- Be concrete about what you found. Then say briefly what is still unfinished and that the user can ask you to continue.`,
 };
 
 export function createFinalAnswerNode(
@@ -498,10 +502,13 @@ export function createFinalAnswerNode(
   const { ephemeralContext = [] } = options;
   const llm = createAgentLlm(apiKey, model, options);
 
-  return async (state: AgentStateType, config?: LangGraphRunnableConfig) => {
-    const reason = classifyRecovery(state.messages);
+  return async (
+    state: AgentStateType,
+    config?: LangGraphRunnableConfig,
+    reason: RecoveryReasonValue = classifyRecovery(state.messages),
+  ) => {
     const fallback = () => ({
-      messages: [new AIMessage({ content: buildRecoveryMessage(state.messages) })],
+      messages: [new AIMessage({ content: buildRecoveryMessage(state.messages, reason) })],
     });
 
     try {

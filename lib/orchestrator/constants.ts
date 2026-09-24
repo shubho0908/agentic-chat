@@ -51,6 +51,7 @@ export const RecoveryReason = {
   ROUND_LIMIT: "round_limit",
   TOOL_FAILURES: "tool_failures",
   EMPTY_ANSWER: "empty_answer",
+  STEP_LIMIT: "step_limit",
 } as const;
 export type RecoveryReasonValue =
   (typeof RecoveryReason)[keyof typeof RecoveryReason];

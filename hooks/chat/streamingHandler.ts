@@ -6,7 +6,7 @@ import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
-import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent, hasVisibleAssistantOutput } from "./conversationManager";
+import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
 import { saveAssistantMessage } from "./messageApi";
 import { logger } from "@/lib/logger";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -568,14 +568,17 @@ export async function handleStreamingResponse(
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
-    if (
-      messageCreated &&
-      hasVisibleAssistantOutput(assistantContent, messageMetadata, toolActivities, thinkingContent)
-    ) {
-      messageMetadata = { ...messageMetadata, streamStatus: "error", streamError: errorMessage };
-      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: assistantContent, metadata: messageMetadata });
-      if (assistantContent.trim() && conversationId && !abortSignal.aborted) {
-        void saveAssistantMessage(conversationId, assistantContent, messageMetadata).catch((saveError) => {
+    const partialMetadata: MessageMetadata = {
+      ...messageMetadata,
+      ...(thinkingContent.trim() ? { thinking: thinkingContent } : {}),
+      ...(toolActivities.length > 0 ? { toolActivities } : {}),
+    };
+    const partialContent = getPersistableAssistantContent(assistantContent, partialMetadata);
+    if (messageCreated && partialContent !== null) {
+      messageMetadata = { ...partialMetadata, streamStatus: "error", streamError: errorMessage };
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: partialContent, metadata: messageMetadata });
+      if (conversationId && !abortSignal.aborted) {
+        void saveAssistantMessage(conversationId, partialContent, messageMetadata).catch((saveError) => {
           logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
         });
       }

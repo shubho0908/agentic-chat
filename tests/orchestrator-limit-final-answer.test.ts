@@ -13,13 +13,12 @@ import { createStreamEventMapper } from "@/lib/orchestrator/streaming";
 import { extractText } from "@/lib/orchestrator/nodes/planner";
 import {
   GRAPH_RUN_LIMITS,
-  STEP_LIMIT_ANSWER,
   closeTurnAtStepLimit,
   isGraphRecursionError,
 } from "@/lib/orchestrator/stepLimit";
 import { GraphNode, MAX_TOOL_ROUNDS, RECURSION_LIMIT, RecoveryReason } from "@/lib/orchestrator/constants";
 import type { StreamWriter } from "@/lib/chat/safeStream";
-import { hasVisibleAssistantOutput } from "@/hooks/chat/conversationManager";
+import { ACTIVITY_ONLY_ASSISTANT_CONTENT, getPersistableAssistantContent } from "@/hooks/chat/conversationManager";
 import { shouldAutoContinueConversation } from "@/hooks/chat/autoContinue";
 import { MessageRole, type Message } from "@/lib/schemas/chat";
 
@@ -34,12 +33,15 @@ interface CapturedRequest {
   body: { input: InputItem[]; tools?: unknown };
 }
 
+let completionCount = 0;
+
 function completionStream(text: string): Response {
+  const responseId = `resp_final_${++completionCount}`;
   const event = (payload: Record<string, unknown>) =>
     `event: ${payload.type}\ndata: ${JSON.stringify(payload)}\n\n`;
-  const item = { id: "msg_final", type: "message", role: "assistant" };
+  const item = { id: `msg_final_${completionCount}`, type: "message", role: "assistant" };
   const body = [
-    event({ type: "response.created", response: { id: "resp_final", object: "response", created_at: 1, model: MODEL, status: "in_progress", output: [] } }),
+    event({ type: "response.created", response: { id: responseId, object: "response", created_at: 1, model: MODEL, status: "in_progress", output: [] } }),
     event({ type: "response.output_item.added", output_index: 0, item: { ...item, status: "in_progress", content: [] } }),
     ...text.split(/(?<= )/).map((delta) =>
       event({ type: "response.output_text.delta", item_id: item.id, output_index: 0, content_index: 0, delta }),
@@ -47,7 +49,7 @@ function completionStream(text: string): Response {
     event({
       type: "response.completed",
       response: {
-        id: "resp_final",
+        id: responseId,
         object: "response",
         created_at: 1,
         model: MODEL,
@@ -167,7 +169,15 @@ async function runTurn(
   } catch (caught) {
     error = caught;
     if (isGraphRecursionError(caught)) {
-      await closeTurnAtStepLimit(graph as never, threadId, sink.writer, mapper, new AbortController().signal, {});
+      await closeTurnAtStepLimit(
+        graph as never,
+        createFinalAnswerNode("sk-test", MODEL),
+        threadId,
+        sink.writer,
+        mapper,
+        new AbortController().signal,
+        {},
+      );
       error = null;
     }
   }
@@ -353,16 +363,20 @@ test("the langgraph default step cap would have broken the same resumed turn", a
   }
 });
 
-test("hitting the graph step cap closes the turn with an answer and a resolved checkpoint", async () => {
-  const model = stubModel(() => completionStream("Picked up where I left off."));
+test("hitting the graph step cap answers from the gathered results with a resolved checkpoint", async () => {
+  const model = stubModel(() => completionStream("Here is what the searches found."));
   try {
     const { graph } = buildGraph({ agent: toolCallingAgent() });
     const run = await runTurn(graph, "step-cap", userTurn("go"), { recursionLimit: 6 });
 
     assert.equal(run.error, null);
-    assert.equal(run.text(), STEP_LIMIT_ANSWER);
-    assert.equal(run.last.content, STEP_LIMIT_ANSWER);
+    assert.equal(run.text(), "Here is what the searches found.");
+    assert.equal(extractText(run.last.content), "Here is what the searches found.");
     assert.deepEqual(run.state.next, []);
+    const finalRequest = model.requests.at(-1)!;
+    assert.equal(finalRequest.body.tools, undefined);
+    assert.ok(finalRequest.body.input.some((item) => item.type === "function_call_output"));
+    assert.ok(JSON.stringify(finalRequest.body.input).includes("every step it is allowed"));
 
     let followUpCalls = 0;
     const next = await runTurn(graph, "step-cap", userTurn("continue"));
@@ -412,9 +426,11 @@ test("the stream never drops, duplicates or loses the terminal answer", () => {
 
   const recovery = createWriter();
   const mapperB = createStreamEventMapper();
-  mapperB.map(recovery.writer, streamChunk(GraphNode.RECOVERY, "From recovery."));
+  mapperB.map(recovery.writer, streamChunk(GraphNode.RECOVERY, "Failed attempt that was re"));
+  assert.equal(recovery.events.length, 0);
+  assert.equal(mapperB.ensureTerminalAnswer(recovery.writer, [answer]), true);
   mapperB.flush(recovery.writer);
-  assert.equal(recovery.text(), "From recovery.");
+  assert.equal(recovery.text(), "Final words.");
 
   const silent = createWriter();
   const mapperC = createStreamEventMapper();
@@ -424,7 +440,7 @@ test("the stream never drops, duplicates or loses the terminal answer", () => {
 
   const partial = createWriter();
   const mapperD = createStreamEventMapper();
-  mapperD.map(partial.writer, streamChunk(GraphNode.RECOVERY, "Half an ans"));
+  mapperD.map(partial.writer, streamChunk(GraphNode.AGENT, "Half an ans"));
   assert.equal(mapperD.ensureTerminalAnswer(partial.writer, [answer]), true);
   mapperD.flush(partial.writer);
   assert.equal(partial.text(), "Half an ans\n\nFinal words.");
@@ -469,7 +485,7 @@ test("the stream never drops, duplicates or loses the terminal answer", () => {
 
   const blankThenFallback = createWriter();
   const mapperK = createStreamEventMapper();
-  mapperK.map(blankThenFallback.writer, streamChunk(GraphNode.RECOVERY, "    "));
+  mapperK.map(blankThenFallback.writer, streamChunk(GraphNode.AGENT, "    "));
   assert.equal(mapperK.ensureTerminalAnswer(blankThenFallback.writer, [answer]), true);
   mapperK.flush(blankThenFallback.writer);
   assert.equal(blankThenFallback.text(), "Final words.");
@@ -480,14 +496,13 @@ test("the stream never drops, duplicates or loses the terminal answer", () => {
   assert.equal(planner.events.length, 0);
 });
 
-test("errored turns keep streamed tool activity and thinking visible", () => {
+test("errored turns persist streamed tool activity and thinking", () => {
   const activity = { toolCallId: "t1", toolName: "web_search", status: "completed", args: {}, timestamp: 1 };
-  assert.equal(hasVisibleAssistantOutput("", undefined, [], ""), false);
-  assert.equal(hasVisibleAssistantOutput("   ", undefined, [], "  "), false);
-  assert.equal(hasVisibleAssistantOutput("partial", undefined, [], ""), true);
-  assert.equal(hasVisibleAssistantOutput("", undefined, [activity as never], ""), true);
-  assert.equal(hasVisibleAssistantOutput("", undefined, [], "thinking about it"), true);
-  assert.equal(hasVisibleAssistantOutput("", { artifacts: [{}] } as never, [], ""), true);
+  assert.equal(getPersistableAssistantContent("", undefined), null);
+  assert.equal(getPersistableAssistantContent("   ", { thinking: "  " } as never), null);
+  assert.equal(getPersistableAssistantContent("partial", undefined), "partial");
+  assert.equal(getPersistableAssistantContent("", { toolActivities: [activity] } as never), ACTIVITY_ONLY_ASSISTANT_CONTENT);
+  assert.equal(getPersistableAssistantContent("", { thinking: "thinking about it" } as never), ACTIVITY_ONLY_ASSISTANT_CONTENT);
 });
 
 test("an errored turn is never silently auto-retried", () => {

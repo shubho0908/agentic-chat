@@ -5,7 +5,6 @@ import {
   type MessageContentPart,
   type Message,
   type MessageMetadata,
-  type ToolActivity,
   MessageRole,
 } from "@/lib/schemas/chat";
 import { QueryClient } from "@tanstack/react-query";
@@ -65,6 +64,8 @@ export const ARTIFACT_ONLY_ASSISTANT_CONTENT =
   "[[__artifact_only_assistant_content_v1__]]";
 export const PDF_ONLY_ASSISTANT_CONTENT =
   "[[__pdf_only_assistant_content_v1__]]";
+export const ACTIVITY_ONLY_ASSISTANT_CONTENT =
+  "[[__activity_only_assistant_content_v1__]]";
 
 
 export function getPersistableAssistantContent(
@@ -90,20 +91,11 @@ export function getPersistableAssistantContent(
     return HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT;
   }
 
-  return null;
-}
+  if (metadata?.toolActivities?.length || metadata?.thinking?.trim()) {
+    return ACTIVITY_ONLY_ASSISTANT_CONTENT;
+  }
 
-export function hasVisibleAssistantOutput(
-  content: string,
-  metadata: MessageMetadata | undefined,
-  toolActivities: readonly ToolActivity[],
-  thinking: string,
-): boolean {
-  return (
-    getPersistableAssistantContent(content, metadata) !== null ||
-    toolActivities.length > 0 ||
-    thinking.trim().length > 0
-  );
+  return null;
 }
 
 function formatArtifactForModelContext(artifact: ArtifactMetadata): string {
@@ -140,6 +132,7 @@ function buildAssistantContentForAPI(message: Message): string {
   const visibleText =
     text === ARTIFACT_ONLY_ASSISTANT_CONTENT ||
     text === PDF_ONLY_ASSISTANT_CONTENT ||
+    text === ACTIVITY_ONLY_ASSISTANT_CONTENT ||
     text === STREAM_STOPPED_BY_USER_MARKER
       ? ""
       : text;
