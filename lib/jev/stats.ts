@@ -216,14 +216,27 @@ export function mergeJevStats(
   return [...byCheckpoint.values()].sort((a, b) => b.total - a.total);
 }
 
+export const JEV_STATS_STATEMENT_TIMEOUT_MS = 10_000;
+export const JEV_STATS_TRANSACTION_MAX_WAIT_MS = 5_000;
+export const JEV_STATS_TRANSACTION_TIMEOUT_MS =
+  2 * JEV_STATS_STATEMENT_TIMEOUT_MS;
+export const JEV_STATS_QUERY_DEADLINE_MS =
+  JEV_STATS_TRANSACTION_MAX_WAIT_MS + JEV_STATS_TRANSACTION_TIMEOUT_MS;
+
 export async function queryJevStats(
   query: JevStatsQuery,
 ): Promise<JevCheckpointStats[]> {
   const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
   const { checkpoint, mode } = query;
 
-  const rawOutcomeRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint,
+  const [rawOutcomeRows, rawLatencyRows] = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(
+        `SELECT set_config('statement_timeout', $1, true)`,
+        String(JEV_STATS_STATEMENT_TIMEOUT_MS),
+      );
+      const outcomeRows = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
        outcome,
@@ -236,12 +249,12 @@ export async function queryJevStats(
        (checkpoint, outcome),
        (checkpoint, mode, outcome)
      )`,
-    since,
-    checkpoint,
-    mode,
-  );
-  const rawLatencyRows = await prisma.$queryRawUnsafe<unknown[]>(
-    `SELECT checkpoint,
+        since,
+        checkpoint,
+        mode,
+      );
+      const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
+        `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
        COUNT(*)::int AS total,
@@ -256,9 +269,16 @@ export async function queryJevStats(
        (checkpoint),
        (checkpoint, mode)
      )`,
-    since,
-    checkpoint,
-    mode,
+        since,
+        checkpoint,
+        mode,
+      );
+      return [outcomeRows, latencyRows] as const;
+    },
+    {
+      maxWait: JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+      timeout: JEV_STATS_TRANSACTION_TIMEOUT_MS,
+    },
   );
 
   const allOutcomeRows: OutcomeRow[] = z
@@ -320,7 +340,11 @@ enum JevStatsCacheEntryState {
 }
 
 type JevStatsCacheEntry =
-  | { state: JevStatsCacheEntryState.Pending; payload: Promise<JevStatsPayload> }
+  | {
+      state: JevStatsCacheEntryState.Pending;
+      payload: Promise<JevStatsPayload>;
+      expiresAt: number;
+    }
   | {
       state: JevStatsCacheEntryState.Settled;
       payload: Promise<JevStatsPayload>;
@@ -330,6 +354,7 @@ type JevStatsCacheEntry =
 export interface JevStatsCacheOptions {
   compute: (query: JevStatsQuery) => Promise<JevStatsPayload>;
   ttlMs: () => number;
+  pendingDeadlineMs: number;
   now: () => number;
 }
 
@@ -343,7 +368,6 @@ function isJevStatsCacheEntryLive(
 ): boolean {
   switch (entry.state) {
     case JevStatsCacheEntryState.Pending:
-      return true;
     case JevStatsCacheEntryState.Settled:
       return entry.expiresAt > now;
     default: {
@@ -378,6 +402,7 @@ export function createJevStatsCache(options: JevStatsCacheOptions) {
     const pending: JevStatsCacheEntry = {
       state: JevStatsCacheEntryState.Pending,
       payload,
+      expiresAt: now + options.pendingDeadlineMs,
     };
     entries.set(key, pending);
     payload.then(
@@ -400,5 +425,6 @@ export function createJevStatsCache(options: JevStatsCacheOptions) {
 export const loadJevStats = createJevStatsCache({
   compute: computeJevStatsPayload,
   ttlMs: () => resolveJevStatsCacheTtlMs(process.env[JEV_STATS_CACHE_TTL_ENV]),
+  pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
   now: Date.now,
 });

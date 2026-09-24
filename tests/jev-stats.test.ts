@@ -239,6 +239,10 @@ import {
   createJevStatsCache,
   JEV_STATS_CACHE_DEFAULT_TTL_SECONDS,
   JEV_STATS_CACHE_MAX_TTL_SECONDS,
+  JEV_STATS_QUERY_DEADLINE_MS,
+  JEV_STATS_STATEMENT_TIMEOUT_MS,
+  JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+  JEV_STATS_TRANSACTION_TIMEOUT_MS,
   resolveJevStatsCacheTtlMs,
   type JevStatsPayload,
   type JevStatsQuery,
@@ -264,6 +268,7 @@ function statsCacheHarness(ttlMs: number) {
       return statsPayload(query, calls);
     },
     ttlMs: () => ttlMs,
+    pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
     now: () => clock,
   });
   return {
@@ -343,6 +348,7 @@ test("stats cache never keeps a failed computation", async () => {
       return statsPayload(query, calls);
     },
     ttlMs: () => 30_000,
+    pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
     now: () => 0,
   });
   await assert.rejects(load(statsQuery()), /db down/);
@@ -362,17 +368,18 @@ test("stats cache shares an aggregation that outlives the TTL instead of startin
         release = resolve;
       });
     },
-    ttlMs: () => 30_000,
+    ttlMs: () => 5_000,
+    pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
     now: () => clock,
   });
   const first = load(statsQuery());
-  clock += 120_000;
+  clock += JEV_STATS_QUERY_DEADLINE_MS - 1;
   const second = load(statsQuery());
   assert.equal(calls, 1);
   assert.equal(second, first);
   release(statsPayload(statsQuery(), 1));
   await first;
-  clock += 29_999;
+  clock += 4_999;
   await load(statsQuery());
   assert.equal(calls, 1);
   clock += 1;
@@ -380,4 +387,41 @@ test("stats cache shares an aggregation that outlives the TTL instead of startin
   assert.equal(calls, 2);
   release(statsPayload(statsQuery(), 2));
   await refreshed;
+});
+
+test("stats cache drops a computation that never settles once its deadline passes", async () => {
+  let clock = 0;
+  const releases: Array<(payload: JevStatsPayload) => void> = [];
+  const load = createJevStatsCache({
+    compute: () =>
+      new Promise<JevStatsPayload>((resolve) => {
+        releases.push(resolve);
+      }),
+    ttlMs: () => 30_000,
+    pendingDeadlineMs: JEV_STATS_QUERY_DEADLINE_MS,
+    now: () => clock,
+  });
+  const stalled = load(statsQuery());
+  clock += JEV_STATS_QUERY_DEADLINE_MS;
+  const retried = load(statsQuery());
+  assert.equal(releases.length, 2);
+  assert.notEqual(retried, stalled);
+
+  releases[1](statsPayload(statsQuery(), 2));
+  assert.equal((await retried).window.since, new Date(2).toISOString());
+  releases[0](statsPayload(statsQuery(), 1));
+  await stalled;
+
+  const served = await load(statsQuery());
+  assert.equal(releases.length, 2);
+  assert.equal(served.window.since, new Date(2).toISOString());
+});
+
+test("stats queries run under a database statement timeout inside the deadline", () => {
+  assert.ok(JEV_STATS_STATEMENT_TIMEOUT_MS > 0);
+  assert.equal(
+    JEV_STATS_QUERY_DEADLINE_MS,
+    JEV_STATS_TRANSACTION_MAX_WAIT_MS + JEV_STATS_TRANSACTION_TIMEOUT_MS,
+  );
+  assert.ok(JEV_STATS_TRANSACTION_TIMEOUT_MS >= 2 * JEV_STATS_STATEMENT_TIMEOUT_MS);
 });

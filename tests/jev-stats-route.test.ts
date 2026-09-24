@@ -8,6 +8,9 @@ import { GET } from "@/app/api/jev/stats/route";
 import {
   JEV_STATS_ALLOWED_EMAIL_ENV,
   JEV_STATS_CACHE_TTL_ENV,
+  JEV_STATS_STATEMENT_TIMEOUT_MS,
+  JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+  JEV_STATS_TRANSACTION_TIMEOUT_MS,
 } from "@/lib/jev/stats";
 
 const OWNER_EMAIL = "owner@example.com";
@@ -34,11 +37,28 @@ async function callStatsRoute(options: {
 
   const getSession = mock.method(auth.api, "getSession", async () => options.session);
   const client = prisma as unknown as Record<string, unknown>;
-  const originalQuery = client.$queryRawUnsafe;
+  const originalTransaction = client.$transaction;
   let databaseQueries = 0;
-  client.$queryRawUnsafe = async () => {
-    databaseQueries += 1;
-    return [];
+  let transactions = 0;
+  const statementTimeouts: unknown[] = [];
+  const transactionOptions: unknown[] = [];
+  const tx = {
+    $executeRawUnsafe: async (_sql: string, ...values: unknown[]) => {
+      statementTimeouts.push(values[0]);
+      return 1;
+    },
+    $queryRawUnsafe: async () => {
+      databaseQueries += 1;
+      return [];
+    },
+  };
+  client.$transaction = async (
+    run: (client: typeof tx) => Promise<unknown>,
+    options: unknown,
+  ) => {
+    transactions += 1;
+    transactionOptions.push(options);
+    return run(tx);
   };
 
   try {
@@ -49,9 +69,12 @@ async function callStatsRoute(options: {
       status: response.status,
       body: (await response.json()) as Record<string, unknown>,
       databaseQueries,
+      transactions,
+      statementTimeouts,
+      transactionOptions,
     };
   } finally {
-    client.$queryRawUnsafe = originalQuery;
+    client.$transaction = originalTransaction;
     getSession.mock.restore();
     if (previousAllowed === undefined) delete process.env[JEV_STATS_ALLOWED_EMAIL_ENV];
     else process.env[JEV_STATS_ALLOWED_EMAIL_ENV] = previousAllowed;
@@ -64,6 +87,7 @@ test("stats route rejects a request without a session before any stats query", a
   const result = await callStatsRoute({ session: null, allowedEmail: OWNER_EMAIL });
   assert.equal(result.status, 401);
   assert.equal(result.databaseQueries, 0);
+  assert.equal(result.transactions, 0);
 });
 
 test("stats route rejects a signed-in non-owner before any stats query", async () => {
@@ -73,6 +97,7 @@ test("stats route rejects a signed-in non-owner before any stats query", async (
   });
   assert.equal(result.status, 403);
   assert.equal(result.databaseQueries, 0);
+  assert.equal(result.transactions, 0);
 });
 
 test("stats route denies everyone when the owner email is unset or blank", async () => {
@@ -83,6 +108,7 @@ test("stats route denies everyone when the owner email is unset or blank", async
     });
     assert.equal(result.status, 403);
     assert.equal(result.databaseQueries, 0);
+  assert.equal(result.transactions, 0);
   }
 });
 
@@ -101,6 +127,7 @@ test("stats route validates the query only after the owner gate", async () => {
   });
   assert.equal(owner.status, 400);
   assert.equal(owner.databaseQueries, 0);
+  assert.equal(owner.transactions, 0);
 });
 
 test("stats route serves the owner", async () => {
@@ -111,6 +138,16 @@ test("stats route serves the owner", async () => {
   });
   assert.equal(result.status, 200);
   assert.equal(result.databaseQueries, 2);
+  assert.equal(result.transactions, 1);
+  assert.deepEqual(result.statementTimeouts, [
+    String(JEV_STATS_STATEMENT_TIMEOUT_MS),
+  ]);
+  assert.deepEqual(result.transactionOptions, [
+    {
+      maxWait: JEV_STATS_TRANSACTION_MAX_WAIT_MS,
+      timeout: JEV_STATS_TRANSACTION_TIMEOUT_MS,
+    },
+  ]);
   assert.deepEqual(result.body.checkpoints, []);
   assert.equal((result.body.window as { days: number }).days, 7);
 });
