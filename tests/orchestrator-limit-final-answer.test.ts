@@ -555,6 +555,57 @@ test("an answer cut off by the time limit is kept and closed with a notice, neve
   }
 });
 
+test("an answer cut off inside an artifact closes the artifact and shows the notice as chat text", async () => {
+  const model = stubModel(() => completionStream("should never be requested"));
+  try {
+    const { graph } = buildGraph({ agent: toolCallingAgent() });
+    const threadId = "time-limit-artifact";
+    await runTurn(graph, threadId, userTurn("build the page"), { recursionLimit: 4 });
+    const requestsBefore = model.requests.length;
+
+    const sink = createWriter();
+    const mapper = createStreamEventMapper();
+    const streamed = 'Here it is:\n<artifact type="html" title="Page">\n<div>Hello</div>\n<p>wor';
+    mapper.map(sink.writer, {
+      event: "on_chat_model_stream",
+      metadata: { langgraph_node: GraphNode.AGENT },
+      data: { chunk: { content: streamed } },
+    });
+    await closeTurnAtLimit(
+      graph as never,
+      createFinalAnswerNode("sk-test", MODEL),
+      RecoveryReason.TIME_LIMIT,
+      threadId,
+      sink.writer,
+      mapper,
+      new AbortController().signal,
+      Date.now() + 10_000,
+      {},
+    );
+    mapper.flush(sink.writer);
+
+    const notice = buildRecoveryMessage([], RecoveryReason.TIME_LIMIT);
+    assert.equal(model.requests.length, requestsBefore);
+    const kinds = sink.events.map((event) => (event.type as string | undefined) ?? "text");
+    const end = kinds.lastIndexOf("artifact_end");
+    const noticeAt = sink.events.findIndex((event) => typeof event.content === "string" && !event.type && (event.content as string).includes(notice));
+    assert.equal(kinds.filter((kind) => kind === "artifact_start").length, 1);
+    assert.equal(kinds.filter((kind) => kind === "artifact_end").length, 1);
+    assert.ok(end >= 0 && noticeAt > end);
+    const artifactText = sink.events
+      .filter((event) => event.type === "artifact_chunk")
+      .map((event) => event.content as string)
+      .join("");
+    assert.equal(artifactText.includes(notice), false);
+    assert.match(artifactText, /<p>wor/);
+
+    const last = (await graph.getState({ configurable: { thread_id: threadId } })).values.messages.at(-1) as BaseMessage;
+    assert.equal(extractText(last.content), `${streamed}\n</artifact>\n\n${notice}`);
+  } finally {
+    model.restore();
+  }
+});
+
 test("the chat route stops waiting for the thread lock while a full working window and answer reserve remain", () => {
   const source = readFileSync(join(process.cwd(), "lib/orchestrator/handler.ts"), "utf8");
   const call = source.slice(source.indexOf("acquireThreadLock(threadId"), source.indexOf("acquireThreadLock(threadId") + 300);

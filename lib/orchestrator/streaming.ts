@@ -142,6 +142,7 @@ export function createStreamEventMapper(): StreamEventMapper {
 
   function appendAnswer(writer: StreamWriter, text: string) {
     heldWhitespace = "";
+    emitParsedResults(writer, artifactParser.flush());
     pushAnswerText(writer, answerSegment.trim() ? `\n\n${text}` : text);
   }
 
@@ -305,7 +306,8 @@ export function createStreamEventMapper(): StreamEventMapper {
       return true;
     },
     appendAnswer,
-    streamedAnswer: () => answerSegment,
+    streamedAnswer: () =>
+      artifactParser.isInsideArtifact() ? `${answerSegment}\n</artifact>` : answerSegment,
     flush(writer) {
       releaseWhitespace(writer);
       emitParsedResults(writer, artifactParser.flush());

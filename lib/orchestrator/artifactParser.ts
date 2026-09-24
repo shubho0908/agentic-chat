@@ -229,5 +229,5 @@ export function createArtifactStreamParser() {
     return results;
   }
 
-  return { push, flush };
+  return { push, flush, isInsideArtifact: () => insideArtifact };
 }
