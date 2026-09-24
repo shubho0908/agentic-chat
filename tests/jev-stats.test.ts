@@ -234,3 +234,119 @@ test("isJevStatsAllowedEmail fails closed when env is unset or blank", () => {
   assert.equal(isJevStatsAllowedEmail(null, "shubhobera98@gmail.com"), false);
   assert.equal(isJevStatsAllowedEmail(undefined, "shubhobera98@gmail.com"), false);
 });
+
+import {
+  createJevStatsCache,
+  JEV_STATS_CACHE_DEFAULT_TTL_SECONDS,
+  JEV_STATS_CACHE_MAX_TTL_SECONDS,
+  resolveJevStatsCacheTtlMs,
+  type JevStatsPayload,
+  type JevStatsQuery,
+} from "@/lib/jev/stats";
+
+function statsQuery(overrides: Partial<JevStatsQuery> = {}): JevStatsQuery {
+  return { days: 30, checkpoint: null, mode: null, ...overrides };
+}
+
+function statsPayload(query: JevStatsQuery, marker: number): JevStatsPayload {
+  return {
+    window: { ...query, since: new Date(marker).toISOString() },
+    checkpoints: [],
+  };
+}
+
+function statsCacheHarness(ttlMs: number) {
+  let clock = 1_000_000;
+  let calls = 0;
+  const load = createJevStatsCache({
+    compute: async (query) => {
+      calls += 1;
+      return statsPayload(query, calls);
+    },
+    ttlMs: () => ttlMs,
+    now: () => clock,
+  });
+  return {
+    load,
+    calls: () => calls,
+    advance: (ms: number) => {
+      clock += ms;
+    },
+  };
+}
+
+test("resolveJevStatsCacheTtlMs defaults, clamps and accepts zero", () => {
+  const defaultMs = JEV_STATS_CACHE_DEFAULT_TTL_SECONDS * 1000;
+  assert.equal(resolveJevStatsCacheTtlMs(undefined), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs(""), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs("  "), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs("abc"), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs("-5"), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs("2.5"), defaultMs);
+  assert.equal(resolveJevStatsCacheTtlMs("0"), 0);
+  assert.equal(resolveJevStatsCacheTtlMs(" 45 "), 45_000);
+  assert.equal(
+    resolveJevStatsCacheTtlMs("100000"),
+    JEV_STATS_CACHE_MAX_TTL_SECONDS * 1000,
+  );
+});
+
+test("stats cache serves repeat requests within the TTL from memory", async () => {
+  const harness = statsCacheHarness(30_000);
+  const first = await harness.load(statsQuery());
+  harness.advance(29_999);
+  const second = await harness.load(statsQuery());
+  assert.equal(harness.calls(), 1);
+  assert.deepEqual(second, first);
+});
+
+test("stats cache recomputes once the TTL has elapsed", async () => {
+  const harness = statsCacheHarness(30_000);
+  await harness.load(statsQuery());
+  harness.advance(30_000);
+  await harness.load(statsQuery());
+  assert.equal(harness.calls(), 2);
+});
+
+test("stats cache keys by days, checkpoint and mode", async () => {
+  const harness = statsCacheHarness(30_000);
+  await harness.load(statsQuery());
+  await harness.load(statsQuery({ days: 7 }));
+  await harness.load(statsQuery({ checkpoint: "planner" }));
+  await harness.load(statsQuery({ mode: "shadow" }));
+  await harness.load(statsQuery({ days: 7 }));
+  assert.equal(harness.calls(), 4);
+});
+
+test("stats cache coalesces concurrent requests into one computation", async () => {
+  const harness = statsCacheHarness(30_000);
+  const results = await Promise.all(
+    Array.from({ length: 50 }, () => harness.load(statsQuery())),
+  );
+  assert.equal(harness.calls(), 1);
+  assert.ok(results.every((result) => result === results[0]));
+});
+
+test("stats cache TTL of zero always reads fresh", async () => {
+  const harness = statsCacheHarness(0);
+  await harness.load(statsQuery());
+  await harness.load(statsQuery());
+  assert.equal(harness.calls(), 2);
+});
+
+test("stats cache never keeps a failed computation", async () => {
+  let calls = 0;
+  const load = createJevStatsCache({
+    compute: async (query) => {
+      calls += 1;
+      if (calls === 1) throw new Error("db down");
+      return statsPayload(query, calls);
+    },
+    ttlMs: () => 30_000,
+    now: () => 0,
+  });
+  await assert.rejects(load(statsQuery()), /db down/);
+  const recovered = await load(statsQuery());
+  assert.equal(calls, 2);
+  assert.equal(recovered.window.since, new Date(2).toISOString());
+});

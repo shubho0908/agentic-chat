@@ -9,8 +9,8 @@ import { HTTP_STATUS } from "@/constants/errors";
 import { logger } from "@/lib/logger";
 import {
   isJevStatsAllowedEmail,
+  loadJevStats,
   parseJevStatsQuery,
-  queryJevStats,
 } from "@/lib/jev/stats";
 
 /** Read-only view over persisted Jev decision records: per-checkpoint
@@ -30,18 +30,7 @@ export async function GET(request: NextRequest) {
       return errorResponse(parsed.error, undefined, HTTP_STATUS.BAD_REQUEST);
     }
 
-    const checkpoints = await queryJevStats(parsed);
-    return jsonResponse({
-      window: {
-        days: parsed.days,
-        checkpoint: parsed.checkpoint,
-        mode: parsed.mode,
-        since: new Date(
-          Date.now() - parsed.days * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-      },
-      checkpoints,
-    });
+    return jsonResponse(await loadJevStats(parsed));
   } catch (error) {
     logger.error("[Jev Stats] Failed to load decision stats:", error);
     return errorResponse(

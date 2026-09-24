@@ -27,6 +27,22 @@ export function isJevStatsAllowedEmail(
   return email.trim().toLowerCase() === allowed.toLowerCase();
 }
 
+export const JEV_STATS_CACHE_TTL_ENV = "JEV_STATS_CACHE_TTL_SECONDS";
+export const JEV_STATS_CACHE_DEFAULT_TTL_SECONDS = 30;
+export const JEV_STATS_CACHE_MAX_TTL_SECONDS = 300;
+
+export function resolveJevStatsCacheTtlMs(
+  raw: string | null | undefined = process.env[JEV_STATS_CACHE_TTL_ENV],
+): number {
+  const trimmed = raw?.trim();
+  const parsed = trimmed ? Number(trimmed) : Number.NaN;
+  const seconds =
+    Number.isInteger(parsed) && parsed >= 0
+      ? Math.min(parsed, JEV_STATS_CACHE_MAX_TTL_SECONDS)
+      : JEV_STATS_CACHE_DEFAULT_TTL_SECONDS;
+  return seconds * 1000;
+}
+
 const checkpointSchema = z.enum(Object.values(JevCheckpoint));
 const modeSchema = z.enum(Object.values(JevMode));
 const outcomeRowSchema = z.object({
@@ -271,3 +287,84 @@ export async function queryJevStats(
     modeLatencyRows,
   );
 }
+
+export interface JevStatsPayload {
+  window: {
+    days: number;
+    checkpoint: JevCheckpointName | null;
+    mode: JevModeValue | null;
+    since: string;
+  };
+  checkpoints: JevCheckpointStats[];
+}
+
+export async function computeJevStatsPayload(
+  query: JevStatsQuery,
+): Promise<JevStatsPayload> {
+  const since = new Date(
+    Date.now() - query.days * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const checkpoints = await queryJevStats(query);
+  return {
+    window: {
+      days: query.days,
+      checkpoint: query.checkpoint,
+      mode: query.mode,
+      since,
+    },
+    checkpoints,
+  };
+}
+
+interface JevStatsCacheEntry {
+  expiresAt: number;
+  payload: Promise<JevStatsPayload>;
+}
+
+export interface JevStatsCacheOptions {
+  compute: (query: JevStatsQuery) => Promise<JevStatsPayload>;
+  ttlMs: () => number;
+  now: () => number;
+}
+
+function jevStatsCacheKey(query: JevStatsQuery): string {
+  return `${query.days}|${query.checkpoint ?? ""}|${query.mode ?? ""}`;
+}
+
+export function createJevStatsCache(options: JevStatsCacheOptions) {
+  const entries = new Map<string, JevStatsCacheEntry>();
+
+  function evictExpired(now: number): void {
+    for (const [key, entry] of entries) {
+      if (entry.expiresAt <= now) entries.delete(key);
+    }
+  }
+
+  return function loadJevStats(query: JevStatsQuery): Promise<JevStatsPayload> {
+    const ttlMs = options.ttlMs();
+    if (ttlMs <= 0) {
+      entries.clear();
+      return options.compute(query);
+    }
+
+    const now = options.now();
+    const key = jevStatsCacheKey(query);
+    const cached = entries.get(key);
+    if (cached && cached.expiresAt > now) return cached.payload;
+
+    evictExpired(now);
+    const payload = options.compute(query);
+    const entry: JevStatsCacheEntry = { expiresAt: now + ttlMs, payload };
+    entries.set(key, entry);
+    payload.catch(() => {
+      if (entries.get(key) === entry) entries.delete(key);
+    });
+    return payload;
+  };
+}
+
+export const loadJevStats = createJevStatsCache({
+  compute: computeJevStatsPayload,
+  ttlMs: () => resolveJevStatsCacheTtlMs(),
+  now: Date.now,
+});
