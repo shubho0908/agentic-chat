@@ -59,7 +59,9 @@ const inlineMarkdownComponents: Components = {
         className,
       )}
     >
-      {children}
+      <orderedListNumberContext.Provider value={null}>
+        {children}
+      </orderedListNumberContext.Provider>
     </span>
   ),
   ol: ({ children, className, start, ...props }) => {

@@ -99,6 +99,19 @@ test("preserves nested, empty, and task-list boundaries without nested controls"
   assert.doesNotMatch(html, /<input/);
 });
 
+test("resets ordered numbering for nested unordered lists", () => {
+  const html = renderToStaticMarkup(
+    createElement(InlineMarkdown, {
+      content: "1. parent\n   - child\n2. sibling",
+    }),
+  );
+
+  assert.equal((html.match(/aria-hidden="true"[^>]*>\d+\.<\/span>/g) ?? []).length, 2);
+  assert.match(html, /list-disc/);
+  assert.match(html, /child/);
+  assert.match(html, /sibling/);
+});
+
 test("HITL headings and context render Markdown formatting", () => {
   const html = renderToStaticMarkup(createElement(HumanInTheLoopApprovalCard, {
     requestKind: HumanInTheLoopRequestKind.ASK_USER,
