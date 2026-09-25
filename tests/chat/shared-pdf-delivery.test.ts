@@ -34,7 +34,9 @@ test("shared conversation delivers generated PDFs on original and alternate assi
     const html = renderToStaticMarkup(createElement(PdfDocuments, { pdfs: version.metadata?.pdfs ?? [] }));
     assert.match(html, /aria-label="Preview /);
     assert.match(html, /aria-label="Download /);
-    assert.match(html, /\.pdf/);
+    const url = version.metadata?.pdfs?.[0].url;
+    assert.ok(url);
+    assert.ok(html.includes(`href="${url}"`));
   }
 });
 
