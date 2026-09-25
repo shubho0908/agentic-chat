@@ -1,73 +1,105 @@
-import { Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent,
+} from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { resizeTextarea } from "@/hooks/useChatTextarea";
+import { VALIDATION_LIMITS } from "@/constants/validation";
+
+const MAX_EDITOR_HEIGHT_PX = 320;
 
 interface MessageEditFormProps {
   editText: string;
+  sizingText?: string;
   onEditTextChange: (text: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
+function getMaxEditorHeight(): number {
+  if (typeof window === "undefined") return 200;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  return Math.max(48, Math.min(MAX_EDITOR_HEIGHT_PX, Math.floor(viewportHeight * 0.5)));
+}
+
+function adjustEditorHeight(textarea: HTMLTextAreaElement | null): void {
+  if (textarea) resizeTextarea(textarea, getMaxEditorHeight());
+}
+
 export function MessageEditForm({
   editText,
+  sizingText = editText,
   onEditTextChange,
   onSubmit,
   onCancel,
 }: MessageEditFormProps) {
-  return (
-    <div className="space-y-2.5 mt-3 animate-in fade-in duration-200">
-      <div className="relative">
-        <Textarea
-          value={editText}
-          onChange={(e) => onEditTextChange(e.target.value)}
-          className="min-h-[100px] resize-none rounded-lg border-[1.5px] border-border/80 dark:border-border/70 focus-visible:border-primary transition-all bg-background shadow-sm outline-none focus:outline-none focus-visible:ring-0"
-        />
-      </div>
-      <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150 delay-75">
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                onClick={onSubmit}
-                disabled={!editText.trim()}
-                variant="ghost"
-                className="size-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-500 dark:hover:text-green-400 dark:hover:bg-green-950/30 transition-all duration-200 ease-out active:scale-90"
-              >
-                <Check className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Save & Resend
-            </TooltipContent>
-          </Tooltip>
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={onCancel}
-                className="size-8 p-0 transition-all duration-200 ease-out active:scale-90"
-              >
-                <X className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-xs">
-              Cancel
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    adjustEditorHeight(textarea);
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, []);
+
+  useLayoutEffect(() => {
+    adjustEditorHeight(textareaRef.current);
+  }, [editText]);
+
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    const handleResize = () => adjustEditorHeight(textareaRef.current);
+    window.addEventListener("resize", handleResize);
+    visualViewport?.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      visualViewport?.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        if (editText.trim()) onSubmit();
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+      }
+    },
+    [editText, onCancel, onSubmit],
+  );
+
+  return (
+    <div className="grid w-fit max-w-full">
+      <span
+        aria-hidden="true"
+        className="invisible pointer-events-none col-start-1 row-start-1 h-[1lh] max-w-full select-none overflow-hidden whitespace-pre-wrap break-words text-[15px] leading-relaxed"
+      >
+        {sizingText || "\u00a0"}
+      </span>
+      <Textarea
+        ref={textareaRef}
+        value={editText}
+        onChange={(event) => onEditTextChange(event.target.value)}
+        onKeyDown={handleKeyDown}
+        aria-label="Edit message"
+        name="message"
+        autoComplete="off"
+        maxLength={VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH}
+        rows={1}
+        cols={1}
+        spellCheck
+        className="col-start-1 row-start-1 block min-h-[24px] max-h-[min(320px,50dvh)] w-full min-w-0 resize-none overflow-x-hidden overflow-y-hidden whitespace-pre-wrap break-words rounded-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-foreground shadow-none outline-none transition-none focus-visible:border-0 focus-visible:ring-0"
+      />
     </div>
   );
 }

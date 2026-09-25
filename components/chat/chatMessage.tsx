@@ -24,6 +24,7 @@ import { CustomEventName } from "@/lib/orchestrator/constants";
 import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
+import { VALIDATION_LIMITS } from "@/constants/validation";
 
 const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
 
@@ -105,6 +106,7 @@ interface MessageContentSurfaceProps {
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   onSendMessage?: (content: string) => void;
   renderUserTextContent: (text: string) => ReactNode;
+  editContent?: ReactNode;
 }
 
 function MessageContentSurface({
@@ -117,6 +119,7 @@ function MessageContentSurface({
   onHumanInTheLoopDecision,
   onSendMessage,
   renderUserTextContent,
+  editContent,
 }: MessageContentSurfaceProps) {
   const isUser = variant === MessageRole.USER;
   const {
@@ -134,7 +137,8 @@ function MessageContentSurface({
       "text-[15px] leading-relaxed",
       isUser
         ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
-        : "w-full min-w-0 text-foreground ml-1"
+        : "w-full min-w-0 text-foreground ml-1",
+      editContent && "focus-within:ring-2 focus-within:ring-foreground/15"
     )}>
       {!isUser && isLoading && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
         <div className="mb-2">
@@ -183,7 +187,7 @@ function MessageContentSurface({
         </div>
       )}
 
-      {!hidePlaceholderContent && textContent ? (
+      {editContent ? editContent : !hidePlaceholderContent && textContent ? (
         isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
       ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
         isUser ? (typeof displayedMessage.content === 'string' ? renderUserTextContent(displayedMessage.content) : '') : <Response>{typeof displayedMessage.content === 'string' ? displayedMessage.content : ''}</Response>
@@ -383,109 +387,115 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
               <SearchImages images={images} />
             )}
 
-            {isEditing ? (
-              <MessageEditForm
-                editText={editText}
-                onEditTextChange={setEditText}
-                onSubmit={handleEditSubmit}
-                onCancel={handleEditCancel}
-              />
-            ) : (
-              <>
-                <MessageContentSurface
-                  variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
-                  displayedMessage={displayedMessage}
-                  textContent={textContent}
-                  renderState={{
-                    isLoading,
-                    isLastMessage,
-                    humanInTheLoopPending,
-                    hideHumanInTheLoopPlaceholder,
-                    hideArtifactPlaceholder,
-                    hideStoppedMarker,
-                  }}
-                  memoryStatus={memoryStatus}
-                  humanInTheLoopRequest={humanInTheLoopRequest}
-                  onHumanInTheLoopDecision={onHumanInTheLoopDecision}
-                  onSendMessage={onSendMessage}
-                  renderUserTextContent={renderUserTextContent}
+            <MessageContentSurface
+              variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
+              displayedMessage={displayedMessage}
+              textContent={textContent}
+              renderState={{
+                isLoading,
+                isLastMessage,
+                humanInTheLoopPending,
+                hideHumanInTheLoopPlaceholder,
+                hideArtifactPlaceholder,
+                hideStoppedMarker,
+              }}
+              memoryStatus={memoryStatus}
+              humanInTheLoopRequest={humanInTheLoopRequest}
+              onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+              onSendMessage={onSendMessage}
+              renderUserTextContent={renderUserTextContent}
+              editContent={isUser && isEditing ? (
+                <MessageEditForm
+                  editText={editText}
+                  sizingText={textContent}
+                  onEditTextChange={setEditText}
+                  onSubmit={handleEditSubmit}
+                  onCancel={handleEditCancel}
                 />
+              ) : undefined}
+            />
 
-                {!isUser && artifactMetadata.length > 0 && (
-                  <ArtifactButtons
-                    artifacts={artifactMetadata}
-                    messageId={displayedMessageId}
-                    onOpenArtifact={onOpenArtifact}
+            {!isUser && artifactMetadata.length > 0 && (
+              <ArtifactButtons
+                artifacts={artifactMetadata}
+                messageId={displayedMessageId}
+                onOpenArtifact={onOpenArtifact}
+              />
+            )}
+
+            {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
+              <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
+            )}
+
+            {isUser && !isEditing && userUrls.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
+                {userUrls.map((url) => (
+                  <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
+                ))}
+              </div>
+            )}
+
+            {!isUser && followUpQuestions.length > 0 && (
+              <FollowUpQuestions
+                questions={followUpQuestions}
+                onQuestionClick={onSendMessage}
+                disabled={isSharePage}
+              />
+            )}
+
+            {!isEditing && totalVersions > 1 && (
+              <div className={cn(isUser ? "mr-2" : "ml-1")}>
+                <VersionNavigator
+                  currentVersion={currentVersion}
+                  totalVersions={totalVersions}
+                  historyIndex={versionIndex}
+                  historyLength={versions.length}
+                  onPrevious={handlePreviousVersion}
+                  onNext={handleNextVersion}
+                />
+              </div>
+            )}
+
+            {!isSharePage && (
+              <div className={cn(
+                "mt-1 flex items-center gap-2",
+                isUser ? "pr-2" : "pl-1 w-full"
+              )}>
+                <div className={cn(
+                  "transition-opacity duration-300 md:group-focus-within:opacity-100",
+                  isEditing
+                    ? "opacity-100"
+                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                )}>
+                  <MessageActions
+                    context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
+                    textContent={textContent}
+                    onEditStart={handleEditStart}
+                    onEditSubmit={handleEditSubmit}
+                    onEditCancel={handleEditCancel}
+                    canSaveEdit={editText.trim().length > 0 && editText.length <= VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH}
+                    onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
                   />
-                )}
-
-                {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
-                  <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
-                )}
-
-                {isUser && userUrls.length > 0 && (
-                  <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
-                    {userUrls.map((url) => (
-                      <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
-                    ))}
-                  </div>
-                )}
-
-                {!isUser && followUpQuestions.length > 0 && (
-                  <FollowUpQuestions
-                    questions={followUpQuestions}
-                    onQuestionClick={onSendMessage}
-                    disabled={isSharePage}
-                  />
-                )}
-
-                {totalVersions > 1 && (
-                  <div className={cn(isUser ? "mr-2" : "ml-1")}>
-                    <VersionNavigator
-                      currentVersion={currentVersion}
-                      totalVersions={totalVersions}
-                      historyIndex={versionIndex}
-                      historyLength={versions.length}
-                      onPrevious={handlePreviousVersion}
-                      onNext={handleNextVersion}
-                    />
-                  </div>
-                )}
-
-                {!isSharePage && (
-                  <div className={cn(
-                    "mt-1 flex items-center gap-2",
-                    isUser ? "pr-2" : "pl-1 w-full"
-                  )}>
-                    <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                      <MessageActions
-                        context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
-                        textContent={textContent}
-                        onEditStart={handleEditStart}
-                        onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
-                      />
-                    </div>
-                    {!isUser && !isThinking && (
-                      <div className="ml-auto flex items-center gap-2">
-                        {citations.length > 0 && (
-                          <MessageSources citations={citations} />
-                        )}
-                        <MessageTimestamp timestamp={displayedMessage.timestamp} />
-                      </div>
+                </div>
+                {!isUser && !isThinking && (
+                  <div className="ml-auto flex items-center gap-2">
+                    {citations.length > 0 && (
+                      <MessageSources citations={citations} />
                     )}
+                    <MessageTimestamp timestamp={displayedMessage.timestamp} />
                   </div>
                 )}
-                {isSharePage && !isUser && !isThinking && (
-                  <div className="mt-1 flex w-full items-center gap-2 pl-1">
-                    <div className="ml-auto flex items-center gap-2">
-                      {citations.length > 0 && (
-                        <MessageSources citations={citations} />
-                      )}
-                      <MessageTimestamp timestamp={displayedMessage.timestamp} />
-                    </div>
-                  </div>
-                )}
-              </>
+              </div>
+            )}
+            {isSharePage && !isUser && !isThinking && (
+              <div className="mt-1 flex w-full items-center gap-2 pl-1">
+                <div className="ml-auto flex items-center gap-2">
+                  {citations.length > 0 && (
+                    <MessageSources citations={citations} />
+                  )}
+                  <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                </div>
+              </div>
             )}
           </div>
         </div>
