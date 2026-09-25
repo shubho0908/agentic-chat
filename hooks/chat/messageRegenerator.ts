@@ -135,9 +135,6 @@ export async function handleRegenerateResponse(
       },
       conversationId,
       branchId,
-      documentAttachmentIds: previousUserMessage.attachments?.flatMap(
-        (attachment) => (attachment.id ? [attachment.id] : []),
-      ),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);

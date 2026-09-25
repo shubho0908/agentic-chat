@@ -61,7 +61,7 @@ interface FilePreviewProps {
   getPreviewUrl: (file: File) => string | null;
   onRemove: (file: File) => void;
   disabled?: boolean;
-  isUploading?: boolean;
+  uploadingFileIds: ReadonlySet<string>;
   uploadPhase?: UploadPhase;
 }
 
@@ -154,7 +154,7 @@ export function FilePreview({
   getPreviewUrl,
   onRemove,
   disabled = false,
-  isUploading = false,
+  uploadingFileIds,
   uploadPhase,
 }: FilePreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -260,7 +260,7 @@ export function FilePreview({
                       previewUrl={getPreviewUrl(file)}
                       onRemove={onRemove}
                       disabled={disabled}
-                      isUploading={isUploading}
+                      isUploading={uploadingFileIds.has(getFileKey(file))}
                       uploadPhase={uploadPhase}
                     />
                   ))}

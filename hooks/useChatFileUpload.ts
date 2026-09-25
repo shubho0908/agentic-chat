@@ -111,6 +111,8 @@ export function useChatFileUpload() {
     IDLE_PHASE,
   );
   const selectedFilesRef = useRef<File[]>([]);
+  const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(() => new Set());
+  const activeUploadCountRef = useRef(0);
   const fileIdMapRef = useRef<WeakMap<File, string>>(null!);
   const filePreviewUrlMapRef = useRef<Map<File, string>>(null!);
   if (fileIdMapRef.current === null) fileIdMapRef.current = new WeakMap();
@@ -265,6 +267,8 @@ export function useChatFileUpload() {
     const nextFiles = [...selectedFilesRef.current, ...allValidFiles];
 
     setSelectedFiles(nextFiles);
+    activeUploadCountRef.current += 1;
+    setUploadingFileIds((prev) => new Set([...prev, ...uploadBatchIds]));
     dispatchUpload({ type: "upload" });
 
     try {
@@ -312,7 +316,13 @@ export function useChatFileUpload() {
         description: getUploadErrorDescription(error),
       });
     } finally {
-      dispatchUpload({ type: "idle" });
+      activeUploadCountRef.current -= 1;
+      setUploadingFileIds((prev) => {
+        const next = new Set(prev);
+        uploadBatchIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (activeUploadCountRef.current === 0) dispatchUpload({ type: "idle" });
     }
   }
 
@@ -322,6 +332,11 @@ export function useChatFileUpload() {
     const fileId = getFileId(file);
 
     setSelectedFiles((prev) => prev.filter((f) => getFileId(f) !== fileId));
+    setUploadingFileIds((prev) => {
+      const next = new Set(prev);
+      next.delete(fileId);
+      return next;
+    });
     setUploadedAttachments((prev) =>
       prev.filter((attachment) => attachment.clientFileId !== fileId),
     );
@@ -330,12 +345,14 @@ export function useChatFileUpload() {
   function clearAttachments() {
     setSelectedFiles([]);
     setUploadedAttachments([]);
+    setUploadingFileIds(new Set());
   }
 
   function restoreAttachments(files: File[], attachments: UploadAttachment[]) {
     files.forEach(ensureFilePreviewUrl);
     setSelectedFiles(files);
     setUploadedAttachments(attachments);
+    setUploadingFileIds(new Set());
   }
 
   return {
@@ -343,6 +360,7 @@ export function useChatFileUpload() {
     uploadedAttachments: publicUploadedAttachments,
     isUploading: uploadPhase.isBusy,
     uploadPhase,
+    uploadingFileIds,
     dispatchUpload,
     getFileId,
     getFilePreviewUrl,

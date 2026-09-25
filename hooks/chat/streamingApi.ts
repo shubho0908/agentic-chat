@@ -198,6 +198,12 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
         hasDocuments: optionalBoolean(parsed.hasDocuments) ?? false,
         memoryCount: optionalNumber(parsed.memoryCount) ?? 0,
         documentCount: optionalNumber(parsed.documentCount) ?? 0,
+        documentContextState: parsed.documentContextState === "ready" || parsed.documentContextState === "unavailable" ? parsed.documentContextState : undefined,
+        documentEvidenceIds: Array.isArray(parsed.documentEvidenceIds) ? parsed.documentEvidenceIds.filter((id): id is string => typeof id === "string") : undefined,
+        documentEvidenceFiles: Array.isArray(parsed.documentEvidenceFiles) ? parsed.documentEvidenceFiles.flatMap((entry) => {
+          const record = optionalRecord(entry);
+          return record && typeof record.id === "string" && typeof record.fileUrl === "string" ? [{ id: record.id, fileUrl: record.fileUrl }] : [];
+        }) : undefined,
         hasImages: optionalBoolean(parsed.hasImages) ?? false,
         imageCount: optionalNumber(parsed.imageCount) ?? 0,
         routingDecision: optionalString(parsed.routingDecision) as MemoryStatus["routingDecision"],
@@ -329,7 +335,7 @@ export async function readChatStream(response: Response, callbacks: StreamCallba
 }
 
 export async function streamChatCompletion(config: StreamConfig): Promise<string> {
-  const { messages, model, signal, conversationId, branchId, documentAttachmentIds, reasoningEffort } = config;
+  const { messages, model, signal, conversationId, branchId, reasoningEffort } = config;
 
   const requestPayload: Record<string, unknown> = {
     model,
@@ -342,9 +348,6 @@ export async function streamChatCompletion(config: StreamConfig): Promise<string
     requestPayload.conversationId = conversationId;
   }
   if (branchId) requestPayload.branchId = branchId;
-  if (documentAttachmentIds?.length) {
-    requestPayload.documentAttachmentIds = documentAttachmentIds;
-  }
   if (reasoningEffort) {
     requestPayload.reasoningEffort = reasoningEffort;
   }

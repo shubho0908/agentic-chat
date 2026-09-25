@@ -23,6 +23,7 @@ interface FormState {
   isLoading: boolean;
   isUploading: boolean;
   uploadPhase: UploadPhase;
+  uploadingFileIds: ReadonlySet<string>;
   getFileId: (file: File) => string;
   getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
@@ -80,6 +81,7 @@ export function ChatInputForm({
     isLoading,
     isUploading,
     uploadPhase,
+    uploadingFileIds,
     getFileId,
     getFilePreviewUrl,
     isSending,
@@ -137,7 +139,7 @@ export function ChatInputForm({
             getPreviewUrl={getFilePreviewUrl}
             onRemove={onRemoveFile}
             disabled={isSending}
-            isUploading={isUploading}
+            uploadingFileIds={uploadingFileIds}
             uploadPhase={uploadPhase}
           />
           <TextSnippetPreview

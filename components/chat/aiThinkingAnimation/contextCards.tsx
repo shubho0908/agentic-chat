@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import { AccordionContent } from "@/components/ui/accordionContent";
 import Image from "next/image";
 import { Brain, ChevronLeft, ChevronRight, FileText, ImageIcon, X } from "lucide-react";
 import { filterDocumentAttachments, filterImageAttachments } from "@/lib/attachmentUtils";
@@ -54,16 +56,27 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
   const onlyImage = imageCount === 1 && documentCount === 0;
   const onlyDocument = documentCount === 1 && imageCount === 0;
   const selectedFile = hasActualFiles ? files[Math.min(selected, files.length - 1)] : undefined;
+  const unavailable = memoryStatus.documentContextState === "unavailable";
+  const evidenceIds = memoryStatus.documentEvidenceIds;
+  const evidenceFiles = memoryStatus.documentEvidenceFiles;
+  const documentEvidenceLabel = (file: Attachment) => {
+    if (unavailable) return "Context unavailable - retry";
+    const matches = evidenceFiles?.filter((item) => item.fileUrl === file.fileUrl) ?? [];
+    // A URL is a usable join key only if it identifies exactly one persisted
+    // attachment. Duplicate URLs must not attribute one file's hits to another.
+    if (matches.length !== 1 || !evidenceIds) return "Document attached - passage use unverified";
+    return evidenceIds.includes(matches[0].id) ? "Relevant passages used" : "No passages used";
+  };
   const description = multiple
-    ? `Using ${imageCount ? `${imageCount} ${imageCount === 1 ? "image" : "images"}` : ""}${imageCount && documentCount ? " and " : ""}${documentCount ? `${documentCount} ${documentCount === 1 ? "document" : "documents"}` : ""}`
-    : onlyImage ? "Looking at an image..." : onlyDocument ? "Reading a document..." : "Using context";
+    ? `${memoryStatus.documentContextState === "ready" || !documentCount ? "Using" : "Attached"} ${imageCount ? `${imageCount} ${imageCount === 1 ? "image" : "images"}` : ""}${imageCount && documentCount ? " and " : ""}${documentCount ? `${documentCount} ${documentCount === 1 ? "document" : "documents"}` : ""}`
+    : onlyImage ? "Looking at an image..." : onlyDocument ? (memoryStatus.documentContextState === "unavailable" ? "Document attached" : "Reading a document...") : "Using context";
 
   return (
-    <div className="w-full min-w-0 max-w-[760px] space-y-3">
-      <button
+    <AccordionPrimitive.Root type="single" collapsible value={expanded ? "context" : ""} onValueChange={(value) => setExpanded(value === "context")} className="w-full min-w-0 max-w-[760px]">
+      <AccordionPrimitive.Item value="context" className="space-y-3 border-none">
+      <AccordionPrimitive.Header className="flex">
+      <AccordionPrimitive.Trigger
         type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
         className={`relative isolate flex min-h-12 w-full items-center gap-3 overflow-hidden rounded-2xl px-3.5 py-2.5 text-left transition-colors hover:bg-accent ${focus} ${surface}`}
       >
         {!expanded && <span aria-hidden="true" className="context-card-sheen pointer-events-none absolute inset-0" />}
@@ -73,42 +86,47 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
         <span className="relative min-w-0 flex-1 text-[13px] leading-5">
           <span className="block truncate font-medium">{description}</span>
           {!multiple && <span className="block text-[11px] text-muted-foreground">1 {onlyImage ? "image" : "document"} attached</span>}
+          {unavailable && <span className="block text-[11px] text-amber-600 dark:text-amber-400">Document context unavailable - retry</span>}
         </span>
         <ChevronRight className={`relative size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden="true" />
-      </button>
-
-      {multiple && expanded && (
+      </AccordionPrimitive.Trigger>
+      </AccordionPrimitive.Header>
+      <AccordionContent className="space-y-3 pb-0">
+      {multiple && (
         <section className={`rounded-[20px] p-3.5 sm:p-4 ${surface}`} aria-label="Context used">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300"><FileText className="size-4" /></span>
             <div className="min-w-0 flex-1">
               <h3 className="text-[13px] font-semibold">Context used</h3>
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{hasActualFiles ? "Files from your message used to understand this request." : "Sources from this conversation used to understand this request."}</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{hasActualFiles ? "Files from your message attached to this request." : "Sources from this conversation are available for this request."}</p>
             </div>
             {hasActualFiles && <div className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"><span className="tabular-nums">{selected + 1} / {files.length}</span><button type="button" className={`ml-1 rounded-full p-1 hover:bg-accent disabled:opacity-30 ${focus}`} disabled={selected === 0} onClick={() => setSelected((value) => value - 1)} aria-label="Previous file"><ChevronLeft className="size-4" /></button><button type="button" className={`rounded-full p-1 hover:bg-accent disabled:opacity-30 ${focus}`} disabled={selected === files.length - 1} onClick={() => setSelected((value) => value + 1)} aria-label="Next file"><ChevronRight className="size-4" /></button></div>}
             <button type="button" className={`shrink-0 rounded-full p-1 text-muted-foreground hover:bg-accent ${focus}`} onClick={() => setExpanded(false)} aria-label="Close context details"><X className="size-4" /></button>
           </div>
+          {unavailable && <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Document context unavailable - retry after processing.</p>}
           <div className="mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border">
             {hasActualFiles ? (
               <>
                 {imageAttachments.length > 0 && <div><p className="mb-2 text-xs font-medium">Images ({imageAttachments.length})</p><div className="flex flex-wrap gap-2">{imageAttachments.map((file, index) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => { setSelected(index); setOpenedImage(file); }} className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 ${selectedFile === file ? "border-foreground/40" : "border-border/70 dark:border-chat-user-bubble-border"} ${focus}`}><span className="relative block aspect-[2.3] bg-muted"><Image src={file.fileUrl} alt="" fill unoptimized sizes="208px" className="object-cover" /></span><span className="block truncate px-2 pt-1 text-[11px] font-medium">{file.fileName}</span><span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></button>)}</div></div>}
-                {documentAttachments.length > 0 && <div className={imageAttachments.length ? "mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border" : ""}><p className="mb-2 text-xs font-medium">Documents ({documentAttachments.length})</p><div className="grid gap-2 sm:grid-cols-3">{documentAttachments.map((file, index) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => { setSelected(imageAttachments.length + index); setOpenedDocument(file); }} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 ${selectedFile === file ? "border-foreground/40" : "border-border/70 dark:border-chat-user-bubble-border"} ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></span></button>)}</div></div>}
+                {documentAttachments.length > 0 && <div className={imageAttachments.length ? "mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border" : ""}><p className="mb-2 text-xs font-medium">Documents ({documentAttachments.length})</p><div className="grid gap-2 sm:grid-cols-3">{documentAttachments.map((file, index) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => { setSelected(imageAttachments.length + index); setOpenedDocument(file); }} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 ${selectedFile === file ? "border-foreground/40" : "border-border/70 dark:border-chat-user-bubble-border"} ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span><span className="block text-[10px] text-muted-foreground">{documentEvidenceLabel(file)}</span></span></button>)}</div></div>}
               </>
             ) : <p className="text-xs leading-5 text-muted-foreground">{imageCount > 0 && `${imageCount} ${imageCount === 1 ? "image" : "images"}`}{imageCount > 0 && documentCount > 0 && " · "}{documentCount > 0 && `${documentCount} ${documentCount === 1 ? "document" : "documents"}`}. File previews are not available for this context.</p>}
           </div>
         </section>
       )}
 
-      {!multiple && expanded && hasActualFiles && selectedFile && (
+      {!multiple && hasActualFiles && selectedFile && (
         <button type="button" onClick={() => onlyImage ? setOpenedImage(selectedFile) : setOpenedDocument(selectedFile)} className={`block w-full max-w-[280px] overflow-hidden rounded-2xl text-left transition-colors hover:border-foreground/40 ${focus} ${surface}`}>
           {onlyImage && <span className="relative block aspect-[2.5] bg-muted"><Image src={selectedFile.fileUrl} alt="" fill unoptimized sizes="280px" className="object-cover" /></span>}
           <span className="flex items-center gap-2 px-3 py-2.5">{onlyImage ? <ImageIcon className="size-4 shrink-0 text-muted-foreground" /> : <FileText className="size-5 shrink-0 text-violet-500" />}<span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{selectedFile.fileName}</span><span className="block text-[11px] text-muted-foreground">{onlyImage ? selectedFile.fileType.replace("image/", "").toUpperCase() : "Document"} · {formatSize(selectedFile.fileSize)}</span></span><ChevronRight className="size-4 shrink-0 text-muted-foreground" /></span>
-          {onlyDocument && <span className="flex items-center gap-2 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-chat-user-bubble-border"><FileText className="size-3.5" />Document used as context</span>}
+          {onlyDocument && <span className="flex items-center gap-2 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-chat-user-bubble-border"><FileText className="size-3.5" />{documentEvidenceLabel(selectedFile)}</span>}
         </button>
       )}
-      {!multiple && expanded && !hasActualFiles && <p className="text-xs text-muted-foreground">File preview is not available for this context.</p>}
+      {!multiple && !hasActualFiles && <p className="text-xs text-muted-foreground">File preview is not available for this context.</p>}
+      </AccordionContent>
+      </AccordionPrimitive.Item>
       <ImageLightbox imageUrl={openedImage?.fileUrl ?? ""} alt={openedImage?.fileName ?? ""} open={!!openedImage} onClose={() => setOpenedImage(null)} />
       <DocumentPreview fileUrl={openedDocument?.fileUrl ?? ""} fileName={openedDocument?.fileName ?? ""} fileType={openedDocument?.fileType ?? ""} open={!!openedDocument} onClose={() => setOpenedDocument(null)} />
-    </div>
+    </AccordionPrimitive.Root>
   );
 }

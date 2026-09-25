@@ -303,7 +303,6 @@ export async function handleStreamingResponse(
       },
       conversationId,
       branchId,
-      documentAttachmentIds: userAttachments?.flatMap((attachment) => attachment.id ? [attachment.id] : []),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);

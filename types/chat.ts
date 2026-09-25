@@ -46,6 +46,9 @@ export interface MemoryStatus {
   hasDocuments: boolean;
   memoryCount: number;
   documentCount: number;
+  documentContextState?: "ready" | "unavailable";
+  documentEvidenceIds?: string[];
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string }>;
   hasImages: boolean;
   imageCount: number;
   routingDecision?: RoutingDecision;
@@ -241,7 +244,6 @@ export interface StreamConfig {
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
   onResponseIncomplete?: (reason: "length") => void;
-  documentAttachmentIds?: string[];
   reasoningEffort?: ReasoningEffortLevel;
 }
 

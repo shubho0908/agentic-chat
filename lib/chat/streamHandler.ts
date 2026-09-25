@@ -170,7 +170,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey }
+              { apiKey, currentMessageId: messages[messages.length - 1]?.id }
             );
 
             memoryStatusInfo = {

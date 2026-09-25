@@ -449,17 +449,18 @@
 }
 
 @keyframes context-card-sheen {
-  0%, 65% { transform: translateX(-125%); }
+  0% { transform: translateX(-125%); }
+  55% { transform: translateX(125%); }
   100% { transform: translateX(125%); }
 }
 
 .context-card-sheen {
-  background: linear-gradient(105deg, transparent 43%, rgba(120, 120, 130, 0.08) 50%, transparent 57%);
-  animation: context-card-sheen 4.5s ease-in-out infinite;
+  background: linear-gradient(105deg, transparent 43%, rgba(120, 120, 130, 0.13) 50%, transparent 57%);
+  animation: context-card-sheen 3.6s ease-in-out infinite;
 }
 
 .dark .context-card-sheen {
-  background: linear-gradient(105deg, transparent 43%, rgba(255, 255, 255, 0.045) 50%, transparent 57%);
+  background: linear-gradient(105deg, transparent 43%, rgba(255, 255, 255, 0.085) 50%, transparent 57%);
 }
 
 @media (prefers-reduced-motion: reduce) {

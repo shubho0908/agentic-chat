@@ -6,7 +6,7 @@ import { MessageRole } from "@/lib/schemas/chat";
 import { DegradedContextSource, RoutingDecision } from "@/types/chat";
 import { prisma } from "./prisma";
 import { filterDocumentAttachments } from "./rag/retrieval/statusHelpers";
-import { isSupportedDocumentExtension } from "./fileValidation";
+import { isSupportedForRAG } from "./rag/utils";
 import { extractTextFromMessage } from "./chat/messageContent";
 import { mediateMemoryIntent } from "./chat/requestMediator";
 import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
@@ -29,7 +29,7 @@ const INLINE_ELIGIBLE_TYPES = new Set([
   "text/xml",
 ]);
 
-function isInlineEligibleType(fileType: string): boolean {
+export function isInlineEligibleType(fileType: string): boolean {
   return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith("text/");
 }
 
@@ -66,12 +66,12 @@ async function tryInlineAttachmentContent(
       },
     });
 
-    if (attachments.length === 0) return null;
+    if (attachmentIds.length === 0 || attachments.length !== new Set(attachmentIds).size) return null;
 
     const eligible = attachments.filter((a) =>
       isInlineEligibleType(a.fileType),
     );
-    if (eligible.length === 0) return null;
+    if (eligible.length === 0 || eligible.length !== attachments.length) return null;
 
     const totalSize = eligible.reduce((sum, a) => sum + a.fileSize, 0);
     if (totalSize > INLINE_ATTACHMENT_MAX_BYTES) return null;
@@ -90,7 +90,7 @@ async function tryInlineAttachmentContent(
     );
 
     const validContents = contents.filter((c): c is string => c !== null);
-    if (validContents.length === 0) return null;
+    if (validContents.length !== attachments.length) return null;
 
     const context =
       "\n\nThe user has attached the following files. Use their FULL content to answer.\n" +
@@ -115,6 +115,9 @@ interface ContextRoutingMetadata {
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
+  documentContextState?: "ready" | "unavailable";
+  documentEvidenceIds?: string[];
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string }>;
   citations?: Array<{
     id: string;
     source: string;
@@ -179,7 +182,7 @@ function uniqueQueries(queries: string[]): string[] {
   return deduped;
 }
 
-function buildRetrievalQueries(
+export function buildRetrievalQueries(
   textQuery: string,
   messages: Message[],
   isReferential: boolean,
@@ -188,7 +191,7 @@ function buildRetrievalQueries(
   const recentConversation = getRecentConversationExcerpt(messages);
 
   if (!recentConversation) {
-    return uniqueQueries([trimmedQuery]);
+    return uniqueQueries([trimmedQuery || "Summarize the attached documents."]);
   }
 
   const standaloneQuery =
@@ -215,14 +218,13 @@ async function resolveDocumentContext(
     waitForProcessing?: boolean;
     processingTimeoutMs?: number;
     signal?: AbortSignal;
-    currentDocumentAttachmentIds?: string[];
   },
 ) {
   if (!queries.length) return null;
   // Retrieval owns cross-variant RRF. Processing is awaited once, while every
   // rewrite contributes candidates instead of the first non-empty result winning.
   try {
-    return await getRAGContext(queries[0], userId, {
+    const result = await getRAGContext(queries[0], userId, {
       conversationId: options.conversationId,
       attachmentIds: options.attachmentIds,
       limit: 8,
@@ -232,6 +234,15 @@ async function resolveDocumentContext(
       queryVariants: queries.slice(1),
       signal: options.signal,
     });
+    // A partial processing timeout must not masquerade as complete evidence.
+    if (options.attachmentIds?.length) {
+      const statuses = await prisma.attachment.findMany({
+        where: { id: { in: options.attachmentIds }, message: { conversation: { userId } } },
+        select: { id: true, processingStatus: true },
+      });
+      if (!allDocumentsReady(options.attachmentIds, statuses)) return null;
+    }
+    return result;
   } catch (error) {
     if (options.signal?.aborted)
       throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
@@ -240,16 +251,25 @@ async function resolveDocumentContext(
   }
 }
 
+export function allDocumentsReady(
+  attachmentIds: string[],
+  statuses: Array<{ id: string; processingStatus: string }>,
+): boolean {
+  const expected = new Set(attachmentIds);
+  return expected.size > 0 && statuses.length === expected.size &&
+    statuses.every((item) => expected.has(item.id) && item.processingStatus === "COMPLETED");
+}
+
 function buildMissingDocumentContext(query: string): string {
   const normalizedQuery = query.trim() || "the attached documents";
 
   return (
-    "\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed." +
+    "\n\nIMPORTANT: The user attached documents but complete document evidence is unavailable for this request." +
     "\n<document_processing_notice>" +
     `\nUser's request: ${normalizedQuery}` +
-    "\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge." +
-    "\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again." +
-    "\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay." +
+    "\nDo NOT answer the document question from memory, the image alone, or partial document evidence." +
+    "\nTell the user you could not read all of the attached documents yet; processing, retrieval, or file access may have failed. Ask them to retry without asserting a specific cause." +
+    "\nDo NOT provide a general answer. Acknowledge the attachments and the missing evidence." +
     "\n</document_processing_notice>"
   );
 }
@@ -275,10 +295,14 @@ async function getAttachmentInfo(
   conversationId: string,
   userId: string,
   currentTurnOnly: boolean,
+  currentMessageId?: string,
+  priorMessageIds?: string[],
 ): Promise<{
   hasDocuments: boolean;
   documentCount: number;
   documentAttachmentIds: string[];
+  documentFiles: Array<{ id: string; fileUrl: string }>;
+  currentMessageFound: boolean;
 }> {
   try {
     const messages = await prisma.message.findMany({
@@ -288,6 +312,8 @@ async function getAttachmentInfo(
           userId,
         },
         isDeleted: false,
+        role: "USER",
+        ...(currentMessageId ? { id: currentMessageId } : priorMessageIds ? { id: { in: priorMessageIds } } : {}),
       },
       ...(currentTurnOnly
         ? { orderBy: { createdAt: "desc" as const }, take: 1 }
@@ -298,6 +324,7 @@ async function getAttachmentInfo(
             id: true,
             fileType: true,
             fileName: true,
+            fileUrl: true,
           },
         },
       },
@@ -313,26 +340,34 @@ async function getAttachmentInfo(
         hasDocuments: false,
         documentCount: 0,
         documentAttachmentIds: [],
+        documentFiles: [],
+        currentMessageFound: messages.length > 0,
       };
     }
 
     const retrievableDocumentAttachments =
-      filterDocumentAttachments(allAttachments);
-    const uiDocumentAttachments = retrievableDocumentAttachments.filter(
-      (att) => att.fileName && isSupportedDocumentExtension(att.fileName),
-    );
-
+      filterDocumentAttachments(allAttachments).filter((att) => isSupportedForRAG(att.fileType));
     return {
       hasDocuments: retrievableDocumentAttachments.length > 0,
-      documentCount: uiDocumentAttachments.length,
+      documentCount: retrievableDocumentAttachments.length,
       documentAttachmentIds: retrievableDocumentAttachments
         .map((attachment) => attachment.id)
         .filter((id): id is string => Boolean(id)),
+      documentFiles: retrievableDocumentAttachments.map(({ id, fileUrl }) => ({ id, fileUrl })),
+      currentMessageFound: messages.length > 0,
     };
   } catch (error) {
     logger.warn("[Context Router] Failed to get attachment info:", error);
-    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
+    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: false };
   }
+}
+
+export function shouldSkipTextContextForImage(
+  hasImages: boolean,
+  textQuery: string,
+  hasDocuments: boolean,
+): boolean {
+  return hasImages && !hasDocuments && textQuery.trim().length < 3;
 }
 
 export async function routeContext(
@@ -347,7 +382,7 @@ export async function routeContext(
   options?: {
     apiKey?: string;
     signal?: AbortSignal;
-    currentDocumentAttachmentIds?: string[];
+    currentMessageId?: string;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -382,21 +417,36 @@ export async function routeContext(
     ];
   };
 
-  if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
+  // Use the persisted current turn, not upload-response IDs or older messages.
+  const currentAttachmentInfo = conversationId
+    ? await getAttachmentInfo(conversationId, userId, true, options?.currentMessageId)
+    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: !options?.currentMessageId };
+  // A supplied turn ID is an exact identity, not a hint to search the latest
+  // message. A missing/deleted/wrong-owner row must never borrow another turn's
+  // documents or fall through to personal memory.
+  if (options?.currentMessageId && !currentAttachmentInfo.currentMessageFound) {
+    metadata.skippedMemory = true;
+    metadata.documentContextState = "unavailable";
+    metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+    metadata.hasDocuments = true;
+    return { context: buildMissingDocumentContext(textQuery), metadata };
+  }
+  const priorMessageIds = messages.flatMap((message) =>
+    message.role === MessageRole.USER && message.id ? [message.id] : [],
+  );
+  // A referential follow-up may use earlier visible turns, never invisible
+  // messages from other branches or the newest unrelated database row.
+  const attachmentInfo = currentAttachmentInfo.hasDocuments || !isReferential || !conversationId || priorMessageIds.length === 0
+    ? currentAttachmentInfo
+    : await getAttachmentInfo(conversationId, userId, false, undefined, priorMessageIds);
+
+  if (attachmentInfo.hasDocuments) metadata.documentEvidenceFiles = attachmentInfo.documentFiles;
+
+  if (shouldSkipTextContextForImage(hasImages, textQuery, attachmentInfo.hasDocuments)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: "", metadata };
   }
-
-  const attachmentInfo = conversationId
-    ? options?.currentDocumentAttachmentIds?.length && !isReferential
-      ? {
-          hasDocuments: true,
-          documentCount: options.currentDocumentAttachmentIds.length,
-          documentAttachmentIds: options.currentDocumentAttachmentIds,
-        }
-      : await getAttachmentInfo(conversationId, userId, !isReferential)
-    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
 
   if (isReferential) {
     metadata.skippedMemory = true;
@@ -410,7 +460,9 @@ export async function routeContext(
 
       if (inlineResult) {
         metadata.hasDocuments = true;
-        metadata.documentCount = inlineResult.documentCount;
+        metadata.documentCount = attachmentInfo.documentCount;
+        metadata.documentContextState = "ready";
+        metadata.documentEvidenceIds = attachmentInfo.documentAttachmentIds;
         metadata.routingDecision = hasImages
           ? RoutingDecision.Hybrid
           : RoutingDecision.DocumentsOnly;
@@ -427,8 +479,10 @@ export async function routeContext(
 
       if (ragResult) {
         metadata.hasDocuments = true;
-        metadata.documentCount = ragResult.documentCount;
+        metadata.documentCount = attachmentInfo.documentCount;
         metadata.citations = ragResult.citations;
+        metadata.documentContextState = "ready";
+        metadata.documentEvidenceIds = ragResult.usedAttachmentIds;
         metadata.routingDecision = hasImages
           ? RoutingDecision.Hybrid
           : RoutingDecision.DocumentsOnly;
@@ -443,6 +497,9 @@ export async function routeContext(
 
       metadata.documentCount = attachmentInfo.documentCount;
       metadata.hasDocuments = true;
+      metadata.skippedMemory = true;
+      metadata.documentContextState = "unavailable";
+      metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
       logMissingDocumentRetrieval({
         userId,
         conversationId,
@@ -470,7 +527,9 @@ export async function routeContext(
 
     if (inlineResult) {
       metadata.hasDocuments = true;
-      metadata.documentCount = inlineResult.documentCount;
+      metadata.documentCount = attachmentInfo.documentCount;
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = attachmentInfo.documentAttachmentIds;
       metadata.routingDecision = hasImages
         ? RoutingDecision.Hybrid
         : RoutingDecision.DocumentsOnly;
@@ -487,8 +546,10 @@ export async function routeContext(
 
     if (ragResult) {
       metadata.hasDocuments = true;
-      metadata.documentCount = ragResult.documentCount;
+      metadata.documentCount = attachmentInfo.documentCount;
       metadata.citations = ragResult.citations;
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = ragResult.usedAttachmentIds;
 
       if (hasImages) {
         metadata.routingDecision = RoutingDecision.Hybrid;
@@ -503,6 +564,8 @@ export async function routeContext(
     // Never substitute personal memory for the user's requested document.
     metadata.documentCount = attachmentInfo.documentCount;
     metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
     metadata.skippedMemory = true;
     logMissingDocumentRetrieval({
       userId,

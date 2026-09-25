@@ -76,6 +76,18 @@ export async function handleEditMessage(
     return { success: false, error: "No model selected" };
   }
 
+  // Edited versions and their attachments are not persisted until after the
+  // answer stream. A changed file set would make retrieval read the old version.
+  // Refuse before optimistic UI changes rather than answer from stale evidence.
+  const oldAttachmentUrls = (messageToEdit.attachments ?? []).map((file) => file.fileUrl).sort();
+  const newAttachmentUrls = (attachments ?? []).map((file) => file.fileUrl).sort();
+  if (JSON.stringify(oldAttachmentUrls) !== JSON.stringify(newAttachmentUrls)) {
+    return {
+      success: false,
+      error: "To change attachments, send a new message so those files can be indexed before the answer.",
+    };
+  }
+
   const messageContent = buildMultimodalContent(newContent, attachments);
   const placeholderAssistantId = getPendingAssistantMessageId(
     conversationId ?? messageId,
@@ -176,9 +188,6 @@ export async function handleEditMessage(
       },
       conversationId,
       branchId,
-      documentAttachmentIds: attachments?.flatMap((attachment) =>
-        attachment.id ? [attachment.id] : [],
-      ),
       onMemoryStatus: (status) => {
         currentMemoryStatus = status;
         onMemoryStatusUpdate?.(status);

@@ -74,6 +74,9 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||
       prevStatus?.documentCount !== nextStatus?.documentCount ||
+      prevStatus?.documentContextState !== nextStatus?.documentContextState ||
+      prevStatus?.documentEvidenceIds !== nextStatus?.documentEvidenceIds ||
+      prevStatus?.documentEvidenceFiles !== nextStatus?.documentEvidenceFiles ||
       prevStatus?.imageCount !== nextStatus?.imageCount ||
       prevStatus?.routingDecision !== nextStatus?.routingDecision ||
       prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length
