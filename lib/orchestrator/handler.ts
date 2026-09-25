@@ -222,6 +222,7 @@ export function createOrchestratorStreamHandler(
               apiKey,
               signal: workSignal,
               currentMessageId: messages[messages.length - 1]?.id,
+              branchId,
             },
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };

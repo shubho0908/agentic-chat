@@ -16,7 +16,9 @@ export function extractIds<T extends { id: string }>(items: T[]): string[] {
 }
 
 function isDocumentAttachment(fileType: string): boolean {
-  return fileType.startsWith('text/') || 
+  return fileType.startsWith('text/') ||
+    fileType === 'application/json' ||
+    fileType === 'application/xml' ||
     fileType === 'application/pdf' ||
     fileType.includes('wordprocessingml') ||
     fileType.includes('spreadsheetml') ||

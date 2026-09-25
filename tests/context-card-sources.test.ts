@@ -62,7 +62,8 @@ test("mixed referential context never labels a latest-turn document as the older
     documentEvidenceFiles: [{ id: "persisted-old", fileUrl: doc("old").fileUrl }],
     documentEvidenceIds: ["persisted-old"],
   }, [image, doc("new")]);
-  assert.match(html, /File previews are not available/);
+  assert.match(html, /scene\.png/);
+  assert.match(html, /1 document preview unavailable/);
   assert.doesNotMatch(html, /new\.pdf|Relevant passages used/);
 });
 
@@ -70,8 +71,8 @@ test("mismatched counts and duplicate URLs do not attribute passages to another 
   const source = { id: "persisted-old", fileUrl: doc("old").fileUrl };
   const twoSources = { ...base, documentCount: 2, documentEvidenceFiles: [source, { id: "other", fileUrl: doc("other").fileUrl }], documentEvidenceIds: ["persisted-old"] };
   const mismatch = render(twoSources, [doc("old")]);
-  assert.match(mismatch, /File previews are not available/);
-  assert.doesNotMatch(mismatch, /old\.pdf/);
+  assert.match(mismatch, /old\.pdf/);
+  assert.match(mismatch, /1 document preview unavailable/);
 
   const duplicate = render({ ...twoSources, documentEvidenceFiles: [source, { id: "other", fileUrl: source.fileUrl }] }, [doc("old"), doc("old")]);
   assert.match(duplicate, /File previews are not available/);
@@ -101,4 +102,15 @@ test("multiple attachments use direct tiles without a pager or navigation button
   assert.match(html, /one\.pdf/);
   assert.match(html, /two\.pdf/);
   assert.doesNotMatch(html, /aria-label="Previous file"|aria-label="Next file"|>1 \/ 3<|>2 \/ 3<|>3 \/ 3</);
+});
+
+test("current image preview remains usable when referenced document is from an earlier turn", () => {
+  const html = render({
+    ...base, hasImages: true, imageCount: 1, routingDecision: RoutingDecision.Hybrid,
+    documentEvidenceFiles: [{ id: "old", fileUrl: doc("old").fileUrl }],
+    documentEvidenceIds: ["old"],
+  }, [image]);
+  assert.match(html, /scene\.png/);
+  assert.match(html, /1 document preview unavailable/);
+  assert.doesNotMatch(html, /old\.pdf|Relevant passages used/);
 });

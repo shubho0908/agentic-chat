@@ -23,3 +23,11 @@ test("generic MIME for a document without a supported extension stays generic", 
   assert.equal(file.fileType, "application/octet-stream");
   assert.equal(isSupportedForRAG(file.fileType), false);
 });
+
+
+test("markdown text MIME on a .txt file is accepted for inline and indexed paths", () => {
+  const [file] = uploadResponsesToAttachments([{ name: "notes.txt", ufsUrl: "https://example.com/notes.txt", type: "text/markdown", size: 100 }]);
+  assert.equal(file.fileType, "text/markdown");
+  assert.equal(isSupportedForRAG(file.fileType), true);
+  assert.equal(selectDocumentAttachmentsForTurn([{ attachments: [file] }], false).length, 1);
+});

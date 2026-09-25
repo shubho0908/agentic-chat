@@ -30,7 +30,8 @@ const INLINE_ELIGIBLE_TYPES = new Set([
 ]);
 
 export function isInlineEligibleType(fileType: string): boolean {
-  return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith("text/");
+  const mime = fileType.split(";")[0].trim().toLowerCase();
+  return INLINE_ELIGIBLE_TYPES.has(mime) || mime.startsWith("text/");
 }
 
 function sanitizeAttachedFileName(name: string): string {
@@ -297,12 +298,15 @@ async function getAttachmentInfo(
   currentTurnOnly: boolean,
   currentMessageId?: string,
   priorMessageIds?: string[],
+  rootBefore?: Date,
 ): Promise<{
   hasDocuments: boolean;
   documentCount: number;
   documentAttachmentIds: string[];
   documentFiles: Array<{ id: string; fileUrl: string }>;
   currentMessageFound: boolean;
+  currentMessageCreatedAt?: Date;
+  currentMessageParentId?: string | null;
   unsupportedDocumentCount: number;
 }> {
   try {
@@ -314,12 +318,14 @@ async function getAttachmentInfo(
         },
         isDeleted: false,
         role: "USER",
-        ...(currentMessageId ? { id: currentMessageId } : priorMessageIds ? { id: { in: priorMessageIds } } : {}),
+        ...(currentMessageId ? { id: currentMessageId } : priorMessageIds ? { id: { in: priorMessageIds } } : rootBefore ? { parentMessageId: null, createdAt: { lt: rootBefore }, attachments: { some: { fileType: { not: { startsWith: "image/" } } } } } : {}),
       },
       ...(currentTurnOnly
         ? { orderBy: { createdAt: "desc" as const }, take: 1 }
-        : {}),
+        : rootBefore ? { orderBy: { createdAt: "desc" as const }, take: 2 } : {}),
       select: {
+        createdAt: true,
+        parentMessageId: true,
         attachments: {
           select: {
             id: true,
@@ -330,6 +336,10 @@ async function getAttachmentInfo(
         },
       },
     });
+
+    if (rootBefore && messages.length !== 1) {
+      return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: false, unsupportedDocumentCount: 0 };
+    }
 
     const allAttachments = selectDocumentAttachmentsForTurn(
       messages,
@@ -343,6 +353,8 @@ async function getAttachmentInfo(
         documentAttachmentIds: [],
         documentFiles: [],
         currentMessageFound: messages.length > 0,
+        currentMessageCreatedAt: messages[0]?.createdAt,
+        currentMessageParentId: messages[0]?.parentMessageId,
         unsupportedDocumentCount: 0,
       };
     }
@@ -357,6 +369,8 @@ async function getAttachmentInfo(
         .filter((id): id is string => Boolean(id)),
       documentFiles: retrievableDocumentAttachments.map(({ id, fileUrl }) => ({ id, fileUrl })),
       currentMessageFound: messages.length > 0,
+      currentMessageCreatedAt: messages[0]?.createdAt,
+      currentMessageParentId: messages[0]?.parentMessageId,
       unsupportedDocumentCount: allAttachments.length - retrievableDocumentAttachments.length,
     };
   } catch (error) {
@@ -386,6 +400,7 @@ export async function routeContext(
     apiKey?: string;
     signal?: AbortSignal;
     currentMessageId?: string;
+    branchId?: string;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -424,35 +439,47 @@ export async function routeContext(
   const currentAttachmentInfo = conversationId
     ? await getAttachmentInfo(conversationId, userId, true, options?.currentMessageId)
     : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: !options?.currentMessageId, unsupportedDocumentCount: 0 };
-  // A supplied turn ID is an exact identity, not a hint to search the latest
-  // message. A missing/deleted/wrong-owner row must never borrow another turn's
-  // documents or fall through to personal memory.
-  if (options?.currentMessageId && !currentAttachmentInfo.currentMessageFound) {
+  // A supplied turn ID must not borrow another turn's documents. If its
+  // multimodal input has an image, fail closed because a missing persisted
+  // document cannot be ruled out. Text-only API turns claim no attachment.
+  if (options?.currentMessageId && !currentAttachmentInfo.currentMessageFound && hasImages) {
     metadata.skippedMemory = true;
     metadata.documentContextState = "unavailable";
-    metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+    metadata.routingDecision = RoutingDecision.Hybrid;
     metadata.hasDocuments = true;
     return { context: buildMissingDocumentContext(textQuery), metadata };
   }
-  const priorMessageIds = messages.flatMap((message) =>
-    message.role === MessageRole.USER && message.id ? [message.id] : [],
-  );
-  // A referential follow-up may use earlier visible turns, never invisible
-  // messages from other branches or the newest unrelated database row.
+  const priorMessageIds = currentAttachmentInfo.currentMessageFound
+    ? messages.flatMap((message) =>
+        message.role === MessageRole.USER && message.id ? [message.id] : [],
+      )
+    : [];
+  // Prefer exact visible turns. A root-thread fallback may inspect older persisted
+  // documents only when the current turn has no document and there is one candidate.
   const attachmentInfo = (currentAttachmentInfo.hasDocuments || currentAttachmentInfo.unsupportedDocumentCount > 0) || !isReferential || !conversationId || priorMessageIds.length === 0
     ? currentAttachmentInfo
     : await getAttachmentInfo(conversationId, userId, false, undefined, priorMessageIds);
 
+  const rootAttachmentInfo = isReferential && conversationId && !options?.branchId &&
+    !currentAttachmentInfo.hasDocuments && !currentAttachmentInfo.unsupportedDocumentCount &&
+    !attachmentInfo.hasDocuments && !attachmentInfo.unsupportedDocumentCount &&
+    options?.currentMessageId && currentAttachmentInfo.currentMessageParentId === null &&
+    currentAttachmentInfo.currentMessageCreatedAt
+      ? await getAttachmentInfo(conversationId, userId, false, undefined, undefined, currentAttachmentInfo.currentMessageCreatedAt)
+      : null;
+  const selectedAttachmentInfo = rootAttachmentInfo?.hasDocuments || rootAttachmentInfo?.unsupportedDocumentCount
+    ? rootAttachmentInfo : attachmentInfo;
+
   // A persisted non-image attachment with an unsupported MIME cannot be
   // silently discarded just because another file is a valid image. The
   // comparison would otherwise reach the vision model without the document.
-  if (attachmentInfo.unsupportedDocumentCount > 0) {
+  if (selectedAttachmentInfo.unsupportedDocumentCount > 0) {
     metadata.skippedMemory = true;
-    metadata.documentCount = attachmentInfo.documentCount + attachmentInfo.unsupportedDocumentCount;
+    metadata.documentCount = selectedAttachmentInfo.documentCount + selectedAttachmentInfo.unsupportedDocumentCount;
     metadata.hasDocuments = true;
     metadata.documentContextState = "unavailable";
     metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
-    metadata.documentEvidenceFiles = attachmentInfo.documentFiles;
+    metadata.documentEvidenceFiles = selectedAttachmentInfo.documentFiles;
     logMissingDocumentRetrieval({
       userId, conversationId, query: textQuery,
       documentCount: metadata.documentCount, isReferential,
@@ -460,9 +487,9 @@ export async function routeContext(
     return { context: buildMissingDocumentContext(textQuery), metadata };
   }
 
-  if (attachmentInfo.hasDocuments) metadata.documentEvidenceFiles = attachmentInfo.documentFiles;
+  if (selectedAttachmentInfo.hasDocuments) metadata.documentEvidenceFiles = selectedAttachmentInfo.documentFiles;
 
-  if (shouldSkipTextContextForImage(hasImages, textQuery, attachmentInfo.hasDocuments)) {
+  if (shouldSkipTextContextForImage(hasImages, textQuery, selectedAttachmentInfo.hasDocuments)) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: "", metadata };
@@ -471,18 +498,18 @@ export async function routeContext(
   if (isReferential) {
     metadata.skippedMemory = true;
 
-    if (attachmentInfo.hasDocuments) {
+    if (selectedAttachmentInfo.hasDocuments) {
       const inlineResult = await tryInlineAttachmentContent(
-        attachmentInfo.documentAttachmentIds,
+        selectedAttachmentInfo.documentAttachmentIds,
         userId,
         options?.signal,
       );
 
       if (inlineResult) {
         metadata.hasDocuments = true;
-        metadata.documentCount = attachmentInfo.documentCount;
+        metadata.documentCount = selectedAttachmentInfo.documentCount;
         metadata.documentContextState = "ready";
-        metadata.documentEvidenceIds = attachmentInfo.documentAttachmentIds;
+        metadata.documentEvidenceIds = selectedAttachmentInfo.documentAttachmentIds;
         metadata.routingDecision = hasImages
           ? RoutingDecision.Hybrid
           : RoutingDecision.DocumentsOnly;
@@ -491,7 +518,7 @@ export async function routeContext(
 
       const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
         conversationId,
-        attachmentIds: attachmentInfo.documentAttachmentIds,
+        attachmentIds: selectedAttachmentInfo.documentAttachmentIds,
         waitForProcessing: true,
         processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
         signal: options?.signal,
@@ -499,7 +526,7 @@ export async function routeContext(
 
       if (ragResult) {
         metadata.hasDocuments = true;
-        metadata.documentCount = attachmentInfo.documentCount;
+        metadata.documentCount = selectedAttachmentInfo.documentCount;
         metadata.citations = ragResult.citations;
         metadata.documentContextState = "ready";
         metadata.documentEvidenceIds = ragResult.usedAttachmentIds;
@@ -515,7 +542,7 @@ export async function routeContext(
         return { context: ragResult.context, metadata };
       }
 
-      metadata.documentCount = attachmentInfo.documentCount;
+      metadata.documentCount = selectedAttachmentInfo.documentCount;
       metadata.hasDocuments = true;
       metadata.skippedMemory = true;
       metadata.documentContextState = "unavailable";
@@ -524,7 +551,7 @@ export async function routeContext(
         userId,
         conversationId,
         query: textQuery,
-        documentCount: attachmentInfo.documentCount,
+        documentCount: selectedAttachmentInfo.documentCount,
         isReferential,
       });
       return { context: buildMissingDocumentContext(textQuery), metadata };
@@ -538,18 +565,18 @@ export async function routeContext(
     return { context: "", metadata };
   }
 
-  if (attachmentInfo.hasDocuments) {
+  if (selectedAttachmentInfo.hasDocuments) {
     const inlineResult = await tryInlineAttachmentContent(
-      attachmentInfo.documentAttachmentIds,
+      selectedAttachmentInfo.documentAttachmentIds,
       userId,
       options?.signal,
     );
 
     if (inlineResult) {
       metadata.hasDocuments = true;
-      metadata.documentCount = attachmentInfo.documentCount;
+      metadata.documentCount = selectedAttachmentInfo.documentCount;
       metadata.documentContextState = "ready";
-      metadata.documentEvidenceIds = attachmentInfo.documentAttachmentIds;
+      metadata.documentEvidenceIds = selectedAttachmentInfo.documentAttachmentIds;
       metadata.routingDecision = hasImages
         ? RoutingDecision.Hybrid
         : RoutingDecision.DocumentsOnly;
@@ -558,7 +585,7 @@ export async function routeContext(
 
     const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
       conversationId,
-      attachmentIds: attachmentInfo.documentAttachmentIds,
+      attachmentIds: selectedAttachmentInfo.documentAttachmentIds,
       waitForProcessing: true,
       processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
       signal: options?.signal,
@@ -566,7 +593,7 @@ export async function routeContext(
 
     if (ragResult) {
       metadata.hasDocuments = true;
-      metadata.documentCount = attachmentInfo.documentCount;
+      metadata.documentCount = selectedAttachmentInfo.documentCount;
       metadata.citations = ragResult.citations;
       metadata.documentContextState = "ready";
       metadata.documentEvidenceIds = ragResult.usedAttachmentIds;
@@ -582,7 +609,7 @@ export async function routeContext(
 
     // A current document was supplied but did not produce usable evidence.
     // Never substitute personal memory for the user's requested document.
-    metadata.documentCount = attachmentInfo.documentCount;
+    metadata.documentCount = selectedAttachmentInfo.documentCount;
     metadata.hasDocuments = true;
     metadata.documentContextState = "unavailable";
     metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
@@ -591,7 +618,7 @@ export async function routeContext(
       userId,
       conversationId,
       query: textQuery,
-      documentCount: attachmentInfo.documentCount,
+      documentCount: selectedAttachmentInfo.documentCount,
       isReferential,
     });
     return { context: buildMissingDocumentContext(textQuery), metadata };

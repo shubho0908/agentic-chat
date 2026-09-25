@@ -333,7 +333,7 @@ export async function getScopedDocumentCoverage(
         AND metadata->>'attachmentId' = ANY(${attachmentIds}::text[])
     )
     SELECT id, content, attachment_id, file_name, page, char_start
-    FROM ranked WHERE row_num <= 2 ORDER BY attachment_id, row_num LIMIT 10`;
+    FROM ranked WHERE row_num <= 2 ORDER BY attachment_id, row_num LIMIT ${attachmentIds.length * 2}`;
   return rows.filter((row) => row.content.trim() && attachmentIds.includes(row.attachment_id))
     .map((row) => ({
       content: row.content,

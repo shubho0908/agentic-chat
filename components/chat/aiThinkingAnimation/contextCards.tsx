@@ -57,16 +57,16 @@ export function ContextCards({ memoryStatus, attachments, defaultExpanded = fals
     candidateDocuments.filter((candidate) => candidate.fileUrl === file.fileUrl).length === 1,
   );
   const imageAttachments = filterImageAttachments(attachments);
-  const files = [...imageAttachments, ...documentAttachments];
-  const hasVerifiedDocuments = documentCount === 0 || (
-    documentSources?.length === documentCount && documentAttachments.length === documentCount
-  );
-  const hasActualFiles = files.length === total && total > 0 && hasVerifiedDocuments;
+  const safeImages = imageAttachments.length === imageCount ? imageAttachments : [];
+  const safeDocuments = documentSources?.length === documentCount ? documentAttachments : [];
+  const previewFiles = [...safeImages, ...safeDocuments];
+  const missingDocumentCount = documentCount - safeDocuments.length;
+  const hasActualFiles = previewFiles.length > 0;
 
   const multiple = total > 1;
   const onlyImage = imageCount === 1 && documentCount === 0;
   const onlyDocument = documentCount === 1 && imageCount === 0;
-  const selectedFile = hasActualFiles ? files[0] : undefined;
+  const selectedFile = hasActualFiles && previewFiles.length === 1 && total === 1 ? previewFiles[0] : undefined;
   const unavailable = memoryStatus.documentContextState === "unavailable";
   const evidenceIds = memoryStatus.documentEvidenceIds;
   const evidenceFiles = memoryStatus.documentEvidenceFiles;
@@ -110,15 +110,16 @@ export function ContextCards({ memoryStatus, attachments, defaultExpanded = fals
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300"><FileText className="size-4" /></span>
             <div className="min-w-0 flex-1">
               <h3 className="text-[13px] font-semibold">Context used</h3>
-              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{hasActualFiles ? "Files from your message attached to this request." : "Sources from this conversation are available for this request."}</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{hasActualFiles ? "Available file previews for this request." : "Sources from this conversation are available for this request."}</p>
             </div>
           </div>
           {unavailable && <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Document context unavailable - retry after processing.</p>}
           <div className="mt-3.5">
             {hasActualFiles ? (
               <>
-                {imageAttachments.length > 0 && <div><p className="mb-2 text-xs font-medium">Images ({imageAttachments.length})</p><div className="flex flex-wrap gap-2">{imageAttachments.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedImage(file)} className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><span className="relative block aspect-[2.3] bg-muted"><Image src={file.fileUrl} alt="" fill unoptimized sizes="208px" className="object-cover" /></span><span className="block truncate px-2 pt-1 text-[11px] font-medium">{file.fileName}</span><span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></button>)}</div></div>}
-                {documentAttachments.length > 0 && <div className={imageAttachments.length ? "mt-4 pt-0" : ""}><p className="mb-2 text-xs font-medium">Documents ({documentAttachments.length})</p><div className="grid gap-2 sm:grid-cols-3">{documentAttachments.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedDocument(file)} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span><span className="block text-[10px] text-muted-foreground">{documentEvidenceLabel(file)}</span></span></button>)}</div></div>}
+                {safeImages.length > 0 && <div><p className="mb-2 text-xs font-medium">Images ({safeImages.length})</p><div className="flex flex-wrap gap-2">{safeImages.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedImage(file)} className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><span className="relative block aspect-[2.3] bg-muted"><Image src={file.fileUrl} alt="" fill unoptimized sizes="208px" className="object-cover" /></span><span className="block truncate px-2 pt-1 text-[11px] font-medium">{file.fileName}</span><span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></button>)}</div></div>}
+                {safeDocuments.length > 0 && <div className={safeImages.length ? "mt-4 pt-0" : ""}><p className="mb-2 text-xs font-medium">Documents ({safeDocuments.length})</p><div className="grid gap-2 sm:grid-cols-3">{safeDocuments.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedDocument(file)} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span><span className="block text-[10px] text-muted-foreground">{documentEvidenceLabel(file)}</span></span></button>)}</div></div>}
+                {missingDocumentCount > 0 && <p className="mt-3 text-xs text-muted-foreground">{missingDocumentCount} {missingDocumentCount === 1 ? "document preview" : "document previews"} unavailable for this context.</p>}
               </>
             ) : <p className="text-xs leading-5 text-muted-foreground">{imageCount > 0 && `${imageCount} ${imageCount === 1 ? "image" : "images"}`}{imageCount > 0 && documentCount > 0 && " · "}{documentCount > 0 && `${documentCount} ${documentCount === 1 ? "document" : "documents"}`}. File previews are not available for this context.</p>}
           </div>

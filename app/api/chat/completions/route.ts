@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey, currentMessageId: validatedMessages[validatedMessages.length - 1]?.id }
+              { apiKey, currentMessageId: validatedMessages[validatedMessages.length - 1]?.id, branchId }
             );
           },
           {

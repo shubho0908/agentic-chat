@@ -171,8 +171,9 @@ export async function loadDocument(
         },
       };
     } else if (
-      lowerFileType.startsWith('text/') || 
-      lowerFileType === 'text/plain' ||
+      lowerFileType.startsWith('text/') ||
+      lowerFileType === 'application/json' ||
+      lowerFileType === 'application/xml' ||
       lowerFileName.endsWith('.txt')
     ) {
       const content = await fileBlob.text();

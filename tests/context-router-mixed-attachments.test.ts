@@ -4,6 +4,7 @@ import { allDocumentsReady, buildRetrievalQueries, isInlineEligibleType, shouldS
 import { selectDocumentAttachmentsForTurn } from "@/lib/chat/attachmentRouting";
 import { buildMultimodalContent } from "@/lib/contentUtils";
 import { MessageRole } from "@/lib/schemas/chat";
+import { isSupportedForRAG } from "@/lib/rag/utils";
 
 const image: { id?: string; fileUrl: string; fileName: string; fileType: string; fileSize: number } = { fileUrl: "https://example.com/photo.png", fileName: "photo.png", fileType: "image/png", fileSize: 12 };
 const pdf = { id: "pdf-id", fileUrl: "https://example.com/one.pdf", fileName: "one.pdf", fileType: "application/pdf", fileSize: 12 };
@@ -131,4 +132,70 @@ test("current unsupported PDF does not borrow earlier visible PDF in a referenti
   } finally {
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup });
   }
+});
+
+test("text markdown and other readable text MIME types stay in document scope", () => {
+  assert.equal(isSupportedForRAG("text/markdown"), true);
+  assert.equal(isSupportedForRAG("text/html"), true);
+  assert.equal(isSupportedForRAG("application/json"), true);
+  assert.equal(isSupportedForRAG("application/pdf"), true);
+  assert.equal(isSupportedForRAG("application/octet-stream"), false);
+});
+
+test("root-thread follow-up finds persisted older document outside prompt window", async () => {
+  const calls: Array<{ where: Record<string, unknown>; take?: number }> = [];
+  const originalLookup = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async (args: { where: Record<string, unknown>; take?: number }) => {
+    calls.push(args);
+    return calls.length === 1 ? [{ createdAt: new Date("2026-09-25T00:00:00Z"), parentMessageId: null, attachments: [] }] : [{ createdAt: new Date("2026-09-20T00:00:00Z"), attachments: [pdf] }];
+  }});
+  try {
+    const result = await routeContext("Summarize the attached document", "owner-1", [], "conversation-1", null, true, { currentMessageId: "current-turn" });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].where.parentMessageId, null);
+    assert.equal(calls[1].take, 2);
+    assert.deepEqual(calls[1].where.attachments, { some: { fileType: { not: { startsWith: "image/" } } } });
+    assert.equal(result.metadata.documentCount, 1);
+  } finally { Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup }); }
+});
+
+test("branch turn does not fall back to root documents outside visible lineage", async () => {
+  const calls: unknown[] = [];
+  const originalLookup = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async (args: unknown) => {
+    calls.push(args); return [{ createdAt: new Date("2026-09-25T00:00:00Z"), parentMessageId: "root-edit", attachments: [] }];
+  }});
+  try {
+    await routeContext("Summarize the attached document", "owner-1", [], "conversation-1", null, true, { currentMessageId: "branch-turn", branchId: "edit-one" });
+    assert.equal(calls.length, 1);
+  } finally { Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup }); }
+});
+
+test("multiple older document turns are ambiguous and are not silently chosen", async () => {
+  const originalLookup = prisma.message.findMany;
+  let calls = 0;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => {
+    calls++;
+    return calls === 1
+      ? [{ createdAt: new Date("2026-09-25T00:00:00Z"), parentMessageId: null, attachments: [] }]
+      : [{ attachments: [pdf] }, { attachments: [secondPdf] }];
+  }});
+  try {
+    const result = await routeContext("Summarize the attached document", "owner-1", [], "conversation-1", null, true, { currentMessageId: "current-turn" });
+    assert.equal(calls, 2);
+    assert.equal(result.metadata.hasDocuments, false);
+    assert.equal(result.context, "");
+  } finally { Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup }); }
+});
+
+
+test("unpersisted text-only API turn never invents a missing document", async () => {
+  const originalLookup = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [] });
+  try {
+    const result = await routeContext("Hello", "owner-1", [{ role: MessageRole.USER, id: "older", content: "Old" }], "conversation-1", null, false, { currentMessageId: "unsaved-turn" });
+    assert.equal(result.metadata.hasDocuments, false);
+    assert.equal(result.metadata.documentContextState, undefined);
+    assert.doesNotMatch(result.context, /could not read all|document_processing_notice/);
+  } finally { Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup }); }
 });
