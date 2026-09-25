@@ -4,7 +4,7 @@ import { useState } from "react";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { AccordionContent } from "@/components/ui/accordionContent";
 import Image from "next/image";
-import { Brain, ChevronLeft, ChevronRight, FileText, ImageIcon, X } from "lucide-react";
+import { Brain, ChevronRight, FileText, ImageIcon, X } from "lucide-react";
 import { filterDocumentAttachments, filterImageAttachments } from "@/lib/attachmentUtils";
 import type { Attachment } from "@/lib/schemas/chat";
 import { RoutingDecision, type MemoryStatus } from "@/types/chat";
@@ -27,7 +27,6 @@ const focus = "focus-visible:outline-none focus-visible:border-foreground/60 foc
 
 export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
   const [expanded, setExpanded] = useState(true);
-  const [selected, setSelected] = useState(0);
   const [openedImage, setOpenedImage] = useState<Attachment | null>(null);
   const [openedDocument, setOpenedDocument] = useState<Attachment | null>(null);
   const imageAttachments = filterImageAttachments(attachments);
@@ -55,7 +54,7 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
   const multiple = total > 1;
   const onlyImage = imageCount === 1 && documentCount === 0;
   const onlyDocument = documentCount === 1 && imageCount === 0;
-  const selectedFile = hasActualFiles ? files[Math.min(selected, files.length - 1)] : undefined;
+  const selectedFile = hasActualFiles ? files[0] : undefined;
   const unavailable = memoryStatus.documentContextState === "unavailable";
   const evidenceIds = memoryStatus.documentEvidenceIds;
   const evidenceFiles = memoryStatus.documentEvidenceFiles;
@@ -100,15 +99,14 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
               <h3 className="text-[13px] font-semibold">Context used</h3>
               <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">{hasActualFiles ? "Files from your message attached to this request." : "Sources from this conversation are available for this request."}</p>
             </div>
-            {hasActualFiles && <div className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"><span className="tabular-nums">{selected + 1} / {files.length}</span><button type="button" className={`ml-1 rounded-full p-1 hover:bg-accent disabled:opacity-30 ${focus}`} disabled={selected === 0} onClick={() => setSelected((value) => value - 1)} aria-label="Previous file"><ChevronLeft className="size-4" /></button><button type="button" className={`rounded-full p-1 hover:bg-accent disabled:opacity-30 ${focus}`} disabled={selected === files.length - 1} onClick={() => setSelected((value) => value + 1)} aria-label="Next file"><ChevronRight className="size-4" /></button></div>}
             <button type="button" className={`shrink-0 rounded-full p-1 text-muted-foreground hover:bg-accent ${focus}`} onClick={() => setExpanded(false)} aria-label="Close context details"><X className="size-4" /></button>
           </div>
           {unavailable && <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Document context unavailable - retry after processing.</p>}
           <div className="mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border">
             {hasActualFiles ? (
               <>
-                {imageAttachments.length > 0 && <div><p className="mb-2 text-xs font-medium">Images ({imageAttachments.length})</p><div className="flex flex-wrap gap-2">{imageAttachments.map((file, index) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => { setSelected(index); setOpenedImage(file); }} className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 ${selectedFile === file ? "border-foreground/40" : "border-border/70 dark:border-chat-user-bubble-border"} ${focus}`}><span className="relative block aspect-[2.3] bg-muted"><Image src={file.fileUrl} alt="" fill unoptimized sizes="208px" className="object-cover" /></span><span className="block truncate px-2 pt-1 text-[11px] font-medium">{file.fileName}</span><span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></button>)}</div></div>}
-                {documentAttachments.length > 0 && <div className={imageAttachments.length ? "mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border" : ""}><p className="mb-2 text-xs font-medium">Documents ({documentAttachments.length})</p><div className="grid gap-2 sm:grid-cols-3">{documentAttachments.map((file, index) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => { setSelected(imageAttachments.length + index); setOpenedDocument(file); }} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 ${selectedFile === file ? "border-foreground/40" : "border-border/70 dark:border-chat-user-bubble-border"} ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span><span className="block text-[10px] text-muted-foreground">{documentEvidenceLabel(file)}</span></span></button>)}</div></div>}
+                {imageAttachments.length > 0 && <div><p className="mb-2 text-xs font-medium">Images ({imageAttachments.length})</p><div className="flex flex-wrap gap-2">{imageAttachments.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedImage(file)} className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><span className="relative block aspect-[2.3] bg-muted"><Image src={file.fileUrl} alt="" fill unoptimized sizes="208px" className="object-cover" /></span><span className="block truncate px-2 pt-1 text-[11px] font-medium">{file.fileName}</span><span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span></button>)}</div></div>}
+                {documentAttachments.length > 0 && <div className={imageAttachments.length ? "mt-3 border-t border-border/60 pt-3 dark:border-chat-user-bubble-border" : ""}><p className="mb-2 text-xs font-medium">Documents ({documentAttachments.length})</p><div className="grid gap-2 sm:grid-cols-3">{documentAttachments.map((file) => <button key={file.id ?? file.fileUrl} type="button" onClick={() => setOpenedDocument(file)} className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 border-border/70 dark:border-chat-user-bubble-border ${focus}`}><FileText className="size-5 shrink-0 text-violet-500" /><span className="min-w-0"><span className="block truncate text-[11px] font-medium">{file.fileName}</span><span className="text-[10px] text-muted-foreground">{formatSize(file.fileSize)}</span><span className="block text-[10px] text-muted-foreground">{documentEvidenceLabel(file)}</span></span></button>)}</div></div>}
               </>
             ) : <p className="text-xs leading-5 text-muted-foreground">{imageCount > 0 && `${imageCount} ${imageCount === 1 ? "image" : "images"}`}{imageCount > 0 && documentCount > 0 && " · "}{documentCount > 0 && `${documentCount} ${documentCount === 1 ? "document" : "documents"}`}. File previews are not available for this context.</p>}
           </div>
