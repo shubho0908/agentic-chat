@@ -1,5 +1,5 @@
-import { type MemoryStatus } from '@/types/chat';
-import { toJsonValue } from '@/lib/json';
+import { type MemoryStatus } from "@/types/chat";
+import { toJsonValue } from "@/lib/json";
 
 const encoder = new TextEncoder();
 
@@ -7,16 +7,15 @@ function encodeSSEMessage(data: Record<string, unknown>): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(toJsonValue(data) ?? {})}\n\n`);
 }
 
-export function encodeMemoryStatus(
-  memoryStatusInfo: MemoryStatus,
-): Uint8Array {
+export function encodeMemoryStatus(memoryStatusInfo: MemoryStatus): Uint8Array {
   return encodeSSEMessage({
-    type: 'memory_status',
+    type: "memory_status",
     hasMemories: memoryStatusInfo.hasMemories,
     attemptedMemory: memoryStatusInfo.attemptedMemory,
     hasDocuments: memoryStatusInfo.hasDocuments,
     memoryCount: memoryStatusInfo.memoryCount,
     documentCount: memoryStatusInfo.documentCount,
+    attachmentContextKind: memoryStatusInfo.attachmentContextKind,
     documentContextState: memoryStatusInfo.documentContextState,
     documentEvidenceIds: memoryStatusInfo.documentEvidenceIds,
     documentEvidenceFiles: memoryStatusInfo.documentEvidenceFiles,
@@ -26,33 +25,33 @@ export function encodeMemoryStatus(
     skippedMemory: memoryStatusInfo.skippedMemory,
     activeToolName: memoryStatusInfo.activeToolName,
     degradedContexts: memoryStatusInfo.degradedContexts,
-    tokenUsage: memoryStatusInfo.tokenUsage
+    tokenUsage: memoryStatusInfo.tokenUsage,
   });
 }
 
 export function encodeToolCall(
   toolName: string,
   toolCallId: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
 ): Uint8Array {
-  return encodeSSEMessage({ 
-    type: 'tool_call',
+  return encodeSSEMessage({
+    type: "tool_call",
     toolName,
     toolCallId,
-    args
+    args,
   });
 }
 
 export function encodeToolResult(
   toolName: string,
   toolCallId: string,
-  result: string | Record<string, unknown> | unknown[]
+  result: string | Record<string, unknown> | unknown[],
 ): Uint8Array {
-  return encodeSSEMessage({ 
-    type: 'tool_result',
+  return encodeSSEMessage({
+    type: "tool_result",
     toolName,
     toolCallId,
-    result
+    result,
   });
 }
 
@@ -60,14 +59,14 @@ export function encodeToolProgress(
   toolName: string,
   status: string,
   message: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): Uint8Array {
-  return encodeSSEMessage({ 
-    type: 'tool_progress',
+  return encodeSSEMessage({
+    type: "tool_progress",
     toolName,
     status,
     message,
-    details
+    details,
   });
 }
 
@@ -76,7 +75,7 @@ export function encodeChatChunk(content: string): Uint8Array {
 }
 
 export function encodeThinkingChunk(content: string): Uint8Array {
-  return encodeSSEMessage({ type: 'thinking', content });
+  return encodeSSEMessage({ type: "thinking", content });
 }
 
 export function encodeResponseIncomplete(reason: "length"): Uint8Array {
@@ -88,9 +87,11 @@ export function encodeError(message: string): Uint8Array {
 }
 
 export function encodeDone(): Uint8Array {
-  return encoder.encode('data: [DONE]\n\n');
+  return encoder.encode("data: [DONE]\n\n");
 }
 
-export function encodeArtifactEvent(event: Record<string, unknown>): Uint8Array {
+export function encodeArtifactEvent(
+  event: Record<string, unknown>,
+): Uint8Array {
   return encodeSSEMessage(event);
 }

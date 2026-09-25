@@ -1,5 +1,5 @@
-import type { MessageContentPart } from '@/lib/schemas/chat';
-import { stripAttachedImageContext } from '@/lib/contentUtils';
+import type { MessageContentPart } from "@/lib/schemas/chat";
+import { stripAttachedImageContext } from "@/lib/contentUtils";
 
 const REFERENTIAL_PATTERNS = [
   /\b(this|that|the|attached)\s+(doc|document|file|pdf|attachment|image|picture)/i,
@@ -9,14 +9,21 @@ const REFERENTIAL_PATTERNS = [
 ] as const;
 
 export function extractTextQuery(
-  query: string | Array<{ type: string; text?: string; image_url?: { url: string } }> | MessageContentPart[]
+  query:
+    | string
+    | Array<{ type: string; text?: string; image_url?: { url: string } }>
+    | MessageContentPart[],
 ): string {
-  const text = typeof query === 'string'
-    ? query
-    : query
-        .filter((part): part is { type: 'text'; text: string } => part.type === 'text' && typeof part.text === 'string')
-        .map((part) => part.text)
-        .join(' ');
+  const text =
+    typeof query === "string"
+      ? query
+      : query
+          .filter(
+            (part): part is { type: "text"; text: string } =>
+              part.type === "text" && typeof part.text === "string",
+          )
+          .map((part) => part.text)
+          .join(" ");
   return stripAttachedImageContext(text);
 }
 

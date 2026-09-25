@@ -5,8 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-geist-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+  --font-geist-sans:
+    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-geist-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono",
+    monospace;
   --font-newsreader: Georgia, "Times New Roman", serif;
   --background: hsl(0 0% 99%);
   --foreground: hsl(240 10% 4%);
@@ -281,7 +285,8 @@
   }
 
   @keyframes float {
-    0%, 100% {
+    0%,
+    100% {
       transform: translate3d(0, 0, 0);
     }
     33% {
@@ -293,7 +298,8 @@
   }
 
   @keyframes float-delayed {
-    0%, 100% {
+    0%,
+    100% {
       transform: translate3d(0, 0, 0);
     }
     33% {
@@ -305,10 +311,12 @@
   }
 
   @keyframes pixel-on {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 0.15;
     }
-    18%, 42% {
+    18%,
+    42% {
       opacity: 1;
     }
     62% {
@@ -326,7 +334,8 @@
   }
 
   @keyframes gradient-shift {
-    0%, 100% {
+    0%,
+    100% {
       background-position: 0% 50%;
     }
     50% {
@@ -449,20 +458,39 @@
 }
 
 @keyframes context-card-sheen {
-  0% { transform: translateX(-125%); }
-  55% { transform: translateX(125%); }
-  100% { transform: translateX(125%); }
+  0% {
+    transform: translateX(-125%);
+  }
+  55% {
+    transform: translateX(125%);
+  }
+  100% {
+    transform: translateX(125%);
+  }
 }
 
 .context-card-sheen {
-  background: linear-gradient(105deg, transparent 43%, rgba(120, 120, 130, 0.13) 50%, transparent 57%);
+  background: linear-gradient(
+    105deg,
+    transparent 43%,
+    rgba(120, 120, 130, 0.13) 50%,
+    transparent 57%
+  );
   animation: context-card-sheen 3.6s ease-in-out infinite;
 }
 
 .dark .context-card-sheen {
-  background: linear-gradient(105deg, transparent 43%, rgba(255, 255, 255, 0.085) 50%, transparent 57%);
+  background: linear-gradient(
+    105deg,
+    transparent 43%,
+    rgba(255, 255, 255, 0.085) 50%,
+    transparent 57%
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .context-card-sheen { animation: none; opacity: 0; }
+  .context-card-sheen {
+    animation: none;
+    opacity: 0;
+  }
 }

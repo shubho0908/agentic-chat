@@ -40,6 +40,7 @@ export function relevanceForScore(score: number | undefined): string {
 export function formatRetrievedContext(
   results: RetrievalCandidate[],
   kind: "retrieved" | "coverage" = "retrieved",
+  attachmentKind: "document" | "snippet" = "document",
 ): RAGContextResult {
   const usedAttachmentIds = Array.from(
     new Set(results.map((result) => result.metadata.attachmentId)),
@@ -49,7 +50,7 @@ export function formatRetrievedContext(
       const page = result.metadata.page
         ? ` (Page ${result.metadata.page})`
         : "";
-      return `[Document ${index + 1}: ${result.metadata.fileName}${page}; chunk ${result.metadata.chunkId ?? "unknown"}]\n${result.content}`;
+      return `[${attachmentKind === "snippet" ? "Snippet" : "Document"} ${index + 1}: ${result.metadata.fileName}${page}; chunk ${result.metadata.chunkId ?? "unknown"}]\n${result.content}`;
     })
     .join("\n\n---\n\n");
   const seen = new Set<string>();
@@ -80,10 +81,12 @@ export function formatRetrievedContext(
   });
   const intro =
     kind === "coverage"
-      ? "The following is document coverage sampling, not query-retrieved evidence. Use it only to explain document contents at a high level."
-      : "Use the following retrieved document evidence before answering.";
+      ? `The following is ${attachmentKind} coverage sampling, not query-retrieved evidence. Use it only to explain ${attachmentKind} contents at a high level.`
+      : `Use the following retrieved ${attachmentKind} evidence before answering.`;
   const tag =
-    kind === "coverage" ? "document_coverage_samples" : "retrieved_documents";
+    kind === "coverage"
+      ? `${attachmentKind}_coverage_samples`
+      : `retrieved_${attachmentKind}s`;
   return {
     context: `\n\n${intro}\n<${tag}>\n${context}\n</${tag}>`,
     documentCount: usedAttachmentIds.length,
@@ -95,7 +98,11 @@ export function formatRetrievedContext(
 async function ensureAttachmentsProcessed(
   attachmentIds: string[],
   userId: string,
-  options: { processingTimeoutMs?: number; kickScope: string; signal?: AbortSignal },
+  options: {
+    processingTimeoutMs?: number;
+    kickScope: string;
+    signal?: AbortSignal;
+  },
 ): Promise<string[]> {
   const statuses = await getAttachmentStatuses(attachmentIds, userId);
   const partitioned = partitionByStatus(statuses);
@@ -176,6 +183,7 @@ async function resolveCompletedAttachmentScope(
           select: {
             id: true,
             fileType: true,
+            kind: true,
             processingStatus: true,
           },
         },
@@ -186,7 +194,10 @@ async function resolveCompletedAttachmentScope(
     });
 
     const allAttachments = messages.flatMap((message) => message.attachments);
-    const documentAttachments = filterDocumentAttachments(allAttachments);
+    const documentAttachments = filterDocumentAttachments(
+      allAttachments,
+      options.attachmentKind ?? "document",
+    );
     const partitioned = partitionByStatus(documentAttachments);
 
     const completedIds = extractIds(partitioned.completed);
@@ -208,9 +219,19 @@ async function resolveCompletedAttachmentScope(
     }
   }
 
-  if (!attachmentIds || attachmentIds.length === 0) {
-    return null;
-  }
+  if (!attachmentIds || attachmentIds.length === 0) return null;
+  const scopedAttachments = await prisma.attachment.findMany({
+    where: {
+      id: { in: attachmentIds },
+      kind: options.attachmentKind ?? "document",
+      message: {
+        conversation: { userId },
+        ...(conversationId ? { conversationId } : {}),
+      },
+    },
+    select: { id: true },
+  });
+  if (new Set(attachmentIds).size !== scopedAttachments.length) return null;
 
   let completedAttachmentIds = attachmentIds;
 
@@ -256,7 +277,6 @@ async function resolveCompletedAttachmentScope(
     attachmentCount: completedAttachmentIds.length,
   };
 }
-
 
 export function mergeNeighborCandidates(
   results: RetrievalCandidate[],
@@ -304,19 +324,22 @@ export function mergeNeighborCandidates(
   return ordered.slice(0, limit);
 }
 
-/** Sample the first bounded chunks of each completed, owner-scoped document
- * when a comparison query has no semantic/lexical hit. This is document
- * coverage, not a claim that the query matched those passages. */
 export async function getScopedDocumentCoverage(
   userId: string,
   conversationId: string | undefined,
   attachmentIds: string[],
 ): Promise<RetrievalCandidate[]> {
   if (attachmentIds.length === 0) return [];
-  const rows = await prisma.$queryRaw<Array<{
-    id: string; content: string; attachment_id: string; file_name: string;
-    page: number | null; char_start: number | null;
-  }>>`
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      content: string;
+      attachment_id: string;
+      file_name: string;
+      page: number | null;
+      char_start: number | null;
+    }>
+  >`
     WITH ranked AS (
       SELECT COALESCE(metadata->>'chunkId', id::text) AS id,
         LEFT(content, 12000) AS content,
@@ -334,13 +357,18 @@ export async function getScopedDocumentCoverage(
     )
     SELECT id, content, attachment_id, file_name, page, char_start
     FROM ranked WHERE row_num <= 2 ORDER BY attachment_id, row_num LIMIT ${attachmentIds.length * 2}`;
-  return rows.filter((row) => row.content.trim() && attachmentIds.includes(row.attachment_id))
+  return rows
+    .filter(
+      (row) => row.content.trim() && attachmentIds.includes(row.attachment_id),
+    )
     .map((row) => ({
       content: row.content,
       score: 0,
       metadata: {
-        chunkId: row.id, attachmentId: row.attachment_id,
-        fileName: row.file_name, page: row.page ?? undefined,
+        chunkId: row.id,
+        attachmentId: row.attachment_id,
+        fileName: row.file_name,
+        page: row.page ?? undefined,
         charStart: row.char_start ?? undefined,
       },
     }));
@@ -349,6 +377,7 @@ export async function getScopedDocumentCoverage(
 async function enrichWithNeighborChunks(
   results: RetrievalCandidate[],
   userId: string,
+  attachmentIds: string[],
 ): Promise<RetrievalCandidate[]> {
   if (!results.length) return [];
   const targets = results.flatMap((result, ord) =>
@@ -368,8 +397,8 @@ async function enrichWithNeighborChunks(
         }>
       >`
     WITH requested AS (SELECT ord, id FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS x(ord int,id text)),
-    target AS (SELECT requested.ord, chunk.metadata->>'attachmentId' attachment_id, CASE WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$' THEN (chunk.metadata->>'charStart')::int END target_start FROM requested JOIN document_chunk chunk ON COALESCE(chunk.metadata->>'chunkId',chunk.id::text)=requested.id AND chunk.metadata->>'userId'=${userId}),
-    ranked AS (SELECT COALESCE(chunk.metadata->>'chunkId', chunk.id::text) AS id,chunk.content,chunk.metadata->>'attachmentId' attachment_id,chunk.metadata->>'fileName' file_name,CASE WHEN chunk.metadata->>'page' ~ '^[0-9]+$' THEN (chunk.metadata->>'page')::int END page,CASE WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$' THEN (chunk.metadata->>'charStart')::int END char_start,target.ord,ABS((chunk.metadata->>'charStart')::int-target.target_start) distance,ROW_NUMBER() OVER(PARTITION BY target.ord ORDER BY ABS((chunk.metadata->>'charStart')::int-target.target_start),chunk.id) row_num FROM target JOIN document_chunk chunk ON chunk.metadata->>'attachmentId'=target.attachment_id AND chunk.metadata->>'userId'=${userId} WHERE chunk.metadata->>'charStart' ~ '^[0-9]+$')
+    target AS (SELECT requested.ord, chunk.metadata->>'attachmentId' attachment_id, CASE WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$' THEN (chunk.metadata->>'charStart')::int END target_start FROM requested JOIN document_chunk chunk ON COALESCE(chunk.metadata->>'chunkId',chunk.id::text)=requested.id AND chunk.metadata->>'userId'=${userId} AND chunk.metadata->>'attachmentId'=ANY(${attachmentIds}::text[])),
+    ranked AS (SELECT COALESCE(chunk.metadata->>'chunkId', chunk.id::text) AS id,chunk.content,chunk.metadata->>'attachmentId' attachment_id,chunk.metadata->>'fileName' file_name,CASE WHEN chunk.metadata->>'page' ~ '^[0-9]+$' THEN (chunk.metadata->>'page')::int END page,CASE WHEN chunk.metadata->>'charStart' ~ '^[0-9]+$' THEN (chunk.metadata->>'charStart')::int END char_start,target.ord,ABS((chunk.metadata->>'charStart')::int-target.target_start) distance,ROW_NUMBER() OVER(PARTITION BY target.ord ORDER BY ABS((chunk.metadata->>'charStart')::int-target.target_start),chunk.id) row_num FROM target JOIN document_chunk chunk ON chunk.metadata->>'attachmentId'=target.attachment_id AND chunk.metadata->>'userId'=${userId} AND chunk.metadata->>'attachmentId'=ANY(${attachmentIds}::text[]) WHERE chunk.metadata->>'charStart' ~ '^[0-9]+$')
     SELECT id,content,attachment_id,file_name,page,char_start,ord,distance FROM ranked WHERE row_num<=${RAG_CONFIG.search.neighborChunksPerHit + 1} ORDER BY ord,row_num`
     : [];
   // Ranked hits lead; neighbors follow in parent-rank order. The pure helper
@@ -394,7 +423,12 @@ export async function getRAGContext(
 
         const scope = await resolveCompletedAttachmentScope(userId, options);
         if (!scope) {
-          logWarn({ event: "rag_retrieval_empty_scope", userId, conversationId: options.conversationId, providedAttachmentCount: options.attachmentIds?.length ?? 0 });
+          logWarn({
+            event: "rag_retrieval_empty_scope",
+            userId,
+            conversationId: options.conversationId,
+            providedAttachmentCount: options.attachmentIds?.length ?? 0,
+          });
           return null;
         }
 
@@ -425,17 +459,47 @@ export async function getRAGContext(
           k: RAG_CONFIG.search.rrfK,
           limit: adjustedLimit,
         });
-        if (!results.length) {
-          logWarn({ event: "rag_retrieval_no_matches", userId, conversationId: options.conversationId, providedAttachmentCount: scope.attachmentIds.length, queryVariantCount: queries.length });
-          const samples = await getScopedDocumentCoverage(userId, conversationId, scope.attachmentIds);
-          // Empty-index documents remain unavailable, not "read".
-          const sampledIds = new Set(samples.map((sample) => sample.metadata.attachmentId));
-          if (scope.attachmentIds.some((id) => !sampledIds.has(id))) return null;
-          const safeSamples = await gatePassages(query, samples, conversationId);
+        const scopedIds = new Set(scope.attachmentIds);
+        const scopedResults = results.filter((result) =>
+          scopedIds.has(result.metadata.attachmentId),
+        );
+        if (!scopedResults.length) {
+          logWarn({
+            event: "rag_retrieval_no_matches",
+            userId,
+            conversationId: options.conversationId,
+            providedAttachmentCount: scope.attachmentIds.length,
+            queryVariantCount: queries.length,
+          });
+          const samples = await getScopedDocumentCoverage(
+            userId,
+            conversationId,
+            scope.attachmentIds,
+          );
+          const sampledIds = new Set(
+            samples.map((sample) => sample.metadata.attachmentId),
+          );
+          if (scope.attachmentIds.some((id) => !sampledIds.has(id)))
+            return null;
+          const safeSamples = await gatePassages(
+            query,
+            samples,
+            conversationId,
+          );
           if (safeSamples.length !== samples.length) return null;
-          return formatRetrievedContext(safeSamples, "coverage");
+          return formatRetrievedContext(
+            safeSamples,
+            "coverage",
+            options.attachmentKind ?? "document",
+          );
         }
-        const enrichedResults = await enrichWithNeighborChunks(results, userId);
+        const enrichedResults = (
+          await enrichWithNeighborChunks(
+            scopedResults,
+            userId,
+            scope.attachmentIds,
+          )
+        ).filter((result) => scopedIds.has(result.metadata.attachmentId));
         // Gate the final prompt passages, including neighbors, so untrusted
         // instructions cannot enter merely by being adjacent to a good hit.
         const gatedResults = await gatePassages(
@@ -444,14 +508,32 @@ export async function getRAGContext(
           conversationId,
         );
         if (!gatedResults.length) {
-          logWarn({ event: "rag_retrieval_all_passages_rejected", userId, conversationId: options.conversationId, candidateCount: enrichedResults.length });
+          logWarn({
+            event: "rag_retrieval_all_passages_rejected",
+            userId,
+            conversationId: options.conversationId,
+            candidateCount: enrichedResults.length,
+          });
           return null;
         }
-        return formatRetrievedContext(gatedResults);
+        return formatRetrievedContext(
+          gatedResults,
+          "retrieved",
+          options.attachmentKind ?? "document",
+        );
       } catch (error) {
-        if (options.signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
+        if (
+          options.signal?.aborted ||
+          (error instanceof Error && error.name === "AbortError")
+        )
+          throw error;
         logger.error("[RAG] Context retrieval failed:", error);
-        logWarn({ event: "rag_retrieval_error", userId, conversationId: options.conversationId, error: error instanceof Error ? error.name : "unknown" });
+        logWarn({
+          event: "rag_retrieval_error",
+          userId,
+          conversationId: options.conversationId,
+          error: error instanceof Error ? error.name : "unknown",
+        });
         return null;
       }
     },

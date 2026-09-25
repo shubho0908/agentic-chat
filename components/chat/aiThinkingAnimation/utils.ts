@@ -4,7 +4,7 @@ import { AI_THINKING_MESSAGES } from "./types";
 
 export function getContextualMessage(
   memoryStatus: MemoryStatus | undefined,
-  hasContext: boolean
+  hasContext: boolean,
 ): string {
   if (!hasContext) {
     return AI_THINKING_MESSAGES.DEFAULT;
@@ -25,14 +25,18 @@ export function getContextualMessage(
   if (routing === RoutingDecision.DocumentsOnly) {
     return (memoryStatus?.documentCount ?? 0) > 1
       ? "Analyzing the provided context..."
-      : "Analyzing the document to extract relevant information...";
+      : `Analyzing the ${memoryStatus?.attachmentContextKind === "snippet" ? "snippet" : "document"} to extract relevant information...`;
   }
 
   if (routing === RoutingDecision.MemoryOnly) {
     return AI_THINKING_MESSAGES.MEMORY_SYNTHESIS;
   }
 
-  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories && routing !== RoutingDecision.ToolOnly) {
+  if (
+    memoryStatus?.attemptedMemory &&
+    !memoryStatus?.hasMemories &&
+    routing !== RoutingDecision.ToolOnly
+  ) {
     return "Checked conversation history for relevant memories...";
   }
 
@@ -42,14 +46,15 @@ export function getContextualMessage(
     if (memoryStatus?.toolProgress?.message) {
       return memoryStatus.toolProgress.message;
     }
-    
+
     return `Using ${toolName} to process your request...`;
   }
 
   const contexts = [];
   if (memoryStatus?.hasDocuments) contexts.push("documents");
   if (memoryStatus?.hasMemories) contexts.push("memories");
-  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories) contexts.push("memory lookup");
+  if (memoryStatus?.attemptedMemory && !memoryStatus?.hasMemories)
+    contexts.push("memory lookup");
 
   return contexts.length > 0
     ? `Synthesizing response with ${contexts.join(" and ")}...`

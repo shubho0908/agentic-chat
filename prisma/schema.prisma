@@ -136,6 +136,7 @@ model Attachment {
   fileUrl          String           @db.Text
   fileName         String           @db.VarChar(255)
   fileType         String           @db.VarChar(100)
+  kind             String           @default("document") @db.VarChar(16)
   fileSize         Int
   createdAt        DateTime         @default(now())
   processingStatus ProcessingStatus @default(PENDING)

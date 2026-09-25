@@ -1,4 +1,8 @@
-import type { Message, ToolActivity, MessageMetadata } from "@/lib/schemas/chat";
+import type {
+  Message,
+  ToolActivity,
+  MessageMetadata,
+} from "@/lib/schemas/chat";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { ToolStatus, MessageRole } from "@/lib/schemas/chat";
 import type { HumanInTheLoopRequestEvent, MemoryStatus } from "@/types/chat";
@@ -6,7 +10,11 @@ import { ArtifactEventType, type ArtifactEvent } from "@/types/artifact";
 import type { QueryClient } from "@tanstack/react-query";
 import { streamChatCompletion } from "./streamingApi";
 import { performCacheCheck } from "./cacheHandler";
-import { handleConversationSaving, buildMessagesForAPI, getPersistableAssistantContent } from "./conversationManager";
+import {
+  handleConversationSaving,
+  buildMessagesForAPI,
+  getPersistableAssistantContent,
+} from "./conversationManager";
 import { saveAssistantMessage } from "./messageApi";
 import { logger } from "@/lib/logger";
 import { DEFAULT_ASSISTANT_PROMPT } from "@/lib/prompts";
@@ -40,7 +48,12 @@ interface StreamingContext {
 
 interface StreamingCallbacks {
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void;
-  saveToCacheMutate: (data: { query: string; response: string; model: string; reasoningEffort?: ReasoningEffortLevel | null }) => void;
+  saveToCacheMutate: (data: {
+    query: string;
+    response: string;
+    model: string;
+    reasoningEffort?: ReasoningEffortLevel | null;
+  }) => void;
   onMemoryStatusUpdate?: (status: MemoryStatus) => void;
   onArtifact?: (event: ArtifactEvent) => void;
 }
@@ -53,18 +66,25 @@ interface StreamingResult {
 
 export function extractMetadataFromProgress(
   progress: { details?: Record<string, unknown> },
-  currentMetadata?: MessageMetadata
+  currentMetadata?: MessageMetadata,
 ): MessageMetadata | undefined {
   if (!progress.details) return currentMetadata;
 
   let metadata = currentMetadata || {};
 
-  if ('sources' in progress.details && Array.isArray(progress.details.sources)) {
-    const details = progress.details as { sources?: MessageMetadata['sources'] };
+  if (
+    "sources" in progress.details &&
+    Array.isArray(progress.details.sources)
+  ) {
+    const details = progress.details as {
+      sources?: MessageMetadata["sources"];
+    };
     if (details.sources && details.sources.length > 0) {
       // Union by URL: several searches can run in one turn and a later event
       // must not drop earlier batches.
-      const seenUrls = new Set((currentMetadata?.sources ?? []).map((source) => source.url));
+      const seenUrls = new Set(
+        (currentMetadata?.sources ?? []).map((source) => source.url),
+      );
       const mergedSources = [...(currentMetadata?.sources ?? [])];
       for (const source of details.sources) {
         if (!source.url || seenUrls.has(source.url)) continue;
@@ -77,24 +97,26 @@ export function extractMetadataFromProgress(
     }
   }
 
-  if ('images' in progress.details && Array.isArray(progress.details.images)) {
-    const details = progress.details as { images?: MessageMetadata['images'] };
+  if ("images" in progress.details && Array.isArray(progress.details.images)) {
+    const details = progress.details as { images?: MessageMetadata["images"] };
     if (details.images && details.images.length > 0) {
       metadata = { ...metadata, images: details.images };
     }
   }
 
-  if ('pdf' in progress.details) {
+  if ("pdf" in progress.details) {
     const raw = progress.details.pdf;
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       const record = raw as Record<string, unknown>;
-      if (typeof record.url === 'string' && typeof record.name === 'string') {
-        const pdf: NonNullable<MessageMetadata['pdfs']>[number] = {
+      if (typeof record.url === "string" && typeof record.name === "string") {
+        const pdf: NonNullable<MessageMetadata["pdfs"]>[number] = {
           url: record.url,
           name: record.name,
-          ...(typeof record.title === 'string' ? { title: record.title } : {}),
-          ...(typeof record.size === 'number' ? { size: record.size } : {}),
-          ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+          ...(typeof record.title === "string" ? { title: record.title } : {}),
+          ...(typeof record.size === "number" ? { size: record.size } : {}),
+          ...(typeof record.pageCount === "number"
+            ? { pageCount: record.pageCount }
+            : {}),
         };
         const existing = currentMetadata?.pdfs ?? [];
         if (!existing.some((item) => item.url === pdf.url)) {
@@ -105,51 +127,61 @@ export function extractMetadataFromProgress(
   }
 
   const details = progress.details as {
-    citations?: MessageMetadata['citations'];
+    citations?: MessageMetadata["citations"];
     followUpQuestions?: string[];
   };
 
-  if ('citations' in details && details.citations) {
+  if ("citations" in details && details.citations) {
     metadata = { ...metadata, citations: details.citations };
   }
 
-  if ('followUpQuestions' in details && details.followUpQuestions) {
+  if ("followUpQuestions" in details && details.followUpQuestions) {
     metadata = { ...metadata, followUpQuestions: details.followUpQuestions };
   }
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
-export function extractPdfFromToolResult(result: unknown): NonNullable<MessageMetadata['pdfs']>[number] | undefined {
-  if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined;
+export function extractPdfFromToolResult(
+  result: unknown,
+): NonNullable<MessageMetadata["pdfs"]>[number] | undefined {
+  if (!result || typeof result !== "object" || Array.isArray(result))
+    return undefined;
   const raw = (result as Record<string, unknown>).pdf;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const record = raw as Record<string, unknown>;
-  if (typeof record.url !== 'string' || typeof record.name !== 'string') return undefined;
+  if (typeof record.url !== "string" || typeof record.name !== "string")
+    return undefined;
   return {
     url: record.url,
     name: record.name,
-    ...(typeof record.title === 'string' ? { title: record.title } : {}),
-    ...(typeof record.size === 'number' ? { size: record.size } : {}),
-    ...(typeof record.pageCount === 'number' ? { pageCount: record.pageCount } : {}),
+    ...(typeof record.title === "string" ? { title: record.title } : {}),
+    ...(typeof record.size === "number" ? { size: record.size } : {}),
+    ...(typeof record.pageCount === "number"
+      ? { pageCount: record.pageCount }
+      : {}),
   };
 }
 
-function toHumanInTheLoopMetadata(request: HumanInTheLoopRequestEvent): MessageMetadata["humanInTheLoopRequest"] {
+function toHumanInTheLoopMetadata(
+  request: HumanInTheLoopRequestEvent,
+): MessageMetadata["humanInTheLoopRequest"] {
   return toJsonValue(request) as MessageMetadata["humanInTheLoopRequest"];
 }
 
 function updateAssistantMessage(
   onMessagesUpdate: (updater: (prev: Message[]) => Message[]) => void,
   assistantMessageId: string,
-  updates: Partial<Message>
+  updates: Partial<Message>,
 ): void {
-  onMessagesUpdate((prev) => updateMessageById(prev, assistantMessageId, updates));
+  onMessagesUpdate((prev) =>
+    updateMessageById(prev, assistantMessageId, updates),
+  );
 }
 
 export async function handleStreamingResponse(
   context: StreamingContext,
-  callbacks: StreamingCallbacks
+  callbacks: StreamingCallbacks,
 ): Promise<StreamingResult> {
   const {
     messages,
@@ -168,43 +200,63 @@ export async function handleStreamingResponse(
     branchId,
   } = context;
 
-  const { onMessagesUpdate, saveToCacheMutate, onMemoryStatusUpdate, onArtifact } = callbacks;
-  let assistantMessageId = existingAssistantMessageId || getPendingAssistantMessageId(conversationId);
+  const {
+    onMessagesUpdate,
+    saveToCacheMutate,
+    onMemoryStatusUpdate,
+    onArtifact,
+  } = callbacks;
+  let assistantMessageId =
+    existingAssistantMessageId || getPendingAssistantMessageId(conversationId);
   let assistantContent = "";
   const toolActivities: ToolActivity[] = [];
   let currentMemoryStatus: MemoryStatus | undefined;
   let messageMetadata: MessageMetadata | undefined;
-  let messageCreated = !!existingAssistantMessageId || messages.some((m) => m.id === assistantMessageId);
+  let messageCreated =
+    !!existingAssistantMessageId ||
+    messages.some((m) => m.id === assistantMessageId);
   let thinkingContent = "";
   let thinkingStartTime = 0;
   let humanInTheLoopPending = false;
   let responseIncompleteReason: "length" | undefined;
   const artifactCollector = createArtifactMetadataCollector();
 
-  const replaceAssistantMessageId = (savedAssistantMessageId: string, metadata?: MessageMetadata) => {
+  const replaceAssistantMessageId = (
+    savedAssistantMessageId: string,
+    metadata?: MessageMetadata,
+  ) => {
     if (!savedAssistantMessageId) return;
 
     const previousAssistantMessageId = assistantMessageId;
     assistantMessageId = savedAssistantMessageId;
-    onMessagesUpdate((prev) => replaceMessageId(prev, previousAssistantMessageId, savedAssistantMessageId, {
-      id: savedAssistantMessageId,
-      ...(metadata && { metadata }),
-    }));
+    onMessagesUpdate((prev) =>
+      replaceMessageId(
+        prev,
+        previousAssistantMessageId,
+        savedAssistantMessageId,
+        {
+          id: savedAssistantMessageId,
+          ...(metadata && { metadata }),
+        },
+      ),
+    );
   };
 
   const ensureAssistantMessage = (content = "") => {
     if (messageCreated) return;
 
     messageCreated = true;
-    onMessagesUpdate((prev) => upsertMessageById(prev, {
-      role: MessageRole.ASSISTANT,
-      content,
-      id: assistantMessageId,
-      timestamp: Date.now(),
-      model,
-      toolActivities: [...toolActivities],
-      metadata: messageMetadata,
-    }));
+    onMessagesUpdate((prev) =>
+      upsertMessageById(prev, {
+        role: MessageRole.ASSISTANT,
+        content,
+        id: assistantMessageId,
+        timestamp: Date.now(),
+        model,
+        toolActivities: [...toolActivities],
+        metadata: messageMetadata,
+      }),
+    );
   };
 
   const applyArtifactMetadata = (): MessageMetadata | undefined => {
@@ -229,22 +281,28 @@ export async function handleStreamingResponse(
       reasoningEffort,
     });
 
-    if (cacheData.cached && cacheData.response !== undefined && typeof cacheData.response === 'string') {
+    if (
+      cacheData.cached &&
+      cacheData.response !== undefined &&
+      typeof cacheData.response === "string"
+    ) {
       assistantContent = cacheData.response;
-      
+
       if (existingAssistantMessageId) {
         updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
           content: assistantContent,
         });
       } else {
-        onMessagesUpdate((prev) => upsertMessageById(prev, {
+        onMessagesUpdate((prev) =>
+          upsertMessageById(prev, {
             role: MessageRole.ASSISTANT,
             content: assistantContent,
             id: assistantMessageId,
             timestamp: Date.now(),
             model,
             toolActivities: [],
-        }));
+          }),
+        );
       }
       handleConversationSaving(
         false,
@@ -259,9 +317,12 @@ export async function handleStreamingResponse(
         undefined,
         false,
         undefined,
-        undefined
+        undefined,
       ).catch((err) => {
-        console.error("[streamingHandler] Background assistant message save (cache) failed:", err);
+        console.error(
+          "[streamingHandler] Background assistant message save (cache) failed:",
+          err,
+        );
       });
 
       persistConversationMemoryIfEligible({
@@ -276,7 +337,14 @@ export async function handleStreamingResponse(
       return { success: true, assistantMessageId };
     }
 
-    const messagesForAPI = buildMessagesForAPI(messages, userMessageContent, DEFAULT_ASSISTANT_PROMPT, model, userAttachments, userMessageId);
+    const messagesForAPI = buildMessagesForAPI(
+      messages,
+      userMessageContent,
+      DEFAULT_ASSISTANT_PROMPT,
+      model,
+      userAttachments,
+      userMessageId,
+    );
 
     const responseContent = await streamChatCompletion({
       messages: messagesForAPI,
@@ -286,7 +354,8 @@ export async function handleStreamingResponse(
         assistantContent += delta;
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertMessageById(prev, {
+          onMessagesUpdate((prev) =>
+            upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: assistantContent,
               id: assistantMessageId,
@@ -294,7 +363,8 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-          }));
+            }),
+          );
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             content: assistantContent,
@@ -308,7 +378,8 @@ export async function handleStreamingResponse(
         onMemoryStatusUpdate?.(status);
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertMessageById(prev, {
+          onMessagesUpdate((prev) =>
+            upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -316,7 +387,8 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-          }));
+            }),
+          );
         }
       },
       onToolCall: (toolCall) => {
@@ -332,7 +404,8 @@ export async function handleStreamingResponse(
 
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertMessageById(prev, {
+          onMessagesUpdate((prev) =>
+            upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -340,7 +413,8 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [...toolActivities],
               metadata: messageMetadata,
-          }));
+            }),
+          );
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             toolActivities: [...toolActivities],
@@ -352,13 +426,18 @@ export async function handleStreamingResponse(
         if (resultPdf) {
           const existing = messageMetadata?.pdfs ?? [];
           if (!existing.some((item) => item.url === resultPdf.url)) {
-            messageMetadata = { ...messageMetadata, pdfs: [...existing, resultPdf] };
+            messageMetadata = {
+              ...messageMetadata,
+              pdfs: [...existing, resultPdf],
+            };
             ensureAssistantMessage();
-            updateAssistantMessage(onMessagesUpdate, assistantMessageId, { metadata: messageMetadata });
+            updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+              metadata: messageMetadata,
+            });
           }
         }
         const activityIndex = toolActivities.findIndex(
-          (a) => a.toolCallId === toolResult.toolCallId
+          (a) => a.toolCallId === toolResult.toolCallId,
         );
 
         if (activityIndex !== -1) {
@@ -375,7 +454,10 @@ export async function handleStreamingResponse(
         }
       },
       onToolProgress: (progress) => {
-        messageMetadata = extractMetadataFromProgress(progress, messageMetadata);
+        messageMetadata = extractMetadataFromProgress(
+          progress,
+          messageMetadata,
+        );
         if (messageCreated && messageMetadata) {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             metadata: messageMetadata,
@@ -409,7 +491,8 @@ export async function handleStreamingResponse(
 
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertMessageById(prev, {
+          onMessagesUpdate((prev) =>
+            upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               id: assistantMessageId,
@@ -417,7 +500,8 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [...toolActivities],
               metadata: messageMetadata,
-          }));
+            }),
+          );
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             metadata: messageMetadata,
@@ -429,7 +513,8 @@ export async function handleStreamingResponse(
         thinkingContent += delta;
         if (!messageCreated) {
           messageCreated = true;
-          onMessagesUpdate((prev) => upsertMessageById(prev, {
+          onMessagesUpdate((prev) =>
+            upsertMessageById(prev, {
               role: MessageRole.ASSISTANT,
               content: "",
               thinking: thinkingContent,
@@ -438,7 +523,8 @@ export async function handleStreamingResponse(
               model,
               toolActivities: [],
               metadata: messageMetadata,
-          }));
+            }),
+          );
         } else {
           updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
             thinking: thinkingContent,
@@ -473,8 +559,14 @@ export async function handleStreamingResponse(
     const artifacts = artifactCollector.getArtifacts();
 
     if (thinkingContent) {
-      const thinkingDurationMs = thinkingStartTime ? Date.now() - thinkingStartTime : undefined;
-      messageMetadata = { ...messageMetadata, thinking: thinkingContent, thinkingDurationMs };
+      const thinkingDurationMs = thinkingStartTime
+        ? Date.now() - thinkingStartTime
+        : undefined;
+      messageMetadata = {
+        ...messageMetadata,
+        thinking: thinkingContent,
+        thinkingDurationMs,
+      };
     }
 
     if (toolActivities.length > 0) {
@@ -495,16 +587,28 @@ export async function handleStreamingResponse(
       });
     }
 
-    const persistableAssistantContent = getPersistableAssistantContent(assistantContent, messageMetadata);
+    const persistableAssistantContent = getPersistableAssistantContent(
+      assistantContent,
+      messageMetadata,
+    );
 
-    if (persistableAssistantContent && persistableAssistantContent !== assistantContent) {
+    if (
+      persistableAssistantContent &&
+      persistableAssistantContent !== assistantContent
+    ) {
       updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
         content: persistableAssistantContent,
       });
     }
 
     if (persistableAssistantContent && !abortSignal.aborted) {
-      if (cacheQuery && assistantContent && artifacts.length === 0 && !messageMetadata?.pdfs?.length && !responseIncompleteReason) {
+      if (
+        cacheQuery &&
+        assistantContent &&
+        artifacts.length === 0 &&
+        !messageMetadata?.pdfs?.length &&
+        !responseIncompleteReason
+      ) {
         saveToCacheMutate({
           query: cacheQuery,
           response: assistantContent,
@@ -526,14 +630,17 @@ export async function handleStreamingResponse(
         undefined,
         false,
         undefined,
-        messageMetadata
+        messageMetadata,
       );
 
       if (humanInTheLoopPending) {
         await savePromise;
       } else {
         savePromise.catch((err) => {
-          console.error("[streamingHandler] Background assistant message save failed:", err);
+          console.error(
+            "[streamingHandler] Background assistant message save failed:",
+            err,
+          );
         });
 
         persistConversationMemoryIfEligible({
@@ -556,14 +663,19 @@ export async function handleStreamingResponse(
         : undefined;
     if (errorName === "AbortError") {
       if (messageCreated) {
-        onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
+        onMessagesUpdate((prev) =>
+          prev.filter((msg) => msg.id !== assistantMessageId),
+        );
       }
       return { success: false, error: "aborted" };
     }
 
     let errorMessage: string;
     try {
-      errorMessage = err instanceof Error ? err.message : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
+      errorMessage =
+        err instanceof Error
+          ? err.message
+          : HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     } catch {
       errorMessage = HOOK_ERROR_MESSAGES.UNKNOWN_ERROR_OCCURRED;
     }
@@ -572,17 +684,36 @@ export async function handleStreamingResponse(
       ...(thinkingContent.trim() ? { thinking: thinkingContent } : {}),
       ...(toolActivities.length > 0 ? { toolActivities } : {}),
     };
-    const partialContent = getPersistableAssistantContent(assistantContent, partialMetadata);
+    const partialContent = getPersistableAssistantContent(
+      assistantContent,
+      partialMetadata,
+    );
     if (messageCreated && partialContent !== null) {
-      messageMetadata = { ...partialMetadata, streamStatus: "error", streamError: errorMessage };
-      updateAssistantMessage(onMessagesUpdate, assistantMessageId, { content: partialContent, metadata: messageMetadata });
+      messageMetadata = {
+        ...partialMetadata,
+        streamStatus: "error",
+        streamError: errorMessage,
+      };
+      updateAssistantMessage(onMessagesUpdate, assistantMessageId, {
+        content: partialContent,
+        metadata: messageMetadata,
+      });
       if (conversationId && !abortSignal.aborted) {
-        void saveAssistantMessage(conversationId, partialContent, messageMetadata).catch((saveError) => {
-          logger.warn("[streamingHandler] Failed to preserve partial response:", saveError);
+        void saveAssistantMessage(
+          conversationId,
+          partialContent,
+          messageMetadata,
+        ).catch((saveError) => {
+          logger.warn(
+            "[streamingHandler] Failed to preserve partial response:",
+            saveError,
+          );
         });
       }
     } else if (messageCreated) {
-      onMessagesUpdate((prev) => prev.filter((msg) => msg.id !== assistantMessageId));
+      onMessagesUpdate((prev) =>
+        prev.filter((msg) => msg.id !== assistantMessageId),
+      );
     }
     return { success: false, error: errorMessage };
   }

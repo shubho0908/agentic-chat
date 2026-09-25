@@ -287,6 +287,24 @@ function validateAttachment(attachment: unknown): AttachmentValidationResult {
     };
   }
 
+  const kind = attachment.kind;
+  const isImage = attachment.fileType
+    .split(";")[0]
+    .trim()
+    .toLowerCase()
+    .startsWith("image/");
+  if (
+    (kind === "image" && !isImage) ||
+    (isImage && kind !== undefined && kind !== "image") ||
+    (kind === "snippet" &&
+      !attachment.fileType.toLowerCase().startsWith("text/"))
+  ) {
+    return {
+      valid: false,
+      error: "Attachment kind does not match its file type",
+    };
+  }
+
   const parsedAttachment = attachmentInputSchema.safeParse(attachment);
   if (!parsedAttachment.success) {
     return {

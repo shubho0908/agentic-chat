@@ -16,13 +16,22 @@ import { PdfDocuments } from "./pdfDocuments";
 import { RichLink } from "../ai-elements/richLink";
 import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
 import { InlineMarkdown } from "@/components/ai-elements/inlineMarkdown";
-import { areChatMessagePropsEqual, type ChatMessageProps } from "./chatMessageMemo";
+import {
+  areChatMessagePropsEqual,
+  type ChatMessageProps,
+} from "./chatMessageMemo";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
 import { PlanningStep } from "./aiThinkingAnimation/planningStep";
 import { CustomEventName } from "@/lib/orchestrator/constants";
-import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
+import {
+  ACTIVITY_ONLY_ASSISTANT_CONTENT,
+  ARTIFACT_ONLY_ASSISTANT_CONTENT,
+  HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT,
+  PDF_ONLY_ASSISTANT_CONTENT,
+  STREAM_STOPPED_BY_USER_MARKER,
+} from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
 import { VALIDATION_LIMITS } from "@/constants/validation";
@@ -31,9 +40,6 @@ import { extractUrls } from "@/lib/url-normalization";
 function renderUserTextContent(text: string): ReactNode {
   return <InlineMarkdown content={text} />;
 }
-
-
-
 
 interface MessageContentSurfaceProps {
   variant: MessageRole;
@@ -49,7 +55,9 @@ interface MessageContentSurfaceProps {
   };
   memoryStatus?: MemoryStatus;
   contextAttachments?: Message["attachments"];
-  humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
+  humanInTheLoopRequest?: NonNullable<
+    Message["metadata"]
+  >["humanInTheLoopRequest"];
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   onSendMessage?: (content: string) => void;
   renderUserTextContent: (text: string) => ReactNode;
@@ -78,24 +86,38 @@ function MessageContentSurface({
     hideArtifactPlaceholder,
     hideStoppedMarker,
   } = renderState;
-  const hidePlaceholderContent = hideHumanInTheLoopPlaceholder || hideArtifactPlaceholder || hideStoppedMarker;
+  const hidePlaceholderContent =
+    hideHumanInTheLoopPlaceholder ||
+    hideArtifactPlaceholder ||
+    hideStoppedMarker;
 
   return (
-    <div className={cn(
-      "text-[15px] leading-relaxed",
-      isUser
-        ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
-        : "w-full min-w-0 text-foreground ml-1",
-      editContent && "focus-within:ring-2 focus-within:ring-foreground/15"
-    )}>
-      {!isUser && isLoading && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
-        <div className="mb-2">
-          <PlanningStep
-            message={memoryStatus.toolProgress.message || "Planning approach..."}
-            plan={(memoryStatus.toolProgress.details as { plan?: string } | undefined)?.plan}
-          />
-        </div>
+    <div
+      className={cn(
+        "text-[15px] leading-relaxed",
+        isUser
+          ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          : "w-full min-w-0 text-foreground ml-1",
+        editContent && "focus-within:ring-2 focus-within:ring-foreground/15",
       )}
+    >
+      {!isUser &&
+        isLoading &&
+        memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
+          <div className="mb-2">
+            <PlanningStep
+              message={
+                memoryStatus.toolProgress.message || "Planning approach..."
+              }
+              plan={
+                (
+                  memoryStatus.toolProgress.details as
+                    { plan?: string } | undefined
+                )?.plan
+              }
+            />
+          </div>
+        )}
 
       {!isUser && displayedMessage.thinking && (
         <ThinkingAccordion
@@ -105,11 +127,17 @@ function MessageContentSurface({
         />
       )}
 
-      {!isUser && displayedMessage.toolActivities && displayedMessage.toolActivities.length > 0 && (
-        <div className="mb-2 rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
-          <ToolActivityDisplay toolActivities={displayedMessage.toolActivities.filter((a) => a.toolName !== ToolName.ASK_USER)} />
-        </div>
-      )}
+      {!isUser &&
+        displayedMessage.toolActivities &&
+        displayedMessage.toolActivities.length > 0 && (
+          <div className="mb-2 rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <ToolActivityDisplay
+              toolActivities={displayedMessage.toolActivities.filter(
+                (a) => a.toolName !== ToolName.ASK_USER,
+              )}
+            />
+          </div>
+        )}
 
       {!isUser && humanInTheLoopRequest && (
         <HumanInTheLoopApprovalCard
@@ -129,25 +157,82 @@ function MessageContentSurface({
 
       {!isUser && displayedMessage.metadata?.streamStatus && (
         <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
-          <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
-          <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
-          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue response</Button>}
+          <div className="font-medium">
+            {displayedMessage.metadata.streamStatus === "incomplete"
+              ? "Response reached the output limit"
+              : "Response interrupted"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            {displayedMessage.metadata.streamStatus === "incomplete"
+              ? "The answer below is incomplete."
+              : "The partial answer below was preserved."}
+          </div>
+          {onSendMessage && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() =>
+                onSendMessage(
+                  "Continue from where you stopped without repeating the existing answer.",
+                )
+              }
+            >
+              Continue response
+            </Button>
+          )}
         </div>
       )}
 
-      {editContent ? editContent : !hidePlaceholderContent && textContent ? (
-        isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
-      ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
-        isUser ? (typeof displayedMessage.content === "string" ? renderUserTextContent(displayedMessage.content) : "") : <Response>{typeof displayedMessage.content === "string" ? displayedMessage.content : ""}</Response>
+      {editContent ? (
+        editContent
+      ) : !hidePlaceholderContent && textContent ? (
+        isUser ? (
+          renderUserTextContent(textContent)
+        ) : (
+          <Response>{textContent}</Response>
+        )
+      ) : !hidePlaceholderContent &&
+        displayedMessage.content &&
+        displayedMessage.content !==
+          HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
+        isUser ? (
+          typeof displayedMessage.content === "string" ? (
+            renderUserTextContent(displayedMessage.content)
+          ) : (
+            ""
+          )
+        ) : (
+          <Response>
+            {typeof displayedMessage.content === "string"
+              ? displayedMessage.content
+              : ""}
+          </Response>
+        )
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
-        <AIThinkingAnimation memoryStatus={memoryStatus} attachments={contextAttachments} />
+        <AIThinkingAnimation
+          memoryStatus={memoryStatus}
+          attachments={contextAttachments}
+        />
       ) : null}
     </div>
   );
 }
 
-
-function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus, contextAttachments }: ChatMessageProps) {
+function ChatMessageComponent({
+  message,
+  onEditMessage,
+  onRegenerateMessage,
+  onSendMessage,
+  onHumanInTheLoopDecision,
+  onOpenArtifact,
+  isSharePage = false,
+  isLastMessage = false,
+  isLoading = false,
+  memoryStatus,
+  contextAttachments,
+}: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -155,27 +240,46 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
   const versions = useMemo(() => message.versions ?? [], [message.versions]);
   const totalVersions = versions.length + 1;
-  const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
+  const currentVersion =
+    versionIndex === -1 ? totalVersions : totalVersions - 1 - versionIndex;
 
   const displayedMessage = useMemo<Message>(() => {
-    const msg = versionIndex === -1 ? message : (versions[versionIndex] || message);
+    const msg =
+      versionIndex === -1 ? message : versions[versionIndex] || message;
     return msg;
   }, [versionIndex, message, versions]);
 
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
-  const artifactMetadata = !isUser ? displayedMessage.metadata?.artifacts ?? [] : [];
+  const artifactMetadata = !isUser
+    ? (displayedMessage.metadata?.artifacts ?? [])
+    : [];
   const displayedMessageId = displayedMessage.id ?? message.id;
 
-  const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
+  const rawText = useMemo(
+    () => extractTextFromContent(displayedContent),
+    [displayedContent],
+  );
 
   const textContent = useMemo(() => {
-    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === PDF_ONLY_ASSISTANT_CONTENT || rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
+    if (
+      rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ||
+      rawText === PDF_ONLY_ASSISTANT_CONTENT ||
+      rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT ||
+      rawText === STREAM_STOPPED_BY_USER_MARKER
+    )
+      return "";
     return rawText;
   }, [rawText]);
-  const hidePdfPlaceholder = (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 && rawText === PDF_ONLY_ASSISTANT_CONTENT;
+  const hidePdfPlaceholder =
+    (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 &&
+    rawText === PDF_ONLY_ASSISTANT_CONTENT;
   const hideActivityPlaceholder = rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT;
-  const hideArtifactPlaceholder = (artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) || hidePdfPlaceholder || hideActivityPlaceholder;
+  const hideArtifactPlaceholder =
+    (artifactMetadata.length > 0 &&
+      textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) ||
+    hidePdfPlaceholder ||
+    hideActivityPlaceholder;
   const hideStoppedMarker = rawText === STREAM_STOPPED_BY_USER_MARKER;
 
   const handleEditStart = useCallback(() => {
@@ -202,7 +306,9 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
         return versions.length > 0 ? 0 : currentIndex;
       }
 
-      return currentIndex < versions.length - 1 ? currentIndex + 1 : currentIndex;
+      return currentIndex < versions.length - 1
+        ? currentIndex + 1
+        : currentIndex;
     });
   }, [versions.length]);
 
@@ -223,19 +329,27 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
     const allCitations = [];
 
-    if (displayedMessage.metadata?.citations && displayedMessage.metadata.citations.length > 0) {
+    if (
+      displayedMessage.metadata?.citations &&
+      displayedMessage.metadata.citations.length > 0
+    ) {
       allCitations.push(...displayedMessage.metadata.citations);
     }
 
-    if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
-      const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
-        id: `source-${source.position || index + 1}`,
-        source: source.title,
-        url: source.url,
-        relevance: source.snippet || `Source from ${source.domain}`,
-        author: source.domain,
-        year: new Date().getFullYear().toString(),
-      }));
+    if (
+      displayedMessage.metadata?.sources &&
+      displayedMessage.metadata.sources.length > 0
+    ) {
+      const sourcesAsCitations = displayedMessage.metadata.sources.map(
+        (source, index) => ({
+          id: `source-${source.position || index + 1}`,
+          source: source.title,
+          url: source.url,
+          relevance: source.snippet || `Source from ${source.domain}`,
+          author: source.domain,
+          year: new Date().getFullYear().toString(),
+        }),
+      );
       allCitations.push(...sourcesAsCitations);
     }
 
@@ -244,7 +358,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
     }
 
     const seenUrls = new Set<string>();
-    const uniqueCitations = allCitations.filter(citation => {
+    const uniqueCitations = allCitations.filter((citation) => {
       if (!citation.url) return true;
       if (seenUrls.has(citation.url)) return false;
       seenUrls.add(citation.url);
@@ -259,12 +373,15 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
     const allImages = [];
 
-    if (displayedMessage.metadata?.images && displayedMessage.metadata.images.length > 0) {
+    if (
+      displayedMessage.metadata?.images &&
+      displayedMessage.metadata.images.length > 0
+    ) {
       allImages.push(...displayedMessage.metadata.images);
     }
 
     const seenUrls = new Set<string>();
-    const uniqueImages = allImages.filter(image => {
+    const uniqueImages = allImages.filter((image) => {
       if (seenUrls.has(image.url)) return false;
       seenUrls.add(image.url);
       return true;
@@ -276,7 +393,11 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   const followUpQuestions = useMemo(() => {
     if (isUser) return [];
 
-    if (displayedMessage.metadata?.followUpQuestions && displayedMessage.metadata.followUpQuestions.length > 0 && !isLoading) {
+    if (
+      displayedMessage.metadata?.followUpQuestions &&
+      displayedMessage.metadata.followUpQuestions.length > 0 &&
+      !isLoading
+    ) {
       if (isLastMessage) {
         return displayedMessage.metadata.followUpQuestions;
       }
@@ -291,8 +412,12 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
     return extractUrls(textContent);
   }, [isUser, textContent]);
 
-  const humanInTheLoopRequest = !isUser ? displayedMessage.metadata?.humanInTheLoopRequest : undefined;
-  const humanInTheLoopPending = displayedMessage.metadata?.humanInTheLoopStatus === "pending" && !!humanInTheLoopRequest;
+  const humanInTheLoopRequest = !isUser
+    ? displayedMessage.metadata?.humanInTheLoopRequest
+    : undefined;
+  const humanInTheLoopPending =
+    displayedMessage.metadata?.humanInTheLoopStatus === "pending" &&
+    !!humanInTheLoopRequest;
   const hideHumanInTheLoopPlaceholder = humanInTheLoopPending;
 
   if (message.role === MessageRole.SYSTEM) return null;
@@ -305,17 +430,32 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
         "group relative px-4 py-3 md:py-4 transition-colors w-screen md:w-full",
       )}
     >
-      <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
-        <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
-          <div className={cn("flex min-w-0 flex-col", isUser ? "gap-1 items-end" : "gap-2 w-full items-start")}>
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-3xl",
+          isUser ? "justify-end" : "justify-start",
+        )}
+      >
+        <div
+          className={cn(
+            "flex min-w-0 gap-3",
+            isUser
+              ? "max-w-[85%] md:max-w-[75%] flex-row-reverse"
+              : "w-full max-w-[90%] md:max-w-[85%]",
+          )}
+        >
+          <div
+            className={cn(
+              "flex min-w-0 flex-col",
+              isUser ? "gap-1 items-end" : "gap-2 w-full items-start",
+            )}
+          >
             <AttachmentDisplay
               attachments={displayedAttachments}
               isUser={isUser}
             />
 
-            {!isUser && images.length > 0 && (
-              <SearchImages images={images} />
-            )}
+            {!isUser && images.length > 0 && <SearchImages images={images} />}
 
             <MessageContentSurface
               variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
@@ -335,15 +475,17 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
               onHumanInTheLoopDecision={onHumanInTheLoopDecision}
               onSendMessage={onSendMessage}
               renderUserTextContent={renderUserTextContent}
-              editContent={isUser && isEditing ? (
-                <MessageEditForm
-                  editText={editText}
-                  sizingText={textContent}
-                  onEditTextChange={setEditText}
-                  onSubmit={handleEditSubmit}
-                  onCancel={handleEditCancel}
-                />
-              ) : undefined}
+              editContent={
+                isUser && isEditing ? (
+                  <MessageEditForm
+                    editText={editText}
+                    sizingText={textContent}
+                    onEditTextChange={setEditText}
+                    onSubmit={handleEditSubmit}
+                    onCancel={handleEditCancel}
+                  />
+                ) : undefined
+              }
             />
 
             {!isUser && artifactMetadata.length > 0 && (
@@ -354,14 +496,21 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
               />
             )}
 
-            {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
-              <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
-            )}
+            {!isUser &&
+              displayedMessage.metadata?.pdfs &&
+              displayedMessage.metadata.pdfs.length > 0 && (
+                <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
+              )}
 
             {isUser && !isEditing && userUrls.length > 0 && (
               <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
                 {userUrls.map((url) => (
-                  <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
+                  <RichLink
+                    key={url}
+                    url={url}
+                    variant="userMessage"
+                    className="w-full sm:w-auto max-w-[280px]"
+                  />
                 ))}
               </div>
             )}
@@ -388,24 +537,42 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
             )}
 
             {!isSharePage && (
-              <div className={cn(
-                "mt-1 flex items-center gap-2",
-                isUser ? "pr-2" : "pl-1 w-full"
-              )}>
-                <div className={cn(
-                  "transition-opacity duration-300 md:group-focus-within:opacity-100",
-                  isEditing
-                    ? "opacity-100"
-                    : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                )}>
+              <div
+                className={cn(
+                  "mt-1 flex items-center gap-2",
+                  isUser ? "pr-2" : "pl-1 w-full",
+                )}
+              >
+                <div
+                  className={cn(
+                    "transition-opacity duration-300 md:group-focus-within:opacity-100",
+                    isEditing
+                      ? "opacity-100"
+                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+                  )}
+                >
                   <MessageActions
-                    context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
+                    context={{
+                      isUser,
+                      isEditing,
+                      canEdit: !!onEditMessage,
+                      isThinking,
+                      isLoading,
+                    }}
                     textContent={textContent}
                     onEditStart={handleEditStart}
                     onEditSubmit={handleEditSubmit}
                     onEditCancel={handleEditCancel}
-                    canSaveEdit={editText.trim().length > 0 && editText.length <= VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH}
-                    onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
+                    canSaveEdit={
+                      editText.trim().length > 0 &&
+                      editText.length <=
+                        VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH
+                    }
+                    onRegenerate={
+                      onRegenerateMessage && message.id
+                        ? () => onRegenerateMessage(message.id!)
+                        : undefined
+                    }
                   />
                 </div>
                 {!isUser && !isThinking && (
@@ -434,7 +601,5 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
     </div>
   );
 }
-
-
 
 export const ChatMessage = memo(ChatMessageComponent, areChatMessagePropsEqual);

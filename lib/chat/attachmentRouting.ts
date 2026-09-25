@@ -1,3 +1,5 @@
+import { attachmentKind } from "./attachmentKind";
+
 export interface RoutableAttachment {
   id?: string;
   fileName: string;
@@ -11,5 +13,5 @@ export function selectDocumentAttachmentsForTurn<T extends RoutableAttachment>(
   const scopedMessages = isReferential ? messages : messages.slice(-1);
   return scopedMessages
     .flatMap((message) => message.attachments ?? [])
-    .filter((attachment) => !attachment.fileType.startsWith("image/"));
+    .filter((attachment) => attachmentKind(attachment) === "document");
 }

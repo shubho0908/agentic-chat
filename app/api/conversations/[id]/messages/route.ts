@@ -1,36 +1,56 @@
-import { NextRequest, after } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { headers } from 'next/headers';
-import { getAuthenticatedUser, errorResponse, jsonResponse } from '@/lib/apiUtils';
-import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { isValidConversationId, validateMessageData, validateAttachmentInputs } from '@/lib/validation';
-import { messageMetadataSchema, type AttachmentInput, type MessageMetadata } from '@/lib/schemas/chat';
-import { isSupportedForRAG } from '@/lib/rag/utils';
-import { runOrQueueDocumentProcessingJob } from '@/lib/orchestration/documentJobs';
+import { NextRequest, after } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { headers } from "next/headers";
+import {
+  getAuthenticatedUser,
+  errorResponse,
+  jsonResponse,
+} from "@/lib/apiUtils";
+import { API_ERROR_MESSAGES, HTTP_STATUS } from "@/constants/errors";
+import {
+  isValidConversationId,
+  validateMessageData,
+  validateAttachmentInputs,
+} from "@/lib/validation";
+import {
+  messageMetadataSchema,
+  type AttachmentInput,
+  type MessageMetadata,
+} from "@/lib/schemas/chat";
+import { isSupportedForRAG } from "@/lib/rag/utils";
+import { runOrQueueDocumentProcessingJob } from "@/lib/orchestration/documentJobs";
 import { logger } from "@/lib/logger";
-import { isRecord } from '@/lib/typeGuards';
-import { markStreamStoppedByUser } from '@/lib/chat/streamStopped';
+import { isRecord } from "@/lib/typeGuards";
+import { markStreamStoppedByUser } from "@/lib/chat/streamStopped";
 import {
   STREAM_STOPPED_BY_USER_MARKER,
   isStreamStoppedMarkerMessage,
   parseStreamStoppedMarkerMessageId,
-} from '@/lib/chat/stopMarker';
-import type { MessageRole, Prisma } from '@prisma/client';
+} from "@/lib/chat/stopMarker";
+import type { MessageRole, Prisma } from "@prisma/client";
 
-type MessageWithAttachments = Prisma.MessageGetPayload<{ include: { attachments: true } }>;
+type MessageWithAttachments = Prisma.MessageGetPayload<{
+  include: { attachments: true };
+}>;
 
 function getRagAttachmentIds(
-  attachments?: Array<{ id: string; fileType: string }>
+  attachments?: Array<{ id: string; fileType: string; kind?: string }>,
 ): string[] {
   if (!attachments || attachments.length === 0) {
     return [];
   }
 
-  return attachments
-    .flatMap((attachment) => isSupportedForRAG(attachment.fileType) ? [attachment.id] : []);
+  return attachments.flatMap((attachment) =>
+    attachment.kind !== "image" && isSupportedForRAG(attachment.fileType)
+      ? [attachment.id]
+      : [],
+  );
 }
 
-function scheduleDocumentProcessing(attachmentIds: string[], userId: string): void {
+function scheduleDocumentProcessing(
+  attachmentIds: string[],
+  userId: string,
+): void {
   if (attachmentIds.length === 0) {
     return;
   }
@@ -38,16 +58,22 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
   after(async () => {
     const results = await Promise.allSettled(
       attachmentIds.map((attachmentId) =>
-        runOrQueueDocumentProcessingJob(attachmentId, userId)
-      )
+        runOrQueueDocumentProcessingJob(attachmentId, userId),
+      ),
     );
 
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        logger.warn('[Messages Route] Failed to schedule document processing:', {
-          attachmentId: attachmentIds[index],
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        });
+      if (result.status === "rejected") {
+        logger.warn(
+          "[Messages Route] Failed to schedule document processing:",
+          {
+            attachmentId: attachmentIds[index],
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          },
+        );
       }
     });
   });
@@ -55,7 +81,7 @@ function scheduleDocumentProcessing(attachmentIds: string[], userId: string): vo
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { user, error } = await getAuthenticatedUser(await headers());
@@ -64,28 +90,44 @@ export async function POST(
     const { id: conversationId } = await params;
 
     if (!isValidConversationId(conversationId)) {
-      return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        API_ERROR_MESSAGES.INVALID_CONVERSATION_ID,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
     let body: unknown;
     try {
       body = await request.json();
     } catch {
-      return errorResponse('Request body must be valid JSON', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Request body must be valid JSON",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
-    
+
     if (!isRecord(body)) {
-      return errorResponse('Invalid request body', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Invalid request body",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
-    
+
     const { role, content, attachments, metadata } = body;
     let validatedAttachments: AttachmentInput[] | undefined;
     let validatedMetadata: MessageMetadata | undefined;
-    const roleValue = typeof role === 'string' ? role : undefined;
-    const contentValue = typeof content === 'string' ? content : undefined;
+    const roleValue = typeof role === "string" ? role : undefined;
+    const contentValue = typeof content === "string" ? content : undefined;
 
     const validation = validateMessageData(roleValue, contentValue);
     if (!validation.valid) {
-      return errorResponse(validation.error || 'Invalid message data', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        validation.error || "Invalid message data",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const validatedRole = roleValue as MessageRole;
@@ -94,7 +136,11 @@ export async function POST(
     if (metadata !== undefined && metadata !== null) {
       const metadataValidation = messageMetadataSchema.safeParse(metadata);
       if (!metadataValidation.success) {
-        return errorResponse('Invalid metadata structure', metadataValidation.error.message, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          "Invalid metadata structure",
+          metadataValidation.error.message,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
       validatedMetadata = metadataValidation.data;
     }
@@ -102,14 +148,18 @@ export async function POST(
     if (attachments !== undefined && attachments !== null) {
       const attachmentValidation = validateAttachmentInputs(attachments);
       if (!attachmentValidation.valid) {
-        return errorResponse(attachmentValidation.error || 'Invalid attachments', undefined, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          attachmentValidation.error || "Invalid attachments",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
 
       validatedAttachments = attachmentValidation.attachments;
     }
 
     const clientMessageId =
-      typeof body.id === 'string' && body.id.length > 0 && body.id.length <= 128
+      typeof body.id === "string" && body.id.length > 0 && body.id.length <= 128
         ? body.id
         : undefined;
 
@@ -121,7 +171,11 @@ export async function POST(
       });
     } catch (updateErr) {
       if (isRecord(updateErr) && updateErr.code === "P2025") {
-        return errorResponse(API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND, undefined, HTTP_STATUS.NOT_FOUND);
+        return errorResponse(
+          API_ERROR_MESSAGES.CONVERSATION_NOT_FOUND,
+          undefined,
+          HTTP_STATUS.NOT_FOUND,
+        );
       }
       throw updateErr;
     }
@@ -131,16 +185,29 @@ export async function POST(
     // implementation. The turn scope comes from the deterministic marker id
     // the client computed for this turn; an unscoped or malformed marker
     // write is refused, never applied to whatever turn happens to be latest.
-    if (validatedRole === 'ASSISTANT' && validatedContent === STREAM_STOPPED_BY_USER_MARKER) {
+    if (
+      validatedRole === "ASSISTANT" &&
+      validatedContent === STREAM_STOPPED_BY_USER_MARKER
+    ) {
       const expectedUserMessageId = clientMessageId
         ? parseStreamStoppedMarkerMessageId(conversationId, clientMessageId)
         : null;
       if (!expectedUserMessageId) {
-        return errorResponse('Stop marker requires the scoped marker message id', undefined, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          "Stop marker requires the scoped marker message id",
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
-      const markResult = await markStreamStoppedByUser(conversationId, expectedUserMessageId);
+      const markResult = await markStreamStoppedByUser(
+        conversationId,
+        expectedUserMessageId,
+      );
       if (!markResult.marked) {
-        return jsonResponse({ id: null, skipped: markResult.reason ?? 'not-marked' }, HTTP_STATUS.OK);
+        return jsonResponse(
+          { id: null, skipped: markResult.reason ?? "not-marked" },
+          HTTP_STATUS.OK,
+        );
       }
       const markerMessage = await prisma.message.findUnique({
         where: { id: markResult.messageId as string },
@@ -151,7 +218,7 @@ export async function POST(
 
     let message: MessageWithAttachments | null = null;
     try {
-      if (validatedRole === 'ASSISTANT') {
+      if (validatedRole === "ASSISTANT") {
         // First-writer-wins against the stop marker: a completion that
         // arrives after the turn was stopped is dropped. The conversation
         // row lock closes the check-then-act window against
@@ -160,7 +227,7 @@ export async function POST(
           await tx.$executeRaw`SELECT id FROM conversation WHERE id = ${conversationId} FOR UPDATE`;
           const latest = await tx.message.findFirst({
             where: { conversationId, isDeleted: false, parentMessageId: null },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: "desc" },
             select: { id: true, role: true, content: true },
           });
           if (isStreamStoppedMarkerMessage(latest)) {
@@ -178,11 +245,18 @@ export async function POST(
         });
         if (!message) {
           const marker = await prisma.message.findFirst({
-            where: { conversationId, isDeleted: false, content: STREAM_STOPPED_BY_USER_MARKER },
-            orderBy: { createdAt: 'desc' },
+            where: {
+              conversationId,
+              isDeleted: false,
+              content: STREAM_STOPPED_BY_USER_MARKER,
+            },
+            orderBy: { createdAt: "desc" },
             select: { id: true },
           });
-          return jsonResponse({ id: marker?.id ?? null, droppedAfterStop: true }, HTTP_STATUS.OK);
+          return jsonResponse(
+            { id: marker?.id ?? null, droppedAfterStop: true },
+            HTTP_STATUS.OK,
+          );
         }
       } else {
         message = await prisma.message.create({
@@ -192,20 +266,32 @@ export async function POST(
             role: validatedRole,
             content: validatedContent,
             ...(validatedMetadata && { metadata: validatedMetadata }),
-            attachments: validatedAttachments && validatedAttachments.length > 0 ? {
-              create: validatedAttachments.map(att => ({
-                fileUrl: att.fileUrl,
-                fileName: att.fileName,
-                fileType: att.fileType,
-                fileSize: att.fileSize,
-              }))
-            } : undefined,
+            attachments:
+              validatedAttachments && validatedAttachments.length > 0
+                ? {
+                    create: validatedAttachments.map((att) => ({
+                      fileUrl: att.fileUrl,
+                      fileName: att.fileName,
+                      fileType: att.fileType,
+                      kind:
+                        att.kind ??
+                        (att.fileType.startsWith("image/")
+                          ? "image"
+                          : "document"),
+                      fileSize: att.fileSize,
+                    })),
+                  }
+                : undefined,
           },
           include: { attachments: true },
         });
       }
     } catch (createErr) {
-      if (isRecord(createErr) && createErr.code === "P2002" && clientMessageId) {
+      if (
+        isRecord(createErr) &&
+        createErr.code === "P2002" &&
+        clientMessageId
+      ) {
         const existing = await prisma.message.findUnique({
           where: { id: clientMessageId },
           include: { attachments: true },
@@ -213,19 +299,26 @@ export async function POST(
         if (existing && existing.conversationId === conversationId) {
           return jsonResponse(existing, HTTP_STATUS.OK);
         }
-        return errorResponse('Message ID conflict', undefined, HTTP_STATUS.CONFLICT);
+        return errorResponse(
+          "Message ID conflict",
+          undefined,
+          HTTP_STATUS.CONFLICT,
+        );
       }
       throw createErr;
     }
 
-    scheduleDocumentProcessing(getRagAttachmentIds(message.attachments), user.id);
+    scheduleDocumentProcessing(
+      getRagAttachmentIds(message.attachments),
+      user.id,
+    );
 
     return jsonResponse(message, HTTP_STATUS.CREATED);
   } catch (error) {
     return errorResponse(
       API_ERROR_MESSAGES.FAILED_CREATE_MESSAGE,
       error instanceof Error ? error.message : undefined,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
     );
   }
 }

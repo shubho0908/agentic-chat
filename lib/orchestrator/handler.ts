@@ -9,7 +9,11 @@ import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { createFinalAnswerNode } from "./nodes/agent";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt, terminalAnswerText } from "./streaming";
+import {
+  createStreamEventMapper,
+  handleGraphInterrupt,
+  terminalAnswerText,
+} from "./streaming";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -371,7 +375,10 @@ export function createOrchestratorStreamHandler(
         const closeTurn = (reason: RecoveryReasonValue) =>
           closeTurnAtLimit(
             graph,
-            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
+            createFinalAnswerNode(apiKey, model, {
+              reasoningEffort,
+              ephemeralContext,
+            }),
             reason,
             threadId,
             stream,
@@ -384,7 +391,11 @@ export function createOrchestratorStreamHandler(
         try {
           threadLock = await acquireThreadLock(threadId, {
             signal: workSignal,
-            waitTimeoutMs: deadlineAt - FINAL_ANSWER_RESERVE_MS - MIN_TURN_WORK_MS - Date.now(),
+            waitTimeoutMs:
+              deadlineAt -
+              FINAL_ANSWER_RESERVE_MS -
+              MIN_TURN_WORK_MS -
+              Date.now(),
           });
         } catch (lockError) {
           if (lockError instanceof ThreadLockTimeoutError) {
@@ -441,7 +452,10 @@ export function createOrchestratorStreamHandler(
           });
           if (checkpointExists && incrementalMessages.length === 0) {
             if (
-              mapper.ensureTerminalAnswer(stream, existingState.values?.messages)
+              mapper.ensureTerminalAnswer(
+                stream,
+                existingState.values?.messages,
+              )
             ) {
               logInfo({
                 event: "orchestrator_completed_turn_replayed",
@@ -508,7 +522,10 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
-          if (answerDue.signal.aborted && !terminalAnswerText(finalState.values?.messages)) {
+          if (
+            answerDue.signal.aborted &&
+            !terminalAnswerText(finalState.values?.messages)
+          ) {
             await closeTurn(RecoveryReason.TIME_LIMIT);
           } else {
             mapper.ensureTerminalAnswer(stream, finalState.values?.messages);

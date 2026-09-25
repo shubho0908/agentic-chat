@@ -16,6 +16,7 @@ export interface PartitionedAttachments<T extends AttachmentStatus> {
 export interface RAGContextOptions {
   conversationId?: string;
   attachmentIds?: string[];
+  attachmentKind?: "document" | "snippet";
   limit?: number;
   scoreThreshold?: number;
   waitForProcessing?: boolean;

@@ -39,7 +39,10 @@ interface FormHandlers {
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
-  onReasoningEffortChange: (modelId: string, effort: ReasoningEffortLevel) => void;
+  onReasoningEffortChange: (
+    modelId: string,
+    effort: ReasoningEffortLevel,
+  ) => void;
   onModelSelect: (modelId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
@@ -149,11 +152,7 @@ export function ChatInputForm({
             isUploading={isUploading}
           />
 
-          <div
-            className={`relative ${
-              centered ? "px-5 pt-4" : "px-4 pt-3.5"
-            }`}
-          >
+          <div className={`relative ${centered ? "px-5 pt-4" : "px-4 pt-3.5"}`}>
             <Textarea
               ref={textareaRef}
               value={input}
@@ -196,7 +195,9 @@ export function ChatInputForm({
               {showCounter && (
                 <p
                   className={`text-right text-[11px] leading-none tabular-nums ${
-                    isOverLimit ? "text-destructive" : "text-muted-foreground/70"
+                    isOverLimit
+                      ? "text-destructive"
+                      : "text-muted-foreground/70"
                   }`}
                 >
                   {input.length.toLocaleString()} / {maxLength.toLocaleString()}

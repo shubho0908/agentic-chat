@@ -4,7 +4,11 @@ import type { MemoryStatus } from "@/types/chat";
 
 export interface ChatMessageProps {
   message: Message;
-  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
+  onEditMessage?: (
+    messageId: string,
+    newContent: string,
+    attachments?: Attachment[],
+  ) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
@@ -16,7 +20,10 @@ export interface ChatMessageProps {
   contextAttachments?: Attachment[];
 }
 
-export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
+export function areChatMessagePropsEqual(
+  prevProps: ChatMessageProps,
+  nextProps: ChatMessageProps,
+): boolean {
   if (
     prevProps.message.id !== nextProps.message.id ||
     prevProps.message.content !== nextProps.message.content ||
@@ -38,12 +45,21 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
     return false;
   }
 
-  if (prevProps.message.toolActivities?.length !== nextProps.message.toolActivities?.length) {
+  if (
+    prevProps.message.toolActivities?.length !==
+    nextProps.message.toolActivities?.length
+  ) {
     return false;
   }
 
-  const prevLastActivity = prevProps.message.toolActivities?.[prevProps.message.toolActivities.length - 1];
-  const nextLastActivity = nextProps.message.toolActivities?.[nextProps.message.toolActivities.length - 1];
+  const prevLastActivity =
+    prevProps.message.toolActivities?.[
+      prevProps.message.toolActivities.length - 1
+    ];
+  const nextLastActivity =
+    nextProps.message.toolActivities?.[
+      nextProps.message.toolActivities.length - 1
+    ];
   if (prevLastActivity?.status !== nextLastActivity?.status) {
     return false;
   }
@@ -56,7 +72,8 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
     prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
     prevMetadata?.images?.length !== nextMetadata?.images?.length ||
     prevMetadata?.pdfs?.length !== nextMetadata?.pdfs?.length ||
-    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
+    prevMetadata?.followUpQuestions?.length !==
+      nextMetadata?.followUpQuestions?.length ||
     prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
   ) {
     return false;
@@ -74,12 +91,14 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
       prevStatus?.hasImages !== nextStatus?.hasImages ||
       prevStatus?.memoryCount !== nextStatus?.memoryCount ||
       prevStatus?.documentCount !== nextStatus?.documentCount ||
+      prevStatus?.attachmentContextKind !== nextStatus?.attachmentContextKind ||
       prevStatus?.documentContextState !== nextStatus?.documentContextState ||
       prevStatus?.documentEvidenceIds !== nextStatus?.documentEvidenceIds ||
       prevStatus?.documentEvidenceFiles !== nextStatus?.documentEvidenceFiles ||
       prevStatus?.imageCount !== nextStatus?.imageCount ||
       prevStatus?.routingDecision !== nextStatus?.routingDecision ||
-      prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length
+      prevStatus?.degradedContexts?.length !==
+        nextStatus?.degradedContexts?.length
     ) {
       return false;
     }
@@ -91,7 +110,8 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
       prevProgress?.status !== nextProgress?.status ||
       prevProgress?.message !== nextProgress?.message ||
       prevProgress?.details?.status !== nextProgress?.details?.status ||
-      prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length
+      prevProgress?.details?.citations?.length !==
+        nextProgress?.details?.citations?.length
     ) {
       return false;
     }
