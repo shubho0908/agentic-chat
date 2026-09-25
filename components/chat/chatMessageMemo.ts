@@ -13,6 +13,7 @@ export interface ChatMessageProps {
   isLastMessage?: boolean;
   isLoading?: boolean;
   memoryStatus?: MemoryStatus;
+  contextAttachments?: Attachment[];
 }
 
 export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
@@ -24,6 +25,7 @@ export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps:
     prevProps.message.metadata !== nextProps.message.metadata ||
     prevProps.message.toolActivities !== nextProps.message.toolActivities ||
     prevProps.message.versions !== nextProps.message.versions ||
+    prevProps.contextAttachments !== nextProps.contextAttachments ||
     prevProps.onEditMessage !== nextProps.onEditMessage ||
     prevProps.onRegenerateMessage !== nextProps.onRegenerateMessage ||
     prevProps.onSendMessage !== nextProps.onSendMessage ||

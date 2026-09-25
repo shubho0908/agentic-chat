@@ -132,6 +132,7 @@ export function ChatContainer({
     messages.length > 0 &&
     lastMessage?.role === MessageRole.ASSISTANT;
   const messageKeyOccurrences = new Map<string, number>();
+  const currentTurnAttachments = messages.slice(0, -1).findLast((message) => message.role === MessageRole.USER)?.attachments;
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
@@ -181,6 +182,7 @@ export function ChatContainer({
                 isLastMessage={index === messages.length - 1}
                 isLoading={isLoading}
                 memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}
+                contextAttachments={index === messages.length - 1 ? currentTurnAttachments : undefined}
               />
             </div>
           ))}

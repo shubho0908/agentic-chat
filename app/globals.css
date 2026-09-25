@@ -447,3 +447,21 @@
     -webkit-user-drag: element;
   }
 }
+
+@keyframes context-card-sheen {
+  0%, 65% { transform: translateX(-125%); }
+  100% { transform: translateX(125%); }
+}
+
+.context-card-sheen {
+  background: linear-gradient(105deg, transparent 43%, rgba(120, 120, 130, 0.08) 50%, transparent 57%);
+  animation: context-card-sheen 4.5s ease-in-out infinite;
+}
+
+.dark .context-card-sheen {
+  background: linear-gradient(105deg, transparent 43%, rgba(255, 255, 255, 0.045) 50%, transparent 57%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-card-sheen { animation: none; opacity: 0; }
+}

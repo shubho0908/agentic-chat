@@ -13,23 +13,19 @@ export function getContextualMessage(
   const routing = memoryStatus?.routingDecision;
 
   if (routing === RoutingDecision.VisionOnly) {
-    const isMultiple = (memoryStatus?.imageCount ?? 0) > 1;
-    return isMultiple
-      ? AI_THINKING_MESSAGES.VISION_MULTIPLE
-      : AI_THINKING_MESSAGES.VISION_SINGLE;
+    return (memoryStatus?.imageCount ?? 0) > 1
+      ? "Analyzing the provided context..."
+      : "Analyzing the image to understand the context...";
   }
 
   if (routing === RoutingDecision.Hybrid) {
-    const imageText = (memoryStatus?.imageCount ?? 0) > 1 ? "images" : "image";
-    const docCount = memoryStatus?.documentCount ?? 0;
-    const docText = docCount !== 1 ? "docs" : "doc";
-    return `Analyzing ${imageText} and ${docCount} ${docText} together...`;
+    return "Analyzing the provided context...";
   }
 
   if (routing === RoutingDecision.DocumentsOnly) {
-    const docCount = memoryStatus?.documentCount ?? 0;
-    const docText = docCount !== 1 ? "docs" : "doc";
-    return `Analyzing ${docCount} attached ${docText} with focused context...`;
+    return (memoryStatus?.documentCount ?? 0) > 1
+      ? "Analyzing the provided context..."
+      : "Analyzing the document to extract relevant information...";
   }
 
   if (routing === RoutingDecision.MemoryOnly) {

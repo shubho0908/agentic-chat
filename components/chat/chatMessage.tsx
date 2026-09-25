@@ -48,6 +48,7 @@ interface MessageContentSurfaceProps {
     hideStoppedMarker: boolean;
   };
   memoryStatus?: MemoryStatus;
+  contextAttachments?: Message["attachments"];
   humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   onSendMessage?: (content: string) => void;
@@ -61,6 +62,7 @@ function MessageContentSurface({
   textContent,
   renderState,
   memoryStatus,
+  contextAttachments,
   humanInTheLoopRequest,
   onHumanInTheLoopDecision,
   onSendMessage,
@@ -138,14 +140,14 @@ function MessageContentSurface({
       ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
         isUser ? (typeof displayedMessage.content === "string" ? renderUserTextContent(displayedMessage.content) : "") : <Response>{typeof displayedMessage.content === "string" ? displayedMessage.content : ""}</Response>
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
-        <AIThinkingAnimation memoryStatus={memoryStatus} />
+        <AIThinkingAnimation memoryStatus={memoryStatus} attachments={contextAttachments} />
       ) : null}
     </div>
   );
 }
 
 
-function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus, contextAttachments }: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -328,6 +330,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
                 hideStoppedMarker,
               }}
               memoryStatus={memoryStatus}
+              contextAttachments={contextAttachments}
               humanInTheLoopRequest={humanInTheLoopRequest}
               onHumanInTheLoopDecision={onHumanInTheLoopDecision}
               onSendMessage={onSendMessage}
