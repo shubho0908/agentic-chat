@@ -26,19 +26,10 @@ import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
 import { VALIDATION_LIMITS } from "@/constants/validation";
-import { URL_PATTERN } from "@/components/ai-elements/response/constants";
+import { extractUrls } from "@/lib/url-normalization";
 
 function renderUserTextContent(text: string): ReactNode {
   return <InlineMarkdown content={text} />;
-}
-
-function extractUserUrls(text: string): string[] {
-  const urls = new Set<string>();
-  URL_PATTERN.lastIndex = 0;
-  for (const match of text.matchAll(URL_PATTERN)) {
-    urls.add(match[0]);
-  }
-  return Array.from(urls);
 }
 
 
@@ -295,7 +286,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   const userUrls = useMemo(() => {
     if (!isUser || !textContent) return [];
 
-    return extractUserUrls(textContent);
+    return extractUrls(textContent);
   }, [isUser, textContent]);
 
   const humanInTheLoopRequest = !isUser ? displayedMessage.metadata?.humanInTheLoopRequest : undefined;

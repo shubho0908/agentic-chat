@@ -1,13 +1,25 @@
-import type { ReactNode } from "react";
+import { Children, createContext, isValidElement, use, type ComponentProps, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import { MAX_MARKDOWN_RENDER_CHARS, REMARK_PLUGINS } from "./response/constants";
 import { PlainTextWithLinks } from "./response/plainText";
 import { shouldRenderMarkdownContent } from "@/lib/markdown/rendering";
+import { cn } from "@/lib/utils";
+
+type InlineMarkdownLinkMode = "interactive" | "text";
+
+const orderedListNumberContext = createContext<number | null>(null);
+
+function withoutMarkdownNode<Props extends { node?: unknown }>(props: Props): Omit<Props, "node"> {
+  const { node, ...domProps } = props;
+  void node;
+  return domProps;
+}
 
 interface InlineMarkdownProps {
   content: string;
   className?: string;
+  linkMode?: InlineMarkdownLinkMode;
 }
 
 const inlineMarkdownComponents: Components = {
@@ -37,9 +49,51 @@ const inlineMarkdownComponents: Components = {
   h4: ({ children }) => <strong className="font-semibold text-current">{children}</strong>,
   h5: ({ children }) => <strong className="font-semibold text-current">{children}</strong>,
   h6: ({ children }) => <strong className="font-semibold text-current">{children}</strong>,
-  ul: ({ children }) => <span>{children}</span>,
-  ol: ({ children }) => <span>{children}</span>,
-  li: ({ children }) => <span>{children}</span>,
+  // Native list elements are invalid inside the inline contexts this renderer supports.
+  ul: ({ children, className, ...props }) => (
+    <span
+      {...withoutMarkdownNode(props)}
+      role="list"
+      className={cn(
+        "my-1 block max-w-full space-y-0.5 pl-4 break-words list-disc marker:text-muted-foreground/50 dark:marker:text-muted-foreground/30",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  ),
+  ol: ({ children, className, start, ...props }) => {
+    const parsedStart = typeof start === "number" ? start : Number(start);
+    const listStart = Number.isFinite(parsedStart) ? parsedStart : 1;
+    const items = Children.toArray(children).filter(isValidElement);
+    let nextItemNumber = listStart;
+
+    return (
+      <span
+        {...withoutMarkdownNode(props)}
+        role="list"
+        aria-label={listStart === 1 ? undefined : `Ordered list starting at ${listStart}`}
+        data-list-start={listStart}
+        className={cn(
+          "my-1 block max-w-full list-none space-y-0.5 pl-4 break-words marker:text-muted-foreground/50 dark:marker:text-muted-foreground/30",
+          className,
+        )}
+      >
+        {items.map((item) => {
+          const itemNumber = nextItemNumber++;
+          return (
+            <orderedListNumberContext.Provider
+              key={item.key ?? `item-${itemNumber}`}
+              value={itemNumber}
+            >
+              {item}
+            </orderedListNumberContext.Provider>
+          );
+        })}
+      </span>
+    );
+  },
+  li: InlineListItem,
   blockquote: ({ children }) => <span>{children}</span>,
   table: ({ children }) => <span>{children}</span>,
   thead: ({ children }) => <span>{children}</span>,
@@ -53,15 +107,47 @@ const inlineMarkdownComponents: Components = {
   img: ({ alt }) => <span>{alt ?? ""}</span>,
 };
 
-export function InlineMarkdown({ content, className = "" }: InlineMarkdownProps) {
-  const safeContent = content.length > MAX_MARKDOWN_RENDER_CHARS
-    ? content.slice(0, MAX_MARKDOWN_RENDER_CHARS)
-    : content;
+const textOnlyMarkdownComponents: Components = {
+  ...inlineMarkdownComponents,
+  a: ({ children }) => <>{children}</>,
+};
 
-  if (!shouldRenderMarkdownContent(safeContent)) {
+type InlineListItemProps = ComponentProps<"span"> & {
+  node?: unknown;
+};
+
+function InlineListItem({ children, className, ...props }: InlineListItemProps) {
+  const orderedNumber = use(orderedListNumberContext);
+  const domProps = withoutMarkdownNode(props);
+
+  return (
+    <span
+      {...domProps}
+      role="listitem"
+      className={cn("min-w-0 max-w-full list-item break-words", className)}
+    >
+      {orderedNumber === null ? null : (
+        <span aria-hidden="true" className="mr-1 select-none">
+          {orderedNumber}.
+        </span>
+      )}
+      {children}
+    </span>
+  );
+}
+
+export function InlineMarkdown({
+  content,
+  className = "",
+  linkMode = "interactive",
+}: InlineMarkdownProps) {
+  const canParseMarkdown =
+    content.length <= MAX_MARKDOWN_RENDER_CHARS && shouldRenderMarkdownContent(content);
+
+  if (!canParseMarkdown) {
     return (
       <span className={`whitespace-pre-wrap break-words ${className}`}>
-        <PlainTextWithLinks content={safeContent} />
+        <PlainTextWithLinks content={content} interactiveLinks={linkMode === "interactive"} />
       </span>
     );
   }
@@ -71,9 +157,9 @@ export function InlineMarkdown({ content, className = "" }: InlineMarkdownProps)
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={[rehypeKatex]}
-        components={inlineMarkdownComponents}
+        components={linkMode === "interactive" ? inlineMarkdownComponents : textOnlyMarkdownComponents}
       >
-        {safeContent}
+        {content}
       </ReactMarkdown>
     </span>
   );

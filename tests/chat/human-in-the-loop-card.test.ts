@@ -71,6 +71,27 @@ test("decision card badges the recommended option and strips its letter referenc
   assert.match(html, /Submit answer/);
 });
 
+test("option links stay non-interactive while context links remain interactive", () => {
+  const html = render({
+    requestKind: ASK_USER,
+    question: "Choose an option",
+    context: "Read the [context](https://context.example/notes)",
+    options: [
+      {
+        label: "[Approve plan](https://option.example/plan)",
+        description: "See [details](https://option.example/details) and https://option.example/raw for more",
+      },
+    ],
+  });
+
+  assert.match(html, /href="https:\/\/context\.example\/notes"/);
+  assert.match(html, /Approve plan/);
+  assert.match(html, /See details and https:\/\/option\.example\/raw for more/);
+  assert.doesNotMatch(html, /href="https:\/\/option\.example\/plan"/);
+  assert.doesNotMatch(html, /href="https:\/\/option\.example\/details"/);
+  assert.doesNotMatch(html, /href="https:\/\/option\.example\/raw"/);
+});
+
 test("a suggestion with no rationale renders no note", () => {
   const html = render({
     requestKind: ASK_USER,

@@ -1,47 +1,11 @@
 import { Fragment, type ReactNode } from "react";
 import {
-  TRAILING_PUNCTUATION_PATTERN,
+  getHrefFromCandidateUrl,
+  splitTrailingPunctuation,
   URL_PATTERN,
-} from "./constants";
+} from "@/lib/url-normalization";
 
-function splitTrailingPunctuation(candidateUrl: string): {
-  normalizedUrl: string;
-  trailingText: string;
-} {
-  let normalizedUrl = candidateUrl;
-  let trailingText = "";
-
-  while (TRAILING_PUNCTUATION_PATTERN.test(normalizedUrl)) {
-    const punctuationMatch = normalizedUrl.match(TRAILING_PUNCTUATION_PATTERN);
-    if (!punctuationMatch?.[0]) {
-      break;
-    }
-    const punctuation = punctuationMatch[0];
-    normalizedUrl = normalizedUrl.slice(0, -punctuation.length);
-    trailingText = `${punctuation}${trailingText}`;
-  }
-
-  while (normalizedUrl.endsWith(")")) {
-    const openingParens = normalizedUrl.split("(").length - 1;
-    const closingParens = normalizedUrl.split(")").length - 1;
-    if (closingParens <= openingParens) {
-      break;
-    }
-    normalizedUrl = normalizedUrl.slice(0, -1);
-    trailingText = `)${trailingText}`;
-  }
-
-  return { normalizedUrl, trailingText };
-}
-
-function getHrefFromCandidateUrl(candidateUrl: string): string {
-  if (/^https?:\/\//i.test(candidateUrl)) {
-    return candidateUrl;
-  }
-  return `https://${candidateUrl}`;
-}
-
-function buildPlainTextWithLinksNodes(content: string): ReactNode[] {
+function buildPlainTextWithLinksNodes(content: string, interactiveLinks: boolean): ReactNode[] {
   const lines = content.split("\n");
 
   return lines.flatMap((line, lineIndex) => {
@@ -66,7 +30,8 @@ function buildPlainTextWithLinksNodes(content: string): ReactNode[] {
       }
 
       const { normalizedUrl, trailingText } = splitTrailingPunctuation(matchedUrl);
-      if (!normalizedUrl) {
+      const href = normalizedUrl ? getHrefFromCandidateUrl(normalizedUrl) : null;
+      if (!normalizedUrl || !href || !interactiveLinks) {
         lineNodes.push(
           <Fragment key={`line-${lineIndex}-raw-${startIndex}`}>{matchedUrl}</Fragment>,
         );
@@ -77,7 +42,7 @@ function buildPlainTextWithLinksNodes(content: string): ReactNode[] {
       lineNodes.push(
         <a
           key={`line-${lineIndex}-link-${startIndex}`}
-          href={getHrefFromCandidateUrl(normalizedUrl)}
+          href={href}
           className="text-sky-600 dark:text-sky-500 hover:text-sky-500 dark:hover:text-sky-400 underline underline-offset-2 decoration-sky-500/35 transition-colors font-medium break-all"
           target="_blank"
           rel="noopener noreferrer"
@@ -111,6 +76,12 @@ function buildPlainTextWithLinksNodes(content: string): ReactNode[] {
   });
 }
 
-export function PlainTextWithLinks({ content }: { content: string }) {
-  return <>{buildPlainTextWithLinksNodes(content)}</>;
+export function PlainTextWithLinks({
+  content,
+  interactiveLinks = true,
+}: {
+  content: string;
+  interactiveLinks?: boolean;
+}) {
+  return <>{buildPlainTextWithLinksNodes(content, interactiveLinks)}</>;
 }

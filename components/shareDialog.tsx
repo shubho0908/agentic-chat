@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, Copy, Download, Globe2, LoaderCircle, LockKeyhole, Share2 } from "lucide-react";
 import {
   Dialog,
@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { ExportSection } from "@/components/export/exportSection";
-import { appRoutes } from "@/lib/routes";
-import { appBaseUrl } from "@/lib/appUrl";
+import { buildShareUrl } from "@/lib/routes";
+import { normalizeOrigin } from "@/lib/appUrl";
 
 interface ShareDialogProps {
   conversationId: string;
@@ -23,6 +23,17 @@ interface ShareDialogProps {
   onToggleSharing: (id: string, isPublic: boolean) => void;
   isToggling?: boolean;
   trigger?: React.ReactNode;
+}
+
+const subscribeToBrowserOrigin = () => () => {};
+
+function getBrowserOriginSnapshot(): string | null {
+  if (typeof window === "undefined" || !window.location) return null;
+  return normalizeOrigin(window.location.origin);
+}
+
+function getServerBrowserOriginSnapshot(): null {
+  return null;
 }
 
 function updateDialogScrollIndicator(
@@ -54,14 +65,18 @@ export function ShareDialog({
 }: ShareDialogProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const browserOrigin = useSyncExternalStore(
+    subscribeToBrowserOrigin,
+    getBrowserOriginSnapshot,
+    getServerBrowserOriginSnapshot,
+  );
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const scrollContentRef = useRef<HTMLDivElement>(null);
   const scrollThumbRef = useRef<HTMLDivElement>(null);
-  const shareUrl = new URL(appRoutes.share(conversationId), appBaseUrl).toString();
+  const shareUrl = browserOrigin ? buildShareUrl(conversationId, browserOrigin) : null;
 
   useEffect(() => () => clearTimeout(copiedTimeoutRef.current), []);
-
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +127,8 @@ export function ShareDialog({
   };
 
   const handleCopyLink = async () => {
+    if (!shareUrl) return;
+
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -191,8 +208,9 @@ export function ShareDialog({
                   <Input
                     id={`share-link-${conversationId}`}
                     aria-label="Share link"
-                    value={shareUrl}
+                    value={shareUrl ?? ""}
                     readOnly
+                    disabled={!shareUrl}
                     className="h-11 w-full min-w-0 rounded-lg bg-muted/30 font-mono text-sm min-[360px]:flex-1 sm:h-10 sm:text-xs"
                     onFocus={(event) => event.currentTarget.select()}
                   />
@@ -201,6 +219,7 @@ export function ShareDialog({
                     variant="outline"
                     onClick={handleCopyLink}
                     aria-label="Copy link"
+                    disabled={!shareUrl}
                     className="h-11 shrink-0 gap-2 rounded-lg px-4 text-sm sm:h-10 sm:px-3 sm:text-[13px]"
                   >
                     {copied ? <Check className="size-4" /> : <Copy className="size-4" />}

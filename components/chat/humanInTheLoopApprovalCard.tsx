@@ -454,7 +454,7 @@ function DecisionCard({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5">
-                  <InlineMarkdown content={option.label} className="text-[13px] leading-tight font-medium text-foreground" />
+                  <InlineMarkdown content={option.label} linkMode="text" className="text-[13px] leading-tight font-medium text-foreground" />
                   {isRecommended && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
                       <Check className="size-2.5" aria-hidden="true" />
@@ -463,7 +463,7 @@ function DecisionCard({
                   )}
                 </span>
                 {option.description ? (
-                  <InlineMarkdown content={option.description} className="mt-0.5 block text-xs leading-relaxed text-muted-foreground" />
+                  <InlineMarkdown content={option.description} linkMode="text" className="mt-0.5 block text-xs leading-relaxed text-muted-foreground" />
                 ) : null}
               </span>
             </button>

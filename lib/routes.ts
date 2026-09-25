@@ -18,6 +18,10 @@ export const appRoutes = {
   terms: "/terms",
 } as const;
 
+export function buildShareUrl(conversationId: string, origin: string): string {
+  return new URL(appRoutes.share(conversationId), origin).toString();
+}
+
 export const apiRoutes = {
   upload: "/api/upload",
   chatCompletions: "/api/chat/completions",
