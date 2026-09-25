@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -36,6 +35,8 @@ export function MessageEditForm({
   onSubmit,
   onCancel,
 }: MessageEditFormProps) {
+  const didFocusRef = useRef(false);
+  const sizingContent = editText.length > sizingText.length ? editText : sizingText;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -43,48 +44,42 @@ export function MessageEditForm({
     if (!textarea) return;
 
     adjustEditorHeight(textarea);
-    textarea.focus({ preventScroll: true });
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-  }, []);
-
-  useLayoutEffect(() => {
-    adjustEditorHeight(textareaRef.current);
+    if (!didFocusRef.current) {
+      didFocusRef.current = true;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
   }, [editText]);
 
   useEffect(() => {
-    const visualViewport = window.visualViewport;
+    const resizeTarget = window.visualViewport ?? window;
     const handleResize = () => adjustEditorHeight(textareaRef.current);
-    window.addEventListener("resize", handleResize);
-    visualViewport?.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      visualViewport?.removeEventListener("resize", handleResize);
-    };
+    resizeTarget.addEventListener("resize", handleResize);
+    return () => resizeTarget.removeEventListener("resize", handleResize);
   }, []);
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-        event.preventDefault();
-        if (editText.trim()) onSubmit();
-        return;
-      }
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return;
 
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel();
-      }
-    },
-    [editText, onCancel, onSubmit],
-  );
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (editText.trim()) onSubmit();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+    }
+  };
 
   return (
-    <div className="grid w-fit max-w-full">
+    <div className="grid min-w-48 w-fit max-w-full sm:min-w-64">
       <span
         aria-hidden="true"
         className="invisible pointer-events-none col-start-1 row-start-1 h-[1lh] max-w-full select-none overflow-hidden whitespace-pre-wrap break-words text-[15px] leading-relaxed"
       >
-        {sizingText || "\u00a0"}
+        {sizingContent || "\u00a0"}
       </span>
       <Textarea
         ref={textareaRef}

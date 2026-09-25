@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { HumanInTheLoopApprovalCard } from "@/components/chat/humanInTheLoopApprovalCard";
@@ -8,11 +8,12 @@ import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 
 const ASK_USER = HumanInTheLoopRequestKind.ASK_USER;
 
-function render(props: Record<string, unknown>): string {
+function render(props: Partial<ComponentProps<typeof HumanInTheLoopApprovalCard>>): string {
   return renderToStaticMarkup(
-    createElement(HumanInTheLoopApprovalCard, { pending: true, isLoading: false, onDecision: () => {}, ...props } as never),
+    createElement(HumanInTheLoopApprovalCard, { pending: true, isLoading: false, onDecision: () => {}, ...props }),
   );
 }
+
 
 test("approval card lists each action with its args and both decisions", () => {
   const html = render({
@@ -67,7 +68,7 @@ test("decision card badges the recommended option and strips its letter referenc
   assert.match(html, /Five maximizes case volume\./);
   assert.doesNotMatch(html, /Option B:/);
   assert.match(html, /Something else…/);
-  assert.match(html, /Continue/);
+  assert.match(html, /Submit answer/);
 });
 
 test("a suggestion with no rationale renders no note", () => {
@@ -116,7 +117,7 @@ test("options survive a payload that omits the optional title", () => {
   assert.doesNotMatch(html, /Type your answer/);
 });
 
-test("long values clamp to a fixed height and never open a nested scroll area", () => {
+test("long values start collapsed in the fixed-height viewport", () => {
   const html = render({
     requestKind: HumanInTheLoopRequestKind.APPROVAL,
     toolCalls: [
@@ -129,5 +130,4 @@ test("long values clamp to a fixed height and never open a nested scroll area", 
   });
 
   assert.match(html, /max-h-40 overflow-hidden/);
-  assert.doesNotMatch(html, /overflow-auto/);
 });

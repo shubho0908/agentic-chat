@@ -10,6 +10,11 @@ test("detects common markdown syntax", () => {
   assert.equal(shouldRenderMarkdownContent("plain sentence"), false);
 });
 
+test("detects single-asterisk and underscore emphasis", () => {
+  assert.equal(shouldRenderMarkdownContent("Use *emphasis* here"), true);
+  assert.equal(shouldRenderMarkdownContent("Use _emphasis_ here"), true);
+});
+
 test("detects display math as markdown", () => {
   assert.equal(
     shouldRenderMarkdownContent("$$ d_E(u,v) = \\|u-v\\|_2 $$"),

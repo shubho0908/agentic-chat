@@ -10,6 +10,7 @@ import {
 } from "@/lib/jev/memoryGate";
 import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { DefaultRAGContext } from "@/components/chat/aiThinkingAnimation/defaultRAGContext";
+import { areChatMessagePropsEqual } from "@/components/chat/chatMessageMemo";
 
 function decision(reasonCode: MemoryGateDecision["reasonCode"]): MemoryGateDecision {
   return {
@@ -103,8 +104,7 @@ test("thinking UI keeps the skipped state when memory is off by routing", () => 
   assert.doesNotMatch(html, /unavailable/);
 });
 
-test("chat message memo re-renders when memory degradation or skip state arrives", async () => {
-  const { areChatMessagePropsEqual } = await import("@/components/chat/chatMessage");
+test("chat message memo re-renders when memory degradation or skip state arrives", () => {
   const message = { id: "m1", role: "assistant", content: "" };
   const base = status({});
   const props = (memoryStatus: MemoryStatus) =>
@@ -131,6 +131,24 @@ test("chat message memo re-renders when memory degradation or skip state arrives
   );
   assert.equal(
     areChatMessagePropsEqual(props(base), props(status({ skippedMemory: true }))),
+    false,
+  );
+});
+
+test("chat message memo invalidates when an action callback changes", () => {
+  const message = { id: "m1", role: "assistant" as const, content: "Answer" };
+  const base = {
+    message,
+    isLastMessage: false,
+    isLoading: false,
+    onEditMessage: () => {},
+  };
+
+  assert.equal(
+    areChatMessagePropsEqual(
+      base,
+      { ...base, onEditMessage: () => {} },
+    ),
     false,
   );
 });

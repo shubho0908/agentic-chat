@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react"
 import { Check, ChevronDown, Info, MessageCircleQuestion, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
 import { cn } from "@/lib/utils";
 import { getToolFamily, getToolRowLabel } from "./aiThinkingAnimation/toolActivityMeta";
 import { ToolIcon } from "./aiThinkingAnimation/toolIcons";
+import { InlineMarkdown } from "@/components/ai-elements/inlineMarkdown";
 
 interface HumanInTheLoopToolCall {
   id?: string;
@@ -35,7 +36,7 @@ interface HumanInTheLoopApprovalCardProps {
 
 const OPTION_LETTERS = ["A", "B", "C", "D", "E", "F"];
 
-const PILL_CLASS = "h-7 rounded-full px-3 text-[13px]";
+const PILL_CLASS = "h-11 rounded-full px-4 text-sm sm:h-7 sm:px-3 sm:text-[13px]";
 
 function formatArgKey(key: string): string {
   return key
@@ -50,19 +51,11 @@ function isLongValue(value: unknown): boolean {
 }
 
 function ClampedValue({ value, mono = false }: { value: string; mono?: boolean }) {
-  const preRef = useRef<HTMLPreElement>(null);
-  const [clipped, setClipped] = useState(false);
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    const pre = preRef.current;
-    if (pre) setClipped((was) => was || pre.scrollHeight > pre.clientHeight + 1);
-  }, [value]);
 
   return (
     <div className="mt-1">
       <pre
-        ref={preRef}
         className={cn(
           "max-h-40 overflow-hidden rounded bg-muted/80 p-2 text-xs leading-relaxed whitespace-pre-wrap break-words",
           mono && "font-mono",
@@ -71,7 +64,7 @@ function ClampedValue({ value, mono = false }: { value: string; mono?: boolean }
       >
         {value}
       </pre>
-      {clipped && (
+      {isLongValue(value) ? (
         <button
           type="button"
           onClick={() => setExpanded((open) => !open)}
@@ -86,7 +79,7 @@ function ClampedValue({ value, mono = false }: { value: string; mono?: boolean }
             aria-hidden="true"
           />
         </button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -132,16 +125,20 @@ function GlideList({ children, className }: { children: ReactNode; className?: s
     setBar((current) => (current && current.top === next.top && current.height === next.height ? current : next));
   }, []);
 
-  const clear = useCallback(() => setBar(null), []);
+  const clearUnlessFocusStaysInside = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setBar(null);
+  }, []);
 
   return (
     <div
       ref={listRef}
       className={cn("relative flex flex-col gap-0.5", className)}
       onMouseOver={(event) => track(event.target)}
-      onMouseLeave={clear}
-      onFocusCapture={(event) => track(event.target)}
-      onBlurCapture={clear}
+      onMouseLeave={() => setBar(null)}
+      onFocus={(event) => track(event.target)}
+      onBlurCapture={clearUnlessFocusStaysInside}
     >
       <span
         aria-hidden="true"
@@ -214,13 +211,19 @@ function Card({
       <div className="space-y-2.5 px-3 py-2.5 sm:px-3.5 sm:py-3">
         <div>
           {chip}
-          <h3 className="mt-1.5 text-sm leading-snug font-medium text-foreground break-words">{heading}</h3>
-          {context && (
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground break-words">{context}</p>
-          )}
-          {reason && (
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground/80 italic break-words">{reason}</p>
-          )}
+          <h3 className="mt-1.5 text-sm leading-snug font-medium text-foreground break-words">
+            <InlineMarkdown content={heading} />
+          </h3>
+          {context ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground break-words">
+              <InlineMarkdown content={context} />
+            </p>
+          ) : null}
+          {reason ? (
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground/80 italic break-words">
+              <InlineMarkdown content={reason} />
+            </p>
+          ) : null}
         </div>
         {children}
       </div>
@@ -279,7 +282,7 @@ function SuggestionNote({ recommendation }: { recommendation: string }) {
   return (
     <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-2.5 py-2">
       <Info className="mt-px size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <span className="text-xs leading-relaxed text-muted-foreground break-words">{note}</span>
+      <InlineMarkdown content={note} className="text-xs leading-relaxed text-muted-foreground break-words" />
     </div>
   );
 }
@@ -419,7 +422,7 @@ function DecisionCard({
         interactive ? (
           <CardFooter>
             <Button type="button" size="sm" disabled={isLoading || !canSubmit} onClick={submit} className={PILL_CLASS}>
-              Continue
+              Submit answer
             </Button>
           </CardFooter>
         ) : undefined
@@ -442,7 +445,7 @@ function DecisionCard({
                 setCustom("");
               }}
               className={cn(
-                "relative z-10 flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                "relative z-10 flex min-h-11 w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:min-h-0 sm:py-1.5",
                 locked && "cursor-not-allowed opacity-60",
               )}
             >
@@ -451,7 +454,7 @@ function DecisionCard({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[13px] leading-tight font-medium text-foreground">{option.label}</span>
+                  <InlineMarkdown content={option.label} className="text-[13px] leading-tight font-medium text-foreground" />
                   {isRecommended && (
                     <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
                       <Check className="size-2.5" aria-hidden="true" />
@@ -459,11 +462,9 @@ function DecisionCard({
                     </span>
                   )}
                 </span>
-                {option.description && (
-                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
-                    {option.description}
-                  </span>
-                )}
+                {option.description ? (
+                  <InlineMarkdown content={option.description} className="mt-0.5 block text-xs leading-relaxed text-muted-foreground" />
+                ) : null}
               </span>
             </button>
           );
@@ -471,7 +472,7 @@ function DecisionCard({
 
         <label
           data-glide-row
-          className={cn("relative z-10 flex items-center gap-2.5 rounded-lg px-2 py-1.5", locked && "opacity-60")}
+          className={cn("relative z-10 flex min-h-11 items-center gap-2.5 rounded-lg px-2 py-2 sm:min-h-0 sm:py-1.5", locked && "opacity-60")}
         >
           <RadioMark selected={trimmedCustom.length > 0} />
           <input
@@ -484,6 +485,7 @@ function DecisionCard({
               setSelected(null);
             }}
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "Enter") {
                 event.preventDefault();
                 submit();
@@ -516,6 +518,9 @@ function AskUserCard({
   isLoading: boolean;
   onDecision?: (approved: boolean, response?: string) => void;
 }) {
+  const focusAnswerInput = useCallback((input: HTMLInputElement | null) => {
+    input?.focus({ preventScroll: true });
+  }, []);
   const [answer, setAnswer] = useState("");
 
   const interactive = pending && Boolean(onDecision);
@@ -548,18 +553,19 @@ function AskUserCard({
     >
       <div
         className={cn(
-          "flex items-center rounded-lg bg-muted/50 px-2.5 py-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring/40",
+          "flex min-h-11 items-center rounded-lg bg-muted/50 px-2.5 py-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring/40 sm:min-h-0",
           (!interactive || isLoading) && "opacity-60",
         )}
       >
         <input
+          ref={interactive ? focusAnswerInput : null}
           value={answer}
           disabled={!interactive || isLoading}
-          autoFocus={interactive}
           aria-label="Clarification answer"
           placeholder="Type your answer…"
           onChange={(event) => setAnswer(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return;
             if (event.key === "Enter") {
               event.preventDefault();
               submit();

@@ -1,6 +1,5 @@
 import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
-import { MessageRole, type Message, type Attachment } from "@/lib/schemas/chat";
-import type { ArtifactMetadata } from "@/types/artifact";
+import { MessageRole, type Message } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
@@ -16,6 +15,8 @@ import { SearchImages } from "./searchImages";
 import { PdfDocuments } from "./pdfDocuments";
 import { RichLink } from "../ai-elements/richLink";
 import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
+import { InlineMarkdown } from "@/components/ai-elements/inlineMarkdown";
+import { areChatMessagePropsEqual, type ChatMessageProps } from "./chatMessageMemo";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
@@ -25,69 +26,23 @@ import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
 import { VALIDATION_LIMITS } from "@/constants/validation";
+import { URL_PATTERN } from "@/components/ai-elements/response/constants";
 
-const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
-
-function trimTrailingUrlPunctuation(rawUrl: string) {
-  let url = rawUrl;
-  let trailing = "";
-
-  while (url.length > 0) {
-    const lastChar = url.at(-1);
-
-    if (!lastChar) {
-      break;
-    }
-
-    if (/[.,!?;:]/.test(lastChar)) {
-      trailing = `${lastChar}${trailing}`;
-      url = url.slice(0, -1);
-      continue;
-    }
-
-    if (lastChar === ")") {
-      const openParens = (url.match(/\(/g) || []).length;
-      const closeParens = (url.match(/\)/g) || []).length;
-
-      if (closeParens > openParens) {
-        trailing = `${lastChar}${trailing}`;
-        url = url.slice(0, -1);
-        continue;
-      }
-    }
-
-    break;
-  }
-
-  return { url, trailing };
+function renderUserTextContent(text: string): ReactNode {
+  return <InlineMarkdown content={text} />;
 }
 
-function extractUserUrls(text: string) {
+function extractUserUrls(text: string): string[] {
   const urls = new Set<string>();
-
-  for (const match of text.matchAll(USER_URL_REGEX)) {
-    const { url } = trimTrailingUrlPunctuation(match[0]);
-
-    if (url) {
-      urls.add(url);
-    }
+  URL_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(URL_PATTERN)) {
+    urls.add(match[0]);
   }
-
   return Array.from(urls);
 }
 
-interface ChatMessageProps {
-  message: Message;
-  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
-  onRegenerateMessage?: (messageId: string) => void;
-  onSendMessage?: (content: string) => void;
-  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
-  onOpenArtifact?: (messageId: string, artifact: ArtifactMetadata) => void;
-  isSharePage?: boolean;
-  isLastMessage?: boolean;
-  isLoading?: boolean;
-  memoryStatus?: MemoryStatus;
-}
+
+
 
 interface MessageContentSurfaceProps {
   variant: MessageRole;
@@ -190,32 +145,14 @@ function MessageContentSurface({
       {editContent ? editContent : !hidePlaceholderContent && textContent ? (
         isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
       ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
-        isUser ? (typeof displayedMessage.content === 'string' ? renderUserTextContent(displayedMessage.content) : '') : <Response>{typeof displayedMessage.content === 'string' ? displayedMessage.content : ''}</Response>
+        isUser ? (typeof displayedMessage.content === "string" ? renderUserTextContent(displayedMessage.content) : "") : <Response>{typeof displayedMessage.content === "string" ? displayedMessage.content : ""}</Response>
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
-        <AIThinkingAnimation
-          memoryStatus={memoryStatus}
-        />
+        <AIThinkingAnimation memoryStatus={memoryStatus} />
       ) : null}
     </div>
   );
 }
 
-function renderUserTextContent(text: string): ReactNode[] | null {
-  if (!text) return null;
-  const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-  for (const match of text.matchAll(USER_URL_REGEX)) {
-    const matchStart = match.index ?? 0;
-    const rawUrl = match[0];
-    const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
-    if (matchStart > lastIndex) nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
-    if (url) nodes.push(<a key={`url-${matchStart}`} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all">{url}</a>);
-    if (trailing) nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
-    lastIndex = matchStart + rawUrl.length;
-  }
-  if (lastIndex < text.length) nodes.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
-  return nodes;
-}
 
 function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
@@ -504,75 +441,6 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   );
 }
 
-export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
-  if (
-    prevProps.message.id !== nextProps.message.id ||
-    prevProps.message.content !== nextProps.message.content ||
-    prevProps.message.thinking !== nextProps.message.thinking ||
-    prevProps.message.attachments !== nextProps.message.attachments ||
-    prevProps.message.metadata !== nextProps.message.metadata ||
-    prevProps.message.toolActivities !== nextProps.message.toolActivities ||
-    prevProps.message.versions !== nextProps.message.versions ||
-    prevProps.onOpenArtifact !== nextProps.onOpenArtifact ||
-    prevProps.isLastMessage !== nextProps.isLastMessage ||
-    prevProps.isLoading !== nextProps.isLoading
-  ) {
-    return false;
-  }
 
-  if (prevProps.message.toolActivities?.length !== nextProps.message.toolActivities?.length) {
-    return false;
-  }
-
-  const prevLastActivity = prevProps.message.toolActivities?.[prevProps.message.toolActivities.length - 1];
-  const nextLastActivity = nextProps.message.toolActivities?.[nextProps.message.toolActivities.length - 1];
-  if (prevLastActivity?.status !== nextLastActivity?.status) {
-    return false;
-  }
-
-  const prevMetadata = prevProps.message.metadata;
-  const nextMetadata = nextProps.message.metadata;
-
-  if (
-    prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
-    prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
-    prevMetadata?.images?.length !== nextMetadata?.images?.length ||
-    prevMetadata?.pdfs?.length !== nextMetadata?.pdfs?.length ||
-    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
-    prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
-  ) {
-    return false;
-  }
-
-  if (prevProps.isLastMessage && nextProps.isLastMessage) {
-    const prevStatus = prevProps.memoryStatus;
-    const nextStatus = nextProps.memoryStatus;
-
-    if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
-      prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
-      prevStatus?.skippedMemory !== nextStatus?.skippedMemory ||
-      prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
-      prevStatus?.hasImages !== nextStatus?.hasImages ||
-      prevStatus?.memoryCount !== nextStatus?.memoryCount ||
-      prevStatus?.documentCount !== nextStatus?.documentCount ||
-      prevStatus?.imageCount !== nextStatus?.imageCount ||
-      prevStatus?.routingDecision !== nextStatus?.routingDecision ||
-      prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length) {
-      return false;
-    }
-
-    const prevProgress = prevStatus?.toolProgress;
-    const nextProgress = nextStatus?.toolProgress;
-
-    if (prevProgress?.status !== nextProgress?.status ||
-      prevProgress?.message !== nextProgress?.message ||
-      prevProgress?.details?.status !== nextProgress?.details?.status ||
-      prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
-      return false;
-    }
-  }
-
-  return true;
-}
 
 export const ChatMessage = memo(ChatMessageComponent, areChatMessagePropsEqual);

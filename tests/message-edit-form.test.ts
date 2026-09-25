@@ -2,8 +2,50 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { VALIDATION_LIMITS } from "@/constants/validation";
 import { MessageActions } from "@/components/chat/messageActions";
+import { InlineMarkdown } from "@/components/ai-elements/inlineMarkdown";
+import { HumanInTheLoopApprovalCard } from "@/components/chat/humanInTheLoopApprovalCard";
+import { HumanInTheLoopRequestKind } from "@/lib/tools/constants";
+import { MessageRole, type Message } from "@/lib/schemas/chat";
+import { ChatMessage } from "@/components/chat/chatMessage";
 import { MessageEditForm } from "@/components/chat/messageEditForm";
+
+test("inline Markdown renders emphasis instead of literal delimiters", () => {
+  const html = renderToStaticMarkup(createElement(InlineMarkdown, {
+    content: "Keep **bold** and *italic* text",
+  }));
+  assert.match(html, /<strong class="[^"]*font-semibold[^"]*">bold<\/strong>/);
+  assert.match(html, /<em class="[^"]*italic[^"]*">italic<\/em>/);
+  assert.doesNotMatch(html, /\*\*bold\*\*/);
+});
+
+test("user chat messages render Markdown formatting", () => {
+  const message: Message = {
+    id: "user-markdown",
+    role: MessageRole.USER,
+    content: "Keep **bold** text",
+    timestamp: 1,
+  };
+  const html = renderToStaticMarkup(createElement(ChatMessage, { message, isLastMessage: true }));
+  assert.match(html, /<strong[^>]*>bold<\/strong>/);
+  assert.doesNotMatch(html, /\*\*bold\*\*/);
+});
+
+test("HITL headings and context render Markdown formatting", () => {
+  const html = renderToStaticMarkup(createElement(HumanInTheLoopApprovalCard, {
+    requestKind: HumanInTheLoopRequestKind.ASK_USER,
+    question: "Keep **bold** text",
+    context: "Use *emphasis* here",
+    pending: true,
+    isLoading: false,
+    onDecision: () => {},
+  }));
+  assert.match(html, /<strong[^>]*>bold<\/strong>/);
+  assert.match(html, /<em[^>]*>emphasis<\/em>/);
+  assert.doesNotMatch(html, /\*\*bold\*\*/);
+  assert.doesNotMatch(html, /\*emphasis\*/);
+});
 
 test("message edit field exposes an accessible, bounded autosizing control", () => {
   const html = renderToStaticMarkup(
@@ -20,7 +62,7 @@ test("message edit field exposes an accessible, bounded autosizing control", () 
   assert.match(html, /autocomplete="off"/i);
   assert.match(html, /rows="1"/);
   assert.match(html, /cols="1"/);
-  assert.match(html, /maxlength="51200"/i);
+  assert.match(html, new RegExp(`maxlength="${VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH}"`, "i"));
   assert.doesNotMatch(html, /<button/);
 });
 
@@ -53,7 +95,8 @@ test("save is disabled when the edited message contains only whitespace", () => 
     }),
   );
 
-  assert.match(html, /aria-label="Save and resend message"[^>]*disabled/);
+  const saveButton = html.match(/<button[^>]*aria-label="Save and resend message"[^>]*>/)?.[0] ?? "";
+  assert.match(saveButton, /disabled/);
 });
 
 test("textarea resizing grows with content and scrolls only above the cap", async () => {

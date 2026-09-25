@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { useChat } from "@/hooks/useChat";
 import { useTokenUsageWithMemory } from "@/hooks/useTokenUsageWithMemory";
@@ -76,6 +76,56 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     };
   }, [isPending]);
 
+  const handleEdit = useCallback((messageId: string, content: string, attachments?: Attachment[]) => {
+    const reasoningEffort = getReasoningEffort();
+    return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
+  }, [editMessage, session]);
+
+  const handleRegenerate = useCallback((messageId: string) => {
+    const reasoningEffort = getReasoningEffort();
+    return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
+  }, [regenerateResponse, session]);
+
+  const handleFollowUpQuestion = useCallback(async (question: string) => {
+    if (!session || !isConfigured) {
+      return;
+    }
+    const reasoningEffort = getReasoningEffort();
+    await sendMessage({
+      content: question,
+      session,
+      reasoningEffort,
+    });
+  }, [isConfigured, sendMessage, session]);
+
+  const handleSendMessage = useCallback(async (
+    content: string,
+    attachments?: Attachment[],
+    _activeTool?: string | null,
+    reasoningEffort?: ReasoningEffortLevel,
+  ) => {
+    if (isPending) {
+      return { success: false, error: "Session is loading" };
+    }
+
+    if (!session) {
+      setShowAuthModal(true);
+      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
+      });
+      return { success: false, error: "Authentication required" };
+    }
+
+    if (!isConfigured) {
+      toast.error(TOAST_ERROR_MESSAGES.API_KEY.REQUIRED, {
+        description: TOAST_ERROR_MESSAGES.API_KEY.REQUIRED_DESCRIPTION,
+      });
+      byokTriggerRef.current?.click();
+      return { success: false, error: "API key required" };
+    }
+    return sendMessage({ content, session, attachments, reasoningEffort });
+  }, [isConfigured, isPending, sendMessage, session]);
+
   if (isPending && !timedOut) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -105,50 +155,6 @@ export function HomeContent({ currentYear }: HomeContentProps) {
     );
   }
 
-  const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
-    const reasoningEffort = getReasoningEffort();
-    return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
-  };
-
-  const handleRegenerate = (messageId: string) => {
-    const reasoningEffort = getReasoningEffort();
-    return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
-  };
-
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, reasoningEffort?: ReasoningEffortLevel) => {
-    if (isPending) {
-      return { success: false, error: "Session is loading" };
-    }
-
-    if (!session) {
-      setShowAuthModal(true);
-      toast.error(TOAST_ERROR_MESSAGES.AUTH.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.AUTH.REQUIRED_DESCRIPTION,
-      });
-      return { success: false, error: "Authentication required" };
-    }
-
-    if (!isConfigured) {
-      toast.error(TOAST_ERROR_MESSAGES.API_KEY.REQUIRED, {
-        description: TOAST_ERROR_MESSAGES.API_KEY.REQUIRED_DESCRIPTION,
-      });
-      byokTriggerRef.current?.click();
-      return { success: false, error: "API key required" };
-    }
-    return sendMessage({ content, session, attachments, reasoningEffort });
-  };
-
-  const handleFollowUpQuestion = async (question: string) => {
-    if (!session || !isConfigured) {
-      return;
-    }
-    const reasoningEffort = getReasoningEffort();
-    await sendMessage({
-      content: question,
-      session,
-      reasoningEffort,
-    });
-  };
 
   if (!hasMessages) {
     if (!isPending && !session) {

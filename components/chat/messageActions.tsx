@@ -1,5 +1,4 @@
-import { useState, useCallback } from "react";
-import { useThrottle } from "@/hooks/useDebounce";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Check, Edit2, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -39,7 +38,10 @@ export function MessageActions({
 }: MessageActionsProps) {
   const { isUser, isEditing, canEdit, isThinking = false, isLoading = false } = context;
   const [copied, setCopied] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const regenerateStartedAtRef = useRef<number | null>(null);
+
+  useEffect(() => () => clearTimeout(copiedTimeoutRef.current), []);
 
   const handleCopy = async () => {
     try {
@@ -52,30 +54,32 @@ export function MessageActions({
         textarea.style.position = "absolute";
         textarea.style.left = "-9999px";
         document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
+        try {
+          textarea.select();
+          document.execCommand("copy");
+        } finally {
+          textarea.remove();
+        }
       } else {
         throw new Error("Clipboard not available");
       }
       setCopied(true);
       toast.success("Copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Failed to copy");
     }
   };
 
-  const throttledRegenerate = useThrottle(
-    useCallback(() => {
-      if (onRegenerate && !isRegenerating) {
-        setIsRegenerating(true);
-        onRegenerate();
-        setTimeout(() => setIsRegenerating(false), 2000);
-      }
-    }, [onRegenerate, isRegenerating]),
-    2000
-  );
+  const handleRegenerate = () => {
+    if (!onRegenerate || isLoading) return;
+
+    const now = Date.now();
+    if (regenerateStartedAtRef.current !== null && now - regenerateStartedAtRef.current < 2000) return;
+    regenerateStartedAtRef.current = now;
+    onRegenerate();
+  };
 
   if (isEditing) {
     return (
@@ -134,7 +138,7 @@ export function MessageActions({
                 size="sm"
                 aria-label="Edit message"
                 onClick={onEditStart}
-                className="h-7 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20"
+                className="h-11 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20 sm:h-7"
                 disabled={isLoading}
               >
                 <Edit2 className="size-3.5" />
@@ -153,15 +157,15 @@ export function MessageActions({
                 variant="ghost"
                 size="sm"
                 aria-label="Regenerate response"
-                onClick={throttledRegenerate}
-                className="h-7 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20"
-                disabled={isRegenerating || isLoading}
+                onClick={handleRegenerate}
+                className="h-11 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20 sm:h-7"
+                disabled={isLoading}
               >
                 <RefreshCw className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-              {isRegenerating ? "Regenerating..." : "Regenerate response"}
+              Regenerate response
             </TooltipContent>
           </Tooltip>
         )}
@@ -174,7 +178,7 @@ export function MessageActions({
                 size="sm"
                 aria-label={copied ? "Copied message" : "Copy to clipboard"}
                 onClick={handleCopy}
-                className="h-7 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20"
+                className="h-11 rounded-md px-2 focus-visible:ring-2 focus-visible:ring-foreground/20 sm:h-7"
                 disabled={!textContent}
               >
                 {copied ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import { Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -94,21 +94,26 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
 
   const conversationNotFound = !!conversationError;
 
-  const handleEdit = (messageId: string, content: string, attachments?: Attachment[]) => {
+  const handleEdit = useCallback((messageId: string, content: string, attachments?: Attachment[]) => {
     const reasoningEffort = getReasoningEffort();
     return editMessage({ messageId, content, attachments, session: session ?? undefined, reasoningEffort });
-  };
+  }, [editMessage, session]);
 
-  const handleRegenerate = (messageId: string) => {
+  const handleRegenerate = useCallback((messageId: string) => {
     const reasoningEffort = getReasoningEffort();
     return regenerateResponse({ messageId, session: session ?? undefined, reasoningEffort });
-  };
+  }, [regenerateResponse, session]);
 
-  const handleToggleSharing = (id: string, nextIsPublic: boolean) => {
+  const handleToggleSharing = useCallback((id: string, nextIsPublic: boolean) => {
     toggleSharing({ id, isPublic: nextIsPublic });
-  };
+  }, [toggleSharing]);
 
-  const handleSendMessage = async (content: string, attachments?: Attachment[], _activeTool?: string | null, reasoningEffort?: ReasoningEffortLevel) => {
+  const handleSendMessage = useCallback(async (
+    content: string,
+    attachments?: Attachment[],
+    _activeTool?: string | null,
+    reasoningEffort?: ReasoningEffortLevel,
+  ) => {
     if (isPending) {
       return { success: false, error: "Session is loading" };
     }
@@ -128,9 +133,9 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
       return { success: false, error: "API key required" };
     }
     return sendMessage({ content, session, attachments, reasoningEffort });
-  };
+  }, [isConfigured, isPending, sendMessage, session]);
 
-  const handleFollowUpQuestion = async (question: string) => {
+  const handleFollowUpQuestion = useCallback(async (question: string) => {
     if (!session || !isConfigured) {
       return;
     }
@@ -138,9 +143,9 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
     await sendMessage({
       content: question,
       session,
-      reasoningEffort
+      reasoningEffort,
     });
-  };
+  }, [isConfigured, sendMessage, session]);
 
   if (conversationNotFound) {
     return <ConversationNotFound isAuthenticated={!!session} />;

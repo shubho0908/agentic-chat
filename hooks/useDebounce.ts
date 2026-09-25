@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 
 export function useThrottle<T extends (...args: Parameters<T>) => ReturnType<T>>(
   callback: T,
-  delay: number
+  delay: number,
 ): (...args: Parameters<T>) => void {
   const lastRunRef = useRef<number>(0);
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
