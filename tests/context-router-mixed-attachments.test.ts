@@ -91,3 +91,44 @@ test("referential lookback is limited to visible user message IDs", async () => 
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup });
   }
 });
+
+test("a persisted generic-MIME PDF with an image must fail closed, not route as vision-only", async () => {
+  const originalLookup = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [{ attachments: [
+    { id: "image-id", fileType: "image/png", fileName: "photo.png", fileUrl: image.fileUrl },
+    { id: "pdf-id", fileType: "application/octet-stream", fileName: "resume.pdf", fileUrl: pdf.fileUrl },
+  ] }] });
+  try {
+    const result = await routeContext(
+      [{ type: "text", text: "Hi" }, { type: "image_url", image_url: { url: image.fileUrl } }],
+      "owner-1", [], "conversation-1", null, true, { currentMessageId: "current-turn" },
+    );
+    assert.equal(result.metadata.documentContextState, "unavailable");
+    assert.equal(result.metadata.routingDecision, RoutingDecision.Hybrid);
+    assert.match(result.context, /could not read all of the attached documents/);
+  } finally {
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup });
+  }
+});
+
+test("current unsupported PDF does not borrow earlier visible PDF in a referential question", async () => {
+  const calls: unknown[] = [];
+  const originalLookup = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async (args: unknown) => {
+    calls.push(args);
+    return calls.length === 1
+      ? [{ attachments: [{ id: "unreadable-pdf", fileType: "application/octet-stream", fileName: "resume.pdf", fileUrl: pdf.fileUrl }] }]
+      : [{ attachments: [{ ...pdf }] }];
+  } });
+  try {
+    const result = await routeContext(
+      [{ type: "text", text: "Compare this attached PDF to the image" }, { type: "image_url", image_url: { url: image.fileUrl } }],
+      "owner-1", [{ role: MessageRole.USER, id: "old-message", content: "Old file" }],
+      "conversation-1", null, true, { currentMessageId: "current-turn" },
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(result.metadata.documentContextState, "unavailable");
+  } finally {
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: originalLookup });
+  }
+});

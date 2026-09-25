@@ -29,13 +29,9 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
   const [expanded, setExpanded] = useState(true);
   const [openedImage, setOpenedImage] = useState<Attachment | null>(null);
   const [openedDocument, setOpenedDocument] = useState<Attachment | null>(null);
-  const imageAttachments = filterImageAttachments(attachments);
-  const documentAttachments = filterDocumentAttachments(attachments);
-  const files = [...imageAttachments, ...documentAttachments];
   const imageCount = memoryStatus.hasImages ? memoryStatus.imageCount : 0;
   const documentCount = memoryStatus.hasDocuments ? memoryStatus.documentCount : 0;
   const total = imageCount + documentCount;
-  const hasActualFiles = files.length === total && total > 0;
   const isMemory = memoryStatus.routingDecision === RoutingDecision.MemoryOnly && memoryStatus.hasMemories;
   const isFileContext = memoryStatus.routingDecision === RoutingDecision.VisionOnly || memoryStatus.routingDecision === RoutingDecision.DocumentsOnly || memoryStatus.routingDecision === RoutingDecision.Hybrid;
 
@@ -50,6 +46,21 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
   }
 
   if (!isFileContext || total === 0) return null;
+
+  // Preview joins must be grounded in the server's scoped document identities.
+  // Counts alone can pair a referential answer with unrelated latest files.
+  const documentSources = memoryStatus.documentEvidenceFiles;
+  const candidateDocuments = filterDocumentAttachments(attachments);
+  const documentAttachments = documentSources === undefined ? [] : candidateDocuments.filter((file) =>
+    documentSources.filter((source) => source.fileUrl === file.fileUrl).length === 1 &&
+    candidateDocuments.filter((candidate) => candidate.fileUrl === file.fileUrl).length === 1,
+  );
+  const imageAttachments = filterImageAttachments(attachments);
+  const files = [...imageAttachments, ...documentAttachments];
+  const hasVerifiedDocuments = documentCount === 0 || (
+    documentSources?.length === documentCount && documentAttachments.length === documentCount
+  );
+  const hasActualFiles = files.length === total && total > 0 && hasVerifiedDocuments;
 
   const multiple = total > 1;
   const onlyImage = imageCount === 1 && documentCount === 0;
@@ -72,11 +83,11 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
 
   return (
     <AccordionPrimitive.Root type="single" collapsible value={expanded ? "context" : ""} onValueChange={(value) => setExpanded(value === "context")} className="w-full min-w-0 max-w-[760px]">
-      <AccordionPrimitive.Item value="context" className="space-y-3 border-none">
+      <AccordionPrimitive.Item value="context" className={`overflow-hidden rounded-2xl ${surface}`}>
       <AccordionPrimitive.Header className="flex">
       <AccordionPrimitive.Trigger
         type="button"
-        className={`relative isolate flex min-h-12 w-full items-center gap-3 overflow-hidden rounded-2xl px-3.5 py-2.5 text-left transition-colors hover:bg-accent ${focus} ${surface}`}
+        className={`relative isolate flex min-h-12 w-full items-center gap-3 overflow-hidden px-3.5 py-2.5 text-left transition-colors hover:bg-accent ${focus}`}
       >
         {!expanded && <span aria-hidden="true" className="context-card-sheen pointer-events-none absolute inset-0" />}
         <span className="relative flex size-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-300">
@@ -92,7 +103,7 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
       </AccordionPrimitive.Header>
       <AccordionContent className="space-y-3 pb-0">
       {multiple && (
-        <section className={`rounded-[20px] p-3.5 sm:p-4 ${surface}`} aria-label="Context used">
+        <section className="border-t border-border/60 px-3.5 py-3.5 sm:px-4 dark:border-chat-user-bubble-border" aria-label="Context used">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300"><FileText className="size-4" /></span>
             <div className="min-w-0 flex-1">
@@ -114,7 +125,7 @@ export function ContextCards({ memoryStatus, attachments }: ContextCardsProps) {
       )}
 
       {!multiple && hasActualFiles && selectedFile && (
-        <button type="button" onClick={() => onlyImage ? setOpenedImage(selectedFile) : setOpenedDocument(selectedFile)} className={`block w-full max-w-[280px] overflow-hidden rounded-2xl text-left transition-colors hover:border-foreground/40 ${focus} ${surface}`}>
+        <button type="button" onClick={() => onlyImage ? setOpenedImage(selectedFile) : setOpenedDocument(selectedFile)} className={`mx-3.5 mb-3.5 block w-[calc(100%-28px)] max-w-[280px] overflow-hidden rounded-2xl border border-border/70 bg-muted/35 text-left transition-colors hover:border-foreground/40 dark:border-chat-user-bubble-border ${focus}`}>
           {onlyImage && <span className="relative block aspect-[2.5] bg-muted"><Image src={selectedFile.fileUrl} alt="" fill unoptimized sizes="280px" className="object-cover" /></span>}
           <span className="flex items-center gap-2 px-3 py-2.5">{onlyImage ? <ImageIcon className="size-4 shrink-0 text-muted-foreground" /> : <FileText className="size-5 shrink-0 text-violet-500" />}<span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{selectedFile.fileName}</span><span className="block text-[11px] text-muted-foreground">{onlyImage ? selectedFile.fileType.replace("image/", "").toUpperCase() : "Document"} · {formatSize(selectedFile.fileSize)}</span></span><ChevronRight className="size-4 shrink-0 text-muted-foreground" /></span>
           {onlyDocument && <span className="flex items-center gap-2 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground dark:border-chat-user-bubble-border"><FileText className="size-3.5" />{documentEvidenceLabel(selectedFile)}</span>}

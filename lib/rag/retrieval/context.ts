@@ -15,6 +15,7 @@ import type { RAGContextOptions, RAGContextResult } from "@/types/rag";
 import { withTrace } from "@/lib/langsmithConfig";
 import { runOrQueueDocumentProcessingJob } from "@/lib/orchestration/documentJobs";
 import { logger } from "@/lib/logger";
+import { logWarn } from "@/lib/observability";
 import {
   candidateKey,
   reciprocalRankFuse,
@@ -303,6 +304,48 @@ export function mergeNeighborCandidates(
   return ordered.slice(0, limit);
 }
 
+/** Sample the first bounded chunks of each completed, owner-scoped document
+ * when a comparison query has no semantic/lexical hit. This is document
+ * coverage, not a claim that the query matched those passages. */
+export async function getScopedDocumentCoverage(
+  userId: string,
+  conversationId: string | undefined,
+  attachmentIds: string[],
+): Promise<RetrievalCandidate[]> {
+  if (attachmentIds.length === 0) return [];
+  const rows = await prisma.$queryRaw<Array<{
+    id: string; content: string; attachment_id: string; file_name: string;
+    page: number | null; char_start: number | null;
+  }>>`
+    WITH ranked AS (
+      SELECT COALESCE(metadata->>'chunkId', id::text) AS id,
+        LEFT(content, 12000) AS content,
+        metadata->>'attachmentId' AS attachment_id,
+        metadata->>'fileName' AS file_name,
+        CASE WHEN metadata->>'page' ~ '^[0-9]+$' THEN (metadata->>'page')::int END AS page,
+        CASE WHEN metadata->>'charStart' ~ '^[0-9]+$' THEN (metadata->>'charStart')::int END AS char_start,
+        ROW_NUMBER() OVER (PARTITION BY metadata->>'attachmentId'
+          ORDER BY CASE WHEN metadata->>'page' ~ '^[0-9]+$' THEN (metadata->>'page')::int END NULLS LAST,
+            CASE WHEN metadata->>'charStart' ~ '^[0-9]+$' THEN (metadata->>'charStart')::int END NULLS LAST, id) AS row_num
+      FROM document_chunk
+      WHERE metadata->>'userId' = ${userId}
+        AND (${conversationId ?? null}::text IS NULL OR metadata->>'conversationId' = ${conversationId ?? null})
+        AND metadata->>'attachmentId' = ANY(${attachmentIds}::text[])
+    )
+    SELECT id, content, attachment_id, file_name, page, char_start
+    FROM ranked WHERE row_num <= 2 ORDER BY attachment_id, row_num LIMIT 10`;
+  return rows.filter((row) => row.content.trim() && attachmentIds.includes(row.attachment_id))
+    .map((row) => ({
+      content: row.content,
+      score: 0,
+      metadata: {
+        chunkId: row.id, attachmentId: row.attachment_id,
+        fileName: row.file_name, page: row.page ?? undefined,
+        charStart: row.char_start ?? undefined,
+      },
+    }));
+}
+
 async function enrichWithNeighborChunks(
   results: RetrievalCandidate[],
   userId: string,
@@ -351,6 +394,7 @@ export async function getRAGContext(
 
         const scope = await resolveCompletedAttachmentScope(userId, options);
         if (!scope) {
+          logWarn({ event: "rag_retrieval_empty_scope", userId, conversationId: options.conversationId, providedAttachmentCount: options.attachmentIds?.length ?? 0 });
           return null;
         }
 
@@ -381,7 +425,16 @@ export async function getRAGContext(
           k: RAG_CONFIG.search.rrfK,
           limit: adjustedLimit,
         });
-        if (!results.length) return null;
+        if (!results.length) {
+          logWarn({ event: "rag_retrieval_no_matches", userId, conversationId: options.conversationId, providedAttachmentCount: scope.attachmentIds.length, queryVariantCount: queries.length });
+          const samples = await getScopedDocumentCoverage(userId, conversationId, scope.attachmentIds);
+          // Empty-index documents remain unavailable, not "read".
+          const sampledIds = new Set(samples.map((sample) => sample.metadata.attachmentId));
+          if (scope.attachmentIds.some((id) => !sampledIds.has(id))) return null;
+          const safeSamples = await gatePassages(query, samples, conversationId);
+          if (safeSamples.length !== samples.length) return null;
+          return formatRetrievedContext(safeSamples, "coverage");
+        }
         const enrichedResults = await enrichWithNeighborChunks(results, userId);
         // Gate the final prompt passages, including neighbors, so untrusted
         // instructions cannot enter merely by being adjacent to a good hit.
@@ -390,11 +443,15 @@ export async function getRAGContext(
           enrichedResults,
           conversationId,
         );
-        if (!gatedResults.length) return null;
+        if (!gatedResults.length) {
+          logWarn({ event: "rag_retrieval_all_passages_rejected", userId, conversationId: options.conversationId, candidateCount: enrichedResults.length });
+          return null;
+        }
         return formatRetrievedContext(gatedResults);
       } catch (error) {
         if (options.signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
         logger.error("[RAG] Context retrieval failed:", error);
+        logWarn({ event: "rag_retrieval_error", userId, conversationId: options.conversationId, error: error instanceof Error ? error.name : "unknown" });
         return null;
       }
     },

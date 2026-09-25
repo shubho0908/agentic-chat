@@ -9,6 +9,11 @@ import { RoutingDecision, type MemoryStatus } from "@/types/chat";
 const status: MemoryStatus = {
   hasMemories: false, hasDocuments: true, hasImages: true, memoryCount: 0,
   documentCount: 2, imageCount: 1, routingDecision: RoutingDecision.Hybrid,
+  documentEvidenceFiles: [
+    { id: "persisted-one", fileUrl: "https://example.com/one.pdf" },
+    { id: "persisted-two", fileUrl: "https://example.com/two.pdf" },
+  ],
+  documentEvidenceIds: ["persisted-one", "persisted-two"],
 };
 const attachments = [
   { fileName: "scene.png", fileUrl: "https://example.com/scene.png", fileType: "image/png", fileSize: 100 },
@@ -23,4 +28,9 @@ test("multiple context files show directly clickable tiles without pager control
   assert.match(html, /one\.pdf/);
   assert.match(html, /two\.pdf/);
   assert.doesNotMatch(html, /aria-label="Previous file"|aria-label="Next file"|>1 \/ 3</);
+  // The trigger and expanded details share one bordered surface. There is no
+  // second floating section with its own rounded corners or shadow.
+  assert.match(html, /overflow-hidden rounded-2xl border border-border\/60/);
+  assert.match(html, /border-t border-border\/60 px-3\.5 py-3\.5/);
+  assert.doesNotMatch(html, /rounded-\[20px\] p-3\.5/);
 });

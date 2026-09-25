@@ -44,10 +44,14 @@ function uploadResponseToAttachment(
   uploadResult: UploadFileResponse,
   clientFileId?: string
 ): UploadAttachment {
-  const resolvedType =
-    uploadResult.type ||
-    uploadResult.serverData?.type ||
-    inferMimeTypeFromFileName(uploadResult.name);
+  // Some upload responses carry the generic browser MIME even though the
+  // accepted file has a recognized extension. Keep an explicit MIME when it
+  // is meaningful, but recover a known document type from the name here.
+  const reportedType = uploadResult.type || uploadResult.serverData?.type;
+  const inferredType = inferMimeTypeFromFileName(uploadResult.name);
+  const resolvedType = !reportedType || reportedType.toLowerCase() === "application/octet-stream"
+    ? inferredType
+    : reportedType;
 
   return {
     // Prefer ufsUrl (v9 canonical); fall back to legacy url for old payloads.

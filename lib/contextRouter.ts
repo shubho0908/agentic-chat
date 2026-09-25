@@ -303,6 +303,7 @@ async function getAttachmentInfo(
   documentAttachmentIds: string[];
   documentFiles: Array<{ id: string; fileUrl: string }>;
   currentMessageFound: boolean;
+  unsupportedDocumentCount: number;
 }> {
   try {
     const messages = await prisma.message.findMany({
@@ -342,6 +343,7 @@ async function getAttachmentInfo(
         documentAttachmentIds: [],
         documentFiles: [],
         currentMessageFound: messages.length > 0,
+        unsupportedDocumentCount: 0,
       };
     }
 
@@ -355,10 +357,11 @@ async function getAttachmentInfo(
         .filter((id): id is string => Boolean(id)),
       documentFiles: retrievableDocumentAttachments.map(({ id, fileUrl }) => ({ id, fileUrl })),
       currentMessageFound: messages.length > 0,
+      unsupportedDocumentCount: allAttachments.length - retrievableDocumentAttachments.length,
     };
   } catch (error) {
     logger.warn("[Context Router] Failed to get attachment info:", error);
-    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: false };
+    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: false, unsupportedDocumentCount: 0 };
   }
 }
 
@@ -420,7 +423,7 @@ export async function routeContext(
   // Use the persisted current turn, not upload-response IDs or older messages.
   const currentAttachmentInfo = conversationId
     ? await getAttachmentInfo(conversationId, userId, true, options?.currentMessageId)
-    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: !options?.currentMessageId };
+    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [], documentFiles: [], currentMessageFound: !options?.currentMessageId, unsupportedDocumentCount: 0 };
   // A supplied turn ID is an exact identity, not a hint to search the latest
   // message. A missing/deleted/wrong-owner row must never borrow another turn's
   // documents or fall through to personal memory.
@@ -436,9 +439,26 @@ export async function routeContext(
   );
   // A referential follow-up may use earlier visible turns, never invisible
   // messages from other branches or the newest unrelated database row.
-  const attachmentInfo = currentAttachmentInfo.hasDocuments || !isReferential || !conversationId || priorMessageIds.length === 0
+  const attachmentInfo = (currentAttachmentInfo.hasDocuments || currentAttachmentInfo.unsupportedDocumentCount > 0) || !isReferential || !conversationId || priorMessageIds.length === 0
     ? currentAttachmentInfo
     : await getAttachmentInfo(conversationId, userId, false, undefined, priorMessageIds);
+
+  // A persisted non-image attachment with an unsupported MIME cannot be
+  // silently discarded just because another file is a valid image. The
+  // comparison would otherwise reach the vision model without the document.
+  if (attachmentInfo.unsupportedDocumentCount > 0) {
+    metadata.skippedMemory = true;
+    metadata.documentCount = attachmentInfo.documentCount + attachmentInfo.unsupportedDocumentCount;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    metadata.routingDecision = hasImages ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+    metadata.documentEvidenceFiles = attachmentInfo.documentFiles;
+    logMissingDocumentRetrieval({
+      userId, conversationId, query: textQuery,
+      documentCount: metadata.documentCount, isReferential,
+    });
+    return { context: buildMissingDocumentContext(textQuery), metadata };
+  }
 
   if (attachmentInfo.hasDocuments) metadata.documentEvidenceFiles = attachmentInfo.documentFiles;
 
