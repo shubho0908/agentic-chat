@@ -33,7 +33,7 @@ const base: MemoryStatus = {
 };
 const render = (status: MemoryStatus, attachments: Attachment[]) =>
   renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() },
-    createElement(ContextCards, { memoryStatus: status, attachments })));
+    createElement(ContextCards, { memoryStatus: status, attachments, defaultExpanded: true })));
 
 test("card shows a document preview only when the persisted source identity matches", () => {
   const matching = render({

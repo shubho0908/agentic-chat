@@ -23,14 +23,29 @@ const attachments = [
 
 test("multiple context files show directly clickable tiles without pager controls", () => {
   const html = renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() },
-    createElement(ContextCards, { memoryStatus: status, attachments })));
+    createElement(ContextCards, { memoryStatus: status, attachments, defaultExpanded: true })));
   assert.match(html, /scene\.png/);
   assert.match(html, /one\.pdf/);
   assert.match(html, /two\.pdf/);
   assert.doesNotMatch(html, /aria-label="Previous file"|aria-label="Next file"|>1 \/ 3</);
   // The trigger and expanded details share one bordered surface. There is no
   // second floating section with its own rounded corners or shadow.
-  assert.match(html, /overflow-hidden rounded-2xl border border-border\/60/);
-  assert.match(html, /border-t border-border\/60 px-3\.5 py-3\.5/);
+  assert.match(html, /overflow-hidden rounded-2xl border border-border\/70/);
+  assert.match(html, /border-t border-border\/35 dark:border-white\/\[0\.06\]/);
+  assert.match(html, /dark:bg-\[#171719\]/);
+  assert.doesNotMatch(html, /dark:bg-gradient|dark:from-card|dark:to-muted/);
   assert.doesNotMatch(html, /rounded-\[20px\] p-3\.5/);
+});
+
+
+test("context accordion starts closed and reveals tiles when expanded", () => {
+  const closed = renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() },
+    createElement(ContextCards, { memoryStatus: status, attachments })));
+  assert.match(closed, /aria-expanded="false"/);
+  assert.doesNotMatch(closed, /scene\.png|one\.pdf|two\.pdf/);
+  const open = renderToStaticMarkup(createElement(QueryClientProvider, { client: new QueryClient() },
+    createElement(ContextCards, { memoryStatus: status, attachments, defaultExpanded: true })));
+  assert.match(open, /aria-expanded="true"/);
+  assert.match(open, /scene\.png/);
+  assert.match(open, /one\.pdf/);
 });
