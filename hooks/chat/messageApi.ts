@@ -197,7 +197,16 @@ export async function saveAssistantMessage(
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to save message: ${response.statusText}`);
+      let serverMessage = response.statusText;
+      try {
+        const errorData = await response.json();
+        if (typeof errorData?.message === "string")
+          serverMessage = errorData.message;
+        else if (typeof errorData?.error === "string")
+          serverMessage = errorData.error;
+      } catch {
+      }
+      throw new Error(`Failed to save assistant message (${response.status}): ${serverMessage}`);
     }
 
     const savedMessage = await response.json();

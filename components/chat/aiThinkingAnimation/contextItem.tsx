@@ -8,6 +8,7 @@ interface ContextItemProps {
   note?: string;
   completed?: boolean;
   skipped?: boolean;
+  unavailable?: boolean;
 }
 
 export function ContextItem({
@@ -17,6 +18,7 @@ export function ContextItem({
   note,
   completed = false,
   skipped = false,
+  unavailable = false,
 }: ContextItemProps) {
   return (
     <div className="flex items-center gap-2 min-w-0">
@@ -33,7 +35,7 @@ export function ContextItem({
         {note && (
           <span className="text-[10px] text-muted-foreground">{note}</span>
         )}
-        {skipped ? null : completed ? (
+        {skipped || unavailable ? null : completed ? (
           <CheckCircle2 className="size-3 text-muted-foreground/70" />
         ) : (
           <Loader className="size-3 animate-spin text-muted-foreground" />

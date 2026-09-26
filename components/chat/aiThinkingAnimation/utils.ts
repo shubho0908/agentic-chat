@@ -10,6 +10,11 @@ export function getContextualMessage(
     return AI_THINKING_MESSAGES.DEFAULT;
   }
 
+  if (memoryStatus?.hasDocuments && memoryStatus.documentCount === 0 &&
+      memoryStatus.documentContextState === "unavailable") {
+    return "Waiting for attachment clarification...";
+  }
+
   const routing = memoryStatus?.routingDecision;
 
   if (routing === RoutingDecision.VisionOnly) {

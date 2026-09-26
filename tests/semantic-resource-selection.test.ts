@@ -91,6 +91,7 @@ test("uncertain or invalid semantic selections fail closed", async () => {
     ]) {
       const result = await routeContext("比較這兩份資料", "owner", [], "conv", null, false, { currentMessageId: "now", decideResources: decision });
       assert.equal(result.metadata.documentEvidenceIds, undefined);
+      assert.equal(result.metadata.documentContextState, "unavailable");
       assert.match(result.context, /document_processing_notice/);
     }
     assert.equal(queries.historical, 1);
@@ -255,6 +256,7 @@ test("ambiguity suppresses current image evidence rather than leaking a partial 
     const result = await routeContext([{ type: "text", text: "Compare these" }, { type: "image_url", image_url: { url: image.fileUrl } }],
       "owner", [], "conv", null, false, { currentMessageId: "now", decideResources: async () => ({ state: "ambiguous" }) });
     assert.equal(result.metadata.hasDocuments, true);
+    assert.equal(result.metadata.documentContextState, "unavailable");
     assert.equal(result.metadata.includeCurrentImages, false);
     assert.match(result.context, /document_processing_notice/);
   } finally {

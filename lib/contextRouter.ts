@@ -423,6 +423,7 @@ export async function routeContext(
   if (semanticIntent === "ambiguous") {
     metadata.skippedMemory = true;
     metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
     metadata.includeCurrentImages = false;
     metadata.selectedCurrentImageFiles = [];
     return { context: "<document_processing_notice>Could not reliably determine which previous attachment is requested. Ask the user to name or reattach it.</document_processing_notice>", metadata };
@@ -496,6 +497,7 @@ export async function routeContext(
   if (selection?.state === "ambiguous") {
     metadata.skippedMemory = true;
     metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
     metadata.includeCurrentImages = false;
     metadata.selectedCurrentImageFiles = [];
     return {
