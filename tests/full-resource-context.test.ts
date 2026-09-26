@@ -429,3 +429,66 @@ test("plain text turns avoid attachment history traversal", async () => {
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
 });
+
+test("bare reference to an earlier PDF scans persisted history", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const older = file(1);
+  let pages = 0;
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => { pages++; return [{ id: "older", attachments: [older] }]; } });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: older.id, fileName: older.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => rows([older.id]) });
+  try {
+    const routed = await routeContext("Summarize that", "owner", [{ role: MessageRole.USER, content: "I uploaded file-1.pdf", attachments: [{ id: older.id, kind: "document", fileName: older.fileName, fileUrl: older.fileUrl, fileType: older.fileType, fileSize: older.fileSize }] }],
+      "conv", null, false, { currentMessageId: "now" });
+    assert.ok(pages > 0);
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [older.id]);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("bare reference to multiple previous files remains scoped to that turn, not the entire conversation", () => {
+  const old = [file(1, false, "previous-turn"), file(2, false, "previous-turn")];
+  const outside = file(3);
+  const selected = selectConversationResource("Summarize those", false, [...old, outside], old.map(({ id }) => id));
+  assert.equal(selected.state, "selected");
+  if (selected.state === "selected") assert.deepEqual(selected.resources.map(({ id }) => id), old.map(({ id }) => id));
+  assert.equal(selectConversationResource("Summarize those", false, [...old, outside], ["missing"]).state, "ambiguous");
+});
+
+test("mixed image/document bare reference does not collapse into an arbitrary type", () => {
+  const image = img(1), document = file(1);
+  assert.equal(selectConversationResource("Describe that", false, [image, document], [image.id, document.id]).state, "ambiguous");
+});
+
+test("bare reference with two earlier attachment turns does not silently choose the newest", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  const older = file(1), newer = file(2);
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => [{ id: "older", attachments: [older] }, { id: "newer", attachments: [newer] }] });
+  const asAttachment = (resource: ResourceCandidate) => ({
+    id: resource.id, kind: "document" as const, fileName: resource.fileName,
+    fileUrl: resource.fileUrl, fileType: resource.fileType, fileSize: resource.fileSize,
+  });
+  try {
+    const result = await routeContext("Summarize that", "owner", [
+      { role: MessageRole.USER, content: "First PDF", attachments: [asAttachment(older)] },
+      { role: MessageRole.USER, content: "Second PDF", attachments: [asAttachment(newer)] },
+    ], "conv", null, false, { currentMessageId: "now" });
+    assert.match(result.context, /Several earlier attachments could match/);
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});

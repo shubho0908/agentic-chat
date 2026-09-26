@@ -35,6 +35,7 @@ export function selectConversationResource(
   text: string,
   currentHasImage: boolean,
   candidates: ResourceCandidate[],
+  referencedAttachmentIds?: string[],
 ): ResourceSelection {
   if (
     /\b(?:remember|recall)\b/i.test(text) &&
@@ -44,6 +45,13 @@ export function selectConversationResource(
     )
   )
     return { state: "none" };
+  if (referencedAttachmentIds?.length) {
+    const referenced = candidates.filter((candidate) => referencedAttachmentIds.includes(candidate.id));
+    if (referenced.length !== referencedAttachmentIds.length) return { state: "ambiguous" };
+    if (new Set(referenced.map(attachmentKind)).size !== 1) return { state: "ambiguous" };
+    if (new Set(referenced.map((candidate) => candidate.messageId)).size !== 1) return { state: "ambiguous" };
+    return { state: "selected", kind: attachmentKind(referenced[0]), resources: referenced };
+  }
   const kinds = new Set<AttachmentKind>();
   if (imageWords.test(text)) kinds.add("image");
   if (documentWords.test(text)) kinds.add("document");
