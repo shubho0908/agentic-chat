@@ -1,11 +1,17 @@
 import type { MemoryStatus } from "@/types/chat";
 import { RoutingDecision } from "@/types/chat";
 import { AI_THINKING_MESSAGES } from "./types";
+import { CustomEventName, ToolStatus } from "@/lib/orchestrator/constants";
 
 export function getContextualMessage(
   memoryStatus: MemoryStatus | undefined,
   hasContext: boolean,
 ): string {
+  if (memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING &&
+      memoryStatus.toolProgress.status === ToolStatus.RUNNING) {
+    return "Preparing plan...";
+  }
+
   if (!hasContext) {
     return AI_THINKING_MESSAGES.DEFAULT;
   }
@@ -48,7 +54,8 @@ export function getContextualMessage(
   if (routing === RoutingDecision.ToolOnly) {
     const toolName = memoryStatus?.activeToolName?.replace("_", " ") || "tool";
 
-    if (memoryStatus?.toolProgress?.message) {
+    if (memoryStatus?.toolProgress?.message &&
+        memoryStatus.toolProgress.toolName !== CustomEventName.PLANNING) {
       return memoryStatus.toolProgress.message;
     }
 

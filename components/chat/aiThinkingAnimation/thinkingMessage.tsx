@@ -11,7 +11,7 @@ interface ThinkingMessageProps {
 
 export function ThinkingMessage({ message }: ThinkingMessageProps) {
   return (
-    <div role="status" className="flex w-fit items-center gap-2.5">
+    <div role="status" aria-live="polite" aria-atomic="true" className="flex w-fit items-center gap-2.5">
       <span
         aria-hidden
         className="grid shrink-0 grid-cols-[repeat(3,4px)] gap-[1.5px]"

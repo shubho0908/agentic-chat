@@ -23,8 +23,6 @@ import {
 import type { MemoryStatus } from "@/types/chat";
 import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
-import { PlanningStep } from "./aiThinkingAnimation/planningStep";
-import { CustomEventName } from "@/lib/orchestrator/constants";
 import {
   ACTIVITY_ONLY_ASSISTANT_CONTENT,
   ARTIFACT_ONLY_ASSISTANT_CONTENT,
@@ -101,18 +99,6 @@ function MessageContentSurface({
         editContent && "focus-within:ring-2 focus-within:ring-foreground/15",
       )}
     >
-      {!isUser &&
-        isLoading &&
-        memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
-          <div className="mb-2">
-            <PlanningStep
-              message={
-                memoryStatus.toolProgress.message || "Planning approach..."
-              }
-            />
-          </div>
-        )}
-
       {!isUser && displayedMessage.thinking && (
         <ThinkingAccordion
           thinking={displayedMessage.thinking}
