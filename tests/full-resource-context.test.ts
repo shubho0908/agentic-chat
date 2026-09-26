@@ -57,7 +57,8 @@ test("scoped complete-text query and old-image/current-PDF route carry both actu
   const recorded:unknown[]=[];
   Object.defineProperty(prisma.message,"findFirst",{configurable:true,value:async()=>({id:"now",parentMessageId:null,createdAt:new Date(),attachments:[current]})});
   Object.defineProperty(prisma.message,"findMany",{configurable:true,value:async()=>[{id:"older",attachments:[old]}]});
-  Object.defineProperty(prisma.attachment,"findMany",{configurable:true,value:async(args:unknown)=>{recorded.push(args);return [{id:current.id,fileName:current.fileName,chunkCount:2}];}});
+  Object.defineProperty(prisma.attachment,"findMany",{configurable:true,value:async(args:{select?:{messageId?:boolean}})=>{recorded.push(args);return args.select?.messageId
+    ? [{...old,messageId:"older"}] : [{id:current.id,fileName:current.fileName,chunkCount:2}];}});
   Object.defineProperty(prisma,"$queryRaw",{configurable:true,value:async(query:unknown)=>{
     recorded.push(query);
     return [0,1].map((i)=>({id:`${current.id}:${i}`,attachment_id:current.id,
@@ -120,12 +121,15 @@ test("an earlier image excludes the unrelated newly attached image from status",
   const current = img(2, true, "now"), old = img(1);
   Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
   Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [{ id: "older", attachments: [old] }] });
+  const find = prisma.attachment.findMany;
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async () => [{ ...old, messageId: "older" }] });
   try {
     const result = await routeContext("Describe the earlier image", "owner", [], "conv", null, false, { currentMessageId: "now" });
     assert.equal(result.metadata.imageCount, 1);
     assert.equal(result.metadata.includeCurrentImages, false);
     assert.deepEqual(result.metadata.historicalImageFiles?.map(({ id }) => id), [old.id]);
   } finally {
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
@@ -172,7 +176,7 @@ test("incomplete long history may still use only a selected current PDF", async 
     assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
     assert.match(routed.context, /FULL pdf-1 CONTENT/);
     const historical = await routeContext("Summarize all PDFs", "owner", [], "conv", null, false, { currentMessageId: "now" });
-    assert.match(historical.context, /Historical attachment search was incomplete/);
+    assert.equal(historical.unresolved?.reason, "history-incomplete");
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
@@ -243,7 +247,7 @@ test("bounded history cannot override a named older document with a current PDF"
     } });
   try {
     const routed = await routeContext("Read file-999.pdf", "owner", [], "conv", null, false, { currentMessageId: "now" });
-    assert.match(routed.context, /Historical attachment search was incomplete/);
+    assert.equal(routed.unresolved?.reason, "history-incomplete");
     assert.equal(routed.metadata.documentEvidenceIds, undefined);
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
@@ -300,7 +304,7 @@ test("custom-extension older file in incomplete history cannot be silently dropp
   try {
     const result = await routeContext("Summarize this PDF and data.json", "owner", [], "conv", null, false,
       { currentMessageId: "now" });
-    assert.match(result.context, /Historical attachment search was incomplete/);
+    assert.equal(result.unresolved?.reason, "history-incomplete");
     assert.equal(result.metadata.documentEvidenceIds, undefined);
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
@@ -485,7 +489,7 @@ test("bare reference with two earlier attachment turns does not silently choose 
       { role: MessageRole.USER, content: "First PDF", attachments: [asAttachment(older)] },
       { role: MessageRole.USER, content: "Second PDF", attachments: [asAttachment(newer)] },
     ], "conv", null, false, { currentMessageId: "now" });
-    assert.match(result.context, /Several earlier attachments could match/);
+    assert.equal(result.unresolved?.reason, "ambiguous");
     assert.equal(result.metadata.documentEvidenceIds, undefined);
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
@@ -579,7 +583,8 @@ test("an older PDF and later image remain available for the user's mixed Hindi c
       { id: "image-turn", attachments: [laterImage] }, { id: "pdf-turn", attachments: [older] },
     ]; } });
   Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
-    value: async () => [{ id: older.id, fileName: older.fileName, chunkCount: 1 }] });
+    value: async (args: { select?: { messageId?: boolean } }) => args.select?.messageId
+      ? [{ ...laterImage, messageId: "image-turn" }] : [{ id: older.id, fileName: older.fileName, chunkCount: 1 }] });
   Object.defineProperty(prisma, "$queryRaw", { configurable: true,
     value: async () => rows([older.id]) });
   try {

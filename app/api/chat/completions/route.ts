@@ -403,6 +403,17 @@ export async function POST(request: NextRequest) {
         );
 
         memoryStatusInfo = contextResult.metadata;
+        if (contextResult.unresolved) {
+          return new Response(JSON.stringify({
+            id: `attachment-clarification-${requestId}`,
+            object: "chat.completion",
+            created: Math.floor(Date.now() / 1000),
+            model: validatedModel,
+            choices: [{ index: 0, finish_reason: "stop", message: {
+              role: "assistant", content: contextResult.unresolved.prompt,
+            } }],
+          }), { headers: { "Content-Type": "application/json" } });
+        }
 
         enhancedMessages = attachHistoricalImagesToModelTurn(
           enhancedMessages, contextResult.metadata.historicalImageFiles || [],

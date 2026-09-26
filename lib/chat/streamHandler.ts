@@ -13,6 +13,7 @@ import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { routeContext } from "@/lib/contextRouter";
 import { parseOpenAIError } from "@/lib/openaiErrors";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { unresolvedRouteToMessage } from "@/lib/chat/attachmentRouteUnresolved";
 import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
 import { extractTextFromMessage } from "./messageContent";
 import {
@@ -193,6 +194,12 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               ...memoryStatusInfo,
               ...contextResult.metadata,
             };
+            if (contextResult.unresolved) {
+              stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
+              stream.enqueue(encodeChatChunk(unresolvedRouteToMessage(contextResult.unresolved)));
+              finishStream();
+              return;
+            }
 
             enhancedMessages = attachHistoricalImagesToModelTurn(
               enhancedMessages, contextResult.metadata.historicalImageFiles || [],

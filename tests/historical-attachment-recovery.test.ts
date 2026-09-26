@@ -40,21 +40,22 @@ const recent = [
   { role: MessageRole.ASSISTANT, content: "Comparison table" },
 ];
 
-test("explicit historical-PDF contact question recovers a unique PDF when intent fails", async () => {
+test("explicit historical-PDF contact question asks instead of guessing when intent fails", async () => {
   await withPriorAttachments(async (calls) => {
     const result = await routeContext(question, "owner", recent, "conv", null, false,
       { currentMessageId: "now", decideResources: async () => { throw new Error("unsupported JSON mode"); } });
     assert.ok(calls.includes("history"));
-    assert.deepEqual(result.metadata.documentEvidenceIds, [pdf.id]);
-    assert.match(result.context, /sample@example.com/);
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+    assert.equal(result.unresolved?.reason, "ambiguous");
   });
 });
 
-test("explicit historical-PDF contact question recovers a unique PDF when intent says none", async () => {
+test("explicit historical-PDF contact question surfaces a contradiction when intent says none", async () => {
   await withPriorAttachments(async () => {
     const result = await routeContext(question, "owner", recent, "conv", null, false,
       { currentMessageId: "now", decideResources: async () => ({ state: "none" }) });
-    assert.deepEqual(result.metadata.documentEvidenceIds, [pdf.id]);
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+    assert.equal(result.unresolved?.reason, "none");
   });
 });
 
@@ -63,12 +64,13 @@ test("multiple PDFs never silently choose one when classification fails", async 
     const result = await routeContext(question, "owner", recent, "conv", null, false,
       { currentMessageId: "now", decideResources: async () => { throw new Error("unavailable"); } });
     assert.equal(result.metadata.documentEvidenceIds, undefined);
-    assert.match(result.context, /document_processing_notice/);
+    assert.ok(result.unresolved?.prompt);
   }, [pdf, { ...pdf, id: "second-pdf", fileName: "another.pdf" }]);
 });
 
-test("explicit reference to current PDF survives classifier failure", async () => {
-  const first = prisma.message.findFirst;
+test("explicit reference to current PDF asks instead of trusting a failed classifier", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [] });
   Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: async (args: { select?: { attachments?: unknown; createdAt?: unknown } }) =>
     args.select?.attachments || args.select?.createdAt ? { id: "now", createdAt: new Date(), parentMessageId: null, attachments: [pdf] } : null });
   const find = prisma.attachment.findMany, raw = prisma.$queryRaw;
@@ -77,10 +79,21 @@ test("explicit reference to current PDF survives classifier failure", async () =
   try {
     const result = await routeContext(question, "owner", [], "conv", null, false,
       { currentMessageId: "now", decideResources: async () => { throw new Error("model unavailable"); } });
-    assert.deepEqual(result.metadata.documentEvidenceIds, [pdf.id]);
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+    assert.equal(result.unresolved?.reason, "ambiguous");
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
     Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
     Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
   }
+});
+
+test("generic Hindi PDF question cannot override negative catalog-backed intent", async () => {
+  await withPriorAttachments(async () => {
+    const result = await routeContext("PDF mein kya hota hai?", "owner", recent, "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => ({ state: "none" }) });
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+    assert.equal(result.unresolved?.reason, "none");
+  });
 });

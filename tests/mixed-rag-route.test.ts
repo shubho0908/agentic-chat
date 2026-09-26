@@ -50,8 +50,10 @@ test("mixed request reaches PDF evidence rather than image-only fallback", async
   });
   Object.defineProperty(prisma.attachment, "findMany", {
     configurable: true,
-    value: async (args: { select?: { fileType?: boolean } }) =>
-      args.select?.fileType
+    value: async (args: { select?: { fileType?: boolean; messageId?: boolean } }) =>
+      args.select?.messageId
+        ? [{ ...image, id: "image-id", messageId: "turn-1", kind: "image" }]
+        : args.select?.fileType
         ? [pdf]
         : [{ id: pdf.id, processingStatus: "COMPLETED" }],
   });
@@ -99,8 +101,8 @@ test("mixed request reaches PDF evidence rather than image-only fallback", async
     assert.equal(routed.metadata.routingDecision, RoutingDecision.Hybrid);
     assert.equal(routed.metadata.documentContextState, "unavailable");
     assert.equal(routed.metadata.documentEvidenceIds, undefined);
-    assert.match(routed.context, /could not read all of the attached documents/);
-    assert.doesNotMatch(routed.context, /document_coverage_samples/);
+    assert.equal(routed.unresolved?.reason, "retrieval-unavailable");
+    assert.equal(routed.context, "");
     assert.equal(vectorQueries.length, 1);
     assert.equal(vectorQueries[0], question);
     assert.equal(

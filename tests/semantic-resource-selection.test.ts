@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/prisma";
 import { routeContext } from "@/lib/contextRouter";
-import { validateResourceDecision, type DecideResources } from "@/lib/chat/semanticResourceSelection";
+import { decideConversationResources, validateResourceDecision, type DecideResources } from "@/lib/chat/semanticResourceSelection";
 import type { ResourceCandidate } from "@/lib/chat/resourceSelection";
 import { MessageRole } from "@/lib/schemas/chat";
 
@@ -29,7 +29,8 @@ async function withCatalog(run: (queries: { historical: number; calls: string[] 
     queries.historical++;
     return [{ id: "later-image", attachments: [image] }, { id: "old-pdf", attachments: [pdf] }];
   } });
-  Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async () => [{ id: pdf.id, fileName: pdf.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async (args: { select?: { messageId?: boolean } }) => args.select?.messageId
+    ? [{ ...image, messageId: "later-image" }] : [{ id: pdf.id, fileName: pdf.fileName, chunkCount: 1 }] });
   Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => [{ id: "pdf:0", attachment_id: "pdf", file_name: "resume.pdf", chunk_index: 0, page: 1, content: "PDF FULL CONTENT" }] });
   const decision: DecideResources = async (input) => {
     queries.calls.push(input.phase);
@@ -71,14 +72,14 @@ test("historical image and PDF are resolved across languages without phrase rule
   });
 });
 
-test("semantic none avoids catalog traversal on unrelated turns", async () => {
+test("semantic none still examines catalog for unrelated turns", async () => {
   await withCatalog(async (queries) => {
     for (const query of ["What is recursion?", "今天的天气怎么样？", "كم الساعة الآن؟"]) {
       await routeContext(query, "owner", [], "conv", null, false, {
         currentMessageId: "now", decideResources: async () => ({ state: "none" }),
       });
     }
-    assert.equal(queries.historical, 0);
+    assert.equal(queries.historical, 3);
   });
 });
 
@@ -92,9 +93,9 @@ test("uncertain or invalid semantic selections fail closed", async () => {
       const result = await routeContext("比較這兩份資料", "owner", [], "conv", null, false, { currentMessageId: "now", decideResources: decision });
       assert.equal(result.metadata.documentEvidenceIds, undefined);
       assert.equal(result.metadata.documentContextState, "unavailable");
-      assert.match(result.context, /document_processing_notice/);
+      assert.ok(result.unresolved?.prompt);
     }
-    assert.equal(queries.historical, 1);
+    assert.equal(queries.historical, 3);
   });
 });
 
@@ -105,7 +106,8 @@ test("new image plus historical PDF selects both under semantic decision", async
     args.select?.attachments ? { id: "now", createdAt: new Date(), parentMessageId: null, attachments: [{ ...image, current: true, messageId: "now" }] } :
     args.select?.createdAt ? { id: "now", createdAt: new Date(), parentMessageId: null, attachments: [image] } : { id: "old-pdf" } });
   Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [{ id: "old-pdf", attachments: [pdf] }] });
-  Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async () => [{ id: pdf.id, fileName: pdf.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async (args: { select?: { messageId?: boolean } }) => args.select?.messageId
+    ? [{ ...image, messageId: "now" }] : [{ id: pdf.id, fileName: pdf.fileName, chunkCount: 1 }] });
   Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => [{ id: "pdf:0", attachment_id: "pdf", file_name: "resume.pdf", chunk_index: 0, page: 1, content: "PDF FULL CONTENT" }] });
   try {
     const result = await routeContext([{ type: "text", text: "この画像と前に送ったPDFを比較して" },
@@ -121,12 +123,14 @@ test("new image plus historical PDF selects both under semantic decision", async
   }
 });
 
-test("negative semantic intent overrides lexical history scan even when query says PDF", async () => {
+test("negative intent remains visible in a file-bearing conversation", async () => {
   await withCatalog(async (queries) => {
     const result = await routeContext("What is a PDF?", "owner", [], "conv", null, false,
       { currentMessageId: "now", decideResources: async () => ({ state: "none" }) });
-    assert.equal(queries.historical, 0);
+    assert.equal(queries.historical, 1);
     assert.equal(result.metadata.documentEvidenceIds, undefined);
+    assert.equal(result.metadata.documentContextState, "unavailable");
+    assert.ok(result.unresolved?.prompt);
   });
 });
 
@@ -135,12 +139,12 @@ test("duplicate catalog IDs cannot silently bind the wrong message", () => {
     [image, { ...image, messageId: "different-turn" }]).state, "ambiguous");
 });
 
-test("failed intent classification does not scan history", async () => {
+test("failed intent classification scans history and asks", async () => {
   await withCatalog(async (queries) => {
     const result = await routeContext("我之前的图片和文件？", "owner", [], "conv", null, false,
       { currentMessageId: "now", decideResources: async () => { throw new Error("unavailable"); } });
-    assert.equal(queries.historical, 0);
-    assert.match(result.context, /document_processing_notice/);
+    assert.equal(queries.historical, 1);
+    assert.ok(result.unresolved?.prompt);
   });
 });
 
@@ -185,8 +189,8 @@ test("lexical file signal contradicting semantic none asks, not silently drops",
   await withCatalog(async (queries) => {
     const result = await routeContext("Compare the PDF I sent", "owner", [], "conv", null, false,
       { currentMessageId: "now", decideResources: async () => ({ state: "none" }) });
-    assert.equal(queries.historical, 0);
-    assert.match(result.context, /document_processing_notice/);
+    assert.equal(queries.historical, 1);
+    assert.ok(result.unresolved?.prompt);
   });
 });
 
@@ -214,7 +218,7 @@ test("semantic catalog ceiling asks rather than selecting from a partial prompt"
       } });
     assert.equal(selectionCalls, 0);
     assert.equal(result.metadata.documentEvidenceIds, undefined);
-    assert.match(result.context, /document_processing_notice/);
+    assert.ok(result.unresolved?.prompt);
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
@@ -258,7 +262,7 @@ test("ambiguity suppresses current image evidence rather than leaking a partial 
     assert.equal(result.metadata.hasDocuments, true);
     assert.equal(result.metadata.documentContextState, "unavailable");
     assert.equal(result.metadata.includeCurrentImages, false);
-    assert.match(result.context, /document_processing_notice/);
+    assert.ok(result.unresolved?.prompt);
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
@@ -275,7 +279,7 @@ test("current message missing at intent check fails closed before history lookup
       { currentMessageId: "now", decideResources: async () => { modelCalls++; return { state: "selected", ids: ["pdf"] }; } });
     assert.equal(historyCalls, 0);
     assert.equal(modelCalls, 0);
-    assert.match(result.context, /current message could not be verified/);
+    assert.equal(result.unresolved?.reason, "current-unverified");
   } finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
@@ -292,4 +296,59 @@ test("document-only request can select the document in a mixed upload", () => {
   const mixedImage = { ...image, messageId: pdf.messageId };
   assert.equal(validateResourceDecision({ state: "selected", ids: [pdf.id] },
     [pdf, mixedImage], "What is in the PDF I uploaded?").state, "selected");
+});
+
+test("intent is grounded in earlier attachment identities, not current-only hints", async () => {
+  await withCatalog(async (queries) => {
+    const seen: Array<{ phase: string; ids: string[] }> = [];
+    await routeContext("Is that one relevant?", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async (input) => {
+        seen.push({ phase: input.phase, ids: input.resources.map((resource) => resource.id) });
+        return input.phase === "intent" ? { state: "selected", ids: [] } : { state: "selected", ids: ["pdf"] };
+      } });
+    assert.deepEqual(seen[0]?.ids, ["image", "pdf"]);
+    assert.equal(queries.historical, 1);
+  });
+});
+
+test("intent error in a file-bearing conversation cannot produce empty context", async () => {
+  await withCatalog(async () => {
+    const result = await routeContext("看看里面有什么", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => { throw new Error("classifier failed"); } });
+    assert.ok(result.unresolved?.prompt);
+    assert.equal(result.metadata.documentContextState, "unavailable");
+  });
+});
+
+test("even a confident none remains observable when historical attachments exist", async () => {
+  await withCatalog(async () => {
+    const result = await routeContext("What is recursion?", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => ({ state: "none" }) });
+    assert.equal(result.metadata.documentContextState, "unavailable");
+    assert.equal(result.unresolved?.reason, "none");
+    assert.match(result.unresolved?.prompt ?? "", /file in this chat/);
+  });
+});
+
+
+test("classifier reasoning effort respects Astra support without breaking Luna", async () => {
+  const original = globalThis.fetch;
+  const efforts: unknown[] = [];
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    efforts.push(body.reasoning_effort);
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"state":"none"}' } }] }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    for (const model of ["gpt-6-astra", "gpt-6-luna"]) {
+      const decision = await decideConversationResources("test-key", model, {
+        phase: "intent", query: "What is in that?", resources: [], recentTurns: [],
+      });
+      assert.equal(decision.state, "none");
+    }
+    assert.deepEqual(efforts, ["medium", "none"]);
+  } finally {
+    globalThis.fetch = original;
+  }
 });

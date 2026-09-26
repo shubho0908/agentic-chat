@@ -6,6 +6,7 @@ import { convertToLangChainMessages } from "./messageConversion";
 import type { MemoryStatus } from "@/types/chat";
 import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { unresolvedRouteToMessage } from "@/lib/chat/attachmentRouteUnresolved";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { createFinalAnswerNode } from "./nodes/agent";
@@ -232,6 +233,12 @@ export function createOrchestratorStreamHandler(
             },
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
+          if (contextResult.unresolved) {
+            stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
+            stream.enqueue(encodeChatChunk(unresolvedRouteToMessage(contextResult.unresolved)));
+            closeStream();
+            return;
+          }
           enhancedMessages = attachHistoricalImagesToModelTurn(
             enhancedMessages, contextResult.metadata.historicalImageFiles || [],
             contextResult.metadata.includeCurrentImages,
