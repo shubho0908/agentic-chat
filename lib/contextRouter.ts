@@ -14,6 +14,7 @@ import { memoryGateDegradation } from "./jev/memoryGate";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { getConversationResourceCatalog } from "./chat/resourceCatalog";
 import { selectConversationResource } from "./chat/resourceSelection";
+import { decideConversationResources, validateResourceDecision, type DecideResources } from "./chat/semanticResourceSelection";
 import { attachmentKind } from "./chat/attachmentKind";
 import { mentionsFileName } from "./chat/fileNameReferences";
 import { logger } from "@/lib/logger";
@@ -328,6 +329,7 @@ export async function routeContext(
     signal?: AbortSignal;
     currentMessageId?: string;
     branchId?: string;
+    decideResources?: DecideResources;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -372,6 +374,59 @@ export async function routeContext(
     !/\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?)\b/i.test(textQuery));
   const fileReference = bareFileFollowUp || /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
     /(?:^|\s)[^\s/]+\.[a-z][a-z0-9]{0,15}(?=$|[\s,;:!?])/iu.test(textQuery);
+  const semanticDecision = options?.decideResources ?? (options?.apiKey
+    ? (input: Parameters<DecideResources>[0]) => decideConversationResources(options.apiKey!, "gpt-6-luna", input)
+    : undefined);
+  const recentTurns = messages.slice(-8).map((message) =>
+    JSON.stringify({ role: message.role, text: extractTextFromMessage(message.content).slice(0, 500),
+      attachments: message.attachments?.map((attachment) => attachment.fileName).slice(0, 5) ?? [] }));
+  let semanticIntent: "none" | "selected" | "ambiguous" | undefined;
+  let hasOlderAttachments = false;
+  let currentAttachmentHints: Parameters<DecideResources>[0]["resources"] = [];
+  if (semanticDecision && conversationId && options?.currentMessageId && !options.branchId) {
+    try {
+      const current = await prisma.message.findFirst({
+        where: { id: options.currentMessageId, conversationId, conversation: { userId },
+          role: "USER", isDeleted: false },
+        select: { id: true, createdAt: true, parentMessageId: true,
+          attachments: { select: { id: true, fileName: true, fileType: true, kind: true } } },
+      });
+      currentAttachmentHints = current?.attachments.map((attachment) => ({
+        id: attachment.id, fileName: attachment.fileName, messageId: current.id,
+        current: true, kind: attachmentKind(attachment),
+      })) ?? [];
+      if (current && current.parentMessageId === null) {
+        const history = await prisma.message.findFirst({
+          where: { conversationId, conversation: { userId }, role: "USER", isDeleted: false,
+            OR: [{ createdAt: { lt: current.createdAt } },
+              { createdAt: current.createdAt, id: { lt: current.id } }],
+            parentMessageId: null, attachments: { some: {} } },
+          select: { id: true },
+        });
+        hasOlderAttachments = Boolean(history);
+      }
+      if (hasOlderAttachments || currentAttachmentHints.length) {
+        const intent = await semanticDecision({ phase: "intent", query: textQuery,
+          resources: currentAttachmentHints, recentTurns, signal: options.signal });
+        semanticIntent = intent.state;
+        if (semanticIntent === "none" && fileReference) semanticIntent = "ambiguous";
+      }
+    } catch (error) {
+      logger.warn("[Context Router] Attachment intent unavailable", { error });
+      semanticIntent = "ambiguous";
+    }
+  }
+  if (semanticDecision && textQuery.length > 4000 &&
+      (hasOlderAttachments || currentAttachmentHints.length)) semanticIntent = "ambiguous";
+  const scanHistory = semanticDecision && !options?.branchId
+    ? hasOlderAttachments && semanticIntent === "selected" : fileReference;
+  if (semanticIntent === "ambiguous") {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.includeCurrentImages = false;
+    metadata.selectedCurrentImageFiles = [];
+    return { context: "<document_processing_notice>Could not reliably determine which previous attachment is requested. Ask the user to name or reattach it.</document_processing_notice>", metadata };
+  }
   const catalog =
     conversationId && options?.currentMessageId
       ? await getConversationResourceCatalog({
@@ -380,13 +435,31 @@ export async function routeContext(
           currentMessageId: options.currentMessageId,
           visibleMessages: messages,
           branchId: options.branchId,
-          scanHistory: fileReference,
+          scanHistory,
         })
       : null;
   if (catalog && !catalog.foundCurrent) {
     metadata.skippedMemory = true;
     metadata.documentContextState = "unavailable";
     return { context: "<document_processing_notice>The current message could not be verified. Do not use other attachments. Ask the user to retry.</document_processing_notice>", metadata };
+  }
+  let semanticSelection: ReturnType<typeof validateResourceDecision> | undefined;
+  if (semanticDecision && catalog?.foundCurrent && semanticIntent === "selected") {
+    try {
+      if (!catalog.complete || catalog.resources.length > 200) {
+        semanticSelection = { state: "ambiguous" };
+      } else {
+        const decision = await semanticDecision({ phase: "selection", query: textQuery,
+          resources: catalog.resources.map((resource) => ({ id: resource.id, fileName: resource.fileName,
+            messageId: resource.messageId, current: resource.current, kind: attachmentKind(resource) })),
+          recentTurns, signal: options?.signal });
+        semanticSelection = validateResourceDecision(decision, catalog.resources, textQuery);
+        if (semanticSelection.state === "none") semanticSelection = { state: "ambiguous" };
+      }
+    } catch (error) {
+      logger.warn("[Context Router] Attachment selection unavailable", { error });
+      semanticSelection = { state: "ambiguous" };
+    }
   }
   const currentOnlySelection = catalog && !catalog.complete
     ? selectConversationResource(textQuery, hasImages,
@@ -401,27 +474,30 @@ export async function routeContext(
     currentOnlySelection.resources.every((resource) => resource.current) &&
     (!currentOnlySelection.images || currentOnlySelection.images.every((resource) => resource.current)) &&
     !/\b(?:earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi)\b/i.test(textQuery);
-  if (catalog && !catalog.complete && !safeCurrentOnly) {
+  if (catalog && !catalog.complete && (semanticIntent === "selected" || !safeCurrentOnly)) {
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>Historical attachment search was incomplete. Ask the user to name or reattach the file. Do not guess from partial history.</document_processing_notice>", metadata };
   }
   const currentHasAttachments = Boolean(catalog?.resources.some((resource) => resource.current));
-  if (bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length > 1) {
+  if (!semanticSelection && bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length > 1) {
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>Several earlier attachments could match that reference. Ask which file the user means before using evidence.</document_processing_notice>", metadata };
   }
-  const selection = catalog?.foundCurrent
+  const selection = semanticSelection ?? (semanticIntent === "none" ? { state: "none" as const } : catalog?.foundCurrent
     ? safeCurrentOnly ? currentOnlySelection :
       selectConversationResource(textQuery, hasImages, catalog.resources,
         bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length === 1
           ? recentAttachment?.attachments?.map((attachment) => attachment.id).filter((id): id is string => Boolean(id)) : undefined)
-    : null;
+    : null);
   if (catalog && selection?.state === "none" && /\b(?:this|that|these|those|earlier|previous|prior|old|attached|uploaded)\s+(?:images?|photos?|pictures?|documents?|pdfs?|files?|attachments?|snippets?)\b/i.test(textQuery)) {
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>The referenced attachment could not be identified. Ask the user to name or reattach it; do not guess.</document_processing_notice>", metadata };
   }
   if (selection?.state === "ambiguous") {
     metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.includeCurrentImages = false;
+    metadata.selectedCurrentImageFiles = [];
     return {
       context:
         "<document_processing_notice>Several attachments could match that request. Ask which file the user means before using evidence.</document_processing_notice>",
