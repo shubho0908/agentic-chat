@@ -236,6 +236,7 @@ export function createOrchestratorStreamHandler(
             enhancedMessages, contextResult.metadata.historicalImageFiles || [],
             contextResult.metadata.includeCurrentImages,
             contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
+            contextResult.metadata.selectedCurrentImageFiles?.map((file) => file.fileUrl),
           );
           if (contextResult.context) {
             enhancedMessages = injectContextToMessages(

@@ -7,8 +7,9 @@ export function attachHistoricalImagesToModelTurn(
   images: Array<{ id: string; fileUrl: string }>,
   includeCurrentImages = false,
   stripUnselectedCurrentImages = false,
+  selectedCurrentImageUrls?: string[],
 ): Message[] {
-  if ((!images.length && !stripUnselectedCurrentImages) || !messages.length) return messages;
+  if ((!images.length && !stripUnselectedCurrentImages && !selectedCurrentImageUrls) || !messages.length) return messages;
   const lastIndex = messages.length - 1;
   const last = messages[lastIndex];
   if (last.role !== MessageRole.USER) return messages;
@@ -18,12 +19,14 @@ export function attachHistoricalImagesToModelTurn(
     uniqueUrls.add(fileUrl);
     return true;
   });
-  if (!selected.length && !stripUnselectedCurrentImages) return messages;
+  if (!selected.length && !stripUnselectedCurrentImages && !selectedCurrentImageUrls) return messages;
   // A request for an earlier image must not carry an unrelated current image
   // into the model as competing visual evidence.
+  const selectedCurrentUrls = selectedCurrentImageUrls && new Set(selectedCurrentImageUrls);
   const lastContent = typeof last.content === "string" ? last.content :
     last.content.filter((part) => part.type !== "image_url" ||
-      includeCurrentImages || selected.some(({ fileUrl }) => part.image_url.url === fileUrl));
+      (selectedCurrentUrls ? selectedCurrentUrls.has(part.image_url.url) : includeCurrentImages) ||
+      selected.some(({ fileUrl }) => part.image_url.url === fileUrl));
   if (!selected.length) return [...messages.slice(0, lastIndex), { ...last, content: lastContent }];
   const reference: Message = {
     role: MessageRole.USER,

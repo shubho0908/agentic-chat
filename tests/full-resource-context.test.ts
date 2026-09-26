@@ -83,6 +83,33 @@ test("scoped complete-text query and old-image/current-PDF route carry both actu
   }
 });
 
+test("focused detail request several turns after indexing receives the complete scoped PDF despite semantic query mismatch", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const older = file(1);
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => [{ id: "older", attachments: [older] }] });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: older.id, fileName: older.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => [{ ...rows([older.id])[0], content: "Contact: reach me at test@example.com, +1 555 0100" }] });
+  try {
+    const routed = await routeContext("What email ID and phone number are in the earlier PDF?",
+      "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.equal(routed.metadata.documentContextState, "ready");
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [older.id]);
+    assert.match(routed.context, /test@example.com/);
+    assert.match(routed.context, /555 0100/);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
 test("an unrelated aggregate word does not select historical files", () => {
   assert.equal(selectConversationResource("That's all for now", false, [file(1)]).state, "none");
   assert.equal(selectConversationResource("Is everything all right?", false, [file(1)]).state, "none");
@@ -120,4 +147,68 @@ test("earlier document and explicitly referenced current image retain both sourc
   if (selection.state !== "selected") return;
   assert.deepEqual(selection.resources.map(({ id }) => id), ["pdf-1"]);
   assert.deepEqual(selection.images?.map(({ id }) => id), ["image-2"]);
+});
+
+test("incidental old filename in a term-definition question does not route attachment evidence", () => {
+  const old = { ...file(1), fileName: "report.pdf" };
+  assert.equal(selectConversationResource("What is report.pdf?", false, [old]).state, "none");
+  const selected = selectConversationResource("Summarize the report.pdf I uploaded earlier", false, [old]);
+  assert.equal(selected.state, "selected");
+});
+
+test("incomplete long history may still use only a selected current PDF", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const current = file(1, true, "now"), older = file(2);
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [older] })) });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: current.id, fileName: current.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => rows([current.id]) });
+  try {
+    const routed = await routeContext("Summarize this PDF", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
+    assert.match(routed.context, /FULL pdf-1 CONTENT/);
+    const historical = await routeContext("Summarize all PDFs", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.match(historical.context, /Historical attachment search was incomplete/);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("both PDFs selects exactly two; with three it refuses a guess", () => {
+  const pair = [file(1), file(2)];
+  const selection = selectConversationResource("Compare both PDFs", false, pair);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.equal(selection.resources.length, 2);
+  assert.equal(selectConversationResource("Compare both PDFs", false, [...pair, file(3)]).state, "ambiguous");
+});
+
+test("one named current image and an older image do not select the other current image", () => {
+  const selected = img(1, true, "now"), other = img(2, true, "now"), old = img(3);
+  const result = selectConversationResource("Compare photo-1.png with the earlier image", true,
+    [selected, other, old]);
+  assert.equal(result.state, "selected");
+  if (result.state === "selected") assert.deepEqual(result.resources.map(({ id }) => id),
+    [selected.id, old.id]);
+});
+
+test("both explicitly named PDFs remain selectable despite other old PDFs", () => {
+  const selected = selectConversationResource("Compare file-1.pdf and file-2.pdf, both PDFs", false,
+    [file(1), file(2), file(3)]);
+  assert.equal(selected.state, "selected");
+  if (selected.state === "selected") assert.deepEqual(selected.resources.map(({ id }) => id), ["pdf-1", "pdf-2"]);
+});
+
+test("the current PDF and exactly one earlier image can be compared despite two image turns", () => {
+  const selection = selectConversationResource("Compare the earlier image with this image and this PDF",
+    true, [file(1, true, "now"), img(1, true, "now"), img(2)]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.images?.map(({ id }) => id),
+    ["image-1", "image-2"]);
 });

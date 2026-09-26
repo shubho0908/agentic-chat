@@ -21,6 +21,7 @@ export function encodeMemoryStatus(memoryStatusInfo: MemoryStatus): Uint8Array {
     documentEvidenceFiles: memoryStatusInfo.documentEvidenceFiles,
     historicalImageFiles: memoryStatusInfo.historicalImageFiles,
     includeCurrentImages: memoryStatusInfo.includeCurrentImages,
+    selectedCurrentImageFiles: memoryStatusInfo.selectedCurrentImageFiles,
     hasImages: memoryStatusInfo.hasImages,
     imageCount: memoryStatusInfo.imageCount,
     routingDecision: memoryStatusInfo.routingDecision,

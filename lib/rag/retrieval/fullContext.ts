@@ -56,8 +56,13 @@ export async function getCompleteIndexedDocuments(
     });
     if (files.length !== ids.length || files.some((file) =>
       !file.chunkCount || file.chunkCount < 1 || file.chunkCount > MAX_FULL_CONTEXT_CHUNKS) ||
-      files.reduce((sum, file) => sum + (file.chunkCount ?? 0), 0) > MAX_FULL_CONTEXT_CHUNKS)
+      files.reduce((sum, file) => sum + (file.chunkCount ?? 0), 0) > MAX_FULL_CONTEXT_CHUNKS) {
+      logger.warn("[RAG] Complete document context unavailable: scope, processing, or chunk limit", {
+        selectedCount: ids.length, verifiedCount: files.length,
+        expectedChunks: files.reduce((sum, file) => sum + (file.chunkCount ?? 0), 0),
+      });
       return null;
+    }
     const rows = await prisma.$queryRaw<IndexedChunk[]>`
       SELECT COALESCE(metadata->>'chunkId', id::text) AS id,
         content, metadata->>'attachmentId' AS attachment_id,
@@ -71,7 +76,13 @@ export async function getCompleteIndexedDocuments(
         AND metadata->>'conversationId' = ${conversationId}
         AND metadata->>'attachmentId' = ANY(${ids}::text[])
       LIMIT ${MAX_FULL_CONTEXT_CHUNKS + 1}`;
-    return assembleCompleteDocuments(ids, files, rows);
+    const complete = assembleCompleteDocuments(ids, files, rows);
+    if (!complete) logger.warn("[RAG] Complete document context unavailable: indexed chunks incomplete or size limit", {
+      selectedCount: ids.length, expectedChunks: files.reduce((sum, file) => sum + (file.chunkCount ?? 0), 0),
+      indexedRows: rows.length,
+      indexedChars: rows.reduce((sum, row) => sum + row.content.length, 0),
+    });
+    return complete;
   } catch (error) {
     logger.warn("[RAG] Complete document context unavailable:", error);
     return null;

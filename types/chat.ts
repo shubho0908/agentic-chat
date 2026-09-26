@@ -56,6 +56,7 @@ export interface MemoryStatus {
   documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "document" | "snippet" }>;
   historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "image" }>;
   includeCurrentImages?: boolean;
+  selectedCurrentImageFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "image" }>;
   hasImages: boolean;
   imageCount: number;
   routingDecision?: RoutingDecision;

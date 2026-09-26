@@ -119,8 +119,15 @@ export function ContextCards({
       ? [sourcedAttachment(source, "image")].filter((file): file is Attachment => file !== null)
       : []);
   const currentImageCount = Math.max(0, imageCount - historicalImageSources.length);
-  const safeCurrentImages = (historicalImageSources.length === 0 || memoryStatus.includeCurrentImages) &&
-    imageAttachments.length === currentImageCount ? imageAttachments : [];
+  const currentSources = memoryStatus.selectedCurrentImageFiles;
+  const safeCurrentImages = currentSources
+    ? currentSources.flatMap((source) => {
+        if (!uniqueSource(source, currentSources)) return [];
+        const matches = imageAttachments.filter((file) => file.fileUrl === source.fileUrl);
+        return matches.length === 1 ? [matches[0]] : [];
+      })
+    : (historicalImageSources.length === 0 || memoryStatus.includeCurrentImages) &&
+      imageAttachments.length === currentImageCount ? imageAttachments : [];
   const safeImages = [...safeHistoricalImages, ...safeCurrentImages];
   const previewFiles = [...safeImages, ...safeDocuments];
   const missingDocumentCount = documentCount - safeDocuments.length;

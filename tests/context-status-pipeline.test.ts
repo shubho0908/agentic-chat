@@ -48,13 +48,15 @@ function Pipeline() {
 }
 
 test("streamed document identities survive token-usage merge and render both mixed tiles", () => {
+  const client = new QueryClient();
   const html = renderToStaticMarkup(
     createElement(
       QueryClientProvider,
-      { client: new QueryClient() },
+      { client },
       createElement(Pipeline),
     ),
   );
+  client.clear();
   assert.match(html, /scene\.png/);
   assert.match(html, /resume\.pdf/);
   assert.match(html, /Relevant passages used/);

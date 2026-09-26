@@ -280,6 +280,18 @@ export async function readChatStream(
                 : [];
             })
           : undefined,
+        selectedCurrentImageFiles: Array.isArray(parsed.selectedCurrentImageFiles)
+          ? parsed.selectedCurrentImageFiles.flatMap((entry) => {
+              const record = optionalRecord(entry);
+              return record && typeof record.id === "string" &&
+                typeof record.fileUrl === "string"
+                ? [{ id: record.id, fileUrl: record.fileUrl,
+                    fileName: optionalString(record.fileName),
+                    fileType: optionalString(record.fileType),
+                    fileSize: optionalNumber(record.fileSize),
+                    kind: "image" as const }]
+                : [];
+            }) : undefined,
         includeCurrentImages: optionalBoolean(parsed.includeCurrentImages),
         hasImages: optionalBoolean(parsed.hasImages) ?? false,
         imageCount: optionalNumber(parsed.imageCount) ?? 0,

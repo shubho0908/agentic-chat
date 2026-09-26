@@ -31,11 +31,12 @@ const base: MemoryStatus = {
   routingDecision: RoutingDecision.DocumentsOnly,
   documentContextState: "ready",
 };
-const render = (status: MemoryStatus, attachments: Attachment[]) =>
-  renderToStaticMarkup(
+const render = (status: MemoryStatus, attachments: Attachment[]) => {
+  const client = new QueryClient();
+  const html = renderToStaticMarkup(
     createElement(
       QueryClientProvider,
-      { client: new QueryClient() },
+      { client },
       createElement(ContextCards, {
         memoryStatus: status,
         attachments,
@@ -43,6 +44,9 @@ const render = (status: MemoryStatus, attachments: Attachment[]) =>
       }),
     ),
   );
+  client.clear();
+  return html;
+};
 
 test("card shows a document preview only when the persisted source identity matches", () => {
   const matching = render(
@@ -254,4 +258,19 @@ test("explicit current and historical image selection renders both previews with
     includeCurrentImages:true }, [image]);
   assert.match(html,/older\.png/);
   assert.match(html,/scene\.png/);
+});
+
+test("selected current image tile remains visible beside old image without unrelated current tile", () => {
+  const chosen: Attachment = { ...image, id: "chosen", fileName: "chosen.png", fileUrl: "https://example.com/chosen.png" };
+  const other: Attachment = { ...image, id: "other", fileName: "other.png", fileUrl: "https://example.com/other.png" };
+  const html = render({ ...base, hasDocuments: false, documentCount: 0,
+    hasImages: true, imageCount: 2, routingDecision: RoutingDecision.VisionOnly,
+    historicalImageFiles: [{ id: "old", fileUrl: "https://example.com/old.png",
+      fileName: "old.png", fileType: "image/png", fileSize: 50, kind: "image" }],
+    selectedCurrentImageFiles: [{ id: "chosen", fileUrl: chosen.fileUrl,
+      fileName: chosen.fileName, fileType: chosen.fileType, fileSize: chosen.fileSize, kind: "image" }],
+    includeCurrentImages: true }, [chosen, other]);
+  assert.match(html, /old\.png/);
+  assert.match(html, /chosen\.png/);
+  assert.doesNotMatch(html, /other\.png/);
 });

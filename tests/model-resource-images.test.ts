@@ -72,3 +72,15 @@ test("old document context strips an unrelated current image without removing re
   assert.deepEqual(input[0].content, [{ type: "text", text: "Summarize the previous document" }]);
   assert.equal(JSON.stringify(input).includes("unrelated.png"), false);
 });
+
+test("only the selected current image joins an older image in model input", () => {
+  const current = "https://utfs.io/f/current.png", other = "https://utfs.io/f/other.png";
+  const input = attachHistoricalImagesToModelTurn([{ role: MessageRole.USER, content: [
+    { type: "text", text: "Compare this image to the earlier one" },
+    { type: "image_url", image_url: { url: current } },
+    { type: "image_url", image_url: { url: other } },
+  ] }], [{ id: "old", fileUrl: "https://utfs.io/f/older.png" }], true, false, [current]);
+  assert.match(JSON.stringify(input), /older\.png/);
+  assert.match(JSON.stringify(input), /current\.png/);
+  assert.doesNotMatch(JSON.stringify(input), /other\.png/);
+});

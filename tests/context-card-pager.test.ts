@@ -42,10 +42,11 @@ const attachments = [
 ];
 
 test("multiple context files show directly clickable tiles without pager controls", () => {
+  const client = new QueryClient();
   const html = renderToStaticMarkup(
     createElement(
       QueryClientProvider,
-      { client: new QueryClient() },
+      { client },
       createElement(ContextCards, {
         memoryStatus: status,
         attachments,
@@ -53,6 +54,7 @@ test("multiple context files show directly clickable tiles without pager control
       }),
     ),
   );
+  client.clear();
   assert.match(html, /scene\.png/);
   assert.match(html, /one\.pdf/);
   assert.match(html, /two\.pdf/);
@@ -68,19 +70,22 @@ test("multiple context files show directly clickable tiles without pager control
 });
 
 test("context accordion starts closed and reveals tiles when expanded", () => {
+  const closedClient = new QueryClient();
   const closed = renderToStaticMarkup(
     createElement(
       QueryClientProvider,
-      { client: new QueryClient() },
+      { client: closedClient },
       createElement(ContextCards, { memoryStatus: status, attachments }),
     ),
   );
+  closedClient.clear();
   assert.match(closed, /aria-expanded="false"/);
   assert.doesNotMatch(closed, /scene\.png|one\.pdf|two\.pdf/);
+  const openClient = new QueryClient();
   const open = renderToStaticMarkup(
     createElement(
       QueryClientProvider,
-      { client: new QueryClient() },
+      { client: openClient },
       createElement(ContextCards, {
         memoryStatus: status,
         attachments,
@@ -88,6 +93,7 @@ test("context accordion starts closed and reveals tiles when expanded", () => {
       }),
     ),
   );
+  openClient.clear();
   assert.match(open, /aria-expanded="true"/);
   assert.match(open, /scene\.png/);
   assert.match(open, /one\.pdf/);

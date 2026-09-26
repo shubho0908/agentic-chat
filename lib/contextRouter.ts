@@ -14,7 +14,7 @@ import { memoryGateDegradation } from "./jev/memoryGate";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { getConversationResourceCatalog } from "./chat/resourceCatalog";
 import { selectConversationResource } from "./chat/resourceSelection";
-
+import { attachmentKind } from "./chat/attachmentKind";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
 import { isTrustedAttachmentUrl } from "@/lib/network/ssrf";
@@ -133,6 +133,7 @@ interface ContextRoutingMetadata {
   documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "document" | "snippet" }>;
   historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "image" }>;
   includeCurrentImages?: boolean;
+  selectedCurrentImageFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "image" }>;
   citations?: Array<{
     id: string;
     source: string;
@@ -378,12 +379,21 @@ export async function routeContext(
     metadata.documentContextState = "unavailable";
     return { context: "<document_processing_notice>The current message could not be verified. Do not use other attachments. Ask the user to retry.</document_processing_notice>", metadata };
   }
-  if (catalog && !catalog.complete) {
+  const currentOnlySelection = catalog && !catalog.complete
+    ? selectConversationResource(textQuery, hasImages,
+        catalog.resources.filter((resource) => resource.current)) : null;
+  const safeCurrentOnly = currentOnlySelection?.state === "selected" &&
+    currentOnlySelection.resources.length > 0 &&
+    currentOnlySelection.resources.every((resource) => resource.current) &&
+    (!currentOnlySelection.images || currentOnlySelection.images.every((resource) => resource.current)) &&
+    !/\b(?:earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi)\b/i.test(textQuery);
+  if (catalog && !catalog.complete && !safeCurrentOnly) {
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>Historical attachment search was incomplete. Ask the user to name or reattach the file. Do not guess from partial history.</document_processing_notice>", metadata };
   }
   const selection = catalog?.foundCurrent
-    ? selectConversationResource(textQuery, hasImages, catalog.resources)
+    ? safeCurrentOnly ? currentOnlySelection :
+      selectConversationResource(textQuery, hasImages, catalog.resources)
     : null;
   if (catalog && selection?.state === "none" && /\b(?:this|that|these|those|earlier|previous|prior|old|attached|uploaded)\s+(?:images?|photos?|pictures?|documents?|pdfs?|files?|attachments?|snippets?)\b/i.test(textQuery)) {
     metadata.skippedMemory = true;
@@ -415,6 +425,8 @@ export async function routeContext(
   if (selection?.state === "selected" && selection.kind === "image") {
     const historicalImages = selection.resources.filter((resource) => !resource.current);
     metadata.includeCurrentImages = selection.resources.some((resource) => resource.current);
+    metadata.selectedCurrentImageFiles = selection.resources.filter((resource) => resource.current)
+      .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
     if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
     metadata.hasImages = selection.resources.length > 0;
     metadata.imageCount = selection.resources.length;
@@ -454,6 +466,11 @@ export async function routeContext(
         /\b(?:this|current|new|attached)\s+(?:image|photo|picture|screenshot)\b/i.test(textQuery));
     metadata.includeCurrentImages = selectedResource.images
       ? selectedResource.images.some((resource) => resource.current) : hasSelectedImages;
+    metadata.selectedCurrentImageFiles = selectedResource.images?.filter((resource) => resource.current)
+      .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const })) ??
+      (hasSelectedImages && hasImages ? catalog?.resources.filter((resource) => resource.current &&
+        attachmentKind(resource) === "image").map(({ id, fileUrl, fileName, fileType, fileSize }) =>
+        ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const })) : []);
     metadata.hasImages = hasSelectedImages;
     metadata.imageCount = selectedResource.images
       ? selectedResource.images.length : hasSelectedImages ? imageCount : 0;
@@ -472,17 +489,20 @@ export async function routeContext(
       };
     }
     const model = options?.model ?? OPENAI_MODELS[0].id;
+    const contextBudget = Math.max(0, getContextBudgetTokens([
+      ...messages, { role: MessageRole.USER, content: textQuery },
+    ], model) - 2000);
     const fullText = conversationId
       ? await getCompleteIndexedDocuments(
           catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
         )
       : null;
     // The injection layer must never silently truncate claimed "complete" text.
+    if (!fullText) logger.warn("[Context Router] Initial complete indexed document context unavailable", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length, contextBudget,
+    });
     const fullTextFits = Boolean(fullText) &&
-      truncateTextToTokenLimit(fullText!, model,
-        Math.max(0, getContextBudgetTokens([
-          ...messages, { role: MessageRole.USER, content: textQuery },
-        ], model) - 2000)) === fullText;
+      truncateTextToTokenLimit(fullText!, model, contextBudget) === fullText;
     if (fullText && fullTextFits) {
       metadata.hasDocuments = true;
       metadata.documentCount = catalogAttachmentInfo.documentCount;
@@ -520,11 +540,11 @@ export async function routeContext(
       ? await getCompleteIndexedDocuments(
           catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
         ) : null;
+    if (!completedFullText && !inlineResult) logger.warn("[Context Router] Complete indexed document context still unavailable after processing wait", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length, contextBudget,
+    });
     const completedFullTextFits = Boolean(completedFullText) &&
-      truncateTextToTokenLimit(completedFullText!, model,
-        Math.max(0, getContextBudgetTokens([
-          ...messages, { role: MessageRole.USER, content: textQuery },
-        ], model) - 2000)) === completedFullText;
+      truncateTextToTokenLimit(completedFullText!, model, contextBudget) === completedFullText;
     if (completedFullText && completedFullTextFits) {
       metadata.documentContextState = "ready";
       metadata.documentEvidenceIds = catalogAttachmentInfo.documentAttachmentIds;
@@ -534,12 +554,9 @@ export async function routeContext(
     const coverageOnly = Boolean(ragResult?.context.includes("_coverage_samples>")) ||
       Boolean(ragResult?.citations?.length &&
         ragResult.citations.every((citation) => citation.relevance === "coverage-sample"));
-    const needsCompleteText = /\b(?:summarize|summary|compare|comparison|differentiate|differences?|similarities?|all|every|both|entire|whole|full|each|dono|sabhi)\b/i.test(textQuery);
+    const needsCompleteText = /\b(?:summarize|summary|compare|comparison|differentiate|differences?|similarities?|all|every|entire|whole|full|each|sabhi)\b/i.test(textQuery);
     const inlineFits = Boolean(inlineResult) &&
-      truncateTextToTokenLimit(inlineResult!.context, model,
-        Math.max(0, getContextBudgetTokens([
-          ...messages, { role: MessageRole.USER, content: textQuery },
-        ], model) - 2000)) === inlineResult!.context;
+      truncateTextToTokenLimit(inlineResult!.context, model, contextBudget) === inlineResult!.context;
     const allSelectedRetrieved = ragResult &&
       catalogAttachmentInfo.documentAttachmentIds.every((id) => ragResult.usedAttachmentIds.includes(id));
     if ((inlineResult && inlineFits) ||
@@ -551,6 +568,14 @@ export async function routeContext(
       if (ragResult) metadata.citations = ragResult.citations;
       return { context: inlineResult?.context ?? ragResult!.context, metadata };
     }
+    logger.warn("[Context Router] Selected document evidence unavailable", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length,
+      completeIndexed: Boolean(completedFullText), contextBudget,
+      fullTextFits: completedFullTextFits,
+      inlineAvailable: Boolean(inlineResult), inlineFits,
+      retrieved: Boolean(ragResult), coverageOnly,
+      allSelectedRetrieved: Boolean(allSelectedRetrieved), needsCompleteText,
+    });
     metadata.skippedMemory = true;
     metadata.documentContextState = "unavailable";
     return { context: buildMissingDocumentContext(textQuery, kind), metadata };
