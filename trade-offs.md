@@ -98,6 +98,12 @@ Stack: Next.js / React / Postgres (Neon) / LangGraph / OpenAI / mem0 / UploadThi
 - **Cost:** Slower for EU and Asia users with no failover.
 - **Gain:** Fastest database queries where it matters most.
 
+## 16. Complete-document context capped at 40 chunks
+
+- **Choice:** Full indexed text is assembled only when the selected documents fit `MAX_FULL_CONTEXT_CHUNKS = 40` and `MAX_FULL_CONTEXT_CHARS = 88_000` (lib/rag/retrieval/fullContext.ts), and it must still fit the per-turn token budget (`getContextBudgetTokens(messages, model) - 2000`, lib/contextRouter.ts). Summarize and compare queries (`needsCompleteText`, lib/contextRouter.ts) get no partial-retrieval fallback past the cap: the request refuses instead of answering from chunks that cover only part of the document.
+- **Cost:** Whole-document summarize and compare are unavailable past the cap; the user gets a refusal. The refusal text ("please retry or reattach it") is known-misleading for this deterministic case, since retrying and reattaching change nothing.
+- **Gain:** Context size stays bounded and predictable: no API overflow errors, no lost-in-the-middle quality loss from oversized windows, stable cost and latency per turn. Q&A retrieval is unaffected; targeted questions still answer from retrieved chunks with citations.
+
 ## Revisit first under load
 
 1. Real job worker. 2. Shared rate limiter. 3. Embedding size lock in.
