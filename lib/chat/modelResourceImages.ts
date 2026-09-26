@@ -1,7 +1,6 @@
 import type { Message } from "@/lib/schemas/chat";
 import { MessageRole } from "@/lib/schemas/chat";
 
-/** Add selected historical images as an ephemeral model turn, not durable dialogue. */
 export function attachHistoricalImagesToModelTurn(
   messages: Message[],
   images: Array<{ id: string; fileUrl: string }>,
@@ -20,8 +19,6 @@ export function attachHistoricalImagesToModelTurn(
     return true;
   });
   if (!selected.length && !stripUnselectedCurrentImages && !selectedCurrentImageUrls) return messages;
-  // A request for an earlier image must not carry an unrelated current image
-  // into the model as competing visual evidence.
   const selectedCurrentUrls = selectedCurrentImageUrls && new Set(selectedCurrentImageUrls);
   const lastContent = typeof last.content === "string" ? last.content :
     last.content.filter((part) => part.type !== "image_url" ||

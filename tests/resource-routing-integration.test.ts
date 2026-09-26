@@ -43,8 +43,6 @@ test("an old document remains the selected evidence 4 turns later rather than th
     const oldAttachmentFind = prisma.attachment.findMany;
     const oldFetch = globalThis.fetch;
     Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async () => [textDoc] });
-    // The safe network fetch deliberately cannot be replaced by global fetch.
-    // The unavailable result still must preserve the selected old ID, not route to image-only.
     try {
       const result = await routeContext("What did the earlier document say?", "owner", [], "conv", null, false, { currentMessageId: "now" });
       assert.deepEqual(result.metadata.documentEvidenceFiles, [{ ...textDoc, kind: "document" }]);

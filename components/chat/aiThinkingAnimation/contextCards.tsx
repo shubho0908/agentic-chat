@@ -84,8 +84,6 @@ export function ContextCards({
   const candidateDocuments = isSnippet
     ? (attachments ?? []).filter((attachment) => attachment.kind === "snippet")
     : filterDocumentAttachments(attachments);
-  // Source metadata comes from the owner's persisted, scoped attachment catalog.
-  // Legacy statuses without a full source identity never become clickable URLs.
   const sourcedAttachment = (source: {
     id: string; fileUrl: string; fileName?: string; fileType?: string;
     fileSize?: number; kind?: "image" | "document" | "snippet";

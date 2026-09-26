@@ -506,7 +506,6 @@ export async function routeContext(
           catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
         )
       : null;
-    // The injection layer must never silently truncate claimed "complete" text.
     if (!fullText) logger.warn("[Context Router] Initial complete indexed document context unavailable", {
       selectedCount: catalogAttachmentInfo.documentAttachmentIds.length, contextBudget,
     });
@@ -543,8 +542,6 @@ export async function routeContext(
     metadata.routingDecision = hasSelectedImages
       ? RoutingDecision.Hybrid
       : RoutingDecision.DocumentsOnly;
-    // A processing wait may have completed the PDF after the first full-text check.
-    // Re-evaluate completeness before accepting query samples as the answer.
     const completedFullText = !inlineResult && conversationId
       ? await getCompleteIndexedDocuments(
           catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,

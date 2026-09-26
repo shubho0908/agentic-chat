@@ -124,8 +124,6 @@ export function selectConversationResource(
     (candidate) => candidate.fileName.length > 0 &&
       mentionsFileName(text, candidate.fileName),
   );
-  // A bare definition of a historical filename is not a request to use the
-  // uploaded attachment. A current upload or explicit possessive/reference is.
   if (named.length && named.every((candidate) => !candidate.current) &&
       /^\s*(?:what|who|where)\s+(?:is|are|was)\s+[^?]+\??\s*$/i.test(text) &&
       !/\b(?:this|that|these|those|my|our|uploaded|attached|sent|earlier|previous|prior)\b/i.test(text))
@@ -187,7 +185,6 @@ export function selectConversationResource(
     if (currentHasImage) currentKinds.add("image");
     if (!kinds.size && currentKinds.size === 1) kinds.add([...currentKinds][0]);
     else if (!kinds.size && currentKinds.size > 1) {
-      // A newly uploaded image and document should both reach the model.
       if (currentKinds.size === 2 && currentKinds.has("image") &&
           currentKinds.has("document") && currentHasImage)
         kinds.add("document");
@@ -201,8 +198,6 @@ export function selectConversationResource(
   }
 
   const kind = [...kinds][0];
-  // An aggregate request without a typed file word can still compare the
-  // selected images against documents across turns.
   if (aggregateRequest && kind === "document" && !comparisonImages &&
       /\b(?:images?|photos?|pictures?)\b/i.test(text))
     comparisonImages = candidates.filter((c) => attachmentKind(c) === "image");

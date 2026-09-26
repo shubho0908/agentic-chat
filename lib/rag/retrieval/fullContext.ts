@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
-/** Full-context requires every indexed chunk of every scoped file. No partial
- * slices, sample chunks, or cross-user rows can stand in for a full document. */
 export const MAX_FULL_CONTEXT_CHUNKS = 40;
 export const MAX_FULL_CONTEXT_CHARS = 88_000;
 

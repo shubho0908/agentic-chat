@@ -35,9 +35,6 @@ export async function getConversationResourceCatalog(options: {
   });
   if (!current) return { foundCurrent: false, complete: true, resources: [] };
 
-  // Ordinary message rows do not carry a durable branch ID. Client-provided
-  // visible IDs are not proof that a historical resource belongs to this branch.
-  // Fail closed on historical recall until branch membership is persisted.
   const branchScoped = Boolean(options.branchId || current.parentMessageId !== null);
   if (branchScoped) {
     return {
@@ -61,8 +58,6 @@ export async function getConversationResourceCatalog(options: {
       attachments: { some: {} },
       parentMessageId: null,
     },
-    // A hard ceiling prevents a large conversation from exhausting the request.
-    // Overflow is reported as incomplete, never silently treated as an exhaustive search.
     take: 501,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
