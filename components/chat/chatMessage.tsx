@@ -109,12 +109,6 @@ function MessageContentSurface({
               message={
                 memoryStatus.toolProgress.message || "Planning approach..."
               }
-              plan={
-                (
-                  memoryStatus.toolProgress.details as
-                    { plan?: string } | undefined
-                )?.plan
-              }
             />
           </div>
         )}

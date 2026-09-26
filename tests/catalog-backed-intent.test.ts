@@ -174,3 +174,31 @@ test("an image deleted between catalog and model input becomes visible unresolve
     Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
   }
 });
+
+test("a failed classifier still routes an explicit single current PDF without guessing from history", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany, find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const attached = { ...earlier, id: "current-pdf", fileName: "new.pdf" };
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", createdAt: new Date(), parentMessageId: null, attachments: [attached] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => [{ id: "old", attachments: [earlier] }] });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: attached.id, fileName: attached.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => [{ id: "current-pdf:0", attachment_id: attached.id, file_name: attached.fileName,
+      chunk_index: 0, page: 1, content: "Only the current PDF" }] });
+  try {
+    const result = await routeContext("What does this PDF say?", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => { throw new Error("classifier timeout"); } });
+    assert.deepEqual(result.metadata.documentEvidenceIds, [attached.id]);
+    assert.match(result.context, /Only the current PDF/);
+    const old = await routeContext("What does the earlier PDF say?", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => { throw new Error("classifier timeout"); } });
+    assert.equal(old.unresolved?.reason, "ambiguous");
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});

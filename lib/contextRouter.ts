@@ -385,6 +385,19 @@ export async function routeContext(
         unresolved: unresolvedAttachmentRoute("current-unverified") };
     }
   }
+  const explicitCurrent = catalog?.foundCurrent
+    ? selectConversationResource(textQuery, hasImages,
+        catalog.resources.filter((resource) => resource.current)) : null;
+  const uniqueExplicitCurrent = !/\b(?:earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) &&
+    explicitCurrent?.state === "selected" && explicitCurrent.resources.length === 1 &&
+    explicitCurrent.resources[0].current && !(explicitCurrent.images?.length) &&
+    catalog?.resources.filter((resource) => resource.current &&
+      attachmentKind(resource) === explicitCurrent.kind).length === 1 &&
+    !catalog?.resources.some((resource) => resource.id !== explicitCurrent.resources[0].id &&
+      resource.fileName && mentionsFileName(textQuery, resource.fileName)) &&
+    (mentionsFileName(textQuery, explicitCurrent.resources[0].fileName) ||
+      /\b(?:this|current|new|attached)\s+(?:file|document|doc|pdf|image|photo|picture|screenshot|snippet)\b/i.test(textQuery));
+  let intentUnavailable = false;
   let semanticIntent: "none" | "selected" | "ambiguous" | undefined;
   if (semanticDecision && catalog?.foundCurrent) {
     if (!catalog.complete || catalog.resources.length > 200 || textQuery.length > 4000) {
@@ -399,7 +412,8 @@ export async function routeContext(
         semanticIntent = intent.state;
       } catch (error) {
         logger.warn("[Context Router] Attachment intent unavailable", { error });
-        semanticIntent = "ambiguous";
+        intentUnavailable = true;
+        semanticIntent = uniqueExplicitCurrent ? "selected" : "ambiguous";
       }
     }
   }
@@ -426,7 +440,7 @@ export async function routeContext(
     return { context: "", metadata, unresolved: unresolvedAttachmentRoute("current-unverified") };
   }
   let semanticSelection: ReturnType<typeof validateResourceDecision> | undefined;
-  if (semanticDecision && catalog?.foundCurrent && semanticIntent === "selected") {
+  if (semanticDecision && catalog?.foundCurrent && semanticIntent === "selected" && !intentUnavailable) {
     try {
       if (!catalog.complete || catalog.resources.length > 200) {
         semanticSelection = { state: "ambiguous" };
@@ -469,7 +483,8 @@ export async function routeContext(
     metadata.documentContextState = "unavailable";
     return { context: "", metadata, unresolved: unresolvedAttachmentRoute("ambiguous") };
   }
-  const selection = semanticSelection ?? (semanticIntent === "none" ? { state: "none" as const } : catalog?.foundCurrent
+  const selection = semanticSelection ?? (intentUnavailable && uniqueExplicitCurrent ? explicitCurrent :
+    semanticIntent === "none" ? { state: "none" as const } : catalog?.foundCurrent
     ? safeCurrentOnly ? currentOnlySelection :
       selectConversationResource(textQuery, hasImages, catalog.resources,
         bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length === 1

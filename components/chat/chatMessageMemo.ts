@@ -111,6 +111,7 @@ export function areChatMessagePropsEqual(
 
     if (
       prevProgress?.status !== nextProgress?.status ||
+      prevProgress?.toolName !== nextProgress?.toolName ||
       prevProgress?.message !== nextProgress?.message ||
       prevProgress?.details?.status !== nextProgress?.details?.status ||
       prevProgress?.details?.citations?.length !==
