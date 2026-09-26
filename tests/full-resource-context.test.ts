@@ -566,3 +566,63 @@ test("bare conversational reference after intervening assistant does not inject 
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
 });
+
+test("an older PDF and later image remain available for the user's mixed Hindi comparison", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const older = file(1, false, "pdf-turn"), laterImage = img(1, false, "image-turn");
+  let scans = 0;
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => { scans++; return [
+      { id: "image-turn", attachments: [laterImage] }, { id: "pdf-turn", attachments: [older] },
+    ]; } });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: older.id, fileName: older.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => rows([older.id]) });
+  try {
+    const q = "Is image mein aur maine jo PDF diya tha vo dono mein koi fark hai kya?";
+    const routed = await routeContext(q, "owner", [
+      { role: MessageRole.USER, content: "First question", attachments: [{ ...older, kind: "document" as const }] },
+      { role: MessageRole.ASSISTANT, content: "Answer" },
+      { role: MessageRole.USER, content: "Unrelated topic" },
+      { role: MessageRole.ASSISTANT, content: "Answer" },
+      { role: MessageRole.USER, content: "What is this image?", attachments: [{ ...laterImage, kind: "image" as const }] },
+      { role: MessageRole.ASSISTANT, content: "Image answer" },
+    ], "conv", null, false, { currentMessageId: "now" });
+    assert.ok(scans > 0);
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [older.id]);
+    assert.deepEqual(routed.metadata.historicalImageFiles?.map(({ id }) => id), [laterImage.id]);
+    assert.equal(routed.metadata.routingDecision, RoutingDecision.Hybrid);
+    assert.match(routed.context, /FULL pdf-1 CONTENT/);
+    const modelInput = toOpenAIChatMessages(attachHistoricalImagesToModelTurn(
+      [{ role: MessageRole.USER, content: q }], routed.metadata.historicalImageFiles ?? []));
+    assert.match(JSON.stringify(modelInput), /photo-1.png/);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("cross-kind comparison references select only unambiguous historical sources", () => {
+  const resources = [file(1), img(1)];
+  for (const q of [
+    "Is image mein aur maine jo PDF diya tha vo dono mein koi fark hai kya?",
+    "Compare my image and PDF",
+    "Is there a difference between the image and PDF I sent?",
+  ]) {
+    const selection = selectConversationResource(q, false, resources);
+    assert.equal(selection.state, "selected");
+    if (selection.state === "selected") {
+      assert.deepEqual(selection.resources.map(({ id }) => id), ["pdf-1"]);
+      assert.deepEqual(selection.images?.map(({ id }) => id), ["image-1"]);
+    }
+  }
+  assert.equal(selectConversationResource("Is image mein aur maine jo PDF diya tha vo dono mein koi fark hai kya?",
+    false, [file(1), img(1), img(2)]).state, "ambiguous");
+  assert.equal(selectConversationResource("Does the image and PDF format matter?", false, resources).state, "none");
+});

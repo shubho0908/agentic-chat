@@ -57,6 +57,10 @@ export function selectConversationResource(
   if (documentWords.test(text)) kinds.add("document");
   if (snippetWords.test(text)) kinds.add("snippet");
   const currentCandidates = candidates.filter((candidate) => candidate.current);
+  const crossKindComparisonReference = kinds.has("image") && kinds.has("document") &&
+    /\b(?:compare|comparison|difference|different|fark|farq|antar)\b/i.test(text) &&
+    /\b(?:this|that|these|those|my|our|uploaded|attached|sent|earlier|previous|prior|is|iss|yeh|ye|wo|woh|maine|mera|meri|dono)\b/i.test(text);
+
   const aggregateRequest =
     (/\b(?:all|every|across|together|each|sabhi)\b/i.test(text) &&
       (kinds.size > 0 || genericWords.test(text))) ||
@@ -195,7 +199,7 @@ export function selectConversationResource(
     /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|photos?|pictures?|screenshots?|snippets?)\s+(?:i|we)\s+(?:sent|uploaded|attached|pasted)\b/i.test(text) ||
     (/\b(?:earlier|previous|prior|above)\b/i.test(text) && kinds.size > 0);
   if (!currentCandidates.length &&
-      !currentHasImage && !attachmentReference && !named.length && !aggregateRequest && !bothFiles)
+      !currentHasImage && !attachmentReference && !named.length && !aggregateRequest && !bothFiles && !crossKindComparisonReference)
     return { state: "none" };
   if (!kinds.size) {
     if (aggregateRequest && (genericWords.test(text) || currentCandidates.length)) {
