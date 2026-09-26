@@ -221,6 +221,25 @@ export function useConversations({ enabled = true }: UseConversationsOptions = {
           })),
         };
       });
+      queryClient.setQueriesData<{
+        pages: Array<{
+          conversation: Conversation & { activeBranchId?: string | null };
+          messages: unknown;
+          tokenUsage?: unknown;
+        }>;
+      }>({ queryKey: queryKeys.conversation(updatedConversation.id) }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            conversation: {
+              ...page.conversation,
+              ...updatedConversation,
+            },
+          })),
+        };
+      });
       if (updatedConversation.isPublic) {
         toast.success(TOAST_SUCCESS_MESSAGES.CONVERSATION_SHARED);
       } else {

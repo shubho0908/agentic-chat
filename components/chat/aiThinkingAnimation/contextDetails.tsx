@@ -10,6 +10,9 @@ import { ToolName } from "@/lib/tools/constants";
 export function ContextDetails({ memoryStatus }: ContextDetailsProps) {
   const isWebSearch = memoryStatus.activeToolName === ToolName.WEB_SEARCH;
 
+  if (memoryStatus.documentContextState === "unavailable" && memoryStatus.documentCount === 0)
+    return <DefaultRAGContext memoryStatus={memoryStatus} />;
+
   if (
     memoryStatus.hasImages &&
     memoryStatus.routingDecision !== RoutingDecision.Hybrid

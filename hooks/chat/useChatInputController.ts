@@ -1,3 +1,4 @@
+import { nextSnippetFileName } from "@/lib/chat/attachmentKind";
 import {
   type ClipboardEvent,
   useEffect,
@@ -20,9 +21,7 @@ import { extractImagesFromClipboard } from "@/lib/fileValidation";
 import type { MessageSendHandler, TokenUsage } from "@/types/chat";
 import { useSession } from "@/lib/authClient";
 import { TOAST_ERROR_MESSAGES } from "@/constants/errors";
-import {
-  TOAST_INFO_MESSAGES,
-} from "@/constants/toasts";
+import { TOAST_INFO_MESSAGES } from "@/constants/toasts";
 import {
   getReasoningEffortMap as getStoredReasoningEffortMap,
   setReasoningEffortForModel as storeReasoningEffortForModel,
@@ -75,7 +74,11 @@ type ChatInputUiAction =
   | { type: "hydrate"; payload: Partial<ChatInputUiState> }
   | { type: "reset-session" }
   | { type: "set-sending"; isSending: boolean }
-  | { type: "set-reasoning-effort"; model: string; effort: ReasoningEffortLevel }
+  | {
+      type: "set-reasoning-effort";
+      model: string;
+      effort: ReasoningEffortLevel;
+    }
   | { type: "set-model"; model: string };
 
 const INITIAL_CHAT_INPUT_UI_STATE: ChatInputUiState = {
@@ -137,7 +140,7 @@ export function useChatInputController({
   const { isSending, effortByModel, selectedModel } = uiState;
   const storedEffort = effortByModel[selectedModel];
   const reasoningEffort = getSupportedReasoningEfforts(selectedModel).includes(
-    storedEffort as ReasoningEffortLevel
+    storedEffort as ReasoningEffortLevel,
   )
     ? (storedEffort as ReasoningEffortLevel)
     : getDefaultReasoningEffort(selectedModel);
@@ -149,22 +152,19 @@ export function useChatInputController({
     uploadedAttachments,
     isUploading,
     uploadPhase,
+    uploadingFileIds,
     dispatchUpload,
     getFileId,
     getFilePreviewUrl,
     handleFilesSelected,
+    markSnippetFile,
     handleRemoveFile,
     clearAttachments,
     restoreAttachments,
   } = useChatFileUpload();
 
-  const {
-    input,
-    setInput,
-    textareaRef,
-    handleKeyDown,
-    clearInput,
-  } = useChatTextarea(sendMessage);
+  const { input, setInput, textareaRef, handleKeyDown, clearInput } =
+    useChatTextarea(sendMessage);
 
   const [textSnippets, setTextSnippets] = useState<TextSnippet[]>([]);
 
@@ -176,10 +176,7 @@ export function useChatInputController({
   const addTextSnippet = useCallback((content: string) => {
     const id = crypto.randomUUID();
     snippetCountRef.current += 1;
-    const fileName =
-      snippetCountRef.current === 1
-        ? "pasted-text.txt"
-        : `pasted-text-${snippetCountRef.current}.txt`;
+    const fileName = nextSnippetFileName(snippetCountRef.current);
     const byteSize = new TextEncoder().encode(content).byteLength;
     const file = new File([content], fileName, { type: "text/plain" });
     const next = [
@@ -209,8 +206,7 @@ export function useChatInputController({
       if (session) {
         dispatchUi({
           type: "hydrate",
-          payload: {
-          },
+          payload: {},
         });
       } else {
         dispatchUi({ type: "reset-session" });
@@ -372,6 +368,7 @@ export function useChatInputController({
       }
 
       const file = addTextSnippet(pastedText);
+      markSnippetFile(file);
       handleFilesSelected([file]);
       return;
     }
@@ -396,8 +393,10 @@ export function useChatInputController({
     }
   }
 
-
-  function handleReasoningEffortChange(model: string, effort: ReasoningEffortLevel) {
+  function handleReasoningEffortChange(
+    model: string,
+    effort: ReasoningEffortLevel,
+  ) {
     dispatchUi({ type: "set-reasoning-effort", model, effort });
     storeReasoningEffortForModel(model, effort);
   }
@@ -424,6 +423,7 @@ export function useChatInputController({
       isLoading,
       isUploading,
       uploadPhase,
+      uploadingFileIds,
       getFileId,
       getFilePreviewUrl,
       isSending,

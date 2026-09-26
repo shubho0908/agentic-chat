@@ -23,6 +23,7 @@ interface FormState {
   isLoading: boolean;
   isUploading: boolean;
   uploadPhase: UploadPhase;
+  uploadingFileIds: ReadonlySet<string>;
   getFileId: (file: File) => string;
   getFilePreviewUrl: (file: File) => string | null;
   isSending: boolean;
@@ -38,7 +39,10 @@ interface FormHandlers {
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onRemoveFile: (file: File) => void;
   onRemoveSnippet: (id: string) => void;
-  onReasoningEffortChange: (modelId: string, effort: ReasoningEffortLevel) => void;
+  onReasoningEffortChange: (
+    modelId: string,
+    effort: ReasoningEffortLevel,
+  ) => void;
   onModelSelect: (modelId: string) => void;
   onFilesSelected: (files: File[]) => void;
   onStop?: () => void;
@@ -80,6 +84,7 @@ export function ChatInputForm({
     isLoading,
     isUploading,
     uploadPhase,
+    uploadingFileIds,
     getFileId,
     getFilePreviewUrl,
     isSending,
@@ -137,7 +142,7 @@ export function ChatInputForm({
             getPreviewUrl={getFilePreviewUrl}
             onRemove={onRemoveFile}
             disabled={isSending}
-            isUploading={isUploading}
+            uploadingFileIds={uploadingFileIds}
             uploadPhase={uploadPhase}
           />
           <TextSnippetPreview
@@ -147,11 +152,7 @@ export function ChatInputForm({
             isUploading={isUploading}
           />
 
-          <div
-            className={`relative ${
-              centered ? "px-5 pt-4" : "px-4 pt-3.5"
-            }`}
-          >
+          <div className={`relative ${centered ? "px-5 pt-4" : "px-4 pt-3.5"}`}>
             <Textarea
               ref={textareaRef}
               value={input}
@@ -194,7 +195,9 @@ export function ChatInputForm({
               {showCounter && (
                 <p
                   className={`text-right text-[11px] leading-none tabular-nums ${
-                    isOverLimit ? "text-destructive" : "text-muted-foreground/70"
+                    isOverLimit
+                      ? "text-destructive"
+                      : "text-muted-foreground/70"
                   }`}
                 >
                   {input.length.toLocaleString()} / {maxLength.toLocaleString()}

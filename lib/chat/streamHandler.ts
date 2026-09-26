@@ -1,19 +1,21 @@
-import type OpenAI from 'openai';
+import type OpenAI from "openai";
 import type {
   ChatCompletionContentPart,
   ChatCompletionMessageParam,
-} from 'openai/resources/chat/completions';
+} from "openai/resources/chat/completions";
 import type {
   ResponseInputItem,
   ResponseInputMessageContentList,
-} from 'openai/resources/responses/responses';
-import type { Message, MessageContentPart } from '@/lib/schemas/chat';
-import { MessageRole } from '@/lib/schemas/chat';
+} from "openai/resources/responses/responses";
+import type { Message, MessageContentPart } from "@/lib/schemas/chat";
+import { MessageRole } from "@/lib/schemas/chat";
 import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
-import { routeContext } from '@/lib/contextRouter';
-import { parseOpenAIError } from '@/lib/openaiErrors';
-import { injectContextToMessages } from '@/lib/chat/messageHelpers';
-import { extractTextFromMessage } from './messageContent';
+import { routeContext } from "@/lib/contextRouter";
+import { parseOpenAIError } from "@/lib/openaiErrors";
+import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { unresolvedRouteToMessage } from "@/lib/chat/attachmentRouteUnresolved";
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
+import { extractTextFromMessage } from "./messageContent";
 import {
   encodeMemoryStatus,
   encodeChatChunk,
@@ -21,12 +23,12 @@ import {
   encodeDone,
   encodeThinkingChunk,
   encodeToolProgress,
-} from './streamingHelpers';
-import { checkTokenBudget } from '@/lib/chat/tokenBudget';
-import { getChatReasoningEffort } from '@/lib/modelPolicy';
-import type { ReasoningEffortLevel } from '@/constants/openai-models';
-import { withRetry } from '@/lib/retry';
-import { createSafeStream } from './safeStream';
+} from "./streamingHelpers";
+import { checkTokenBudget } from "@/lib/chat/tokenBudget";
+import { getChatReasoningEffort } from "@/lib/modelPolicy";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
+import { withRetry } from "@/lib/retry";
+import { createSafeStream } from "./safeStream";
 
 import { logger } from "@/lib/logger";
 interface StreamHandlerOptions {
@@ -39,47 +41,55 @@ interface StreamHandlerOptions {
   abortSignal?: AbortSignal;
   userId?: string;
   conversationId?: string;
+  branchId?: string;
   requestId?: string;
   reasoningEffort?: ReasoningEffortLevel | null;
 }
 
-function toChatCompletionContentPart(part: MessageContentPart): ChatCompletionContentPart {
-  if (part.type === 'text') {
-    return { type: 'text', text: part.text };
+function toChatCompletionContentPart(
+  part: MessageContentPart,
+): ChatCompletionContentPart {
+  if (part.type === "text") {
+    return { type: "text", text: part.text };
   }
 
   return {
-    type: 'image_url',
+    type: "image_url",
     image_url: {
       url: part.image_url.url,
     },
   };
 }
 
-function toResponseInputContentPart(part: MessageContentPart): ResponseInputMessageContentList[number] {
-  if (part.type === 'text') {
-    return { type: 'input_text', text: part.text };
+function toResponseInputContentPart(
+  part: MessageContentPart,
+): ResponseInputMessageContentList[number] {
+  if (part.type === "text") {
+    return { type: "input_text", text: part.text };
   }
 
   return {
-    type: 'input_image',
+    type: "input_image",
     image_url: part.image_url.url,
-    detail: 'auto',
+    detail: "auto",
   };
 }
 
-function toTextContent(content: Message['content']): string {
+function toTextContent(content: Message["content"]): string {
   return extractTextFromMessage(content);
 }
 
-export function toOpenAIChatMessages(messages: Message[]): ChatCompletionMessageParam[] {
+export function toOpenAIChatMessages(
+  messages: Message[],
+): ChatCompletionMessageParam[] {
   return messages.map(({ role, content }) => {
     if (role === MessageRole.USER) {
       return {
         role,
-        content: typeof content === 'string'
-          ? content
-          : content.map(toChatCompletionContentPart),
+        content:
+          typeof content === "string"
+            ? content
+            : content.map(toChatCompletionContentPart),
       };
     }
 
@@ -92,11 +102,12 @@ export function toOpenAIChatMessages(messages: Message[]): ChatCompletionMessage
 
 function toOpenAIResponseInput(messages: Message[]): ResponseInputItem[] {
   return messages.map(({ role, content }) => ({
-    type: 'message',
+    type: "message",
     role,
-    content: typeof content === 'string'
-      ? content
-      : content.map(toResponseInputContentPart),
+    content:
+      typeof content === "string"
+        ? content
+        : content.map(toResponseInputContentPart),
   }));
 }
 
@@ -105,6 +116,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     apiKey,
     abortSignal,
     conversationId,
+    branchId,
     memoryEnabled = true,
     messages,
     model,
@@ -146,19 +158,24 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
         await emitMemoryStatus();
 
-        stream.enqueue(encodeError(budgetCheck.errorMessage ?? 'Request exceeds the server token budget.'));
+        stream.enqueue(
+          encodeError(
+            budgetCheck.errorMessage ??
+              "Request exceeds the server token budget.",
+          ),
+        );
 
         finishStream();
         return false;
       };
-      
+
       try {
         if (abortSignal?.aborted) {
           abortStream();
           return;
         }
 
-        const lastUserMessage = messages[messages.length - 1]?.content || '';
+        const lastUserMessage = messages[messages.length - 1]?.content || "";
         await emitMemoryStatus();
 
         try {
@@ -170,29 +187,47 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey }
+              { apiKey, model, currentMessageId: messages[messages.length - 1]?.id, branchId },
             );
 
             memoryStatusInfo = {
               ...memoryStatusInfo,
               ...contextResult.metadata,
             };
+            if (contextResult.unresolved) {
+              stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
+              stream.enqueue(encodeChatChunk(unresolvedRouteToMessage(contextResult.unresolved)));
+              finishStream();
+              return;
+            }
 
+            enhancedMessages = attachHistoricalImagesToModelTurn(
+              enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+              contextResult.metadata.includeCurrentImages,
+              contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
+              contextResult.metadata.selectedCurrentImageFiles?.map((file) => file.fileUrl),
+            );
             if (contextResult.context) {
-              enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, model);
+              enhancedMessages = injectContextToMessages(
+                enhancedMessages,
+                contextResult.context,
+                model,
+              );
             }
 
             if (contextResult.metadata.citations?.length) {
-              stream.enqueue(encodeToolProgress(
-                  'document_retrieval',
-                  'completed',
-                  'Retrieved relevant document passages',
-                  { citations: contextResult.metadata.citations }
-              ));
+              stream.enqueue(
+                encodeToolProgress(
+                  "document_retrieval",
+                  "completed",
+                  "Retrieved relevant document passages",
+                  { citations: contextResult.metadata.citations },
+                ),
+              );
             }
           }
         } catch (error) {
-          logger.error('[Stream Handler] Context routing failed:', error);
+          logger.error("[Stream Handler] Context routing failed:", error);
           memoryStatusInfo.degradedContexts = [
             ...(memoryStatusInfo.degradedContexts || []),
             {
@@ -210,10 +245,14 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
           abortStream();
           return;
         }
-        
+
         const resolvedEffort = getChatReasoningEffort(model, reasoningEffort);
 
-        if (resolvedEffort && resolvedEffort !== 'none' && resolvedEffort !== 'minimal') {
+        if (
+          resolvedEffort &&
+          resolvedEffort !== "none" &&
+          resolvedEffort !== "minimal"
+        ) {
           const responseStream = await withRetry(
             () =>
               openai.responses.create(
@@ -221,20 +260,23 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   model,
                   input: toOpenAIResponseInput(enhancedMessages),
                   stream: true,
-                  reasoning: { effort: resolvedEffort, summary: 'detailed' },
+                  reasoning: { effort: resolvedEffort, summary: "detailed" },
                 },
-                { signal: abortSignal }
+                { signal: abortSignal },
               ),
-            { signal: abortSignal }
+            { signal: abortSignal },
           );
 
           for await (const event of responseStream) {
             if (abortSignal?.aborted) break;
-            if (event.type === 'response.reasoning_summary_text.delta' || event.type === 'response.reasoning_text.delta') {
+            if (
+              event.type === "response.reasoning_summary_text.delta" ||
+              event.type === "response.reasoning_text.delta"
+            ) {
               if (!stream.enqueue(encodeThinkingChunk(event.delta))) {
                 break;
               }
-            } else if (event.type === 'response.output_text.delta') {
+            } else if (event.type === "response.output_text.delta") {
               if (!stream.enqueue(encodeChatChunk(event.delta))) {
                 break;
               }
@@ -248,17 +290,19 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
                   model,
                   messages: toOpenAIChatMessages(enhancedMessages),
                   stream: true,
-                  ...(resolvedEffort ? { reasoning_effort: resolvedEffort } : {}),
+                  ...(resolvedEffort
+                    ? { reasoning_effort: resolvedEffort }
+                    : {}),
                 },
-                { signal: abortSignal }
+                { signal: abortSignal },
               ),
-            { signal: abortSignal }
+            { signal: abortSignal },
           );
 
           for await (const chunk of streamResponse) {
             if (abortSignal?.aborted) break;
             const delta = chunk.choices[0]?.delta;
-            const text = delta?.content || '';
+            const text = delta?.content || "";
 
             if (text) {
               if (!stream.enqueue(encodeChatChunk(text))) {
@@ -277,9 +321,11 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
       } catch (error) {
         if (
           abortSignal?.aborted ||
-          (error instanceof Error && (error.name === 'AbortError' || error.message.includes('aborted by user')))
+          (error instanceof Error &&
+            (error.name === "AbortError" ||
+              error.message.includes("aborted by user")))
         ) {
-          logger.warn('[Stream Handler] Request aborted by user');
+          logger.warn("[Stream Handler] Request aborted by user");
           abortStream();
           return;
         }

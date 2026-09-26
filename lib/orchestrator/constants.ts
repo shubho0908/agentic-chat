@@ -79,6 +79,8 @@ export const CustomEventName = {
 } as const;
 
 export const StreamEventType = {
+  CHAIN_START: "on_chain_start",
+  CHAIN_END: "on_chain_end",
   CHAT_MODEL_STREAM: "on_chat_model_stream",
   CHAT_MODEL_END: "on_chat_model_end",
   TOOL_START: "on_tool_start",

@@ -29,8 +29,8 @@ test("first-party send, edit, regenerate and continuation paths contain no memor
 
 test("server route alone preserves external-client false opt-out and owns kill switch", () => {
   const route = read("app/api/chat/completions/route.ts");
-  assert.match(route, /parseOptionalBoolean\(body\.memoryEnabled/);
-  assert.match(route, /process\.env\.MEMORY_ENABLED !== 'false'/);
+  assert.match(route, /parseOptionalBoolean\(\s*body\.memoryEnabled/);
+  assert.match(route, /process\.env\.MEMORY_ENABLED\s*!==\s*[\"\']false[\"\']/);
 });
 
 test("toggle component and stale localStorage key are removed", () => {

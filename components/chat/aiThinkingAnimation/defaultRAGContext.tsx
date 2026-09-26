@@ -14,10 +14,14 @@ export function DefaultRAGContext({ memoryStatus }: MemoryStatusProps) {
         <ContextItem
           icon={FileText}
           label={
-            memoryStatus.documentCount > 0
+            memoryStatus.documentCount === 0 && memoryStatus.documentContextState === "unavailable"
+              ? "Attachment context unavailable"
+              : memoryStatus.documentCount > 0
               ? `${memoryStatus.documentCount} attached ${memoryStatus.documentCount === 1 ? "doc" : "docs"}`
               : "Searching documents"
           }
+          note={memoryStatus.documentCount === 0 && memoryStatus.documentContextState === "unavailable" ? "clarification needed" : undefined}
+          unavailable={memoryStatus.documentCount === 0 && memoryStatus.documentContextState === "unavailable"}
         />
       )}
 

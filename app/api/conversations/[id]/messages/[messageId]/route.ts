@@ -19,14 +19,16 @@ import { runOrQueueDocumentProcessingJob } from "@/lib/orchestration/documentJob
 
 import { logger } from "@/lib/logger";
 function getRagAttachmentIds(
-  attachments?: Array<{ id: string; fileType: string }>,
+  attachments?: Array<{ id: string; fileType: string; kind?: string }>,
 ): string[] {
   if (!attachments || attachments.length === 0) {
     return [];
   }
 
   return attachments.flatMap((attachment) =>
-    isSupportedForRAG(attachment.fileType) ? [attachment.id] : [],
+    attachment.kind !== "image" && isSupportedForRAG(attachment.fileType)
+      ? [attachment.id]
+      : [],
   );
 }
 
@@ -72,6 +74,8 @@ function buildAttachmentCreateInput(attachments?: AttachmentInput[] | null) {
       fileUrl: att.fileUrl,
       fileName: att.fileName,
       fileType: att.fileType,
+      kind:
+        att.kind ?? (att.fileType.startsWith("image/") ? "image" : "document"),
       fileSize: att.fileSize,
     })),
   };

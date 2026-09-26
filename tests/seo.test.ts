@@ -6,6 +6,7 @@ import {
   resolveAppBaseUrl,
   resolveTrustedOrigins,
 } from "@/lib/appUrl";
+import { buildShareUrl } from "@/lib/routes";
 import {
   absoluteUrl,
   createBreadcrumbSchema,
@@ -80,4 +81,15 @@ test("builds breadcrumb schema with absolute item URLs", () => {
 
   assert.equal(schema.itemListElement[0].item, absoluteUrl("/"));
   assert.equal(schema.itemListElement[1].item, absoluteUrl("/terms"));
+});
+
+test("builds share URLs against an explicit browser origin", () => {
+  assert.equal(
+    buildShareUrl("conversation/with space", "http://localhost:3001"),
+    "http://localhost:3001/share/conversation%2Fwith%20space",
+  );
+  assert.equal(
+    buildShareUrl("abc123", "https://preview.example.com"),
+    "https://preview.example.com/share/abc123",
+  );
 });

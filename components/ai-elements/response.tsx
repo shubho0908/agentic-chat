@@ -22,18 +22,15 @@ export const Response = memo(function Response({
   children,
   className = "",
 }: ResponseProps) {
-  const safeContent = children.length > MAX_MARKDOWN_RENDER_CHARS
-    ? children.slice(0, MAX_MARKDOWN_RENDER_CHARS)
-    : children;
+  const canParseMarkdown =
+    children.length <= MAX_MARKDOWN_RENDER_CHARS && shouldRenderMarkdownContent(children);
+  const hasCodeFences = canParseMarkdown && COMPLETE_CODE_FENCE_PATTERN.test(children);
 
-  const hasMarkdownSyntax = shouldRenderMarkdownContent(safeContent);
-  const hasCodeFences = COMPLETE_CODE_FENCE_PATTERN.test(safeContent);
-
-  if (!hasMarkdownSyntax) {
+  if (!canParseMarkdown) {
     return (
       <div className={`prose-edward leading-inherit text-foreground ${className}`}>
         <p className="m-0 whitespace-pre-wrap break-words">
-          <PlainTextWithLinks content={safeContent} />
+          <PlainTextWithLinks content={children} />
         </p>
       </div>
     );
@@ -50,7 +47,7 @@ export const Response = memo(function Response({
         rehypePlugins={rehypePlugins}
         components={components}
       >
-        {safeContent}
+        {children}
       </ReactMarkdown>
     </div>
   );

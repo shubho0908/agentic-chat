@@ -1,6 +1,5 @@
 import { memo, useState, useMemo, useCallback, type ReactNode } from "react";
-import { MessageRole, type Message, type Attachment } from "@/lib/schemas/chat";
-import type { ArtifactMetadata } from "@/types/artifact";
+import { MessageRole, type Message } from "@/lib/schemas/chat";
 import { cn } from "@/lib/utils";
 import { AIThinkingAnimation } from "./aiThinkingAnimation";
 import { ThinkingAccordion } from "./thinkingAccordion";
@@ -16,76 +15,28 @@ import { SearchImages } from "./searchImages";
 import { PdfDocuments } from "./pdfDocuments";
 import { RichLink } from "../ai-elements/richLink";
 import { HumanInTheLoopApprovalCard } from "./humanInTheLoopApprovalCard";
+import { InlineMarkdown } from "@/components/ai-elements/inlineMarkdown";
+import {
+  areChatMessagePropsEqual,
+  type ChatMessageProps,
+} from "./chatMessageMemo";
 import type { MemoryStatus } from "@/types/chat";
 import { ToolName } from "@/lib/tools/constants";
 import { ToolActivityDisplay } from "./aiThinkingAnimation/toolActivityDisplay";
-import { PlanningStep } from "./aiThinkingAnimation/planningStep";
-import { CustomEventName } from "@/lib/orchestrator/constants";
-import { ACTIVITY_ONLY_ASSISTANT_CONTENT, ARTIFACT_ONLY_ASSISTANT_CONTENT, HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT, PDF_ONLY_ASSISTANT_CONTENT, STREAM_STOPPED_BY_USER_MARKER } from "@/hooks/chat/conversationManager";
+import {
+  ACTIVITY_ONLY_ASSISTANT_CONTENT,
+  ARTIFACT_ONLY_ASSISTANT_CONTENT,
+  HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT,
+  PDF_ONLY_ASSISTANT_CONTENT,
+  STREAM_STOPPED_BY_USER_MARKER,
+} from "@/hooks/chat/conversationManager";
 import { ArtifactButtons } from "./artifactButtons";
 import { Button } from "@/components/ui/button";
+import { VALIDATION_LIMITS } from "@/constants/validation";
+import { extractUrls } from "@/lib/url-normalization";
 
-const USER_URL_REGEX = /(?<![`\[]|(?:\]\())https?:\/\/[^\s<>\[\]`]+/gi;
-
-function trimTrailingUrlPunctuation(rawUrl: string) {
-  let url = rawUrl;
-  let trailing = "";
-
-  while (url.length > 0) {
-    const lastChar = url.at(-1);
-
-    if (!lastChar) {
-      break;
-    }
-
-    if (/[.,!?;:]/.test(lastChar)) {
-      trailing = `${lastChar}${trailing}`;
-      url = url.slice(0, -1);
-      continue;
-    }
-
-    if (lastChar === ")") {
-      const openParens = (url.match(/\(/g) || []).length;
-      const closeParens = (url.match(/\)/g) || []).length;
-
-      if (closeParens > openParens) {
-        trailing = `${lastChar}${trailing}`;
-        url = url.slice(0, -1);
-        continue;
-      }
-    }
-
-    break;
-  }
-
-  return { url, trailing };
-}
-
-function extractUserUrls(text: string) {
-  const urls = new Set<string>();
-
-  for (const match of text.matchAll(USER_URL_REGEX)) {
-    const { url } = trimTrailingUrlPunctuation(match[0]);
-
-    if (url) {
-      urls.add(url);
-    }
-  }
-
-  return Array.from(urls);
-}
-
-interface ChatMessageProps {
-  message: Message;
-  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
-  onRegenerateMessage?: (messageId: string) => void;
-  onSendMessage?: (content: string) => void;
-  onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
-  onOpenArtifact?: (messageId: string, artifact: ArtifactMetadata) => void;
-  isSharePage?: boolean;
-  isLastMessage?: boolean;
-  isLoading?: boolean;
-  memoryStatus?: MemoryStatus;
+function renderUserTextContent(text: string): ReactNode {
+  return <InlineMarkdown content={text} />;
 }
 
 interface MessageContentSurfaceProps {
@@ -101,10 +52,14 @@ interface MessageContentSurfaceProps {
     hideStoppedMarker: boolean;
   };
   memoryStatus?: MemoryStatus;
-  humanInTheLoopRequest?: NonNullable<Message["metadata"]>["humanInTheLoopRequest"];
+  contextAttachments?: Message["attachments"];
+  humanInTheLoopRequest?: NonNullable<
+    Message["metadata"]
+  >["humanInTheLoopRequest"];
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
   onSendMessage?: (content: string) => void;
   renderUserTextContent: (text: string) => ReactNode;
+  editContent?: ReactNode;
 }
 
 function MessageContentSurface({
@@ -113,10 +68,12 @@ function MessageContentSurface({
   textContent,
   renderState,
   memoryStatus,
+  contextAttachments,
   humanInTheLoopRequest,
   onHumanInTheLoopDecision,
   onSendMessage,
   renderUserTextContent,
+  editContent,
 }: MessageContentSurfaceProps) {
   const isUser = variant === MessageRole.USER;
   const {
@@ -127,24 +84,21 @@ function MessageContentSurface({
     hideArtifactPlaceholder,
     hideStoppedMarker,
   } = renderState;
-  const hidePlaceholderContent = hideHumanInTheLoopPlaceholder || hideArtifactPlaceholder || hideStoppedMarker;
+  const hidePlaceholderContent =
+    hideHumanInTheLoopPlaceholder ||
+    hideArtifactPlaceholder ||
+    hideStoppedMarker;
 
   return (
-    <div className={cn(
-      "text-[15px] leading-relaxed",
-      isUser
-        ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
-        : "w-full min-w-0 text-foreground ml-1"
-    )}>
-      {!isUser && isLoading && memoryStatus?.toolProgress?.toolName === CustomEventName.PLANNING && (
-        <div className="mb-2">
-          <PlanningStep
-            message={memoryStatus.toolProgress.message || "Planning approach..."}
-            plan={(memoryStatus.toolProgress.details as { plan?: string } | undefined)?.plan}
-          />
-        </div>
+    <div
+      className={cn(
+        "text-[15px] leading-relaxed",
+        isUser
+          ? "border border-chat-user-bubble-border bg-gradient-to-b from-chat-user-bubble to-chat-user-bubble/80 text-foreground px-4 py-2.5 rounded-[20px] rounded-br-[6px] whitespace-pre-wrap break-words shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          : "w-full min-w-0 text-foreground ml-1",
+        editContent && "focus-within:ring-2 focus-within:ring-foreground/15",
       )}
-
+    >
       {!isUser && displayedMessage.thinking && (
         <ThinkingAccordion
           thinking={displayedMessage.thinking}
@@ -153,11 +107,17 @@ function MessageContentSurface({
         />
       )}
 
-      {!isUser && displayedMessage.toolActivities && displayedMessage.toolActivities.length > 0 && (
-        <div className="mb-2 rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
-          <ToolActivityDisplay toolActivities={displayedMessage.toolActivities.filter((a) => a.toolName !== ToolName.ASK_USER)} />
-        </div>
-      )}
+      {!isUser &&
+        displayedMessage.toolActivities &&
+        displayedMessage.toolActivities.length > 0 && (
+          <div className="mb-2 rounded-xl border border-border/60 bg-gradient-to-b from-card to-muted/60 px-3.5 py-2.5 text-xs shadow-[0_1px_3px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <ToolActivityDisplay
+              toolActivities={displayedMessage.toolActivities.filter(
+                (a) => a.toolName !== ToolName.ASK_USER,
+              )}
+            />
+          </div>
+        )}
 
       {!isUser && humanInTheLoopRequest && (
         <HumanInTheLoopApprovalCard
@@ -177,43 +137,82 @@ function MessageContentSurface({
 
       {!isUser && displayedMessage.metadata?.streamStatus && (
         <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-3 text-sm">
-          <div className="font-medium">{displayedMessage.metadata.streamStatus === "incomplete" ? "Response reached the output limit" : "Response interrupted"}</div>
-          <div className="mt-1 text-muted-foreground">{displayedMessage.metadata.streamStatus === "incomplete" ? "The answer below is incomplete." : "The partial answer below was preserved."}</div>
-          {onSendMessage && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => onSendMessage("Continue from where you stopped without repeating the existing answer.")}>Continue response</Button>}
+          <div className="font-medium">
+            {displayedMessage.metadata.streamStatus === "incomplete"
+              ? "Response reached the output limit"
+              : "Response interrupted"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            {displayedMessage.metadata.streamStatus === "incomplete"
+              ? "The answer below is incomplete."
+              : "The partial answer below was preserved."}
+          </div>
+          {onSendMessage && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() =>
+                onSendMessage(
+                  "Continue from where you stopped without repeating the existing answer.",
+                )
+              }
+            >
+              Continue response
+            </Button>
+          )}
         </div>
       )}
 
-      {!hidePlaceholderContent && textContent ? (
-        isUser ? renderUserTextContent(textContent) : <Response>{textContent}</Response>
-      ) : !hidePlaceholderContent && displayedMessage.content && displayedMessage.content !== HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
-        isUser ? (typeof displayedMessage.content === 'string' ? renderUserTextContent(displayedMessage.content) : '') : <Response>{typeof displayedMessage.content === 'string' ? displayedMessage.content : ''}</Response>
+      {editContent ? (
+        editContent
+      ) : !hidePlaceholderContent && textContent ? (
+        isUser ? (
+          renderUserTextContent(textContent)
+        ) : (
+          <Response>{textContent}</Response>
+        )
+      ) : !hidePlaceholderContent &&
+        displayedMessage.content &&
+        displayedMessage.content !==
+          HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ? (
+        isUser ? (
+          typeof displayedMessage.content === "string" ? (
+            renderUserTextContent(displayedMessage.content)
+          ) : (
+            ""
+          )
+        ) : (
+          <Response>
+            {typeof displayedMessage.content === "string"
+              ? displayedMessage.content
+              : ""}
+          </Response>
+        )
       ) : humanInTheLoopRequest ? null : isLoading && isLastMessage ? (
         <AIThinkingAnimation
           memoryStatus={memoryStatus}
+          attachments={contextAttachments}
         />
       ) : null}
     </div>
   );
 }
 
-function renderUserTextContent(text: string): ReactNode[] | null {
-  if (!text) return null;
-  const nodes: ReactNode[] = [];
-  let lastIndex = 0;
-  for (const match of text.matchAll(USER_URL_REGEX)) {
-    const matchStart = match.index ?? 0;
-    const rawUrl = match[0];
-    const { url, trailing } = trimTrailingUrlPunctuation(rawUrl);
-    if (matchStart > lastIndex) nodes.push(<span key={`text-${matchStart}`}>{text.slice(lastIndex, matchStart)}</span>);
-    if (url) nodes.push(<a key={`url-${matchStart}`} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-foreground/25 hover:decoration-foreground transition-colors break-all">{url}</a>);
-    if (trailing) nodes.push(<span key={`trail-${matchStart}`}>{trailing}</span>);
-    lastIndex = matchStart + rawUrl.length;
-  }
-  if (lastIndex < text.length) nodes.push(<span key={`text-${lastIndex}`}>{text.slice(lastIndex)}</span>);
-  return nodes;
-}
-
-function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onSendMessage, onHumanInTheLoopDecision, onOpenArtifact, isSharePage = false, isLastMessage = false, isLoading = false, memoryStatus }: ChatMessageProps) {
+function ChatMessageComponent({
+  message,
+  onEditMessage,
+  onRegenerateMessage,
+  onSendMessage,
+  onHumanInTheLoopDecision,
+  onOpenArtifact,
+  isSharePage = false,
+  isLastMessage = false,
+  isLoading = false,
+  memoryStatus,
+  contextAttachments,
+}: ChatMessageProps) {
   const isUser = message.role === MessageRole.USER;
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -221,27 +220,46 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
   const versions = useMemo(() => message.versions ?? [], [message.versions]);
   const totalVersions = versions.length + 1;
-  const currentVersion = versionIndex === -1 ? totalVersions : (totalVersions - 1 - versionIndex);
+  const currentVersion =
+    versionIndex === -1 ? totalVersions : totalVersions - 1 - versionIndex;
 
   const displayedMessage = useMemo<Message>(() => {
-    const msg = versionIndex === -1 ? message : (versions[versionIndex] || message);
+    const msg =
+      versionIndex === -1 ? message : versions[versionIndex] || message;
     return msg;
   }, [versionIndex, message, versions]);
 
   const displayedContent = displayedMessage.content;
   const displayedAttachments = displayedMessage.attachments;
-  const artifactMetadata = !isUser ? displayedMessage.metadata?.artifacts ?? [] : [];
+  const artifactMetadata = !isUser
+    ? (displayedMessage.metadata?.artifacts ?? [])
+    : [];
   const displayedMessageId = displayedMessage.id ?? message.id;
 
-  const rawText = useMemo(() => extractTextFromContent(displayedContent), [displayedContent]);
+  const rawText = useMemo(
+    () => extractTextFromContent(displayedContent),
+    [displayedContent],
+  );
 
   const textContent = useMemo(() => {
-    if (rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT || rawText === PDF_ONLY_ASSISTANT_CONTENT || rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT || rawText === STREAM_STOPPED_BY_USER_MARKER) return "";
+    if (
+      rawText === HUMAN_IN_THE_LOOP_PENDING_ASSISTANT_CONTENT ||
+      rawText === PDF_ONLY_ASSISTANT_CONTENT ||
+      rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT ||
+      rawText === STREAM_STOPPED_BY_USER_MARKER
+    )
+      return "";
     return rawText;
   }, [rawText]);
-  const hidePdfPlaceholder = (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 && rawText === PDF_ONLY_ASSISTANT_CONTENT;
+  const hidePdfPlaceholder =
+    (displayedMessage.metadata?.pdfs?.length ?? 0) > 0 &&
+    rawText === PDF_ONLY_ASSISTANT_CONTENT;
   const hideActivityPlaceholder = rawText === ACTIVITY_ONLY_ASSISTANT_CONTENT;
-  const hideArtifactPlaceholder = (artifactMetadata.length > 0 && textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) || hidePdfPlaceholder || hideActivityPlaceholder;
+  const hideArtifactPlaceholder =
+    (artifactMetadata.length > 0 &&
+      textContent === ARTIFACT_ONLY_ASSISTANT_CONTENT) ||
+    hidePdfPlaceholder ||
+    hideActivityPlaceholder;
   const hideStoppedMarker = rawText === STREAM_STOPPED_BY_USER_MARKER;
 
   const handleEditStart = useCallback(() => {
@@ -268,7 +286,9 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
         return versions.length > 0 ? 0 : currentIndex;
       }
 
-      return currentIndex < versions.length - 1 ? currentIndex + 1 : currentIndex;
+      return currentIndex < versions.length - 1
+        ? currentIndex + 1
+        : currentIndex;
     });
   }, [versions.length]);
 
@@ -289,19 +309,27 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
     const allCitations = [];
 
-    if (displayedMessage.metadata?.citations && displayedMessage.metadata.citations.length > 0) {
+    if (
+      displayedMessage.metadata?.citations &&
+      displayedMessage.metadata.citations.length > 0
+    ) {
       allCitations.push(...displayedMessage.metadata.citations);
     }
 
-    if (displayedMessage.metadata?.sources && displayedMessage.metadata.sources.length > 0) {
-      const sourcesAsCitations = displayedMessage.metadata.sources.map((source, index) => ({
-        id: `source-${source.position || index + 1}`,
-        source: source.title,
-        url: source.url,
-        relevance: source.snippet || `Source from ${source.domain}`,
-        author: source.domain,
-        year: new Date().getFullYear().toString(),
-      }));
+    if (
+      displayedMessage.metadata?.sources &&
+      displayedMessage.metadata.sources.length > 0
+    ) {
+      const sourcesAsCitations = displayedMessage.metadata.sources.map(
+        (source, index) => ({
+          id: `source-${source.position || index + 1}`,
+          source: source.title,
+          url: source.url,
+          relevance: source.snippet || `Source from ${source.domain}`,
+          author: source.domain,
+          year: new Date().getFullYear().toString(),
+        }),
+      );
       allCitations.push(...sourcesAsCitations);
     }
 
@@ -310,7 +338,7 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
     }
 
     const seenUrls = new Set<string>();
-    const uniqueCitations = allCitations.filter(citation => {
+    const uniqueCitations = allCitations.filter((citation) => {
       if (!citation.url) return true;
       if (seenUrls.has(citation.url)) return false;
       seenUrls.add(citation.url);
@@ -325,12 +353,15 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
 
     const allImages = [];
 
-    if (displayedMessage.metadata?.images && displayedMessage.metadata.images.length > 0) {
+    if (
+      displayedMessage.metadata?.images &&
+      displayedMessage.metadata.images.length > 0
+    ) {
       allImages.push(...displayedMessage.metadata.images);
     }
 
     const seenUrls = new Set<string>();
-    const uniqueImages = allImages.filter(image => {
+    const uniqueImages = allImages.filter((image) => {
       if (seenUrls.has(image.url)) return false;
       seenUrls.add(image.url);
       return true;
@@ -342,7 +373,11 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   const followUpQuestions = useMemo(() => {
     if (isUser) return [];
 
-    if (displayedMessage.metadata?.followUpQuestions && displayedMessage.metadata.followUpQuestions.length > 0 && !isLoading) {
+    if (
+      displayedMessage.metadata?.followUpQuestions &&
+      displayedMessage.metadata.followUpQuestions.length > 0 &&
+      !isLoading
+    ) {
       if (isLastMessage) {
         return displayedMessage.metadata.followUpQuestions;
       }
@@ -354,11 +389,15 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
   const userUrls = useMemo(() => {
     if (!isUser || !textContent) return [];
 
-    return extractUserUrls(textContent);
+    return extractUrls(textContent);
   }, [isUser, textContent]);
 
-  const humanInTheLoopRequest = !isUser ? displayedMessage.metadata?.humanInTheLoopRequest : undefined;
-  const humanInTheLoopPending = displayedMessage.metadata?.humanInTheLoopStatus === "pending" && !!humanInTheLoopRequest;
+  const humanInTheLoopRequest = !isUser
+    ? displayedMessage.metadata?.humanInTheLoopRequest
+    : undefined;
+  const humanInTheLoopPending =
+    displayedMessage.metadata?.humanInTheLoopStatus === "pending" &&
+    !!humanInTheLoopRequest;
   const hideHumanInTheLoopPlaceholder = humanInTheLoopPending;
 
   if (message.role === MessageRole.SYSTEM) return null;
@@ -371,198 +410,176 @@ function ChatMessageComponent({ message, onEditMessage, onRegenerateMessage, onS
         "group relative px-4 py-3 md:py-4 transition-colors w-screen md:w-full",
       )}
     >
-      <div className={cn("mx-auto flex w-full max-w-3xl", isUser ? "justify-end" : "justify-start")}>
-        <div className={cn("flex min-w-0 gap-3", isUser ? "max-w-[85%] md:max-w-[75%] flex-row-reverse" : "w-full max-w-[90%] md:max-w-[85%]")}>
-          <div className={cn("flex min-w-0 flex-col", isUser ? "gap-1 items-end" : "gap-2 w-full items-start")}>
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-3xl",
+          isUser ? "justify-end" : "justify-start",
+        )}
+      >
+        <div
+          className={cn(
+            "flex min-w-0 gap-3",
+            isUser
+              ? "max-w-[85%] md:max-w-[75%] flex-row-reverse"
+              : "w-full max-w-[90%] md:max-w-[85%]",
+          )}
+        >
+          <div
+            className={cn(
+              "flex min-w-0 flex-col",
+              isUser ? "gap-1 items-end" : "gap-2 w-full items-start",
+            )}
+          >
             <AttachmentDisplay
               attachments={displayedAttachments}
               isUser={isUser}
             />
 
-            {!isUser && images.length > 0 && (
-              <SearchImages images={images} />
+            {!isUser && images.length > 0 && <SearchImages images={images} />}
+
+            <MessageContentSurface
+              variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
+              displayedMessage={displayedMessage}
+              textContent={textContent}
+              renderState={{
+                isLoading,
+                isLastMessage,
+                humanInTheLoopPending,
+                hideHumanInTheLoopPlaceholder,
+                hideArtifactPlaceholder,
+                hideStoppedMarker,
+              }}
+              memoryStatus={memoryStatus}
+              contextAttachments={contextAttachments}
+              humanInTheLoopRequest={humanInTheLoopRequest}
+              onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+              onSendMessage={onSendMessage}
+              renderUserTextContent={renderUserTextContent}
+              editContent={
+                isUser && isEditing ? (
+                  <MessageEditForm
+                    editText={editText}
+                    sizingText={textContent}
+                    onEditTextChange={setEditText}
+                    onSubmit={handleEditSubmit}
+                    onCancel={handleEditCancel}
+                  />
+                ) : undefined
+              }
+            />
+
+            {!isUser && artifactMetadata.length > 0 && (
+              <ArtifactButtons
+                artifacts={artifactMetadata}
+                messageId={displayedMessageId}
+                onOpenArtifact={onOpenArtifact}
+              />
             )}
 
-            {isEditing ? (
-              <MessageEditForm
-                editText={editText}
-                onEditTextChange={setEditText}
-                onSubmit={handleEditSubmit}
-                onCancel={handleEditCancel}
+            {!isUser &&
+              displayedMessage.metadata?.pdfs &&
+              displayedMessage.metadata.pdfs.length > 0 && (
+                <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
+              )}
+
+            {isUser && !isEditing && userUrls.length > 0 && (
+              <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
+                {userUrls.map((url) => (
+                  <RichLink
+                    key={url}
+                    url={url}
+                    variant="userMessage"
+                    className="w-full sm:w-auto max-w-[280px]"
+                  />
+                ))}
+              </div>
+            )}
+
+            {!isUser && followUpQuestions.length > 0 && (
+              <FollowUpQuestions
+                questions={followUpQuestions}
+                onQuestionClick={onSendMessage}
+                disabled={isSharePage}
               />
-            ) : (
-              <>
-                <MessageContentSurface
-                  variant={isUser ? MessageRole.USER : MessageRole.ASSISTANT}
-                  displayedMessage={displayedMessage}
-                  textContent={textContent}
-                  renderState={{
-                    isLoading,
-                    isLastMessage,
-                    humanInTheLoopPending,
-                    hideHumanInTheLoopPlaceholder,
-                    hideArtifactPlaceholder,
-                    hideStoppedMarker,
-                  }}
-                  memoryStatus={memoryStatus}
-                  humanInTheLoopRequest={humanInTheLoopRequest}
-                  onHumanInTheLoopDecision={onHumanInTheLoopDecision}
-                  onSendMessage={onSendMessage}
-                  renderUserTextContent={renderUserTextContent}
+            )}
+
+            {!isEditing && totalVersions > 1 && (
+              <div className={cn(isUser ? "mr-2" : "ml-1")}>
+                <VersionNavigator
+                  currentVersion={currentVersion}
+                  totalVersions={totalVersions}
+                  historyIndex={versionIndex}
+                  historyLength={versions.length}
+                  onPrevious={handlePreviousVersion}
+                  onNext={handleNextVersion}
                 />
+              </div>
+            )}
 
-                {!isUser && artifactMetadata.length > 0 && (
-                  <ArtifactButtons
-                    artifacts={artifactMetadata}
-                    messageId={displayedMessageId}
-                    onOpenArtifact={onOpenArtifact}
+            {!isSharePage && (
+              <div
+                className={cn(
+                  "mt-1 flex items-center gap-2",
+                  isUser ? "pr-2" : "pl-1 w-full",
+                )}
+              >
+                <div
+                  className={cn(
+                    "transition-opacity duration-300 md:group-focus-within:opacity-100",
+                    isEditing
+                      ? "opacity-100"
+                      : "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+                  )}
+                >
+                  <MessageActions
+                    context={{
+                      isUser,
+                      isEditing,
+                      canEdit: !!onEditMessage,
+                      isThinking,
+                      isLoading,
+                    }}
+                    textContent={textContent}
+                    onEditStart={handleEditStart}
+                    onEditSubmit={handleEditSubmit}
+                    onEditCancel={handleEditCancel}
+                    canSaveEdit={
+                      editText.trim().length > 0 &&
+                      editText.length <=
+                        VALIDATION_LIMITS.CHAT_MESSAGE_MAX_LENGTH
+                    }
+                    onRegenerate={
+                      onRegenerateMessage && message.id
+                        ? () => onRegenerateMessage(message.id!)
+                        : undefined
+                    }
                   />
-                )}
-
-                {!isUser && displayedMessage.metadata?.pdfs && displayedMessage.metadata.pdfs.length > 0 && (
-                  <PdfDocuments pdfs={displayedMessage.metadata.pdfs} />
-                )}
-
-                {isUser && userUrls.length > 0 && (
-                  <div className="flex flex-wrap justify-end gap-2 mt-2 w-full">
-                    {userUrls.map((url) => (
-                      <RichLink key={url} url={url} variant="userMessage" className="w-full sm:w-auto max-w-[280px]" />
-                    ))}
-                  </div>
-                )}
-
-                {!isUser && followUpQuestions.length > 0 && (
-                  <FollowUpQuestions
-                    questions={followUpQuestions}
-                    onQuestionClick={onSendMessage}
-                    disabled={isSharePage}
-                  />
-                )}
-
-                {totalVersions > 1 && (
-                  <div className={cn(isUser ? "mr-2" : "ml-1")}>
-                    <VersionNavigator
-                      currentVersion={currentVersion}
-                      totalVersions={totalVersions}
-                      historyIndex={versionIndex}
-                      historyLength={versions.length}
-                      onPrevious={handlePreviousVersion}
-                      onNext={handleNextVersion}
-                    />
-                  </div>
-                )}
-
-                {!isSharePage && (
-                  <div className={cn(
-                    "mt-1 flex items-center gap-2",
-                    isUser ? "pr-2" : "pl-1 w-full"
-                  )}>
-                    <div className="opacity-100 transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                      <MessageActions
-                        context={{ isUser, isEditing, canEdit: !!onEditMessage, isThinking, isLoading }}
-                        textContent={textContent}
-                        onEditStart={handleEditStart}
-                        onRegenerate={onRegenerateMessage && message.id ? () => onRegenerateMessage(message.id!) : undefined}
-                      />
-                    </div>
-                    {!isUser && !isThinking && (
-                      <div className="ml-auto flex items-center gap-2">
-                        {citations.length > 0 && (
-                          <MessageSources citations={citations} />
-                        )}
-                        <MessageTimestamp timestamp={displayedMessage.timestamp} />
-                      </div>
+                </div>
+                {!isUser && !isThinking && (
+                  <div className="ml-auto flex items-center gap-2">
+                    {citations.length > 0 && (
+                      <MessageSources citations={citations} />
                     )}
+                    <MessageTimestamp timestamp={displayedMessage.timestamp} />
                   </div>
                 )}
-                {isSharePage && !isUser && !isThinking && (
-                  <div className="mt-1 flex w-full items-center gap-2 pl-1">
-                    <div className="ml-auto flex items-center gap-2">
-                      {citations.length > 0 && (
-                        <MessageSources citations={citations} />
-                      )}
-                      <MessageTimestamp timestamp={displayedMessage.timestamp} />
-                    </div>
-                  </div>
-                )}
-              </>
+              </div>
+            )}
+            {isSharePage && !isUser && !isThinking && (
+              <div className="mt-1 flex w-full items-center gap-2 pl-1">
+                <div className="ml-auto flex items-center gap-2">
+                  {citations.length > 0 && (
+                    <MessageSources citations={citations} />
+                  )}
+                  <MessageTimestamp timestamp={displayedMessage.timestamp} />
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-export function areChatMessagePropsEqual(prevProps: ChatMessageProps, nextProps: ChatMessageProps): boolean {
-  if (
-    prevProps.message.id !== nextProps.message.id ||
-    prevProps.message.content !== nextProps.message.content ||
-    prevProps.message.thinking !== nextProps.message.thinking ||
-    prevProps.message.attachments !== nextProps.message.attachments ||
-    prevProps.message.metadata !== nextProps.message.metadata ||
-    prevProps.message.toolActivities !== nextProps.message.toolActivities ||
-    prevProps.message.versions !== nextProps.message.versions ||
-    prevProps.onOpenArtifact !== nextProps.onOpenArtifact ||
-    prevProps.isLastMessage !== nextProps.isLastMessage ||
-    prevProps.isLoading !== nextProps.isLoading
-  ) {
-    return false;
-  }
-
-  if (prevProps.message.toolActivities?.length !== nextProps.message.toolActivities?.length) {
-    return false;
-  }
-
-  const prevLastActivity = prevProps.message.toolActivities?.[prevProps.message.toolActivities.length - 1];
-  const nextLastActivity = nextProps.message.toolActivities?.[nextProps.message.toolActivities.length - 1];
-  if (prevLastActivity?.status !== nextLastActivity?.status) {
-    return false;
-  }
-
-  const prevMetadata = prevProps.message.metadata;
-  const nextMetadata = nextProps.message.metadata;
-
-  if (
-    prevMetadata?.citations?.length !== nextMetadata?.citations?.length ||
-    prevMetadata?.sources?.length !== nextMetadata?.sources?.length ||
-    prevMetadata?.images?.length !== nextMetadata?.images?.length ||
-    prevMetadata?.pdfs?.length !== nextMetadata?.pdfs?.length ||
-    prevMetadata?.followUpQuestions?.length !== nextMetadata?.followUpQuestions?.length ||
-    prevMetadata?.artifacts?.length !== nextMetadata?.artifacts?.length
-  ) {
-    return false;
-  }
-
-  if (prevProps.isLastMessage && nextProps.isLastMessage) {
-    const prevStatus = prevProps.memoryStatus;
-    const nextStatus = nextProps.memoryStatus;
-
-    if (prevStatus?.hasMemories !== nextStatus?.hasMemories ||
-      prevStatus?.attemptedMemory !== nextStatus?.attemptedMemory ||
-      prevStatus?.skippedMemory !== nextStatus?.skippedMemory ||
-      prevStatus?.hasDocuments !== nextStatus?.hasDocuments ||
-      prevStatus?.hasImages !== nextStatus?.hasImages ||
-      prevStatus?.memoryCount !== nextStatus?.memoryCount ||
-      prevStatus?.documentCount !== nextStatus?.documentCount ||
-      prevStatus?.imageCount !== nextStatus?.imageCount ||
-      prevStatus?.routingDecision !== nextStatus?.routingDecision ||
-      prevStatus?.degradedContexts?.length !== nextStatus?.degradedContexts?.length) {
-      return false;
-    }
-
-    const prevProgress = prevStatus?.toolProgress;
-    const nextProgress = nextStatus?.toolProgress;
-
-    if (prevProgress?.status !== nextProgress?.status ||
-      prevProgress?.message !== nextProgress?.message ||
-      prevProgress?.details?.status !== nextProgress?.details?.status ||
-      prevProgress?.details?.citations?.length !== nextProgress?.details?.citations?.length) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export const ChatMessage = memo(ChatMessageComponent, areChatMessagePropsEqual);

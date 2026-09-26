@@ -1,3 +1,4 @@
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { Message } from "@/lib/schemas/chat";
@@ -5,11 +6,16 @@ import { convertToLangChainMessages } from "./messageConversion";
 import type { MemoryStatus } from "@/types/chat";
 import { routeContext } from "@/lib/contextRouter";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { unresolvedRouteToMessage } from "@/lib/chat/attachmentRouteUnresolved";
 import { getConnectedToolkits } from "@/lib/tools/composio/auth";
 import { createAgentGraph } from "./graph";
 import { createFinalAnswerNode } from "./nodes/agent";
 import { shouldBypassSemanticCacheForMessageContext } from "./tools";
-import { createStreamEventMapper, handleGraphInterrupt, terminalAnswerText } from "./streaming";
+import {
+  createStreamEventMapper,
+  handleGraphInterrupt,
+  terminalAnswerText,
+} from "./streaming";
 import {
   encodeMemoryStatus,
   encodeError,
@@ -63,7 +69,6 @@ interface OrchestratorStreamOptions {
   userId: string;
   conversationId: string;
   branchId?: string;
-  documentAttachmentIds?: string[];
   memoryEnabled?: boolean;
   reasoningEffort?: ReasoningEffortLevel | null;
   abortSignal?: AbortSignal;
@@ -79,7 +84,6 @@ export function createOrchestratorStreamHandler(
     userId,
     conversationId,
     branchId,
-    documentAttachmentIds,
     memoryEnabled = true,
     reasoningEffort,
     abortSignal,
@@ -222,11 +226,25 @@ export function createOrchestratorStreamHandler(
             memoryEnabled,
             {
               apiKey,
+              model,
               signal: workSignal,
-              currentDocumentAttachmentIds: documentAttachmentIds,
+              currentMessageId: messages[messages.length - 1]?.id,
+              branchId,
             },
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
+          if (contextResult.unresolved) {
+            stream.enqueue(encodeMemoryStatus(memoryStatusInfo));
+            stream.enqueue(encodeChatChunk(unresolvedRouteToMessage(contextResult.unresolved)));
+            closeStream();
+            return;
+          }
+          enhancedMessages = attachHistoricalImagesToModelTurn(
+            enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+            contextResult.metadata.includeCurrentImages,
+            contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
+            contextResult.metadata.selectedCurrentImageFiles?.map((file) => file.fileUrl),
+          );
           if (contextResult.context) {
             enhancedMessages = injectContextToMessages(
               enhancedMessages,
@@ -278,8 +296,13 @@ export function createOrchestratorStreamHandler(
         );
 
         const queryText = extractTextFromMessage(lastUserMessage);
-        const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(
-          messages,
+        const bypassSemanticCache = Boolean(
+          memoryStatusInfo.documentEvidenceFiles?.length ||
+          memoryStatusInfo.historicalImageFiles?.length ||
+          memoryStatusInfo.documentContextState === "unavailable" ||
+          (memoryStatusInfo.skippedMemory && Boolean(memoryStatusInfo.routingDecision))
+        ) || shouldBypassSemanticCacheForMessageContext(
+          enhancedMessages,
           queryText,
           connectedToolkits,
         );
@@ -372,7 +395,10 @@ export function createOrchestratorStreamHandler(
         const closeTurn = (reason: RecoveryReasonValue) =>
           closeTurnAtLimit(
             graph,
-            createFinalAnswerNode(apiKey, model, { reasoningEffort, ephemeralContext }),
+            createFinalAnswerNode(apiKey, model, {
+              reasoningEffort,
+              ephemeralContext,
+            }),
             reason,
             threadId,
             stream,
@@ -385,7 +411,11 @@ export function createOrchestratorStreamHandler(
         try {
           threadLock = await acquireThreadLock(threadId, {
             signal: workSignal,
-            waitTimeoutMs: deadlineAt - FINAL_ANSWER_RESERVE_MS - MIN_TURN_WORK_MS - Date.now(),
+            waitTimeoutMs:
+              deadlineAt -
+              FINAL_ANSWER_RESERVE_MS -
+              MIN_TURN_WORK_MS -
+              Date.now(),
           });
         } catch (lockError) {
           if (lockError instanceof ThreadLockTimeoutError) {
@@ -442,7 +472,10 @@ export function createOrchestratorStreamHandler(
           });
           if (checkpointExists && incrementalMessages.length === 0) {
             if (
-              mapper.ensureTerminalAnswer(stream, existingState.values?.messages)
+              mapper.ensureTerminalAnswer(
+                stream,
+                existingState.values?.messages,
+              )
             ) {
               logInfo({
                 event: "orchestrator_completed_turn_replayed",
@@ -509,7 +542,10 @@ export function createOrchestratorStreamHandler(
             return;
           }
 
-          if (answerDue.signal.aborted && !terminalAnswerText(finalState.values?.messages)) {
+          if (
+            answerDue.signal.aborted &&
+            !terminalAnswerText(finalState.values?.messages)
+          ) {
             await closeTurn(RecoveryReason.TIME_LIMIT);
           } else {
             mapper.ensureTerminalAnswer(stream, finalState.values?.messages);

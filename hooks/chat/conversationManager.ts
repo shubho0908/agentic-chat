@@ -13,6 +13,10 @@ import {
   buildModelContentWithImageAttachments,
   generateTitle as generateTitleUtil,
 } from "@/lib/contentUtils";
+import {
+  referencesDocument,
+  referencesSnippet,
+} from "@/lib/chat/attachmentKind";
 import { DOCUMENT_FOCUSED_ASSISTANT_PROMPT } from "@/lib/prompts";
 import { orderConversationMessagesDesc } from "@/lib/conversationMessageOrder";
 import { saveUserMessage, saveAssistantMessage } from "./messageApi";
@@ -66,7 +70,6 @@ export const PDF_ONLY_ASSISTANT_CONTENT =
   "[[__pdf_only_assistant_content_v1__]]";
 export const ACTIVITY_ONLY_ASSISTANT_CONTENT =
   "[[__activity_only_assistant_content_v1__]]";
-
 
 export function getPersistableAssistantContent(
   assistantContent: string,
@@ -160,7 +163,10 @@ function getMessageContentForAPI(
 
   if (message.role === MessageRole.USER) {
     return includeHistoricalImages
-      ? buildModelContentWithImageAttachments(message.content, message.attachments)
+      ? buildModelContentWithImageAttachments(
+          message.content,
+          message.attachments,
+        )
       : extractTextFromContent(message.content);
   }
 
@@ -233,12 +239,24 @@ export function buildMessagesForAPI(
   model: string,
   currentAttachments?: Attachment[],
   newMessageId?: string,
-): Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }> {
+): Array<{
+  role: MessageRole;
+  content: string | MessageContentPart[];
+  id?: string;
+}> {
   const isReferential = isReferentialQuery(newContent);
+  const textQuery = extractTextQuery(newContent);
+  const includeHistoricalImages =
+    isReferential &&
+    !referencesDocument(textQuery) &&
+    !referencesSnippet(textQuery);
   const hasAttachmentsInContext = hasRecentAttachments(messages, 3);
   const hasCurrentDocumentAttachment =
-    currentAttachments?.some((att) => !att.fileType.startsWith("image/")) ??
-    false;
+    currentAttachments?.some(
+      (att) =>
+        att.kind === "document" ||
+        (!att.kind && !att.fileType.startsWith("image/")),
+    ) ?? false;
 
   if (
     (isReferential && hasAttachmentsInContext) ||
@@ -253,13 +271,18 @@ export function buildMessagesForAPI(
           content: `${systemPrompt}\n\n${DOCUMENT_FOCUSED_ASSISTANT_PROMPT}`,
         },
         ...recentMessages.flatMap((message) => {
-          const content = getMessageContentForAPI(message, isReferential);
+          const content = getMessageContentForAPI(
+            message,
+            includeHistoricalImages,
+          );
           if (
             content === "" ||
             (Array.isArray(content) && content.length === 0)
           )
             return [];
-          return [{ role: message.role as MessageRole, content, id: message.id }];
+          return [
+            { role: message.role as MessageRole, content, id: message.id },
+          ];
         }),
         {
           role: MessageRole.USER,
@@ -309,9 +332,14 @@ async function discardEmptyConversation(conversationId: string): Promise<void> {
     await fetch(apiRoutes.conversation(conversationId), { method: "DELETE" });
   } catch (err) {
     try {
-      logger.warn("[conversationManager] Failed to discard empty conversation:", err);
+      logger.warn(
+        "[conversationManager] Failed to discard empty conversation:",
+        err,
+      );
     } catch (logErr) {
-      emergencyLog(`logger.warn() threw in discardEmptyConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+      emergencyLog(
+        `logger.warn() threw in discardEmptyConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`,
+      );
     }
   }
 }
@@ -393,7 +421,9 @@ async function createNewConversation(
     try {
       logger.error("Failed to create conversation:", err);
     } catch (logErr) {
-      emergencyLog(`logger.error() threw in createNewConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`);
+      emergencyLog(
+        `logger.error() threw in createNewConversation: ${typeof logErr === "object" && logErr !== null ? String((logErr as Record<string, unknown>).message ?? logErr) : String(logErr)}`,
+      );
     }
     return null;
   }

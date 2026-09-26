@@ -2,6 +2,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { Options } from "react-markdown";
 
+// Markdown parsing budget; renderer input is never truncated at this limit.
 export const MAX_MARKDOWN_RENDER_CHARS = 50_000;
 export const COMPLETE_CODE_FENCE_PATTERN =
   /(?:^|\n)(?:`{3,}|~{3,})[^\n]*\n[\s\S]*?\n(?:`{3,}|~{3,})[ \t]*(?=\n|$)/;
@@ -9,8 +10,7 @@ export const REMARK_PLUGINS: NonNullable<Options["remarkPlugins"]> = [
   remarkGfm,
   [remarkMath, { singleDollarTextMath: false }],
 ];
-export const URL_PATTERN = /\b((?:https?:\/\/|www\.)[^\s<>{}[\]"]+)/gi;
-export const TRAILING_PUNCTUATION_PATTERN = /[.,!?;:]+$/;
+export { TRAILING_PUNCTUATION_PATTERN, URL_PATTERN } from "@/lib/url-normalization";
 export const MERMAID_LOADING_TEXT = "Rendering diagram preview...";
 export const MERMAID_FALLBACK_ERROR = "This Mermaid diagram has invalid syntax.";
 export const MAX_MERMAID_ERROR_LENGTH = 240;

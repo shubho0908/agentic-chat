@@ -1,21 +1,28 @@
 import { getMemoryContextResult } from "./memory";
 import { getRAGContext } from "./rag/retrieval/context";
+import { getCompleteIndexedDocuments } from "./rag/retrieval/fullContext";
+import { getContextBudgetTokens } from "./chat/messageHelpers";
 import type { Message } from "@/lib/schemas/chat";
-import { selectDocumentAttachmentsForTurn } from "./chat/attachmentRouting";
 import { MessageRole } from "@/lib/schemas/chat";
 import { DegradedContextSource, RoutingDecision } from "@/types/chat";
 import { prisma } from "./prisma";
-import { filterDocumentAttachments } from "./rag/retrieval/statusHelpers";
-import { isSupportedDocumentExtension } from "./fileValidation";
+import { isSupportedForRAG } from "./rag/utils";
 import { extractTextFromMessage } from "./chat/messageContent";
 import { mediateMemoryIntent } from "./chat/requestMediator";
 import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
 import { memoryGateDegradation } from "./jev/memoryGate";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
-import { logWarn } from "./observability";
-
+import { getConversationResourceCatalog } from "./chat/resourceCatalog";
+import { hasDirectAttachmentReference, selectConversationResource } from "./chat/resourceSelection";
+import { unresolvedAttachmentRoute, type AttachmentRouteUnresolved } from "./chat/attachmentRouteUnresolved";
+import { decideConversationResources, validateResourceDecision, type DecideResources } from "./chat/semanticResourceSelection";
+import { attachmentKind } from "./chat/attachmentKind";
+import { mentionsFileName } from "./chat/fileNameReferences";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
+import { isTrustedAttachmentUrl } from "@/lib/network/ssrf";
+import { OPENAI_MODELS } from "@/constants/openai-models";
+import { truncateTextToTokenLimit } from "@/lib/utils/tokenCounter";
 
 const INLINE_ATTACHMENT_MAX_BYTES = 512 * 1024;
 
@@ -29,8 +36,9 @@ const INLINE_ELIGIBLE_TYPES = new Set([
   "text/xml",
 ]);
 
-function isInlineEligibleType(fileType: string): boolean {
-  return INLINE_ELIGIBLE_TYPES.has(fileType) || fileType.startsWith("text/");
+export function isInlineEligibleType(fileType: string): boolean {
+  const mime = fileType.split(";")[0].trim().toLowerCase();
+  return INLINE_ELIGIBLE_TYPES.has(mime) || mime.startsWith("text/");
 }
 
 function sanitizeAttachedFileName(name: string): string {
@@ -50,11 +58,13 @@ async function tryInlineAttachmentContent(
   attachmentIds: string[],
   userId: string,
   signal?: AbortSignal,
+  kind: "document" | "snippet" = "document",
 ): Promise<{ context: string; documentCount: number } | null> {
   try {
     const attachments = await prisma.attachment.findMany({
       where: {
         id: { in: attachmentIds },
+        kind,
         message: { conversation: { userId } },
       },
       select: {
@@ -66,12 +76,17 @@ async function tryInlineAttachmentContent(
       },
     });
 
-    if (attachments.length === 0) return null;
+    if (
+      attachmentIds.length === 0 ||
+      attachments.length !== new Set(attachmentIds).size
+    )
+      return null;
 
     const eligible = attachments.filter((a) =>
       isInlineEligibleType(a.fileType),
     );
-    if (eligible.length === 0) return null;
+    if (eligible.length === 0 || eligible.length !== attachments.length)
+      return null;
 
     const totalSize = eligible.reduce((sum, a) => sum + a.fileSize, 0);
     if (totalSize > INLINE_ATTACHMENT_MAX_BYTES) return null;
@@ -90,10 +105,10 @@ async function tryInlineAttachmentContent(
     );
 
     const validContents = contents.filter((c): c is string => c !== null);
-    if (validContents.length === 0) return null;
+    if (validContents.length !== attachments.length) return null;
 
     const context =
-      "\n\nThe user has attached the following files. Use their FULL content to answer.\n" +
+      `\n\nThe user has attached the following ${kind === "snippet" ? "snippets" : "documents"}. Use their FULL content to answer.\n` +
       validContents.join("\n\n");
 
     return { context, documentCount: validContents.length };
@@ -111,10 +126,17 @@ interface ContextRoutingMetadata {
   hasImages: boolean;
   memoryCount: number;
   documentCount: number;
+  attachmentContextKind?: "document" | "snippet";
   imageCount: number;
   routingDecision?: RoutingDecision;
   skippedMemory: boolean;
   activeToolName?: string;
+  documentContextState?: "ready" | "unavailable";
+  documentEvidenceIds?: string[];
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "document" | "snippet" }>;
+  historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "image" }>;
+  includeCurrentImages?: boolean;
+  selectedCurrentImageFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "image" }>;
   citations?: Array<{
     id: string;
     source: string;
@@ -131,6 +153,7 @@ interface ContextRoutingMetadata {
 interface ContextRoutingResult {
   context: string;
   metadata: ContextRoutingMetadata;
+  unresolved?: AttachmentRouteUnresolved;
 }
 
 const CHAT_DOCUMENT_WAIT_TIMEOUT_MS = 30_000;
@@ -179,7 +202,7 @@ function uniqueQueries(queries: string[]): string[] {
   return deduped;
 }
 
-function buildRetrievalQueries(
+export function buildRetrievalQueries(
   textQuery: string,
   messages: Message[],
   isReferential: boolean,
@@ -188,7 +211,7 @@ function buildRetrievalQueries(
   const recentConversation = getRecentConversationExcerpt(messages);
 
   if (!recentConversation) {
-    return uniqueQueries([trimmedQuery]);
+    return uniqueQueries([trimmedQuery || "Summarize the attached documents."]);
   }
 
   const standaloneQuery =
@@ -212,19 +235,20 @@ async function resolveDocumentContext(
   options: {
     conversationId?: string;
     attachmentIds?: string[];
+    attachmentKind?: "document" | "snippet";
     waitForProcessing?: boolean;
     processingTimeoutMs?: number;
     signal?: AbortSignal;
-    currentDocumentAttachmentIds?: string[];
   },
 ) {
   if (!queries.length) return null;
   // Retrieval owns cross-variant RRF. Processing is awaited once, while every
   // rewrite contributes candidates instead of the first non-empty result winning.
   try {
-    return await getRAGContext(queries[0], userId, {
+    const result = await getRAGContext(queries[0], userId, {
       conversationId: options.conversationId,
       attachmentIds: options.attachmentIds,
+      attachmentKind: options.attachmentKind,
       limit: 8,
       scoreThreshold: 0.55,
       waitForProcessing: options.waitForProcessing,
@@ -232,6 +256,18 @@ async function resolveDocumentContext(
       queryVariants: queries.slice(1),
       signal: options.signal,
     });
+    if (options.attachmentIds?.length) {
+      const statuses = await prisma.attachment.findMany({
+        where: {
+          id: { in: options.attachmentIds },
+          kind: options.attachmentKind ?? "document",
+          message: { conversation: { userId } },
+        },
+        select: { id: true, processingStatus: true },
+      });
+      if (!allDocumentsReady(options.attachmentIds, statuses)) return null;
+    }
+    return result;
   } catch (error) {
     if (options.signal?.aborted)
       throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
@@ -240,99 +276,26 @@ async function resolveDocumentContext(
   }
 }
 
-function buildMissingDocumentContext(query: string): string {
-  const normalizedQuery = query.trim() || "the attached documents";
-
+export function allDocumentsReady(
+  attachmentIds: string[],
+  statuses: Array<{ id: string; processingStatus: string }>,
+): boolean {
+  const expected = new Set(attachmentIds);
   return (
-    "\n\nIMPORTANT: The user has attached documents to this conversation but they are still being processed." +
-    "\n<document_processing_notice>" +
-    `\nUser's request: ${normalizedQuery}` +
-    "\nThe attached documents have NOT been fully processed yet — do NOT answer the question from your own knowledge." +
-    "\nYou MUST tell the user that their documents are still being processed and ask them to wait a moment and try again." +
-    "\nDo NOT provide a general answer. Acknowledge the attachment and explain the brief processing delay." +
-    "\n</document_processing_notice>"
+    expected.size > 0 &&
+    statuses.length === expected.size &&
+    statuses.every(
+      (item) => expected.has(item.id) && item.processingStatus === "COMPLETED",
+    )
   );
 }
 
-function logMissingDocumentRetrieval(params: {
-  userId: string;
-  conversationId?: string;
-  query: string;
-  documentCount: number;
-  isReferential: boolean;
-}): void {
-  logWarn({
-    event: "rag_context_missing_with_attachments",
-    userId: params.userId,
-    conversationId: params.conversationId,
-    queryLength: params.query.trim().length,
-    documentCount: params.documentCount,
-    isReferential: params.isReferential,
-  });
-}
-
-async function getAttachmentInfo(
-  conversationId: string,
-  userId: string,
-  currentTurnOnly: boolean,
-): Promise<{
-  hasDocuments: boolean;
-  documentCount: number;
-  documentAttachmentIds: string[];
-}> {
-  try {
-    const messages = await prisma.message.findMany({
-      where: {
-        conversationId,
-        conversation: {
-          userId,
-        },
-        isDeleted: false,
-      },
-      ...(currentTurnOnly
-        ? { orderBy: { createdAt: "desc" as const }, take: 1 }
-        : {}),
-      select: {
-        attachments: {
-          select: {
-            id: true,
-            fileType: true,
-            fileName: true,
-          },
-        },
-      },
-    });
-
-    const allAttachments = selectDocumentAttachmentsForTurn(
-      messages,
-      !currentTurnOnly,
-    );
-
-    if (allAttachments.length === 0) {
-      return {
-        hasDocuments: false,
-        documentCount: 0,
-        documentAttachmentIds: [],
-      };
-    }
-
-    const retrievableDocumentAttachments =
-      filterDocumentAttachments(allAttachments);
-    const uiDocumentAttachments = retrievableDocumentAttachments.filter(
-      (att) => att.fileName && isSupportedDocumentExtension(att.fileName),
-    );
-
-    return {
-      hasDocuments: retrievableDocumentAttachments.length > 0,
-      documentCount: uiDocumentAttachments.length,
-      documentAttachmentIds: retrievableDocumentAttachments
-        .map((attachment) => attachment.id)
-        .filter((id): id is string => Boolean(id)),
-    };
-  } catch (error) {
-    logger.warn("[Context Router] Failed to get attachment info:", error);
-    return { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
-  }
+export function shouldSkipTextContextForImage(
+  hasImages: boolean,
+  textQuery: string,
+  hasDocuments: boolean,
+): boolean {
+  return hasImages && !hasDocuments && textQuery.trim().length < 3;
 }
 
 export async function routeContext(
@@ -346,8 +309,11 @@ export async function routeContext(
   memoryEnabled: boolean = true,
   options?: {
     apiKey?: string;
+    model?: string;
     signal?: AbortSignal;
-    currentDocumentAttachmentIds?: string[];
+    currentMessageId?: string;
+    branchId?: string;
+    decideResources?: DecideResources;
   },
 ): Promise<ContextRoutingResult> {
   const textQuery = extractTextQuery(query);
@@ -375,151 +341,376 @@ export async function routeContext(
     degradedContexts: [],
   };
 
-  const addDegradedContext = (source: DegradedContextSource, reason: string) => {
+  const addDegradedContext = (
+    source: DegradedContextSource,
+    reason: string,
+  ) => {
     metadata.degradedContexts = [
       ...(metadata.degradedContexts || []),
       { source, reason },
     ];
   };
 
-  if (hasImages && (!textQuery.trim() || textQuery.trim().length < 3)) {
+  const attachmentBearingTurns = messages.filter((message) => (message.attachments?.length ?? 0) > 0);
+  const recentAttachment = attachmentBearingTurns.at(-1);
+  const bareFileFollowUp = Boolean(recentAttachment && recentAttachment === messages.at(-1) && isReferential &&
+    /\b(?:that|it|this|those|these)\b/i.test(textQuery) &&
+    !/\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?)\b/i.test(textQuery));
+  const directFileReference = hasDirectAttachmentReference(textQuery);
+  const fileReference = bareFileFollowUp || directFileReference || /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
+    /(?:^|\s)[^\s/]+\.[a-z][a-z0-9]{0,15}(?=$|[\s,;:!?])/iu.test(textQuery);
+  const semanticDecision = options?.decideResources ?? (options?.apiKey
+    ? (input: Parameters<DecideResources>[0]) => decideConversationResources(options.apiKey!, options.model || "gpt-6-luna", input)
+    : undefined);
+  const recentTurns = messages.slice(-8).map((message) =>
+    JSON.stringify({ role: message.role, text: extractTextFromMessage(message.content).slice(0, 500),
+      attachments: message.attachments?.map((attachment) => attachment.fileName).slice(0, 5) ?? [] }));
+  let catalog: Awaited<ReturnType<typeof getConversationResourceCatalog>> | null = null;
+  if (conversationId && options?.currentMessageId) {
+    try {
+      catalog = await getConversationResourceCatalog({
+        conversationId, userId, currentMessageId: options.currentMessageId,
+        visibleMessages: messages, branchId: options.branchId,
+        scanHistory: semanticDecision && !options.branchId ? true : fileReference,
+      });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      logger.warn("[Context Router] Attachment catalog unavailable", { error });
+      metadata.skippedMemory = true;
+      metadata.hasDocuments = true;
+      metadata.documentContextState = "unavailable";
+      metadata.includeCurrentImages = false;
+      metadata.selectedCurrentImageFiles = [];
+      return { context: "", metadata,
+        unresolved: unresolvedAttachmentRoute("current-unverified") };
+    }
+  }
+  const explicitCurrent = catalog?.foundCurrent
+    ? selectConversationResource(textQuery, hasImages,
+        catalog.resources.filter((resource) => resource.current)) : null;
+  const additionalAttachmentAfterAnd = /\band\b.{0,100}\b(?:this|that|these|those|current|new|attached|other|another|earlier|previous|prior)\s+(?:file|document|doc|pdf|image|photo|picture|screenshot|snippet)\b/i.test(textQuery);
+  const twoOperationsOnOneCurrent = catalog?.resources.length === 1 &&
+    /\band\s+(?:tell|give|show|explain|summarize|identify|list|extract|find|check)\b/i.test(textQuery) &&
+    !additionalAttachmentAfterAnd;
+  const uniqueExplicitCurrent = (!/\b(?:and|with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) ||
+    twoOperationsOnOneCurrent && !/\b(?:with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery)) &&
+    explicitCurrent?.state === "selected" && explicitCurrent.resources.length === 1 &&
+    explicitCurrent.resources[0].current && !(explicitCurrent.images?.length) &&
+    catalog?.resources.filter((resource) => resource.current &&
+      attachmentKind(resource) === explicitCurrent.kind).length === 1 &&
+    !catalog?.resources.some((resource) => resource.id !== explicitCurrent.resources[0].id &&
+      resource.fileName && mentionsFileName(textQuery, resource.fileName)) &&
+    (mentionsFileName(textQuery, explicitCurrent.resources[0].fileName) ||
+      /\b(?:this|current|new|attached)\s+(?:file|document|doc|pdf|image|photo|picture|screenshot|snippet)\b/i.test(textQuery));
+  let intentUnavailable = false;
+  let semanticIntent: "none" | "selected" | "ambiguous" | undefined;
+  if (semanticDecision && catalog?.foundCurrent) {
+    if (!catalog.complete || catalog.resources.length > 200 || textQuery.length > 4000) {
+      semanticIntent = "ambiguous";
+    } else if (catalog.resources.length) {
+      try {
+        const intent = await semanticDecision({ phase: "intent", query: textQuery,
+          resources: catalog.resources.map((resource) => ({ id: resource.id,
+            fileName: resource.fileName, messageId: resource.messageId,
+            current: resource.current, kind: attachmentKind(resource) })),
+          recentTurns, signal: options?.signal });
+        semanticIntent = intent.state;
+      } catch (error) {
+        logger.warn("[Context Router] Attachment intent unavailable", { error });
+        intentUnavailable = true;
+        semanticIntent = uniqueExplicitCurrent ? "selected" : "ambiguous";
+      }
+    }
+  }
+  if (semanticIntent === "none" && catalog?.resources.length) {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    metadata.includeCurrentImages = false;
+    metadata.selectedCurrentImageFiles = [];
+    return { context: "", metadata,
+      unresolved: unresolvedAttachmentRoute("none") };
+  }
+  if (semanticIntent === "ambiguous") {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    metadata.includeCurrentImages = false;
+    metadata.selectedCurrentImageFiles = [];
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("ambiguous") };
+  }
+  if (catalog && !catalog.foundCurrent) {
+    metadata.skippedMemory = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("current-unverified") };
+  }
+  let semanticSelection: ReturnType<typeof validateResourceDecision> | undefined;
+  if (semanticDecision && catalog?.foundCurrent && semanticIntent === "selected" && !intentUnavailable) {
+    try {
+      if (!catalog.complete || catalog.resources.length > 200) {
+        semanticSelection = { state: "ambiguous" };
+      } else {
+        const decision = await semanticDecision({ phase: "selection", query: textQuery,
+          resources: catalog.resources.map((resource) => ({ id: resource.id, fileName: resource.fileName,
+            messageId: resource.messageId, current: resource.current, kind: attachmentKind(resource) })),
+          recentTurns, signal: options?.signal });
+        semanticSelection = validateResourceDecision(decision, catalog.resources, textQuery);
+        if (semanticSelection.state === "none") semanticSelection = { state: "ambiguous" };
+      }
+    } catch (error) {
+      logger.warn("[Context Router] Attachment selection unavailable", { error });
+      semanticSelection = { state: "ambiguous" };
+    }
+  }
+  const currentOnlySelection = catalog && !catalog.complete
+    ? selectConversationResource(textQuery, hasImages,
+        catalog.resources.filter((resource) => resource.current)) : null;
+  const namedNonCurrentResource = Boolean(catalog && !catalog.complete &&
+    catalog.resources.some((resource) => !resource.current && resource.fileName &&
+      mentionsFileName(textQuery, resource.fileName)));
+  const safeCurrentOnly = !namedNonCurrentResource &&
+    !/\b(?:and|with|plus|versus|vs\.?|against|compare)\b/i.test(textQuery) &&
+    currentOnlySelection?.state === "selected" &&
+    currentOnlySelection.resources.length > 0 &&
+    currentOnlySelection.resources.every((resource) => resource.current) &&
+    (!currentOnlySelection.images || currentOnlySelection.images.every((resource) => resource.current)) &&
+    !/\b(?:earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi)\b/i.test(textQuery);
+  if (catalog && !catalog.complete && (semanticIntent === "selected" || !safeCurrentOnly)) {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("history-incomplete") };
+  }
+  const currentHasAttachments = Boolean(catalog?.resources.some((resource) => resource.current));
+  if (!semanticSelection && bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length > 1) {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("ambiguous") };
+  }
+  const selection = semanticSelection ?? (intentUnavailable && uniqueExplicitCurrent ? explicitCurrent :
+    semanticIntent === "none" ? { state: "none" as const } : catalog?.foundCurrent
+    ? safeCurrentOnly ? currentOnlySelection :
+      selectConversationResource(textQuery, hasImages, catalog.resources,
+        bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length === 1
+          ? recentAttachment?.attachments?.map((attachment) => attachment.id).filter((id): id is string => Boolean(id)) : undefined)
+    : null);
+  if (catalog && selection?.state === "none" && /\b(?:this|that|these|those|earlier|previous|prior|old|attached|uploaded)\s+(?:images?|photos?|pictures?|documents?|pdfs?|files?|attachments?|snippets?)\b/i.test(textQuery)) {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("ambiguous") };
+  }
+  if (selection?.state === "ambiguous") {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    metadata.includeCurrentImages = false;
+    metadata.selectedCurrentImageFiles = [];
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("ambiguous") };
+  }
+  const selectedHistoricalImages = selection?.state === "selected"
+    ? (selection.kind === "image" ? selection.resources : selection.images ?? [])
+        .filter((resource) => !resource.current)
+    : [];
+  if (selectedHistoricalImages.some((resource) =>
+    !resource.fileType.toLowerCase().startsWith("image/") ||
+    !/^https:\/\//i.test(resource.fileUrl) ||
+    !isTrustedAttachmentUrl(resource.fileUrl)
+  )) {
+    metadata.skippedMemory = true;
+    metadata.hasDocuments = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("retrieval-unavailable") };
+  }
+  if (selection?.state === "selected") {
+    const selectedImages = selection.kind === "image" ? selection.resources : selection.images ?? [];
+    if (selectedImages.length && conversationId) {
+      try {
+        const verified = await prisma.attachment.findMany({
+          where: { id: { in: selectedImages.map((resource) => resource.id) },
+            message: { conversationId, isDeleted: false, conversation: { userId } } },
+          select: { id: true, messageId: true, fileUrl: true, fileType: true, kind: true },
+        });
+        const byId = new Map(verified.map((file) => [file.id, file]));
+        if (selectedImages.some((resource) => {
+          const file = byId.get(resource.id);
+          return !file || file.messageId !== resource.messageId || file.fileUrl !== resource.fileUrl ||
+            file.fileType !== resource.fileType || attachmentKind(file) !== "image";
+        })) {
+          metadata.skippedMemory = true;
+          metadata.hasDocuments = true;
+          metadata.documentContextState = "unavailable";
+          return { context: "", metadata, unresolved: unresolvedAttachmentRoute("retrieval-unavailable") };
+        }
+      } catch (error) {
+        if (options?.signal?.aborted) throw error;
+        logger.warn("[Context Router] Selected image verification unavailable", { error });
+        metadata.skippedMemory = true;
+        metadata.hasDocuments = true;
+        metadata.documentContextState = "unavailable";
+        return { context: "", metadata, unresolved: unresolvedAttachmentRoute("retrieval-unavailable") };
+      }
+    }
+  }
+  if (selection?.state === "selected" && selection.kind === "image") {
+    const historicalImages = selection.resources.filter((resource) => !resource.current);
+    metadata.includeCurrentImages = selection.resources.some((resource) => resource.current);
+    metadata.selectedCurrentImageFiles = selection.resources.filter((resource) => resource.current)
+      .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
+    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
+    metadata.hasImages = selection.resources.length > 0;
+    metadata.imageCount = selection.resources.length;
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: "", metadata };
   }
-
-  const attachmentInfo = conversationId
-    ? options?.currentDocumentAttachmentIds?.length && !isReferential
-      ? {
-          hasDocuments: true,
-          documentCount: options.currentDocumentAttachmentIds.length,
-          documentAttachmentIds: options.currentDocumentAttachmentIds,
-        }
-      : await getAttachmentInfo(conversationId, userId, !isReferential)
-    : { hasDocuments: false, documentCount: 0, documentAttachmentIds: [] };
-
-  if (isReferential) {
-    metadata.skippedMemory = true;
-
-    if (attachmentInfo.hasDocuments) {
-      const inlineResult = await tryInlineAttachmentContent(
-        attachmentInfo.documentAttachmentIds,
-        userId,
-        options?.signal,
-      );
-
-      if (inlineResult) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = inlineResult.documentCount;
-        metadata.routingDecision = hasImages
-          ? RoutingDecision.Hybrid
-          : RoutingDecision.DocumentsOnly;
-        return { context: inlineResult.context, metadata };
+  const selectedResource =
+    selection?.state === "selected" && selection.kind !== "image"
+      ? selection
+      : null;
+  const catalogAttachmentInfo = selectedResource
+    ? {
+        documentCount: selectedResource.resources.filter((resource) =>
+          isSupportedForRAG(resource.fileType),
+        ).length,
+        documentAttachmentIds: selectedResource.resources
+          .filter((resource) => isSupportedForRAG(resource.fileType))
+          .map((resource) => resource.id),
+        documentFiles: selectedResource.resources
+          .filter((resource) => isSupportedForRAG(resource.fileType))
+          .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: selectedResource.kind as "document" | "snippet" })),
+        unsupportedDocumentCount: selectedResource.resources.filter(
+          (resource) => !isSupportedForRAG(resource.fileType),
+        ).length,
       }
-
-      const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
-        conversationId,
-        attachmentIds: attachmentInfo.documentAttachmentIds,
-        waitForProcessing: true,
-        processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
-        signal: options?.signal,
-      });
-
-      if (ragResult) {
-        metadata.hasDocuments = true;
-        metadata.documentCount = ragResult.documentCount;
-        metadata.citations = ragResult.citations;
-        metadata.routingDecision = hasImages
-          ? RoutingDecision.Hybrid
-          : RoutingDecision.DocumentsOnly;
-
-        if (hasImages) {
-          metadata.routingDecision = RoutingDecision.Hybrid;
-          return { context: ragResult.context, metadata };
-        }
-
-        return { context: ragResult.context, metadata };
-      }
-
-      metadata.documentCount = attachmentInfo.documentCount;
+    : null;
+  if (selectedResource && catalogAttachmentInfo) {
+    const kind = selectedResource.kind as "document" | "snippet";
+    metadata.attachmentContextKind = kind;
+    const historicalImages = selectedResource.images?.filter((resource) => !resource.current) || [];
+    metadata.includeCurrentImages = selectedResource.images?.some((resource) => resource.current) ?? false;
+    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
+    const hasSelectedImages = selectedResource.images
+      ? selectedResource.images.length > 0
+      : hasImages && (selectedResource.resources.some((resource) => resource.current) ||
+        /\b(?:this|current|new|attached)\s+(?:image|photo|picture|screenshot)\b/i.test(textQuery));
+    metadata.includeCurrentImages = selectedResource.images
+      ? selectedResource.images.some((resource) => resource.current) : hasSelectedImages;
+    metadata.selectedCurrentImageFiles = selectedResource.images?.filter((resource) => resource.current)
+      .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const })) ??
+      (hasSelectedImages && hasImages ? catalog?.resources.filter((resource) => resource.current &&
+        attachmentKind(resource) === "image").map(({ id, fileUrl, fileName, fileType, fileSize }) =>
+        ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const })) : []);
+    metadata.hasImages = hasSelectedImages;
+    metadata.imageCount = selectedResource.images
+      ? selectedResource.images.length : hasSelectedImages ? imageCount : 0;
+    metadata.documentEvidenceFiles = catalogAttachmentInfo.documentFiles;
+    if (catalogAttachmentInfo.unsupportedDocumentCount > 0) {
+      metadata.skippedMemory = true;
       metadata.hasDocuments = true;
-      logMissingDocumentRetrieval({
-        userId,
-        conversationId,
-        query: textQuery,
-        documentCount: attachmentInfo.documentCount,
-        isReferential,
-      });
-      return { context: buildMissingDocumentContext(textQuery), metadata };
-    }
-
-    if (hasImages) {
-      metadata.routingDecision = RoutingDecision.VisionOnly;
-      return { context: "", metadata };
-    }
-
-    return { context: "", metadata };
-  }
-
-  if (attachmentInfo.hasDocuments) {
-    const inlineResult = await tryInlineAttachmentContent(
-      attachmentInfo.documentAttachmentIds,
-      userId,
-      options?.signal,
-    );
-
-    if (inlineResult) {
-      metadata.hasDocuments = true;
-      metadata.documentCount = inlineResult.documentCount;
-      metadata.routingDecision = hasImages
+      metadata.documentCount = selectedResource.resources.length;
+      metadata.documentContextState = "unavailable";
+      metadata.routingDecision = hasSelectedImages
         ? RoutingDecision.Hybrid
         : RoutingDecision.DocumentsOnly;
-      return { context: inlineResult.context, metadata };
+      return { context: "", metadata, unresolved: unresolvedAttachmentRoute("retrieval-unavailable") };
     }
-
-    const ragResult = await resolveDocumentContext(retrievalQueries, userId, {
-      conversationId,
-      attachmentIds: attachmentInfo.documentAttachmentIds,
-      waitForProcessing: true,
-      processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
-      signal: options?.signal,
+    const model = options?.model ?? OPENAI_MODELS[0].id;
+    const contextBudget = Math.max(0, getContextBudgetTokens([
+      ...messages, { role: MessageRole.USER, content: textQuery },
+    ], model) - 2000);
+    const fullText = conversationId
+      ? await getCompleteIndexedDocuments(
+          catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
+        )
+      : null;
+    if (!fullText) logger.warn("[Context Router] Initial complete indexed document context unavailable", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length, contextBudget,
     });
-
-    if (ragResult) {
+    const fullTextFits = Boolean(fullText) &&
+      truncateTextToTokenLimit(fullText!, model, contextBudget) === fullText;
+    if (fullText && fullTextFits) {
       metadata.hasDocuments = true;
-      metadata.documentCount = ragResult.documentCount;
-      metadata.citations = ragResult.citations;
-
-      if (hasImages) {
-        metadata.routingDecision = RoutingDecision.Hybrid;
-        return { context: ragResult.context, metadata };
-      }
-
-      metadata.routingDecision = RoutingDecision.DocumentsOnly;
-      return { context: ragResult.context, metadata };
+      metadata.documentCount = catalogAttachmentInfo.documentCount;
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = catalogAttachmentInfo.documentAttachmentIds;
+      metadata.routingDecision = hasSelectedImages
+        ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+      metadata.skippedMemory = true;
+      return { context: fullText, metadata };
     }
-
-    // A current document was supplied but did not produce usable evidence.
-    // Never substitute personal memory for the user's requested document.
-    metadata.documentCount = attachmentInfo.documentCount;
-    metadata.hasDocuments = true;
-    metadata.skippedMemory = true;
-    logMissingDocumentRetrieval({
+    const inlineResult = await tryInlineAttachmentContent(
+      catalogAttachmentInfo.documentAttachmentIds,
       userId,
-      conversationId,
-      query: textQuery,
-      documentCount: attachmentInfo.documentCount,
-      isReferential,
+      options?.signal,
+      kind,
+    );
+    const ragResult = inlineResult
+      ? null
+      : await resolveDocumentContext(retrievalQueries, userId, {
+          conversationId,
+          attachmentIds: catalogAttachmentInfo.documentAttachmentIds,
+          attachmentKind: kind,
+          waitForProcessing: true,
+          processingTimeoutMs: CHAT_DOCUMENT_WAIT_TIMEOUT_MS,
+          signal: options?.signal,
+        });
+    metadata.hasDocuments = true;
+    metadata.documentCount = catalogAttachmentInfo.documentCount;
+    metadata.routingDecision = hasSelectedImages
+      ? RoutingDecision.Hybrid
+      : RoutingDecision.DocumentsOnly;
+    const completedFullText = !inlineResult && conversationId
+      ? await getCompleteIndexedDocuments(
+          catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
+        ) : null;
+    if (!completedFullText && !inlineResult) logger.warn("[Context Router] Complete indexed document context still unavailable after processing wait", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length, contextBudget,
     });
-    return { context: buildMissingDocumentContext(textQuery), metadata };
+    const completedFullTextFits = Boolean(completedFullText) &&
+      truncateTextToTokenLimit(completedFullText!, model, contextBudget) === completedFullText;
+    if (completedFullText && completedFullTextFits) {
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = catalogAttachmentInfo.documentAttachmentIds;
+      metadata.skippedMemory = true;
+      return { context: completedFullText, metadata };
+    }
+    const coverageOnly = Boolean(ragResult?.context.includes("_coverage_samples>")) ||
+      Boolean(ragResult?.citations?.length &&
+        ragResult.citations.every((citation) => citation.relevance === "coverage-sample"));
+    const needsCompleteText = /\b(?:summarize|summary|compare|comparison|differentiate|differences?|similarities?|all|every|entire|whole|full|each|sabhi)\b/i.test(textQuery);
+    const inlineFits = Boolean(inlineResult) &&
+      truncateTextToTokenLimit(inlineResult!.context, model, contextBudget) === inlineResult!.context;
+    const allSelectedRetrieved = ragResult &&
+      catalogAttachmentInfo.documentAttachmentIds.every((id) => ragResult.usedAttachmentIds.includes(id));
+    if ((inlineResult && inlineFits) ||
+        (ragResult && !coverageOnly && !needsCompleteText && allSelectedRetrieved)) {
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = inlineResult
+        ? catalogAttachmentInfo.documentAttachmentIds
+        : ragResult!.usedAttachmentIds;
+      if (ragResult) metadata.citations = ragResult.citations;
+      return { context: inlineResult?.context ?? ragResult!.context, metadata };
+    }
+    logger.warn("[Context Router] Selected document evidence unavailable", {
+      selectedCount: catalogAttachmentInfo.documentAttachmentIds.length,
+      completeIndexed: Boolean(completedFullText), contextBudget,
+      fullTextFits: completedFullTextFits,
+      inlineAvailable: Boolean(inlineResult), inlineFits,
+      retrieved: Boolean(ragResult), coverageOnly,
+      allSelectedRetrieved: Boolean(allSelectedRetrieved), needsCompleteText,
+    });
+    metadata.skippedMemory = true;
+    metadata.documentContextState = "unavailable";
+    return { context: "", metadata, unresolved: unresolvedAttachmentRoute("retrieval-unavailable") };
   }
 
-  if (hasImages) {
+  if (!catalog && hasImages) {
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: "", metadata };
   }
-
   if (!memoryEnabled || metadata.skippedMemory) {
     return { context: "", metadata };
   }

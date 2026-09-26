@@ -14,7 +14,11 @@ import { Button } from "../ui/button";
 interface ChatContainerProps {
   messages: Message[];
   isLoading: boolean;
-  onEditMessage?: (messageId: string, newContent: string, attachments?: Attachment[]) => void;
+  onEditMessage?: (
+    messageId: string,
+    newContent: string,
+    attachments?: Attachment[],
+  ) => void;
   onRegenerateMessage?: (messageId: string) => void;
   onSendMessage?: (content: string) => void;
   onHumanInTheLoopDecision?: (approved: boolean, response?: string) => void;
@@ -66,7 +70,7 @@ export function ChatContainer({
   hasNextPage,
   fetchNextPage,
   isFetchingNextPage,
-  onNewChat
+  onNewChat,
 }: ChatContainerProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true);
@@ -76,7 +80,9 @@ export function ChatContainer({
 
   useEffect(() => {
     if (!isFetchingNextPage && previousScrollHeightRef.current > 0) {
-      const scrollElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+      const scrollElement = scrollAreaRef.current?.querySelector(
+        "[data-radix-scroll-area-viewport]",
+      ) as HTMLElement;
       if (scrollElement) {
         const newScrollHeight = scrollElement.scrollHeight;
         const scrollDiff = newScrollHeight - previousScrollHeightRef.current;
@@ -86,18 +92,21 @@ export function ChatContainer({
     }
   }, [isFetchingNextPage]);
 
-  const bottomAnchorRef = useCallback((node: HTMLDivElement | null) => {
-    if (node && shouldScrollToBottom) {
-      const prefersReducedMotion =
-        typeof window !== "undefined" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const bottomAnchorRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node && shouldScrollToBottom) {
+        const prefersReducedMotion =
+          typeof window !== "undefined" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      node.scrollIntoView({
-        behavior: prefersReducedMotion ? "auto" : "smooth",
-        block: "end",
-      });
-    }
-  }, [shouldScrollToBottom]);
+        node.scrollIntoView({
+          behavior: prefersReducedMotion ? "auto" : "smooth",
+          block: "end",
+        });
+      }
+    },
+    [shouldScrollToBottom],
+  );
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -125,26 +134,32 @@ export function ChatContainer({
     : "empty";
   const memoryStatusFingerprint = serializeAnchorValue(memoryStatus);
   const bottomAnchorKey = `${messages.length}-${isLoading}-${lastMessage?.id ?? "empty"}-${lastMessageFingerprint}-${memoryStatusFingerprint}`;
-  const isContextBlocked = memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
+  const isContextBlocked =
+    memoryStatus?.tokenUsage && memoryStatus.tokenUsage.percentage >= 95;
   const shouldShowBanner =
     isContextBlocked &&
     !isLoading &&
     messages.length > 0 &&
     lastMessage?.role === MessageRole.ASSISTANT;
   const messageKeyOccurrences = new Map<string, number>();
+  const currentTurnAttachments = messages
+    .slice(0, -1)
+    .findLast((message) => message.role === MessageRole.USER)?.attachments;
 
   return (
     <ScrollArea ref={scrollAreaRef} className="flex-1" onScroll={handleScroll}>
       <div
         className={cn(
           "flex flex-col md:pr-20 xl:pr-0",
-          !isSharePage && "pt-20 md:pt-24 xl:pt-0"
+          !isSharePage && "pt-20 md:pt-24 xl:pt-0",
         )}
       >
         {isFetchingNextPage && (
           <div className="flex items-center justify-center py-4">
             <Loader className="size-5 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading older messages…</span>
+            <span className="ml-2 text-sm text-muted-foreground">
+              Loading older messages…
+            </span>
           </div>
         )}
         {!isFetchingNextPage && hasNextPage && messages.length > 0 && (
@@ -153,9 +168,12 @@ export function ChatContainer({
               type="button"
               onClick={() => {
                 if (fetchNextPage) {
-                  const scrollElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+                  const scrollElement = scrollAreaRef.current?.querySelector(
+                    "[data-radix-scroll-area-viewport]",
+                  ) as HTMLElement;
                   if (scrollElement) {
-                    previousScrollHeightRef.current = scrollElement.scrollHeight;
+                    previousScrollHeightRef.current =
+                      scrollElement.scrollHeight;
                   }
                   fetchNextPage();
                 }
@@ -167,23 +185,28 @@ export function ChatContainer({
           </div>
         )}
         {messages.map((message, index) => (
-            <div
-              key={getMessageRenderKey(message, index, messageKeyOccurrences)}
-            >
-              <ChatMessage
-                message={message}
-                onEditMessage={isLoading ? undefined : onEditMessage}
-                onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
-                onSendMessage={onSendMessage}
-                onHumanInTheLoopDecision={onHumanInTheLoopDecision}
-                onOpenArtifact={onOpenArtifact}
-                isSharePage={isSharePage}
-                isLastMessage={index === messages.length - 1}
-                isLoading={isLoading}
-                memoryStatus={index === messages.length - 1 ? memoryStatus : undefined}
-              />
-            </div>
-          ))}
+          <div key={getMessageRenderKey(message, index, messageKeyOccurrences)}>
+            <ChatMessage
+              message={message}
+              onEditMessage={isLoading ? undefined : onEditMessage}
+              onRegenerateMessage={isLoading ? undefined : onRegenerateMessage}
+              onSendMessage={onSendMessage}
+              onHumanInTheLoopDecision={onHumanInTheLoopDecision}
+              onOpenArtifact={onOpenArtifact}
+              isSharePage={isSharePage}
+              isLastMessage={index === messages.length - 1}
+              isLoading={isLoading}
+              memoryStatus={
+                index === messages.length - 1 ? memoryStatus : undefined
+              }
+              contextAttachments={
+                index === messages.length - 1
+                  ? currentTurnAttachments
+                  : undefined
+              }
+            />
+          </div>
+        ))}
 
         {shouldShowBanner && onNewChat && memoryStatus?.tokenUsage && (
           <div>

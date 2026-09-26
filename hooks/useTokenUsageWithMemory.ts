@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import type { MemoryStatus, TokenUsage } from '@/types/chat';
+import { useMemo } from "react";
+import type { MemoryStatus, TokenUsage } from "@/types/chat";
 
 interface UseTokenUsageWithMemoryOptions {
   memoryStatus?: MemoryStatus;
@@ -22,6 +22,13 @@ export function useTokenUsageWithMemory({
       hasDocuments: memoryStatus?.hasDocuments ?? false,
       memoryCount: memoryStatus?.memoryCount ?? 0,
       documentCount: memoryStatus?.documentCount ?? 0,
+      attachmentContextKind: memoryStatus?.attachmentContextKind,
+      documentContextState: memoryStatus?.documentContextState,
+      documentEvidenceIds: memoryStatus?.documentEvidenceIds,
+      documentEvidenceFiles: memoryStatus?.documentEvidenceFiles,
+      historicalImageFiles: memoryStatus?.historicalImageFiles,
+      includeCurrentImages: memoryStatus?.includeCurrentImages,
+      selectedCurrentImageFiles: memoryStatus?.selectedCurrentImageFiles,
       hasImages: memoryStatus?.hasImages ?? false,
       imageCount: memoryStatus?.imageCount ?? 0,
       routingDecision: memoryStatus?.routingDecision,

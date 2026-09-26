@@ -55,7 +55,8 @@ export const RAG_CONFIG = {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
-    "text/csv",
-    "text/plain",
+    "text/*",
+    "application/json",
+    "application/xml",
   ],
 };
