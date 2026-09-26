@@ -281,3 +281,15 @@ test("current message missing at intent check fails closed before history lookup
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
 });
+
+test("the only two documents remain valid despite an unrelated image", () => {
+  const second = { ...pdf, id: "second-document", messageId: "another-turn", fileName: "notes.pdf" };
+  assert.equal(validateResourceDecision({ state: "selected", ids: [pdf.id, second.id] },
+    [pdf, second, image], "Compare the two documents").state, "selected");
+});
+
+test("document-only request can select the document in a mixed upload", () => {
+  const mixedImage = { ...image, messageId: pdf.messageId };
+  assert.equal(validateResourceDecision({ state: "selected", ids: [pdf.id] },
+    [pdf, mixedImage], "What is in the PDF I uploaded?").state, "selected");
+});

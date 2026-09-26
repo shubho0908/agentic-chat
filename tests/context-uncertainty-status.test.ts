@@ -18,3 +18,11 @@ test("unresolved attachment selection never claims to search or synthesize docum
   assert.doesNotMatch(html, /Searching documents|Synthesizing response with documents/);
   assert.equal(getContextualMessage(unavailable, true), "Waiting for attachment clarification...");
 });
+
+test("unresolved image plus PDF never displays an image analysis card", () => {
+  const html = renderToStaticMarkup(createElement(AIThinkingAnimation, {
+    memoryStatus: { ...unavailable, hasImages: true, imageCount: 1, includeCurrentImages: false },
+  }));
+  assert.match(html, /Attachment context unavailable/);
+  assert.doesNotMatch(html, /Analyzing image|Looking at an image|Analyzing the image/);
+});

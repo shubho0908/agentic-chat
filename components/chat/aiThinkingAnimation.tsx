@@ -44,13 +44,15 @@ export function AIThinkingAnimation({
 
   return (
     <div className="flex flex-col gap-2.5">
-      {hasContext &&
-        memoryStatus &&
-        ((memoryStatus.hasMemories &&
-          memoryStatus.routingDecision === RoutingDecision.MemoryOnly) ||
-        memoryStatus.routingDecision === RoutingDecision.VisionOnly ||
-        memoryStatus.routingDecision === RoutingDecision.DocumentsOnly ||
-        memoryStatus.routingDecision === RoutingDecision.Hybrid ? (
+      {hasContext && memoryStatus &&
+        (memoryStatus.documentContextState === "unavailable" && memoryStatus.documentCount === 0 ? (
+          <div className="rounded-xl border border-border/70 bg-card px-3.5 py-2.5 text-xs dark:border-white/10">
+            <ContextDetails memoryStatus={memoryStatus} />
+          </div>
+        ) : ((memoryStatus.hasMemories && memoryStatus.routingDecision === RoutingDecision.MemoryOnly) ||
+          memoryStatus.routingDecision === RoutingDecision.VisionOnly ||
+          memoryStatus.routingDecision === RoutingDecision.DocumentsOnly ||
+          memoryStatus.routingDecision === RoutingDecision.Hybrid) ? (
           <ContextCards memoryStatus={memoryStatus} attachments={attachments} />
         ) : (
           <div className="rounded-xl border border-border/70 bg-card px-3.5 py-2.5 text-xs dark:border-white/10">

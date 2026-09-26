@@ -13,7 +13,7 @@ import { estimateMemoryEntryCount } from "./chat/memoryPolicy";
 import { memoryGateDegradation } from "./jev/memoryGate";
 import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { getConversationResourceCatalog } from "./chat/resourceCatalog";
-import { selectConversationResource } from "./chat/resourceSelection";
+import { hasDirectAttachmentReference, selectConversationResource } from "./chat/resourceSelection";
 import { decideConversationResources, validateResourceDecision, type DecideResources } from "./chat/semanticResourceSelection";
 import { attachmentKind } from "./chat/attachmentKind";
 import { mentionsFileName } from "./chat/fileNameReferences";
@@ -372,10 +372,11 @@ export async function routeContext(
   const bareFileFollowUp = Boolean(recentAttachment && recentAttachment === messages.at(-1) && isReferential &&
     /\b(?:that|it|this|those|these)\b/i.test(textQuery) &&
     !/\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?)\b/i.test(textQuery));
-  const fileReference = bareFileFollowUp || /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
+  const directFileReference = hasDirectAttachmentReference(textQuery);
+  const fileReference = bareFileFollowUp || directFileReference || /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
     /(?:^|\s)[^\s/]+\.[a-z][a-z0-9]{0,15}(?=$|[\s,;:!?])/iu.test(textQuery);
   const semanticDecision = options?.decideResources ?? (options?.apiKey
-    ? (input: Parameters<DecideResources>[0]) => decideConversationResources(options.apiKey!, "gpt-6-luna", input)
+    ? (input: Parameters<DecideResources>[0]) => decideConversationResources(options.apiKey!, options.model || "gpt-6-luna", input)
     : undefined);
   const recentTurns = messages.slice(-8).map((message) =>
     JSON.stringify({ role: message.role, text: extractTextFromMessage(message.content).slice(0, 500),
@@ -409,11 +410,12 @@ export async function routeContext(
         const intent = await semanticDecision({ phase: "intent", query: textQuery,
           resources: currentAttachmentHints, recentTurns, signal: options.signal });
         semanticIntent = intent.state;
-        if (semanticIntent === "none" && fileReference) semanticIntent = "ambiguous";
+        if (semanticIntent === "none" && fileReference)
+          semanticIntent = directFileReference ? "selected" : "ambiguous";
       }
     } catch (error) {
       logger.warn("[Context Router] Attachment intent unavailable", { error });
-      semanticIntent = "ambiguous";
+      semanticIntent = directFileReference ? "selected" : "ambiguous";
     }
   }
   if (semanticDecision && textQuery.length > 4000 &&
@@ -461,6 +463,8 @@ export async function routeContext(
       logger.warn("[Context Router] Attachment selection unavailable", { error });
       semanticSelection = { state: "ambiguous" };
     }
+    if (directFileReference && semanticSelection?.state === "ambiguous")
+      semanticSelection = undefined;
   }
   const currentOnlySelection = catalog && !catalog.complete
     ? selectConversationResource(textQuery, hasImages,

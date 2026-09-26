@@ -26,6 +26,9 @@ const imageWords = /\b(?:images?|pictures?|photos?|screenshots?)\b/i;
 const documentWords = /\b(?:docs?|documents?|pdfs?)\b/i;
 const snippetWords = /\b(?:snippets?|pasted\s+(?:text|content))\b/i;
 const genericWords = /\b(?:files?|attachments?)\b/i;
+export function hasDirectAttachmentReference(text: string): boolean {
+  return /\b(?:pdf|document|doc|file|image|photo|picture|screenshot|snippet)\s+(?:mein|me|se|ka|ki|ke|mai|waale?|wala)\b/i.test(text);
+}
 const referenceWords =
   /\b(?:this|that|these|those|attached|earlier|previous|prior|above|uploaded|sent)\b/i;
 const earlierWords =
@@ -195,6 +198,7 @@ export function selectConversationResource(
     return { state: "none" };
   }
   const attachmentReference =
+    hasDirectAttachmentReference(text) ||
     /\b(?:this|that|these|those|attached|earlier|previous|prior|above|uploaded|sent)\s+(?:files?|attachments?|docs?|documents?|pdfs?|images?|photos?|pictures?|screenshots?|snippets?)\b/i.test(text) ||
     /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|photos?|pictures?|screenshots?|snippets?)\s+(?:i|we)\s+(?:sent|uploaded|attached|pasted)\b/i.test(text) ||
     (/\b(?:earlier|previous|prior|above)\b/i.test(text) && kinds.size > 0);
@@ -213,6 +217,7 @@ export function selectConversationResource(
     if (!kinds.size && (
       !genericWords.test(text) &&
       !referenceWords.test(text) &&
+      !hasDirectAttachmentReference(text) &&
       !currentHasImage &&
       !bothFiles &&
       !candidates.some((candidate) => candidate.current)
@@ -253,6 +258,8 @@ export function selectConversationResource(
     if (!matching.length) return { state: "selected", kind, resources: [] };
   }
   if (!matching.length) return { state: "none" };
+  if (hasDirectAttachmentReference(text) && !aggregateRequest && matching.length > 1)
+    return { state: "ambiguous" };
   if (bothFiles && matching.length !== 2) return { state: "ambiguous" };
   const messages = new Set(matching.map((c) => c.messageId));
   if (messages.size > 1 && !aggregateRequest && !bothFiles) return { state: "ambiguous" };
