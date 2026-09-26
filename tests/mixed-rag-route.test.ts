@@ -28,6 +28,7 @@ const pdf = {
 
 test("mixed request reaches PDF evidence rather than image-only fallback", async () => {
   const oldFindMany = prisma.message.findMany;
+  const oldFindFirst = prisma.message.findFirst;
   const oldAttachments = prisma.attachment.findMany;
   const oldQuery = prisma.$queryRaw;
   const oldUser = prisma.user.findUnique;
@@ -39,9 +40,13 @@ test("mixed request reaches PDF evidence rather than image-only fallback", async
   process.env.JEV_PASSAGE_GATE_MODE = "off";
   process.env.DATABASE_URL = "postgresql://test:test@localhost:1/test";
   const vectorQueries: string[] = [];
+  Object.defineProperty(prisma.message, "findFirst", {
+    configurable: true,
+    value: async () => ({ id: "turn-1", createdAt: new Date("2026-09-26T05:30:00Z"), parentMessageId: null, attachments: [{ ...pdf, kind: "document" }, { ...image, id: "image-id", kind: "image" }] }),
+  });
   Object.defineProperty(prisma.message, "findMany", {
     configurable: true,
-    value: async () => [{ attachments: [{ ...pdf }] }],
+    value: async () => [],
   });
   Object.defineProperty(prisma.attachment, "findMany", {
     configurable: true,
@@ -111,6 +116,10 @@ test("mixed request reaches PDF evidence rather than image-only fallback", async
     Object.defineProperty(prisma.message, "findMany", {
       configurable: true,
       value: oldFindMany,
+    });
+    Object.defineProperty(prisma.message, "findFirst", {
+      configurable: true,
+      value: oldFindFirst,
     });
     Object.defineProperty(prisma.attachment, "findMany", {
       configurable: true,

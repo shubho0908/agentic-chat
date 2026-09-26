@@ -96,10 +96,15 @@ export function ContextCards({
             ).length === 1,
         );
   const imageAttachments = filterImageAttachments(attachments);
-  const safeImages =
-    imageAttachments.length === imageCount ? imageAttachments : [];
+  const historicalImageSources = memoryStatus.historicalImageFiles ?? [];
+  const safeImages = historicalImageSources.length > 0
+    ? []
+    : imageAttachments.length === imageCount ? imageAttachments : [];
   const safeDocuments =
     documentSources?.length === documentCount ? documentAttachments : [];
+  // Historical image URLs alone are not preview identities: no name, size, or
+  // file ownership metadata is sent to this component. Do not render them as
+  // clickable previews or substitute current-turn images.
   const previewFiles = [...safeImages, ...safeDocuments];
   const missingDocumentCount = documentCount - safeDocuments.length;
   const hasActualFiles = previewFiles.length > 0;

@@ -13,6 +13,7 @@ import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 import { routeContext } from "@/lib/contextRouter";
 import { parseOpenAIError } from "@/lib/openaiErrors";
 import { injectContextToMessages } from "@/lib/chat/messageHelpers";
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
 import { extractTextFromMessage } from "./messageContent";
 import {
   encodeMemoryStatus,
@@ -39,6 +40,7 @@ interface StreamHandlerOptions {
   abortSignal?: AbortSignal;
   userId?: string;
   conversationId?: string;
+  branchId?: string;
   requestId?: string;
   reasoningEffort?: ReasoningEffortLevel | null;
 }
@@ -113,6 +115,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
     apiKey,
     abortSignal,
     conversationId,
+    branchId,
     memoryEnabled = true,
     messages,
     model,
@@ -183,7 +186,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey, currentMessageId: messages[messages.length - 1]?.id },
+              { apiKey, currentMessageId: messages[messages.length - 1]?.id, branchId },
             );
 
             memoryStatusInfo = {
@@ -191,6 +194,9 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               ...contextResult.metadata,
             };
 
+            enhancedMessages = attachHistoricalImagesToModelTurn(
+              enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+            );
             if (contextResult.context) {
               enhancedMessages = injectContextToMessages(
                 enhancedMessages,

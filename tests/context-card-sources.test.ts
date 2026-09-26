@@ -194,3 +194,20 @@ test("snippet status only displays snippet tiles, not an ordinary text document 
   assert.match(html, /pasted-text-1\.txt|snippet attached/i);
   assert.doesNotMatch(html, /notes\.txt/);
 });
+
+test("a historical image never makes an unrelated current image look like the selected preview", () => {
+  const html = render(
+    {
+      ...base,
+      hasDocuments: false,
+      documentCount: 0,
+      hasImages: true,
+      imageCount: 1,
+      routingDecision: RoutingDecision.VisionOnly,
+      historicalImageFiles: [{ id: "old-image", fileUrl: image.fileUrl }],
+    },
+    [image],
+  );
+  assert.doesNotMatch(html, /scene\.png/);
+  assert.match(html, /File preview is not available/);
+});

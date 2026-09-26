@@ -1,3 +1,4 @@
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 import { createHash } from "node:crypto";
@@ -338,6 +339,7 @@ export async function POST(request: NextRequest) {
             abortSignal: abortController.signal,
             userId: authUser.id,
             conversationId,
+            branchId,
             requestId,
             reasoningEffort,
           });
@@ -401,6 +403,9 @@ export async function POST(request: NextRequest) {
 
         memoryStatusInfo = contextResult.metadata;
 
+        enhancedMessages = attachHistoricalImagesToModelTurn(
+          enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+        );
         if (contextResult.context) {
           enhancedMessages = injectContextToMessages(
             enhancedMessages,

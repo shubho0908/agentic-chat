@@ -1,3 +1,4 @@
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
 import type { ReasoningEffortLevel } from "@/constants/openai-models";
 import type { BaseMessage } from "@langchain/core/messages";
 import type { Message } from "@/lib/schemas/chat";
@@ -230,6 +231,9 @@ export function createOrchestratorStreamHandler(
             },
           );
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
+          enhancedMessages = attachHistoricalImagesToModelTurn(
+            enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+          );
           if (contextResult.context) {
             enhancedMessages = injectContextToMessages(
               enhancedMessages,
@@ -281,8 +285,13 @@ export function createOrchestratorStreamHandler(
         );
 
         const queryText = extractTextFromMessage(lastUserMessage);
-        const bypassSemanticCache = shouldBypassSemanticCacheForMessageContext(
-          messages,
+        const bypassSemanticCache = Boolean(
+          memoryStatusInfo.documentEvidenceFiles?.length ||
+          memoryStatusInfo.historicalImageFiles?.length ||
+          memoryStatusInfo.documentContextState === "unavailable" ||
+          (memoryStatusInfo.skippedMemory && Boolean(memoryStatusInfo.routingDecision))
+        ) || shouldBypassSemanticCacheForMessageContext(
+          enhancedMessages,
           queryText,
           connectedToolkits,
         );

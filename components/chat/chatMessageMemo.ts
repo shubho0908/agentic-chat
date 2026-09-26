@@ -95,6 +95,7 @@ export function areChatMessagePropsEqual(
       prevStatus?.documentContextState !== nextStatus?.documentContextState ||
       prevStatus?.documentEvidenceIds !== nextStatus?.documentEvidenceIds ||
       prevStatus?.documentEvidenceFiles !== nextStatus?.documentEvidenceFiles ||
+      prevStatus?.historicalImageFiles !== nextStatus?.historicalImageFiles ||
       prevStatus?.imageCount !== nextStatus?.imageCount ||
       prevStatus?.routingDecision !== nextStatus?.routingDecision ||
       prevStatus?.degradedContexts?.length !==

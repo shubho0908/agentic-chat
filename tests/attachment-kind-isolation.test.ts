@@ -140,6 +140,10 @@ test("image vocabulary alone does not override text-only memory routing", () => 
     requestedAttachmentKind("Describe this image", true, false, false),
     "image",
   );
+  assert.equal(
+    requestedAttachmentKind("Describe this image", false, true, false, true),
+    "image",
+  );
 });
 
 test("generic file and attachment references route to a lone snippet but ask for mixed kinds", () => {

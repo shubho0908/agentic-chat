@@ -26,6 +26,7 @@ export function useTokenUsageWithMemory({
       documentContextState: memoryStatus?.documentContextState,
       documentEvidenceIds: memoryStatus?.documentEvidenceIds,
       documentEvidenceFiles: memoryStatus?.documentEvidenceFiles,
+      historicalImageFiles: memoryStatus?.historicalImageFiles,
       hasImages: memoryStatus?.hasImages ?? false,
       imageCount: memoryStatus?.imageCount ?? 0,
       routingDecision: memoryStatus?.routingDecision,

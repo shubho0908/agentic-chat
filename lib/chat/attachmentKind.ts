@@ -42,6 +42,7 @@ export function requestedAttachmentKind(
   hasImages: boolean,
   hasDocument: boolean,
   hasSnippet: boolean,
+  hasVisibleEarlierImage = false,
 ): "image" | "document" | "snippet" | "ambiguous" | "none" {
   const asksDocument = referencesDocument(text);
   const asksSnippet = referencesSnippet(text);
@@ -51,7 +52,7 @@ export function requestedAttachmentKind(
   if (asksDocument && asksSnippet) return "ambiguous";
   if (asksSnippet) return "snippet";
   if (asksDocument) return "document";
-  if (asksImage) return hasImages ? "image" : "none";
+  if (asksImage) return hasImages || hasVisibleEarlierImage ? "image" : "none";
   if (referencesGenericAttachment(text) && hasDocument && hasSnippet)
     return "ambiguous";
   if (hasDocument && hasSnippet) return "ambiguous";

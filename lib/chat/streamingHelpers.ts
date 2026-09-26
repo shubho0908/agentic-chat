@@ -19,6 +19,7 @@ export function encodeMemoryStatus(memoryStatusInfo: MemoryStatus): Uint8Array {
     documentContextState: memoryStatusInfo.documentContextState,
     documentEvidenceIds: memoryStatusInfo.documentEvidenceIds,
     documentEvidenceFiles: memoryStatusInfo.documentEvidenceFiles,
+    historicalImageFiles: memoryStatusInfo.historicalImageFiles,
     hasImages: memoryStatusInfo.hasImages,
     imageCount: memoryStatusInfo.imageCount,
     routingDecision: memoryStatusInfo.routingDecision,

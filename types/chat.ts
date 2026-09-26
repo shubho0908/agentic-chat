@@ -54,6 +54,7 @@ export interface MemoryStatus {
   documentContextState?: "ready" | "unavailable";
   documentEvidenceIds?: string[];
   documentEvidenceFiles?: Array<{ id: string; fileUrl: string }>;
+  historicalImageFiles?: Array<{ id: string; fileUrl: string }>;
   hasImages: boolean;
   imageCount: number;
   routingDecision?: RoutingDecision;

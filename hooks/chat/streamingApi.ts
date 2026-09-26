@@ -260,6 +260,16 @@ export async function readChatStream(
                 : [];
             })
           : undefined,
+        historicalImageFiles: Array.isArray(parsed.historicalImageFiles)
+          ? parsed.historicalImageFiles.flatMap((entry) => {
+              const record = optionalRecord(entry);
+              return record &&
+                typeof record.id === "string" &&
+                typeof record.fileUrl === "string"
+                ? [{ id: record.id, fileUrl: record.fileUrl }]
+                : [];
+            })
+          : undefined,
         hasImages: optionalBoolean(parsed.hasImages) ?? false,
         imageCount: optionalNumber(parsed.imageCount) ?? 0,
         routingDecision: optionalString(
