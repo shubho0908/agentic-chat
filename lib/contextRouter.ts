@@ -367,7 +367,7 @@ export async function routeContext(
 
   const attachmentBearingTurns = messages.filter((message) => (message.attachments?.length ?? 0) > 0);
   const recentAttachment = attachmentBearingTurns.at(-1);
-  const bareFileFollowUp = Boolean(recentAttachment && isReferential &&
+  const bareFileFollowUp = Boolean(recentAttachment && recentAttachment === messages.at(-1) && isReferential &&
     /\b(?:that|it|this|those|these)\b/i.test(textQuery) &&
     !/\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?)\b/i.test(textQuery));
   const fileReference = bareFileFollowUp || /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
@@ -405,14 +405,15 @@ export async function routeContext(
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>Historical attachment search was incomplete. Ask the user to name or reattach the file. Do not guess from partial history.</document_processing_notice>", metadata };
   }
-  if (bareFileFollowUp && attachmentBearingTurns.length > 1) {
+  const currentHasAttachments = Boolean(catalog?.resources.some((resource) => resource.current));
+  if (bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length > 1) {
     metadata.skippedMemory = true;
     return { context: "<document_processing_notice>Several earlier attachments could match that reference. Ask which file the user means before using evidence.</document_processing_notice>", metadata };
   }
   const selection = catalog?.foundCurrent
     ? safeCurrentOnly ? currentOnlySelection :
       selectConversationResource(textQuery, hasImages, catalog.resources,
-        bareFileFollowUp && attachmentBearingTurns.length === 1
+        bareFileFollowUp && !currentHasAttachments && attachmentBearingTurns.length === 1
           ? recentAttachment?.attachments?.map((attachment) => attachment.id).filter((id): id is string => Boolean(id)) : undefined)
     : null;
   if (catalog && selection?.state === "none" && /\b(?:this|that|these|those|earlier|previous|prior|old|attached|uploaded)\s+(?:images?|photos?|pictures?|documents?|pdfs?|files?|attachments?|snippets?)\b/i.test(textQuery)) {

@@ -492,3 +492,77 @@ test("bare reference with two earlier attachment turns does not silently choose 
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
 });
+
+test("bare reference uses newly attached PDF rather than an older turn", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const older = file(1), current = file(2, true, "now");
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => [{ id: "older", attachments: [older] }] });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: current.id, fileName: current.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => rows([current.id]) });
+  try {
+    const routed = await routeContext("Summarize that", "owner", [
+      { role: MessageRole.USER, content: "I uploaded file-1.pdf", attachments: [{ ...older, kind: "document" as const }] },
+    ], "conv", null, false, { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("a new attachment wins even if two earlier attachment turns exist", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const current = file(3, true, "now"), older = [file(1), file(2)];
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => older.map((resource) => ({ id: resource.messageId, attachments: [resource] })) });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: current.id, fileName: current.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => rows([current.id]) });
+  try {
+    const routed = await routeContext("Summarize that", "owner", older.map((resource) => ({
+      role: MessageRole.USER, content: "Uploaded a PDF", attachments: [{ ...resource, kind: "document" as const }],
+    })), "conv", null, false, { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("bare conversational reference after intervening assistant does not inject old file", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  const older = file(1);
+  let pages = 0;
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => { pages++; return [{ id: "older", attachments: [older] }]; } });
+  try {
+    const routed = await routeContext("Explain that", "owner", [
+      { role: MessageRole.USER, content: "I uploaded file-1.pdf", attachments: [{ ...older, kind: "document" as const }] },
+      { role: MessageRole.ASSISTANT, content: "The recursion example has three steps." },
+      { role: MessageRole.USER, content: "Let's discuss a different example." },
+      { role: MessageRole.ASSISTANT, content: "Here is a new example about trees." },
+    ], "conv", null, false, { currentMessageId: "now" });
+    assert.equal(pages, 0);
+    assert.equal(routed.metadata.documentEvidenceIds, undefined);
+    assert.doesNotMatch(routed.context, /Several earlier attachments|Historical attachment search was incomplete/);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
