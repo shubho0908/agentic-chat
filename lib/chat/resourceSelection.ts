@@ -54,13 +54,21 @@ export function selectConversationResource(
     /\b(?:these|those|multiple|several|five|four|three|two|[2-9])\s+(?:files?|attachments?|docs?|documents?|pdfs?|images?|photos?|pictures?|snippets?)\b/i.test(text);
   const bothFiles = /\b(?:both|dono)\s+(?:files?|attachments?|docs?|documents?|pdfs?|images?|photos?|pictures?|snippets?)\b/i.test(text);
   const bothGeneric = /\b(?:both|dono)\s+(?:files?|attachments?)\b/i.test(text);
-  if (bothGeneric && currentCandidates.length === 2 &&
+  const hasHistoricalImageReference = /\b(?:earlier|previous|prior|old|above)\s+(?:image|photo|picture|screenshot)\b/i.test(text);
+  if (bothGeneric && !hasHistoricalImageReference && currentCandidates.length === 2 &&
       new Set(currentCandidates.map(attachmentKind)).size === 2 &&
       currentCandidates.some((candidate) => attachmentKind(candidate) === "image") &&
       currentCandidates.some((candidate) => attachmentKind(candidate) === "document")) {
     return { state: "selected", kind: "document",
       resources: currentCandidates.filter((candidate) => attachmentKind(candidate) === "document"),
       images: currentCandidates.filter((candidate) => attachmentKind(candidate) === "image") };
+  }
+  if (bothGeneric && hasHistoricalImageReference && currentCandidates.some((candidate) => attachmentKind(candidate) === "document")) {
+    const olderImages = candidates.filter((candidate) => !candidate.current && attachmentKind(candidate) === "image");
+    if (olderImages.length !== 1) return { state: "ambiguous" };
+    const currentDocuments = currentCandidates.filter((candidate) => attachmentKind(candidate) === "document");
+    if (currentDocuments.length !== 1) return { state: "ambiguous" };
+    return { state: "selected", kind: "document", resources: currentDocuments, images: olderImages };
   }
   let comparisonImages: ResourceCandidate[] | undefined;
   if (kinds.size > 1) {
@@ -71,7 +79,7 @@ export function selectConversationResource(
     );
     const currentImages = images.filter((candidate) => candidate.current);
     const textMentionsOlderImage =
-      /\b(?:earlier|previous|prior|old|above)\s+(?:image|photo|picture)\b/i.test(text) ||
+      hasHistoricalImageReference ||
       /\b(?:image|photo|picture)\b.{0,45}\b(?:earlier|previous|prior|pehle|old)\b/i.test(text);
     const namedImages = images.filter((candidate) => candidate.fileName &&
       text.toLocaleLowerCase().includes(candidate.fileName.toLocaleLowerCase()));
@@ -86,6 +94,9 @@ export function selectConversationResource(
       : aggregateRequest ? images
       : currentImages.length ? currentImages : images;
     if (!comparisonImages.length && !currentHasImage) return { state: "none" };
+    if (!aggregateRequest && textMentionsOlderImage &&
+        comparisonImages.filter((candidate) => !candidate.current).length > 1)
+      return { state: "ambiguous" };
     if (new Set(comparisonImages.map((candidate) => candidate.messageId)).size > 1 &&
         !aggregateRequest && !(textMentionsOlderImage && mentionsCurrentImage &&
           comparisonImages.filter((candidate) => !candidate.current).length === 1))
@@ -101,7 +112,7 @@ export function selectConversationResource(
   if (namedImagePlusOlder) {
     const chosen = candidates.filter((candidate) => attachmentKind(candidate) === "image" &&
       ((candidate.current && candidate.fileName && lowerText.includes(candidate.fileName.toLocaleLowerCase())) || !candidate.current));
-    if (new Set(chosen.filter((candidate) => !candidate.current).map((candidate) => candidate.messageId)).size > 1)
+    if (chosen.filter((candidate) => !candidate.current).length !== 1)
       return { state: "ambiguous" };
     return { state: "selected", kind: "image", resources: chosen };
   }

@@ -382,7 +382,15 @@ export async function routeContext(
   const currentOnlySelection = catalog && !catalog.complete
     ? selectConversationResource(textQuery, hasImages,
         catalog.resources.filter((resource) => resource.current)) : null;
-  const safeCurrentOnly = currentOnlySelection?.state === "selected" &&
+  const namedNonCurrentResource = Boolean(catalog && !catalog.complete &&
+    catalog.resources.some((resource) => !resource.current && resource.fileName &&
+      textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
+  const mentionsDifferentFileName = Boolean(catalog && !catalog.complete &&
+    /\b[^\s/]+\.[a-z][a-z0-9]{0,11}\b/i.test(textQuery) &&
+    !catalog.resources.filter((resource) => resource.current).some((resource) =>
+      resource.fileName && textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
+  const safeCurrentOnly = !namedNonCurrentResource && !mentionsDifferentFileName &&
+    currentOnlySelection?.state === "selected" &&
     currentOnlySelection.resources.length > 0 &&
     currentOnlySelection.resources.every((resource) => resource.current) &&
     (!currentOnlySelection.images || currentOnlySelection.images.every((resource) => resource.current)) &&

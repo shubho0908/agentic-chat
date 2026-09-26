@@ -212,3 +212,37 @@ test("the current PDF and exactly one earlier image can be compared despite two 
   if (selection.state === "selected") assert.deepEqual(selection.images?.map(({ id }) => id),
     ["image-1", "image-2"]);
 });
+
+test("explicit earlier image beats current image in mixed both-files comparison", () => {
+  const selection = selectConversationResource("Compare both files - the earlier image and this PDF", true,
+    [file(1, true, "now"), img(1, true, "now"), img(2)]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") {
+    assert.deepEqual(selection.resources.map(({ id }) => id), ["pdf-1"]);
+    assert.deepEqual(selection.images?.map(({ id }) => id), ["image-2"]);
+  }
+});
+
+test("multiple older images in the same message cannot be guessed as the earlier image", () => {
+  const older = [img(2, false, "one-older-turn"), img(3, false, "one-older-turn")];
+  const selection = selectConversationResource("Compare photo-1.png with the earlier image", true,
+    [img(1, true, "now"), ...older]);
+  assert.equal(selection.state, "ambiguous");
+});
+
+test("incomplete history cannot override a named older document with a current PDF", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  const current = file(1, true, "now");
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [file(i+2)] })) });
+  try {
+    const routed = await routeContext("Read file-999.pdf", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.match(routed.context, /Historical attachment search was incomplete/);
+    assert.equal(routed.metadata.documentEvidenceIds, undefined);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
