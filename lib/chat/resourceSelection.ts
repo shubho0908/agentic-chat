@@ -65,10 +65,14 @@ export function selectConversationResource(
   }
   if (bothGeneric && hasHistoricalImageReference && currentCandidates.some((candidate) => attachmentKind(candidate) === "document")) {
     const olderImages = candidates.filter((candidate) => !candidate.current && attachmentKind(candidate) === "image");
-    if (olderImages.length !== 1) return { state: "ambiguous" };
+    const namedOlderImages = olderImages.filter((candidate) => candidate.fileName &&
+      text.toLocaleLowerCase().includes(candidate.fileName.toLocaleLowerCase()));
+    const imageFileMention = /\b[^\s/]+\.(?:png|jpe?g|webp|gif|heic|avif|svg|bmp|tiff?)\b/i.test(text);
+    const selectedOlderImages = imageFileMention ? namedOlderImages : olderImages;
+    if (selectedOlderImages.length !== 1) return { state: "ambiguous" };
     const currentDocuments = currentCandidates.filter((candidate) => attachmentKind(candidate) === "document");
     if (currentDocuments.length !== 1) return { state: "ambiguous" };
-    return { state: "selected", kind: "document", resources: currentDocuments, images: olderImages };
+    return { state: "selected", kind: "document", resources: currentDocuments, images: selectedOlderImages };
   }
   let comparisonImages: ResourceCandidate[] | undefined;
   if (kinds.size > 1) {

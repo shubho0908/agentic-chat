@@ -246,3 +246,36 @@ test("incomplete history cannot override a named older document with a current P
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
 });
+
+test("both files resolves a named earlier image, never a different image or unrelated current image", () => {
+  const result = selectConversationResource("Compare both files - the earlier image photo-2.png and this PDF",
+    true, [file(1, true, "now"), img(1, true, "now"), img(2), img(3)]);
+  assert.equal(result.state, "selected");
+  if (result.state === "selected") assert.deepEqual(result.images?.map(({ id }) => id), ["image-2"]);
+  const missing = selectConversationResource("Compare both files - the earlier image photo-9.png and this PDF",
+    true, [file(1, true, "now"), img(1, true, "now"), img(3)]);
+  assert.notEqual(missing.state, "selected");
+});
+
+test("a dotted topic is not a historical filename with incomplete history", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const current = file(1, true, "now");
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [file(i+2)] })) });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: current.id, fileName: current.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => rows([current.id]) });
+  try {
+    const routed = await routeContext("Summarize this PDF about node.js", "owner", [], "conv", null, false,
+      { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});

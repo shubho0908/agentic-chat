@@ -386,7 +386,7 @@ export async function routeContext(
     catalog.resources.some((resource) => !resource.current && resource.fileName &&
       textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
   const mentionsDifferentFileName = Boolean(catalog && !catalog.complete &&
-    /\b[^\s/]+\.[a-z][a-z0-9]{0,11}\b/i.test(textQuery) &&
+    /\b[^\s/]+\.(?:pdf|docx?|txt|csv|md|png|jpe?g|webp|gif|heic|avif|svg|bmp|tiff?|xlsx?|pptx?|rtf)\b/i.test(textQuery) &&
     !catalog.resources.filter((resource) => resource.current).some((resource) =>
       resource.fileName && textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
   const safeCurrentOnly = !namedNonCurrentResource && !mentionsDifferentFileName &&
