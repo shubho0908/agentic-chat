@@ -649,6 +649,99 @@ test("snippet reference scopes only the snippet MIME even beside an ordinary tex
   }
 });
 
+test("text-only photo wording does not suppress memory routing", async () => {
+  const original = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findMany", {
+    configurable: true,
+    value: async () => [
+      {
+        createdAt: new Date("2026-09-25T00:00:00Z"),
+        parentMessageId: null,
+        attachments: [],
+      },
+    ],
+  });
+  try {
+    const result = await routeContext(
+      "What do you remember about my photos?",
+      "owner-1",
+      [],
+      "conversation-1",
+      null,
+      false,
+      { currentMessageId: "current-turn" },
+    );
+    assert.notEqual(
+      result.metadata.routingDecision,
+      RoutingDecision.VisionOnly,
+    );
+    assert.equal(result.metadata.skippedMemory, true);
+    assert.equal(result.metadata.hasImages, false);
+  } finally {
+    Object.defineProperty(prisma.message, "findMany", {
+      configurable: true,
+      value: original,
+    });
+  }
+});
+
+test("a pasted snippet called this file stays in snippet context end to end", async () => {
+  const oldMessage = prisma.message.findMany;
+  const oldAttachment = prisma.attachment.findMany;
+  const calls: Array<{ where: Record<string, unknown> }> = [];
+  Object.defineProperty(prisma.message, "findMany", {
+    configurable: true,
+    value: async (args: { where: Record<string, unknown> }) => {
+      calls.push(args);
+      return [
+        {
+          createdAt: new Date("2026-09-25T00:00:00Z"),
+          parentMessageId: null,
+          attachments: [
+            {
+              id: "paste",
+              fileType: "text/plain",
+              fileName: "pasted-text-1.txt",
+              fileUrl: "https://example.com/snippet",
+              kind: "snippet",
+            },
+          ],
+        },
+      ];
+    },
+  });
+  Object.defineProperty(prisma.attachment, "findMany", {
+    configurable: true,
+    value: async () => [],
+  });
+  try {
+    const result = await routeContext(
+      "Summarize this file",
+      "owner-1",
+      [],
+      "conversation-1",
+      null,
+      true,
+      { currentMessageId: "current-turn" },
+    );
+    assert.equal(result.metadata.attachmentContextKind, "snippet");
+    assert.deepEqual(result.metadata.documentEvidenceFiles, [
+      { id: "paste", fileUrl: "https://example.com/snippet" },
+    ]);
+    assert.equal(result.metadata.documentCount, 1);
+    assert.equal(calls.length, 2);
+  } finally {
+    Object.defineProperty(prisma.message, "findMany", {
+      configurable: true,
+      value: oldMessage,
+    });
+    Object.defineProperty(prisma.attachment, "findMany", {
+      configurable: true,
+      value: oldAttachment,
+    });
+  }
+});
+
 test("a generic mixed snippet and document request asks rather than choosing a file", async () => {
   const original = prisma.message.findMany;
   Object.defineProperty(prisma.message, "findMany", {

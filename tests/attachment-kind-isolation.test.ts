@@ -125,3 +125,34 @@ test("rejects inconsistent client kind and MIME pairs at persistence boundary", 
     );
   }
 });
+
+test("image vocabulary alone does not override text-only memory routing", () => {
+  assert.equal(
+    requestedAttachmentKind(
+      "What do you remember about my photos?",
+      false,
+      false,
+      false,
+    ),
+    "none",
+  );
+  assert.equal(
+    requestedAttachmentKind("Describe this image", true, false, false),
+    "image",
+  );
+});
+
+test("generic file and attachment references route to a lone snippet but ask for mixed kinds", () => {
+  for (const text of [
+    "Summarize this file",
+    "What is in the attached attachment?",
+  ]) {
+    assert.equal(requestedAttachmentKind(text, false, false, true), "snippet");
+    assert.equal(requestedAttachmentKind(text, false, true, true), "ambiguous");
+    assert.equal(requestedAttachmentKind(text, false, true, false), "document");
+  }
+  assert.equal(
+    requestedAttachmentKind("Summarize this PDF", false, false, true),
+    "document",
+  );
+});

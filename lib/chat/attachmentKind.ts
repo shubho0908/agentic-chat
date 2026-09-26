@@ -20,7 +20,11 @@ export function attachmentKind(attachment: {
 }
 
 export function referencesDocument(text: string): boolean {
-  return /\b(?:docs?|documents?|pdfs?|files?|attachments?)\b/i.test(text);
+  return /\b(?:docs?|documents?|pdfs?)\b/i.test(text);
+}
+
+function referencesGenericAttachment(text: string): boolean {
+  return /\b(?:files?|attachments?)\b/i.test(text);
 }
 
 export function referencesSnippet(text: string): boolean {
@@ -47,7 +51,9 @@ export function requestedAttachmentKind(
   if (asksDocument && asksSnippet) return "ambiguous";
   if (asksSnippet) return "snippet";
   if (asksDocument) return "document";
-  if (asksImage) return "image";
+  if (asksImage) return hasImages ? "image" : "none";
+  if (referencesGenericAttachment(text) && hasDocument && hasSnippet)
+    return "ambiguous";
   if (hasDocument && hasSnippet) return "ambiguous";
   if (hasImages && !hasDocument && !hasSnippet) return "image";
   if (hasDocument) return "document";
