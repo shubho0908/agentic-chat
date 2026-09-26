@@ -8,6 +8,7 @@ export async function getConversationResourceCatalog(options: {
   currentMessageId: string;
   visibleMessages: Message[];
   branchId?: string;
+  scanHistory?: boolean;
 }): Promise<{ foundCurrent: boolean; complete: boolean; resources: ResourceCandidate[] }> {
   const current = await prisma.message.findFirst({
     where: {
@@ -35,6 +36,15 @@ export async function getConversationResourceCatalog(options: {
   });
   if (!current) return { foundCurrent: false, complete: true, resources: [] };
 
+  if (options.scanHistory === false) {
+    return {
+      foundCurrent: true,
+      complete: true,
+      resources: current.attachments.map((attachment) => ({
+        ...attachment, messageId: current.id, current: true,
+      })),
+    };
+  }
   const branchScoped = Boolean(options.branchId || current.parentMessageId !== null);
   if (branchScoped) {
     return {

@@ -124,10 +124,21 @@ export function selectConversationResource(
     (candidate) => candidate.fileName.length > 0 &&
       mentionsFileName(text, candidate.fileName),
   );
-  const named = namedMatches.filter((candidate) => !namedMatches.some((other) =>
-    other !== candidate && other.fileName.length > candidate.fileName.length &&
-    other.fileName.toLocaleLowerCase().endsWith(candidate.fileName.toLocaleLowerCase()) &&
-    mentionsFileName(text, other.fileName)));
+  const named = namedMatches.filter((candidate) => {
+    const name = candidate.fileName.toLocaleLowerCase();
+    const query = text.toLocaleLowerCase();
+    const longerNames = namedMatches.filter((other) => other !== candidate &&
+      other.fileName.length > candidate.fileName.length &&
+      other.fileName.toLocaleLowerCase().endsWith(name));
+    let index = query.indexOf(name);
+    while (index >= 0) {
+      if (!longerNames.some((other) =>
+        query.slice(Math.max(0, index - (other.fileName.length - name.length)),
+          index + name.length) === other.fileName.toLocaleLowerCase())) return true;
+      index = query.indexOf(name, index + 1);
+    }
+    return false;
+  });
 
   if (named.length && named.every((candidate) => !candidate.current) &&
       /^\s*(?:what|who|where)\s+(?:is|are|was)\s+[^?]+\??\s*$/i.test(text) &&

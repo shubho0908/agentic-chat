@@ -365,6 +365,8 @@ export async function routeContext(
     ];
   };
 
+  const fileReference = /\b(?:files?|attachments?|docs?|documents?|pdfs?|images?|pictures?|photos?|screenshots?|snippets?|uploaded|attached|earlier|previous|prior|pasted)\b/i.test(textQuery) ||
+    /(?:^|\s)[^\s/]+\.[a-z][a-z0-9]{0,15}(?=$|[\s,;:!?])/iu.test(textQuery);
   const catalog =
     conversationId && options?.currentMessageId
       ? await getConversationResourceCatalog({
@@ -373,6 +375,7 @@ export async function routeContext(
           currentMessageId: options.currentMessageId,
           visibleMessages: messages,
           branchId: options.branchId,
+          scanHistory: fileReference,
         })
       : null;
   if (catalog && !catalog.foundCurrent) {

@@ -405,3 +405,27 @@ test("explicit two-name comparison selects only the named files, not a third cur
   assert.equal(selection.state, "selected");
   if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
 });
+
+test("short and long overlapping filenames both survive when separately named", () => {
+  const current = { ...file(1, true, "now"), fileName: "report.pdf" };
+  const older = { ...file(2), fileName: "quarterly report.pdf" };
+  const selection = selectConversationResource("Compare report.pdf and quarterly report.pdf", false, [current, older]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
+});
+
+test("plain text turns avoid attachment history traversal", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  let pages = 0;
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => { pages++; return []; } });
+  try {
+    await routeContext("Explain the difference between recursion and iteration", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.equal(pages, 0);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
