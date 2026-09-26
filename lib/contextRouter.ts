@@ -388,7 +388,12 @@ export async function routeContext(
   const explicitCurrent = catalog?.foundCurrent
     ? selectConversationResource(textQuery, hasImages,
         catalog.resources.filter((resource) => resource.current)) : null;
-  const uniqueExplicitCurrent = !/\b(?:and|with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) &&
+  const additionalAttachmentAfterAnd = /\band\b.{0,100}\b(?:this|that|these|those|current|new|attached|other|another|earlier|previous|prior)\s+(?:file|document|doc|pdf|image|photo|picture|screenshot|snippet)\b/i.test(textQuery);
+  const twoOperationsOnOneCurrent = catalog?.resources.length === 1 &&
+    /\band\s+(?:tell|give|show|explain|summarize|identify|list|extract|find|check)\b/i.test(textQuery) &&
+    !additionalAttachmentAfterAnd;
+  const uniqueExplicitCurrent = (!/\b(?:and|with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) ||
+    twoOperationsOnOneCurrent && !/\b(?:with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery)) &&
     explicitCurrent?.state === "selected" && explicitCurrent.resources.length === 1 &&
     explicitCurrent.resources[0].current && !(explicitCurrent.images?.length) &&
     catalog?.resources.filter((resource) => resource.current &&

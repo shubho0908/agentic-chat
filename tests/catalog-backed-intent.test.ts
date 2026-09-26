@@ -203,6 +203,25 @@ test("a failed classifier still routes an explicit single current PDF without gu
   }
 });
 
+test("classifier failure allows two operations on the only current PDF", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  const doc = { ...earlier, id: "current-pdf", fileName: "current.pdf" };
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", createdAt: new Date(), parentMessageId: null, attachments: [doc] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [] });
+  try {
+    const result = await routeContext("Summarize this PDF and tell me its title", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => { throw new Error("classifier timeout"); } });
+    assert.notEqual(result.unresolved?.reason, "ambiguous");
+    const missingSecond = await routeContext("Summarize this PDF and that image", "owner", [], "conv", null, false,
+      { currentMessageId: "now", decideResources: async () => { throw new Error("classifier timeout"); } });
+    assert.equal(missingSecond.unresolved?.reason, "ambiguous");
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
+
 test("classifier failure cannot answer from only one of two requested current files", async () => {
   const first = prisma.message.findFirst, many = prisma.message.findMany;
   const doc = { ...earlier, id: "current-pdf", fileName: "current.pdf" };
