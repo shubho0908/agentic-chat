@@ -15,7 +15,7 @@ import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { getConversationResourceCatalog } from "./chat/resourceCatalog";
 import { selectConversationResource } from "./chat/resourceSelection";
 import { attachmentKind } from "./chat/attachmentKind";
-import { mentionsFileName, mentionsExplicitFileName } from "./chat/fileNameReferences";
+import { mentionsFileName } from "./chat/fileNameReferences";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
 import { isTrustedAttachmentUrl } from "@/lib/network/ssrf";
@@ -386,11 +386,8 @@ export async function routeContext(
   const namedNonCurrentResource = Boolean(catalog && !catalog.complete &&
     catalog.resources.some((resource) => !resource.current && resource.fileName &&
       mentionsFileName(textQuery, resource.fileName)));
-  const mentionsDifferentFileName = Boolean(catalog && !catalog.complete &&
-    mentionsExplicitFileName(textQuery) &&
-    !catalog.resources.filter((resource) => resource.current).some((resource) =>
-      resource.fileName && mentionsFileName(textQuery, resource.fileName)));
-  const safeCurrentOnly = !namedNonCurrentResource && !mentionsDifferentFileName &&
+  const safeCurrentOnly = !namedNonCurrentResource &&
+    !/\b(?:and|with|plus|versus|vs\.?|against|compare)\b/i.test(textQuery) &&
     currentOnlySelection?.state === "selected" &&
     currentOnlySelection.resources.length > 0 &&
     currentOnlySelection.resources.every((resource) => resource.current) &&

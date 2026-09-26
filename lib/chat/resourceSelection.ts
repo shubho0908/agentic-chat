@@ -120,14 +120,28 @@ export function selectConversationResource(
       return { state: "ambiguous" };
     return { state: "selected", kind: "image", resources: chosen };
   }
-  const named = candidates.filter(
+  const namedMatches = candidates.filter(
     (candidate) => candidate.fileName.length > 0 &&
       mentionsFileName(text, candidate.fileName),
   );
+  const named = namedMatches.filter((candidate) => !namedMatches.some((other) =>
+    other !== candidate && other.fileName.length > candidate.fileName.length &&
+    other.fileName.toLocaleLowerCase().endsWith(candidate.fileName.toLocaleLowerCase()) &&
+    mentionsFileName(text, other.fileName)));
+
   if (named.length && named.every((candidate) => !candidate.current) &&
       /^\s*(?:what|who|where)\s+(?:is|are|was)\s+[^?]+\??\s*$/i.test(text) &&
       !/\b(?:this|that|these|those|my|our|uploaded|attached|sent|earlier|previous|prior)\b/i.test(text))
     return { state: "none" };
+  const currentDocumentReference = /\b(?:this|current|new|attached)\s+(?:doc|document|pdf)\b/i.test(text);
+  const namedHistoricalDocuments = named.filter((candidate) => !candidate.current && attachmentKind(candidate) === "document");
+  if (currentDocumentReference && namedHistoricalDocuments.length === 1 &&
+      named.length === 1 && /\b(?:compare|with|against|and)\b/i.test(text)) {
+    const currentDocuments = currentCandidates.filter((candidate) => attachmentKind(candidate) === "document");
+    if (currentDocuments.length !== 1) return { state: "ambiguous" };
+    return { state: "selected", kind: "document", resources: [currentDocuments[0], namedHistoricalDocuments[0]],
+      ...(comparisonImages && { images: comparisonImages }) };
+  }
   if (named.length && !(comparisonImages && kinds.has("document") &&
       named.every((candidate) => attachmentKind(candidate) === "image"))) {
     const uniqueKinds = new Set(named.map(attachmentKind));
@@ -144,7 +158,8 @@ export function selectConversationResource(
     if (kinds.size && !kinds.has(kind)) return { state: "ambiguous" };
     if (bothFiles && named.length !== 2) return { state: "ambiguous" };
     const namedMessageIds = new Set(named.map((candidate) => candidate.messageId));
-    if (namedMessageIds.size > 1 && !aggregateRequest && !bothFiles) return { state: "ambiguous" };
+    if (namedMessageIds.size > 1 && !aggregateRequest && !bothFiles &&
+        !(named.length === 2 && /\b(?:compare|with|against|and)\b/i.test(text))) return { state: "ambiguous" };
     return { state: "selected", kind, resources: named,
       ...(comparisonImages && { images: comparisonImages }) };
   }

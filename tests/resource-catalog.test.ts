@@ -11,7 +11,7 @@ async function withMessageMock<T>(current: unknown, history: unknown[], run: (ca
   const many = prisma.message.findMany;
   const calls: { current: Array<{where: Record<string, unknown>}>; history: Array<{where: Record<string, unknown>; take: number}> } = { current: [], history: [] };
   Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: async (args: unknown) => { calls.current.push(args as {where: Record<string, unknown>}); return current; } });
-  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async (args: unknown) => { calls.history.push(args as {where: Record<string, unknown>; take: number}); return history; } });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async (args: unknown) => { const query = args as {where: Record<string, unknown>; take: number; cursor?: {id: string}}; calls.history.push(query); const start = query.cursor ? history.findIndex((item) => (item as {id: string}).id === query.cursor?.id) + 1 : 0; return history.slice(start, start + query.take); } });
   try { return await run(calls); }
   finally {
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
@@ -29,7 +29,7 @@ test("root resource search includes older persisted roots beyond the prompt wind
       { createdAt: now, id: { lt: "now" } },
     ]);
     assert.equal(calls.history[0].where.parentMessageId, null);
-    assert.equal(calls.history[0].take, 501);
+    assert.equal(calls.history[0].take, 251);
   });
 });
 test("edited branch refuses unverified historical IDs even if the client supplied them", async () => {
@@ -46,11 +46,12 @@ test("edited branch refuses unverified historical IDs even if the client supplie
     assert.equal(calls.history.length, 0);
   });
 });
-test("more than 500 historical attachment turns fails closed instead of implying exhaustive search", async () => {
-  await withMessageMock({ id: "now", createdAt: now, parentMessageId: null, attachments: [] }, Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [attachment(`a-${i}`)] })), async () => {
+test("501 historical attachment turns are searched across pages", async () => {
+  await withMessageMock({ id: "now", createdAt: now, parentMessageId: null, attachments: [] }, Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [attachment(`a-${i}`)] })), async (calls) => {
     const result = await getConversationResourceCatalog({ conversationId: "conv", userId: "owner", currentMessageId: "now", visibleMessages: [] });
-    assert.equal(result.complete, false);
-    assert.equal(result.resources.length, 500);
+    assert.equal(result.complete, true);
+    assert.equal(result.resources.length, 501);
+    assert.equal(calls.history.length, 3);
   });
 });
 
@@ -61,5 +62,26 @@ test("a deleted prior version and an attachment from another conversation cannot
     assert.equal(calls.history[0].where.conversationId, "conv");
     assert.equal(calls.history[0].where.isDeleted, false);
     assert.equal(calls.history[0].where.parentMessageId, null);
+  });
+});
+
+test("pagination reaches a named attachment after the old 500-message cutoff", async () => {
+  const history = Array.from({ length: 501 }, (_, i) => ({ id: `older-${i}`, attachments: [{ ...attachment(`a-${i}`), fileName: i === 500 ? "quarterly report.pdf" : `a-${i}.pdf` }] }));
+  await withMessageMock({ id: "now", createdAt: now, parentMessageId: null, attachments: [attachment("current")] }, history, async (calls) => {
+    const catalog = await getConversationResourceCatalog({ conversationId: "conv", userId: "owner", currentMessageId: "now", visibleMessages: [] });
+    assert.equal(catalog.complete, true);
+    assert.equal(catalog.resources.length, 502);
+    assert.equal(catalog.resources.at(-1)?.fileName, "quarterly report.pdf");
+    assert.deepEqual(calls.history.map(({ take }) => take), [251, 251, 251]);
+  });
+});
+
+test("a bounded history does not claim completeness at the hard work cap", async () => {
+  const history = Array.from({ length: 5001 }, (_, i) => ({ id: `older-${i}`, attachments: [attachment(`a-${i}`)] }));
+  await withMessageMock({ id: "now", createdAt: now, parentMessageId: null, attachments: [] }, history, async (calls) => {
+    const catalog = await getConversationResourceCatalog({ conversationId: "conv", userId: "owner", currentMessageId: "now", visibleMessages: [] });
+    assert.equal(catalog.complete, false);
+    assert.equal(catalog.resources.length, 5000);
+    assert.equal(calls.history.length, 20);
   });
 });

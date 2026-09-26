@@ -12,7 +12,3 @@ export function mentionsFileName(text: string, fileName: string): boolean {
   }
   return false;
 }
-
-export function mentionsExplicitFileName(text: string): boolean {
-  return /\b(?:read|open|summarize|compare|review|analy[sz]e|inspect|check|attach|upload|and|with|plus)\s+(?:the\s+)?(?:file\s+)?(?:[`"']?)[^\s/"'`<>]+\.[a-z][a-z0-9]{0,15}(?=$|[\s,;:!?)]|["'`])/iu.test(text);
-}

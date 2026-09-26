@@ -230,13 +230,17 @@ test("multiple older images in the same message cannot be guessed as the earlier
   assert.equal(selection.state, "ambiguous");
 });
 
-test("incomplete history cannot override a named older document with a current PDF", async () => {
+test("bounded history cannot override a named older document with a current PDF", async () => {
   const first = prisma.message.findFirst, many = prisma.message.findMany;
   const current = file(1, true, "now");
   Object.defineProperty(prisma.message, "findFirst", { configurable: true,
     value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  const history = Array.from({ length: 5001 }, (_, i) => ({ id: `old-${i}`, attachments: [file(i+2)] }));
   Object.defineProperty(prisma.message, "findMany", { configurable: true,
-    value: async () => Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [file(i+2)] })) });
+    value: async (query: { cursor?: { id: string }; take: number }) => {
+      const start = query.cursor ? history.findIndex(({ id }) => id === query.cursor?.id) + 1 : 0;
+      return history.slice(start, start + query.take);
+    } });
   try {
     const routed = await routeContext("Read file-999.pdf", "owner", [], "conv", null, false, { currentMessageId: "now" });
     assert.match(routed.context, /Historical attachment search was incomplete/);
@@ -302,4 +306,102 @@ test("custom-extension older file in incomplete history cannot be silently dropp
     Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
     Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
   }
+});
+
+test("paged catalog resolves a spaced older filename with the current PDF", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const current = file(1, true, "now");
+  const older = { ...file(700), fileName: "quarterly report.pdf" };
+  const history = Array.from({ length: 501 }, (_, i) => ({
+    id: `older-${i}`, attachments: [i === 500 ? older : file(i + 2)],
+  }));
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async (query: { cursor?: { id: string }; take: number }) => {
+      const start = query.cursor ? history.findIndex(({ id }) => id === query.cursor?.id) + 1 : 0;
+      return history.slice(start, start + query.take);
+    } });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [current, older].map(({ id, fileName }) => ({ id, fileName, chunkCount: 1 })) });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true,
+    value: async () => [
+      rows([current.id])[0],
+      { ...rows([older.id])[0], file_name: older.fileName },
+    ] });
+  try {
+    const routed = await routeContext("Compare this PDF with quarterly report.pdf", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id, older.id]);
+    assert.match(routed.context, /quarterly report.pdf/);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("paged catalog reads current PDF when node.js is a topic, not a named attachment", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany,
+    find = prisma.attachment.findMany, raw = prisma.$queryRaw;
+  const current = file(1, true, "now");
+  const history = Array.from({ length: 501 }, (_, i) => ({ id: `older-${i}`, attachments: [file(i + 2)] }));
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [current] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async (query: { cursor?: { id: string }; take: number }) => {
+      const start = query.cursor ? history.findIndex(({ id }) => id === query.cursor?.id) + 1 : 0;
+      return history.slice(start, start + query.take);
+    } });
+  Object.defineProperty(prisma.attachment, "findMany", { configurable: true,
+    value: async () => [{ id: current.id, fileName: current.fileName, chunkCount: 1 }] });
+  Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: async () => rows([current.id]) });
+  try {
+    const routed = await routeContext("Summarize this PDF and node.js", "owner", [], "conv", null, false, { currentMessageId: "now" });
+    assert.deepEqual(routed.metadata.documentEvidenceIds, [current.id]);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+    Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: find });
+    Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
+  }
+});
+
+test("paged catalog retains second named JSON alongside a named current PDF", async () => {
+  const current = file(1, true, "now");
+  const older = { ...file(700), fileName: "data.json", fileType: "application/json" };
+  const selection = selectConversationResource("Compare file-1.pdf and data.json", false, [current, older]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
+});
+
+test("a real earlier node.js attachment is selected with the current PDF", () => {
+  const current = file(1, true, "now");
+  const older = { ...file(2), fileName: "node.js", fileType: "text/javascript" };
+  const selection = selectConversationResource("Summarize this PDF and node.js", false, [current, older]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
+});
+
+test("a multiword filename is matched exactly, and duplicate named files across turns remain ambiguous", () => {
+  const current = file(1, true, "now");
+  const older = { ...file(2), fileName: "quarterly report.pdf" };
+  const unrelated = { ...file(3), fileName: "report.pdf" };
+  const selection = selectConversationResource("Compare this PDF with quarterly report.pdf", false,
+    [current, unrelated, older]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
+  assert.equal(selectConversationResource("Open quarterly report.pdf", false,
+    [older, { ...file(4), fileName: "quarterly report.pdf" }]).state, "ambiguous");
+});
+
+test("explicit two-name comparison selects only the named files, not a third current attachment", () => {
+  const current = file(1, true, "now");
+  const older = { ...file(2), fileName: "data.json", fileType: "application/json" };
+  const unrelated = file(3, true, "now");
+  const selection = selectConversationResource("Compare file-1.pdf and data.json", false,
+    [current, unrelated, older]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.resources.map(({ id }) => id), [current.id, older.id]);
 });

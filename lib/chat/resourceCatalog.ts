@@ -45,44 +45,60 @@ export async function getConversationResourceCatalog(options: {
       })),
     };
   }
-  const history = await prisma.message.findMany({
-    where: {
-      conversationId: options.conversationId,
-      conversation: { userId: options.userId },
-      role: "USER",
-      isDeleted: false,
-      OR: [
-        { createdAt: { lt: current.createdAt } },
-        { createdAt: current.createdAt, id: { lt: current.id } },
-      ],
-      attachments: { some: {} },
-      parentMessageId: null,
-    },
-    take: 501,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: {
-      id: true,
-      attachments: {
-        select: {
-          id: true,
-          fileName: true,
-          fileUrl: true,
-          fileType: true,
-          fileSize: true,
-          kind: true,
+  const pageSize = 250;
+  const maxHistoricalMessages = 5000;
+  const history: Array<{ id: string; attachments: typeof current.attachments }> = [];
+  let cursor: string | undefined;
+  let complete = false;
+  const seen = new Set<string>();
+  while (history.length < maxHistoricalMessages) {
+    const page = await prisma.message.findMany({
+      where: {
+        conversationId: options.conversationId,
+        conversation: { userId: options.userId },
+        role: "USER",
+        isDeleted: false,
+        OR: [
+          { createdAt: { lt: current.createdAt } },
+          { createdAt: current.createdAt, id: { lt: current.id } },
+        ],
+        attachments: { some: {} },
+        parentMessageId: null,
+      },
+      take: Math.min(pageSize, maxHistoricalMessages - history.length) + 1,
+      ...(cursor && { cursor: { id: cursor }, skip: 1 }),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+        attachments: {
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileType: true,
+            fileSize: true,
+            kind: true,
+          },
         },
       },
-    },
-  });
-  const resources = [
-    current,
-    ...history.slice(0, 500).filter((message) => message.id !== current.id),
-  ].flatMap((message) =>
-    message.attachments.map((attachment) => ({
+    });
+    const accepted = page.slice(0, Math.min(pageSize, maxHistoricalMessages - history.length));
+    if (page.length && !accepted.length) break;
+    if (accepted.some((message) => seen.has(message.id))) break;
+    accepted.forEach((message) => seen.add(message.id));
+    history.push(...accepted);
+    if (page.length <= accepted.length) {
+      complete = true;
+      break;
+    }
+    cursor = accepted.at(-1)?.id;
+    if (!cursor) break;
+  }
+  const resources = [current, ...history.filter((message) => message.id !== current.id)]
+    .flatMap((message) => message.attachments.map((attachment) => ({
       ...attachment,
       messageId: message.id,
       current: message.id === current.id,
-    })),
-  );
-  return { foundCurrent: true, complete: history.length <= 500, resources };
+    })));
+  return { foundCurrent: true, complete, resources };
 }
