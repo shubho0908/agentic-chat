@@ -1,3 +1,4 @@
+import { mentionsFileName } from "./fileNameReferences";
 import { attachmentKind, type AttachmentKind } from "./attachmentKind";
 
 export interface ResourceCandidate {
@@ -66,7 +67,7 @@ export function selectConversationResource(
   if (bothGeneric && hasHistoricalImageReference && currentCandidates.some((candidate) => attachmentKind(candidate) === "document")) {
     const olderImages = candidates.filter((candidate) => !candidate.current && attachmentKind(candidate) === "image");
     const namedOlderImages = olderImages.filter((candidate) => candidate.fileName &&
-      text.toLocaleLowerCase().includes(candidate.fileName.toLocaleLowerCase()));
+      mentionsFileName(text, candidate.fileName));
     const imageFileMention = /\b[^\s/]+\.(?:png|jpe?g|webp|gif|heic|avif|svg|bmp|tiff?)\b/i.test(text);
     const selectedOlderImages = imageFileMention ? namedOlderImages : olderImages;
     if (selectedOlderImages.length !== 1) return { state: "ambiguous" };
@@ -86,7 +87,7 @@ export function selectConversationResource(
       hasHistoricalImageReference ||
       /\b(?:image|photo|picture)\b.{0,45}\b(?:earlier|previous|prior|pehle|old)\b/i.test(text);
     const namedImages = images.filter((candidate) => candidate.fileName &&
-      text.toLocaleLowerCase().includes(candidate.fileName.toLocaleLowerCase()));
+      mentionsFileName(text, candidate.fileName));
     const mentionsCurrentImage = /\b(?:this|current|new|attached)\s+(?:image|photo|picture|screenshot)\b/i.test(text);
     comparisonImages = namedImages.length
       ? images.filter((candidate) => namedImages.includes(candidate) ||
@@ -108,21 +109,20 @@ export function selectConversationResource(
     kinds.delete("image");
   }
 
-  const lowerText = text.toLocaleLowerCase();
   const namedImagePlusOlder = kinds.size === 1 && kinds.has("image") &&
     /\b(?:earlier|previous|prior|old)\s+(?:image|photo|picture)\b/i.test(text) &&
     candidates.some((candidate) => attachmentKind(candidate) === "image" &&
-      candidate.current && candidate.fileName && lowerText.includes(candidate.fileName.toLocaleLowerCase()));
+      candidate.current && candidate.fileName && mentionsFileName(text, candidate.fileName));
   if (namedImagePlusOlder) {
     const chosen = candidates.filter((candidate) => attachmentKind(candidate) === "image" &&
-      ((candidate.current && candidate.fileName && lowerText.includes(candidate.fileName.toLocaleLowerCase())) || !candidate.current));
+      ((candidate.current && candidate.fileName && mentionsFileName(text, candidate.fileName)) || !candidate.current));
     if (chosen.filter((candidate) => !candidate.current).length !== 1)
       return { state: "ambiguous" };
     return { state: "selected", kind: "image", resources: chosen };
   }
   const named = candidates.filter(
     (candidate) => candidate.fileName.length > 0 &&
-      lowerText.includes(candidate.fileName.toLocaleLowerCase()),
+      mentionsFileName(text, candidate.fileName),
   );
   // A bare definition of a historical filename is not a request to use the
   // uploaded attachment. A current upload or explicit possessive/reference is.

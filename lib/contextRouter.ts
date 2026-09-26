@@ -15,6 +15,7 @@ import { extractTextQuery, isReferentialQuery } from "./chat/referentialQuery";
 import { getConversationResourceCatalog } from "./chat/resourceCatalog";
 import { selectConversationResource } from "./chat/resourceSelection";
 import { attachmentKind } from "./chat/attachmentKind";
+import { mentionsFileName, mentionsExplicitFileName } from "./chat/fileNameReferences";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
 import { isTrustedAttachmentUrl } from "@/lib/network/ssrf";
@@ -384,11 +385,11 @@ export async function routeContext(
         catalog.resources.filter((resource) => resource.current)) : null;
   const namedNonCurrentResource = Boolean(catalog && !catalog.complete &&
     catalog.resources.some((resource) => !resource.current && resource.fileName &&
-      textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
+      mentionsFileName(textQuery, resource.fileName)));
   const mentionsDifferentFileName = Boolean(catalog && !catalog.complete &&
-    /\b[^\s/]+\.(?:pdf|docx?|txt|csv|md|png|jpe?g|webp|gif|heic|avif|svg|bmp|tiff?|xlsx?|pptx?|rtf)\b/i.test(textQuery) &&
+    mentionsExplicitFileName(textQuery) &&
     !catalog.resources.filter((resource) => resource.current).some((resource) =>
-      resource.fileName && textQuery.toLocaleLowerCase().includes(resource.fileName.toLocaleLowerCase())));
+      resource.fileName && mentionsFileName(textQuery, resource.fileName)));
   const safeCurrentOnly = !namedNonCurrentResource && !mentionsDifferentFileName &&
     currentOnlySelection?.state === "selected" &&
     currentOnlySelection.resources.length > 0 &&

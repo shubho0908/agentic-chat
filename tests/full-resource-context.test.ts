@@ -279,3 +279,27 @@ test("a dotted topic is not a historical filename with incomplete history", asyn
     Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
   }
 });
+
+test("named image matches whole filename, not suffix inside a different filename", () => {
+  const selection = selectConversationResource("Compare the earlier image fold.png with this PDF", false,
+    [file(1, true, "now"), { ...img(2), fileName: "fold.png" }, { ...img(3), fileName: "old.png" }]);
+  assert.equal(selection.state, "selected");
+  if (selection.state === "selected") assert.deepEqual(selection.images?.map(({ id }) => id), ["image-2"]);
+});
+
+test("custom-extension older file in incomplete history cannot be silently dropped", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", parentMessageId: null, createdAt: new Date(), attachments: [file(1, true, "now")] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true,
+    value: async () => Array.from({ length: 501 }, (_, i) => ({ id: `old-${i}`, attachments: [file(i+2)] })) });
+  try {
+    const result = await routeContext("Summarize this PDF and data.json", "owner", [], "conv", null, false,
+      { currentMessageId: "now" });
+    assert.match(result.context, /Historical attachment search was incomplete/);
+    assert.equal(result.metadata.documentEvidenceIds, undefined);
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
