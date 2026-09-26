@@ -13,6 +13,7 @@ const attachmentSchema = z.object({
   fileUrl: z.url(),
   fileName: z.string(),
   fileType: z.string(),
+  kind: z.enum(["image", "document", "snippet"]).optional(),
   fileSize: z.number().int(),
 });
 
@@ -22,6 +23,7 @@ export const attachmentInputSchema = z.object({
     .string()
     .min(1)
     .max(VALIDATION_LIMITS.ATTACHMENT_FILE_NAME_MAX_LENGTH),
+  kind: z.enum(["image", "document", "snippet"]).optional(),
   fileType: z
     .string()
     .min(1)

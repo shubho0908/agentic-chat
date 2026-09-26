@@ -7,7 +7,14 @@ interface SharedMessageInput {
   metadata?: Prisma.JsonValue;
   createdAt: Date;
   siblingIndex: number;
-  attachments?: { id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number }[];
+  attachments?: {
+    id: string;
+    fileUrl: string;
+    fileName: string;
+    fileType: string;
+    kind?: "image" | "document" | "snippet";
+    fileSize: number;
+  }[];
   versions?: SharedMessageInput[];
 }
 
@@ -32,8 +39,11 @@ const SAFE_METADATA_KEYS = new Set([
   "pdfs",
 ]);
 
-function redactMetadata(metadata: Prisma.JsonValue | undefined): Record<string, unknown> | undefined {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+function redactMetadata(
+  metadata: Prisma.JsonValue | undefined,
+): Record<string, unknown> | undefined {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    return undefined;
   const safe: Record<string, unknown> = {};
   for (const key of SAFE_METADATA_KEYS) {
     if (key in metadata && metadata[key] !== undefined) {
@@ -50,7 +60,14 @@ interface RedactedMessage {
   metadata: Record<string, unknown> | undefined;
   createdAt: Date;
   siblingIndex: number;
-  attachments: { id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number }[];
+  attachments: {
+    id: string;
+    fileUrl: string;
+    fileName: string;
+    fileType: string;
+    kind?: "image" | "document" | "snippet";
+    fileSize: number;
+  }[];
   versions: RedactedMessage[];
 }
 
@@ -67,7 +84,9 @@ function redactMessage(msg: SharedMessageInput): RedactedMessage {
   };
 }
 
-export function redactSharedConversation(conversation: SharedConversationInput) {
+export function redactSharedConversation(
+  conversation: SharedConversationInput,
+) {
   return {
     id: conversation.id,
     title: conversation.title,

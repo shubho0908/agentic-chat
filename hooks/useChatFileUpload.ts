@@ -104,13 +104,21 @@ function uploadPhaseReducer(_: UploadPhase, action: UploadAction): UploadPhase {
 }
 
 export function useChatFileUpload() {
-  const [selectedFilesState, setSelectedFilesState] = useState(EMPTY_SELECTED_FILES);
-  const [uploadedAttachments, setUploadedAttachments] = useState(EMPTY_UPLOAD_ATTACHMENTS);
+  const [selectedFilesState, setSelectedFilesState] =
+    useState(EMPTY_SELECTED_FILES);
+  const snippetFileIdsRef = useRef<Set<string>>(new Set());
+  const [uploadedAttachments, setUploadedAttachments] = useState(
+    EMPTY_UPLOAD_ATTACHMENTS,
+  );
   const [uploadPhase, dispatchUpload] = useReducer(
     uploadPhaseReducer,
     IDLE_PHASE,
   );
   const selectedFilesRef = useRef<File[]>([]);
+  const [uploadingFileIds, setUploadingFileIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const activeUploadCountRef = useRef(0);
   const fileIdMapRef = useRef<WeakMap<File, string>>(null!);
   const filePreviewUrlMapRef = useRef<Map<File, string>>(null!);
   if (fileIdMapRef.current === null) fileIdMapRef.current = new WeakMap();
@@ -119,12 +127,13 @@ export function useChatFileUpload() {
   const publicUploadedAttachments = useMemo<Attachment[]>(
     () =>
       uploadedAttachments.map(
-        ({ id, fileUrl, fileName, fileType, fileSize }) => ({
+        ({ id, fileUrl, fileName, fileType, fileSize, kind }) => ({
           id,
           fileUrl,
           fileName,
           fileType,
           fileSize,
+          kind,
         }),
       ),
     [uploadedAttachments],
@@ -265,6 +274,8 @@ export function useChatFileUpload() {
     const nextFiles = [...selectedFilesRef.current, ...allValidFiles];
 
     setSelectedFiles(nextFiles);
+    activeUploadCountRef.current += 1;
+    setUploadingFileIds((prev) => new Set([...prev, ...uploadBatchIds]));
     dispatchUpload({ type: "upload" });
 
     try {
@@ -276,7 +287,16 @@ export function useChatFileUpload() {
       const newAttachments = uploadResponsesToAttachments(
         response,
         uploadBatch,
-      );
+      ).map((attachment) => ({
+        ...attachment,
+        kind:
+          attachment.clientFileId &&
+          snippetFileIdsRef.current.has(attachment.clientFileId)
+            ? ("snippet" as const)
+            : attachment.fileType.startsWith("image/")
+              ? ("image" as const)
+              : ("document" as const),
+      }));
 
       setUploadedAttachments((prev) => {
         const activeFileIds = new Set(selectedFilesRef.current.map(getFileId));
@@ -312,37 +332,65 @@ export function useChatFileUpload() {
         description: getUploadErrorDescription(error),
       });
     } finally {
-      dispatchUpload({ type: "idle" });
+      activeUploadCountRef.current -= 1;
+      setUploadingFileIds((prev) => {
+        const next = new Set(prev);
+        uploadBatchIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (activeUploadCountRef.current === 0) dispatchUpload({ type: "idle" });
     }
+  }
+
+  function markSnippetFile(file: File) {
+    snippetFileIdsRef.current.add(getFileId(file));
   }
 
   function handleRemoveFile(file: File) {
     if (!file) return;
 
     const fileId = getFileId(file);
+    snippetFileIdsRef.current.delete(fileId);
 
     setSelectedFiles((prev) => prev.filter((f) => getFileId(f) !== fileId));
+    setUploadingFileIds((prev) => {
+      const next = new Set(prev);
+      next.delete(fileId);
+      return next;
+    });
     setUploadedAttachments((prev) =>
       prev.filter((attachment) => attachment.clientFileId !== fileId),
     );
   }
 
   function clearAttachments() {
+    snippetFileIdsRef.current.clear();
     setSelectedFiles([]);
     setUploadedAttachments([]);
+    setUploadingFileIds(new Set());
   }
 
   function restoreAttachments(files: File[], attachments: UploadAttachment[]) {
+    snippetFileIdsRef.current = new Set(
+      attachments.flatMap((attachment) =>
+        attachment.kind === "snippet" && attachment.clientFileId
+          ? [attachment.clientFileId]
+          : [],
+      ),
+    );
     files.forEach(ensureFilePreviewUrl);
     setSelectedFiles(files);
     setUploadedAttachments(attachments);
+    setUploadingFileIds(new Set());
   }
 
   return {
     selectedFiles: selectedFilesState,
     uploadedAttachments: publicUploadedAttachments,
+    markSnippetFile,
     isUploading: uploadPhase.isBusy,
     uploadPhase,
+    uploadingFileIds,
     dispatchUpload,
     getFileId,
     getFilePreviewUrl,

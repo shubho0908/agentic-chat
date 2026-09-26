@@ -161,6 +161,18 @@ export function createStreamEventMapper(): StreamEventMapper {
       const eventType = event.event as string;
 
       switch (eventType) {
+        case StreamEventType.CHAIN_START: {
+          if (event.name === GraphNode.PLANNER && getNode(event) === GraphNode.PLANNER) {
+            writer.enqueue(encodeToolProgress(CustomEventName.PLANNING, ToolStatus.RUNNING, "Preparing plan..."));
+          }
+          break;
+        }
+        case StreamEventType.CHAIN_END: {
+          if (event.name === GraphNode.PLANNER && getNode(event) === GraphNode.PLANNER) {
+            writer.enqueue(encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, ""));
+          }
+          break;
+        }
         case StreamEventType.CHAT_MODEL_STREAM: {
           if (askUserPending) break;
           if (getNode(event) !== GraphNode.AGENT) break;
@@ -254,12 +266,6 @@ export function createStreamEventMapper(): StreamEventMapper {
 
           if (customData?.type === CustomEventName.THINKING) {
             writer.enqueue(encodeThinkingChunk(customData.content as string));
-          }
-          if (customData?.type === CustomEventName.PLANNING || eventName === CustomEventName.PLANNING) {
-            const planData = customData?.plan ?? customData;
-            writer.enqueue(
-              encodeToolProgress(CustomEventName.PLANNING, ToolStatus.COMPLETED, "Plan ready", planData as Record<string, unknown>)
-            );
           }
           if (eventName === CustomEventName.RESEARCH_PROGRESS) {
             const step = (customData?.step as string) ?? "researching";

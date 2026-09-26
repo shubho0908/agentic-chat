@@ -17,6 +17,7 @@ interface SavedMessageWithAttachments {
   attachments?: Array<{
     id: string;
     fileType: string;
+    kind?: string;
   }>;
 }
 
@@ -145,7 +146,9 @@ export async function saveUserMessage(
         savedMessage.attachments.length > 0
       ) {
         const documentAttachmentIds = savedMessage.attachments.flatMap((att) =>
-          isSupportedForRAG(att.fileType) ? [att.id] : [],
+          att.kind !== "image" && isSupportedForRAG(att.fileType)
+            ? [att.id]
+            : [],
         );
 
         if (documentAttachmentIds.length > 0) {
@@ -194,7 +197,16 @@ export async function saveAssistantMessage(
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to save message: ${response.statusText}`);
+      let serverMessage = response.statusText;
+      try {
+        const errorData = await response.json();
+        if (typeof errorData?.message === "string")
+          serverMessage = errorData.message;
+        else if (typeof errorData?.error === "string")
+          serverMessage = errorData.error;
+      } catch {
+      }
+      throw new Error(`Failed to save assistant message (${response.status}): ${serverMessage}`);
     }
 
     const savedMessage = await response.json();
@@ -269,7 +281,9 @@ export async function finalizeEditedMessage(
   ) {
     const documentAttachmentIds = finalized.updatedMessage.attachments.flatMap(
       (att) =>
-        typeof att.id === "string" && isSupportedForRAG(att.fileType)
+        typeof att.id === "string" &&
+        att.kind !== "image" &&
+        isSupportedForRAG(att.fileType)
           ? [att.id]
           : [],
     );

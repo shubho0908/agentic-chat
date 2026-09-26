@@ -1,12 +1,17 @@
-import { NextRequest } from 'next/server';
-import { headers } from 'next/headers';
-import { createHash } from 'node:crypto';
-import { getAuthenticatedUser, errorResponse, verifyConversationOwnership } from '@/lib/apiUtils';
-import { prisma } from '@/lib/prisma';
-import { decryptApiKey } from '@/lib/encryption';
-import OpenAI from 'openai';
-import { API_ERROR_MESSAGES, HTTP_STATUS } from '@/constants/errors';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rateLimit';
+import { attachHistoricalImagesToModelTurn } from "@/lib/chat/modelResourceImages";
+import { NextRequest } from "next/server";
+import { headers } from "next/headers";
+import { createHash } from "node:crypto";
+import {
+  getAuthenticatedUser,
+  errorResponse,
+  verifyConversationOwnership,
+} from "@/lib/apiUtils";
+import { prisma } from "@/lib/prisma";
+import { decryptApiKey } from "@/lib/encryption";
+import OpenAI from "openai";
+import { API_ERROR_MESSAGES, HTTP_STATUS } from "@/constants/errors";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 
 const OPENAI_CLIENT_CACHE_MAX = 32;
 const openaiClientCache = new Map<string, OpenAI>();
@@ -35,9 +40,9 @@ function getOpenAIClient(apiKey: string): OpenAI {
 
   return client;
 }
-import { isValidConversationId, validateChatMessages } from '@/lib/validation';
-import { parseOpenAIError } from '@/lib/openaiErrors';
-import { DegradedContextSource, type MemoryStatus } from '@/types/chat';
+import { isValidConversationId, validateChatMessages } from "@/lib/validation";
+import { parseOpenAIError } from "@/lib/openaiErrors";
+import { DegradedContextSource, type MemoryStatus } from "@/types/chat";
 
 const BASE_MEMORY_STATUS: MemoryStatus = {
   hasMemories: false,
@@ -49,16 +54,27 @@ const BASE_MEMORY_STATUS: MemoryStatus = {
   imageCount: 0,
   skippedMemory: false,
 };
-import { createChatStreamHandler, toOpenAIChatMessages } from '@/lib/chat/streamHandler';
-import { wrapOpenAIWithLangSmith, withTrace } from '@/lib/langsmithConfig';
-import { createRequestId, logError, logWarn } from '@/lib/observability';
-import { validateRequestedModel, getChatReasoningEffort, parseReasoningEffortParam } from '@/lib/modelPolicy';
-import { REASONING_EFFORTS, getSupportedReasoningEfforts, isReasoningEffortSupported } from '@/constants/openai-models';
-import { withRetry } from '@/lib/retry';
-import { checkTokenBudget } from '@/lib/chat/tokenBudget';
+import {
+  createChatStreamHandler,
+  toOpenAIChatMessages,
+} from "@/lib/chat/streamHandler";
+import { wrapOpenAIWithLangSmith, withTrace } from "@/lib/langsmithConfig";
+import { createRequestId, logError, logWarn } from "@/lib/observability";
+import {
+  validateRequestedModel,
+  getChatReasoningEffort,
+  parseReasoningEffortParam,
+} from "@/lib/modelPolicy";
+import {
+  REASONING_EFFORTS,
+  getSupportedReasoningEfforts,
+  isReasoningEffortSupported,
+} from "@/constants/openai-models";
+import { withRetry } from "@/lib/retry";
+import { checkTokenBudget } from "@/lib/chat/tokenBudget";
 import { logger } from "@/lib/logger";
-import { isRecord } from '@/lib/typeGuards';
-export const dynamic = 'force-dynamic';
+import { isRecord } from "@/lib/typeGuards";
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 function parseOptionalBoolean(
@@ -70,7 +86,7 @@ function parseOptionalBoolean(
     return { success: true, value: defaultValue };
   }
 
-  if (typeof value !== 'boolean') {
+  if (typeof value !== "boolean") {
     return { success: false, error: `${fieldName} must be a boolean` };
   }
 
@@ -78,9 +94,11 @@ function parseOptionalBoolean(
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = createRequestId('chat');
+  const requestId = createRequestId("chat");
   try {
-    const { user: authUser, error } = await getAuthenticatedUser(await headers());
+    const { user: authUser, error } = await getAuthenticatedUser(
+      await headers(),
+    );
     if (error) {
       return error;
     }
@@ -94,7 +112,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user?.encryptedApiKey) {
-      return errorResponse(API_ERROR_MESSAGES.API_KEY_NOT_CONFIGURED, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        API_ERROR_MESSAGES.API_KEY_NOT_CONFIGURED,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const apiKey = decryptApiKey(user.encryptedApiKey);
@@ -103,11 +125,19 @@ export async function POST(request: NextRequest) {
     try {
       rawBody = await request.json();
     } catch {
-      return errorResponse('Request body must be valid JSON.', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Request body must be valid JSON.",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     if (!isRecord(rawBody)) {
-      return errorResponse('Request body must be a JSON object.', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Request body must be a JSON object.",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const body = rawBody;
@@ -115,49 +145,95 @@ export async function POST(request: NextRequest) {
     const conversationId =
       body.conversationId === undefined || body.conversationId === null
         ? undefined
-        : typeof body.conversationId === 'string'
+        : typeof body.conversationId === "string"
           ? body.conversationId.trim() || undefined
           : null;
 
     if (conversationId === null) {
-      return errorResponse('conversationId must be a string when provided.', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "conversationId must be a string when provided.",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     if (!conversationId && body.useOrchestrator !== false) {
-      return errorResponse('conversationId is required for orchestrated requests.', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "conversationId is required for orchestrated requests.",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     if (conversationId) {
       if (!isValidConversationId(conversationId)) {
-        return errorResponse(API_ERROR_MESSAGES.INVALID_CONVERSATION_ID, undefined, HTTP_STATUS.BAD_REQUEST);
+        return errorResponse(
+          API_ERROR_MESSAGES.INVALID_CONVERSATION_ID,
+          undefined,
+          HTTP_STATUS.BAD_REQUEST,
+        );
       }
 
-      const { error: ownershipError } = await verifyConversationOwnership(conversationId, authUser.id);
+      const { error: ownershipError } = await verifyConversationOwnership(
+        conversationId,
+        authUser.id,
+      );
       if (ownershipError) return ownershipError;
     }
 
-    const branchId = body.branchId === undefined ? undefined : typeof body.branchId === "string" && body.branchId.trim() ? body.branchId.trim() : null;
+    const branchId =
+      body.branchId === undefined
+        ? undefined
+        : typeof body.branchId === "string" && body.branchId.trim()
+          ? body.branchId.trim()
+          : null;
     if (branchId === null || (branchId && branchId.length > 200)) {
-      return errorResponse('branchId must be a non-empty string up to 200 characters.', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "branchId must be a non-empty string up to 200 characters.",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    const streamResult = parseOptionalBoolean(body.stream, 'stream', true);
+    const streamResult = parseOptionalBoolean(body.stream, "stream", true);
     if (!streamResult.success) {
-      return errorResponse(streamResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        streamResult.error,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
     const stream = streamResult.value;
 
     // Memory is server-owned and always available for authenticated users. The
     // removed client boolean is honored only when false for external API clients.
     // The first-party UI no longer reads or sends the old localStorage setting.
-    const memoryEnabledResult = parseOptionalBoolean(body.memoryEnabled, 'memoryEnabled', true);
-    if (!memoryEnabledResult.success) return errorResponse(memoryEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+    const memoryEnabledResult = parseOptionalBoolean(
+      body.memoryEnabled,
+      "memoryEnabled",
+      true,
+    );
+    if (!memoryEnabledResult.success)
+      return errorResponse(
+        memoryEnabledResult.error,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     const legacyMemoryOptOut = memoryEnabledResult.value === false;
-    const memoryEnabled = process.env.MEMORY_ENABLED !== 'false' && !legacyMemoryOptOut;
+    const memoryEnabled =
+      process.env.MEMORY_ENABLED !== "false" && !legacyMemoryOptOut;
 
-    const thinkingEnabledResult = parseOptionalBoolean(body.thinkingEnabled, 'thinkingEnabled', false);
+    const thinkingEnabledResult = parseOptionalBoolean(
+      body.thinkingEnabled,
+      "thinkingEnabled",
+      false,
+    );
     if (!thinkingEnabledResult.success) {
-      return errorResponse(thinkingEnabledResult.error, undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        thinkingEnabledResult.error,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
     const thinkingEnabled = thinkingEnabledResult.value;
 
@@ -170,17 +246,28 @@ export async function POST(request: NextRequest) {
       );
     }
     // Legacy clients only send thinkingEnabled: ON maps to "high".
-    reasoningEffort = reasoningEffort ?? (thinkingEnabled ? 'high' : null);
+    reasoningEffort = reasoningEffort ?? (thinkingEnabled ? "high" : null);
 
-    if (typeof model !== 'string' || !model.trim()) {
-      return errorResponse(API_ERROR_MESSAGES.MODEL_REQUIRED, undefined, HTTP_STATUS.BAD_REQUEST);
+    if (typeof model !== "string" || !model.trim()) {
+      return errorResponse(
+        API_ERROR_MESSAGES.MODEL_REQUIRED,
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
     const validatedModel = validateRequestedModel(model.trim());
     if (!validatedModel) {
-      return errorResponse('Unsupported model requested', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        "Unsupported model requested",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
-    if (reasoningEffort && !isReasoningEffortSupported(validatedModel, reasoningEffort)) {
+    if (
+      reasoningEffort &&
+      !isReasoningEffortSupported(validatedModel, reasoningEffort)
+    ) {
       return errorResponse(
         `reasoningEffort "${reasoningEffort}" is not supported by ${validatedModel}. Supported: ${getSupportedReasoningEfforts(validatedModel).join(", ")}`,
         undefined,
@@ -190,13 +277,14 @@ export async function POST(request: NextRequest) {
 
     const validation = validateChatMessages(messages);
     if (!validation.valid) {
-      return errorResponse(validation.error || 'Invalid messages', undefined, HTTP_STATUS.BAD_REQUEST);
+      return errorResponse(
+        validation.error || "Invalid messages",
+        undefined,
+        HTTP_STATUS.BAD_REQUEST,
+      );
     }
 
     const validatedMessages = validation.messages;
-    const documentAttachmentIds = Array.isArray(body.documentAttachmentIds)
-      ? body.documentAttachmentIds.filter((id): id is string => typeof id === "string" && id.length > 0).slice(0, 20)
-      : undefined;
 
     const openai = wrapOpenAIWithLangSmith(getOpenAIClient(apiKey));
 
@@ -206,7 +294,7 @@ export async function POST(request: NextRequest) {
         abortController.abort();
       } else {
         request.signal.addEventListener(
-          'abort',
+          "abort",
           () => {
             abortController.abort();
           },
@@ -215,7 +303,7 @@ export async function POST(request: NextRequest) {
       }
       const useOrchestratorResult = parseOptionalBoolean(
         body.useOrchestrator,
-        'useOrchestrator',
+        "useOrchestrator",
         true,
       );
       if (!useOrchestratorResult.success) {
@@ -228,14 +316,15 @@ export async function POST(request: NextRequest) {
       const useOrchestrator = useOrchestratorResult.value;
 
       const streamHandler = useOrchestrator
-        ? (await import('@/lib/orchestrator/handler')).createOrchestratorStreamHandler({
+        ? (
+            await import("@/lib/orchestrator/handler")
+          ).createOrchestratorStreamHandler({
             messages: validatedMessages,
             model: validatedModel,
             apiKey,
             userId: authUser.id,
             conversationId: conversationId!,
             branchId,
-            documentAttachmentIds,
             memoryEnabled,
             reasoningEffort,
             abortSignal: abortController.signal,
@@ -250,25 +339,29 @@ export async function POST(request: NextRequest) {
             abortSignal: abortController.signal,
             userId: authUser.id,
             conversationId,
+            branchId,
             requestId,
             reasoningEffort,
           });
 
-      const readableStream = new ReadableStream({
-        ...streamHandler,
-        cancel() {
-          abortController.abort();
+      const readableStream = new ReadableStream(
+        {
+          ...streamHandler,
+          cancel() {
+            abortController.abort();
+          },
         },
-      }, {
-        highWaterMark: 1,
-      });
+        {
+          highWaterMark: 1,
+        },
+      );
 
       return new Response(readableStream, {
         headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache, no-transform',
-          'Connection': 'keep-alive',
-          'X-Accel-Buffering': 'no',
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
         },
       });
     } else {
@@ -276,12 +369,14 @@ export async function POST(request: NextRequest) {
       let memoryStatusInfo: MemoryStatus = { ...BASE_MEMORY_STATUS };
 
       try {
-        const { routeContext } = await import('@/lib/contextRouter');
-        const { injectContextToMessages } = await import('@/lib/chat/messageHelpers');
-        const lastUserMessage = validatedMessages[validatedMessages.length - 1]?.content || '';
+        const { routeContext } = await import("@/lib/contextRouter");
+        const { injectContextToMessages } =
+          await import("@/lib/chat/messageHelpers");
+        const lastUserMessage =
+          validatedMessages[validatedMessages.length - 1]?.content || "";
 
         const contextResult = await withTrace(
-          'context-routing',
+          "context-routing",
           async () => {
             return await routeContext(
               lastUserMessage,
@@ -290,7 +385,13 @@ export async function POST(request: NextRequest) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey }
+              {
+                apiKey,
+                model: validatedModel,
+                currentMessageId:
+                  validatedMessages[validatedMessages.length - 1]?.id,
+                branchId,
+              },
             );
           },
           {
@@ -298,16 +399,37 @@ export async function POST(request: NextRequest) {
             conversationId,
             memoryEnabled,
             model: validatedModel,
-          }
+          },
         );
 
         memoryStatusInfo = contextResult.metadata;
+        if (contextResult.unresolved) {
+          return new Response(JSON.stringify({
+            id: `attachment-clarification-${requestId}`,
+            object: "chat.completion",
+            created: Math.floor(Date.now() / 1000),
+            model: validatedModel,
+            choices: [{ index: 0, finish_reason: "stop", message: {
+              role: "assistant", content: contextResult.unresolved.prompt,
+            } }],
+          }), { headers: { "Content-Type": "application/json" } });
+        }
 
+        enhancedMessages = attachHistoricalImagesToModelTurn(
+          enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+          contextResult.metadata.includeCurrentImages,
+          contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
+          contextResult.metadata.selectedCurrentImageFiles?.map((file) => file.fileUrl),
+        );
         if (contextResult.context) {
-          enhancedMessages = injectContextToMessages(enhancedMessages, contextResult.context, validatedModel);
+          enhancedMessages = injectContextToMessages(
+            enhancedMessages,
+            contextResult.context,
+            validatedModel,
+          );
         }
       } catch (error) {
-        logger.error('[Context Routing Error]', error);
+        logger.error("[Context Routing Error]", error);
         memoryStatusInfo.degradedContexts = [
           ...(memoryStatusInfo.degradedContexts || []),
           {
@@ -322,7 +444,7 @@ export async function POST(request: NextRequest) {
         memoryStatusInfo.tokenUsage = budgetCheck.tokenUsage;
         if (!budgetCheck.ok) {
           logWarn({
-            event: 'chat_request_rejected_budget',
+            event: "chat_request_rejected_budget",
             requestId,
             model: validatedModel,
             usedTokens: budgetCheck.tokenUsage.used,
@@ -330,26 +452,30 @@ export async function POST(request: NextRequest) {
             reserve: budgetCheck.tokenUsage.responseReserve,
           });
           return errorResponse(
-            budgetCheck.errorMessage ?? 'Request exceeds the server token budget. Please shorten the conversation or attachments and try again.',
+            budgetCheck.errorMessage ??
+              "Request exceeds the server token budget. Please shorten the conversation or attachments and try again.",
             undefined,
-            HTTP_STATUS.BAD_REQUEST
+            HTTP_STATUS.BAD_REQUEST,
           );
         }
       } catch (error) {
         logError({
-          event: 'token_count_failed',
+          event: "token_count_failed",
           requestId,
           error: error instanceof Error ? error.message : String(error),
         });
         memoryStatusInfo.tokenUsage = undefined;
         return errorResponse(
-          'Unable to validate request size. Please try again.',
+          "Unable to validate request size. Please try again.",
           undefined,
-          HTTP_STATUS.BAD_REQUEST
+          HTTP_STATUS.BAD_REQUEST,
         );
       }
 
-      const resolvedReasoningEffort = getChatReasoningEffort(validatedModel, reasoningEffort);
+      const resolvedReasoningEffort = getChatReasoningEffort(
+        validatedModel,
+        reasoningEffort,
+      );
       const completion = await withRetry(
         () =>
           openai.chat.completions.create(
@@ -357,21 +483,22 @@ export async function POST(request: NextRequest) {
               model: validatedModel,
               messages: toOpenAIChatMessages(enhancedMessages),
               stream: false,
-              ...(resolvedReasoningEffort ? { reasoning_effort: resolvedReasoningEffort } : {}),
+              ...(resolvedReasoningEffort
+                ? { reasoning_effort: resolvedReasoningEffort }
+                : {}),
             },
-            { signal: request.signal }
+            { signal: request.signal },
           ),
-        { signal: request.signal }
+        { signal: request.signal },
       );
 
-      return new Response(
-        JSON.stringify(completion),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify(completion), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
   } catch (error) {
     logError({
-      event: 'chat_route_failed',
+      event: "chat_route_failed",
       requestId,
       error: error instanceof Error ? error.message : String(error),
     });

@@ -1,26 +1,30 @@
-import type { Attachment, Message, MessageMetadata, ToolArgs, MessageContentPart, MessageRole } from '@/lib/schemas/chat';
-import type { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from '@/lib/orchestrator/constants';
-import type { HumanInTheLoopRequestKindValue } from '@/lib/tools/constants';
 import type {
-  WebSearchImage,
-  WebSearchSource,
-} from './tools';
-import type { ArtifactEvent } from './artifact';
-import type { ReasoningEffortLevel } from '@/constants/openai-models';
+  Attachment,
+  Message,
+  MessageMetadata,
+  ToolArgs,
+  MessageContentPart,
+  MessageRole,
+} from "@/lib/schemas/chat";
+import type { HUMAN_IN_THE_LOOP_REQUEST_TYPE } from "@/lib/orchestrator/constants";
+import type { HumanInTheLoopRequestKindValue } from "@/lib/tools/constants";
+import type { WebSearchImage, WebSearchSource } from "./tools";
+import type { ArtifactEvent } from "./artifact";
+import type { ReasoningEffortLevel } from "@/constants/openai-models";
 
 export enum RoutingDecision {
-  VisionOnly = 'vision-only',
-  DocumentsOnly = 'documents-only',
-  MemoryOnly = 'memory-only',
-  Hybrid = 'hybrid',
-  ToolOnly = 'tool-only',
+  VisionOnly = "vision-only",
+  DocumentsOnly = "documents-only",
+  MemoryOnly = "memory-only",
+  Hybrid = "hybrid",
+  ToolOnly = "tool-only",
 }
 
 export enum ToolProgressStatus {
-  Searching = 'searching',
-  Found = 'found',
-  ProcessingSources = 'processing_sources',
-  Completed = 'completed',
+  Searching = "searching",
+  Found = "found",
+  ProcessingSources = "processing_sources",
+  Completed = "completed",
 }
 
 export interface TokenUsage {
@@ -36,8 +40,8 @@ export interface TokenUsage {
 }
 
 export enum DegradedContextSource {
-  Memory = 'memory',
-  ContextRouter = 'context_router',
+  Memory = "memory",
+  ContextRouter = "context_router",
 }
 
 export interface MemoryStatus {
@@ -46,6 +50,13 @@ export interface MemoryStatus {
   hasDocuments: boolean;
   memoryCount: number;
   documentCount: number;
+  attachmentContextKind?: "document" | "snippet";
+  documentContextState?: "ready" | "unavailable";
+  documentEvidenceIds?: string[];
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "document" | "snippet" }>;
+  historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "image" }>;
+  includeCurrentImages?: boolean;
+  selectedCurrentImageFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "image" }>;
   hasImages: boolean;
   imageCount: number;
   routingDecision?: RoutingDecision;
@@ -73,7 +84,7 @@ export interface MemoryStatus {
       tool?: string;
       error?: string;
 
-      citations?: MessageMetadata['citations'];
+      citations?: MessageMetadata["citations"];
       skipped?: boolean;
       status?: string;
     };
@@ -119,7 +130,7 @@ export type MessageSendHandler = (
   content: string,
   attachments?: Attachment[],
   activeTool?: string | null,
-  reasoningEffort?: ReasoningEffortLevel
+  reasoningEffort?: ReasoningEffortLevel,
 ) => Promise<MessageSendResult> | MessageSendResult;
 
 export interface EditMessageOptions {
@@ -152,7 +163,10 @@ export interface UseChatReturn {
   editMessage: (options: EditMessageOptions) => Promise<void>;
   regenerateResponse: (options: RegenerateMessageOptions) => Promise<void>;
   continueConversation: (options: ContinueConversationOptions) => Promise<void>;
-  respondToHumanInTheLoop: (approved: boolean, response?: string) => Promise<void>;
+  respondToHumanInTheLoop: (
+    approved: boolean,
+    response?: string,
+  ) => Promise<void>;
   clearChat: () => void;
   stopGeneration: () => void;
   memoryStatus?: MemoryStatus;
@@ -226,7 +240,11 @@ export interface HumanInTheLoopRequestEvent {
 }
 
 export interface StreamConfig {
-  messages: Array<{ role: MessageRole; content: string | MessageContentPart[]; id?: string }>;
+  messages: Array<{
+    role: MessageRole;
+    content: string | MessageContentPart[];
+    id?: string;
+  }>;
   branchId?: string;
   model: string;
   signal: AbortSignal;
@@ -237,11 +255,14 @@ export interface StreamConfig {
   onToolResult?: (toolResult: ToolResultEvent) => void;
   onToolProgress?: (progress: ToolProgressEvent) => void;
   onHumanInTheLoopRequest?: (request: HumanInTheLoopRequestEvent) => void;
-  onUsageUpdated?: (usage: { usageCount: number; remaining: number; limit: number }) => void;
+  onUsageUpdated?: (usage: {
+    usageCount: number;
+    remaining: number;
+    limit: number;
+  }) => void;
   onThinking?: (thinking: string) => void;
   onArtifact?: (event: ArtifactEvent) => void;
   onResponseIncomplete?: (reason: "length") => void;
-  documentAttachmentIds?: string[];
   reasoningEffort?: ReasoningEffortLevel;
 }
 
