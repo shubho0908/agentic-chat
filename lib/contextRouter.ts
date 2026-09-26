@@ -388,7 +388,7 @@ export async function routeContext(
   const explicitCurrent = catalog?.foundCurrent
     ? selectConversationResource(textQuery, hasImages,
         catalog.resources.filter((resource) => resource.current)) : null;
-  const uniqueExplicitCurrent = !/\b(?:earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) &&
+  const uniqueExplicitCurrent = !/\b(?:and|with|plus|earlier|previous|prior|old|above|before|all|every|both|across|together|dono|sabhi|compare|versus|against)\b/i.test(textQuery) &&
     explicitCurrent?.state === "selected" && explicitCurrent.resources.length === 1 &&
     explicitCurrent.resources[0].current && !(explicitCurrent.images?.length) &&
     catalog?.resources.filter((resource) => resource.current &&

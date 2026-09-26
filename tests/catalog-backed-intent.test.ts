@@ -202,3 +202,24 @@ test("a failed classifier still routes an explicit single current PDF without gu
     Object.defineProperty(prisma, "$queryRaw", { configurable: true, value: raw });
   }
 });
+
+test("classifier failure cannot answer from only one of two requested current files", async () => {
+  const first = prisma.message.findFirst, many = prisma.message.findMany;
+  const doc = { ...earlier, id: "current-pdf", fileName: "current.pdf" };
+  const image = { ...current, id: "current-image", fileName: "current.png" };
+  Object.defineProperty(prisma.message, "findFirst", { configurable: true,
+    value: async () => ({ id: "now", createdAt: new Date(), parentMessageId: null, attachments: [doc, image] }) });
+  Object.defineProperty(prisma.message, "findMany", { configurable: true, value: async () => [] });
+  try {
+    for (const query of ["What is in this file and this image?", "Compare current.pdf with current.png"]) {
+      const result = await routeContext(query, "owner", [], "conv", null, false,
+        { currentMessageId: "now", decideResources: async () => { throw new Error("classifier timeout"); } });
+      assert.equal(result.unresolved?.reason, "ambiguous");
+      assert.equal(result.metadata.documentEvidenceIds, undefined);
+      assert.equal(result.metadata.historicalImageFiles, undefined);
+    }
+  } finally {
+    Object.defineProperty(prisma.message, "findFirst", { configurable: true, value: first });
+    Object.defineProperty(prisma.message, "findMany", { configurable: true, value: many });
+  }
+});
