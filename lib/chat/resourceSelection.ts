@@ -59,7 +59,7 @@ export function selectConversationResource(
   const currentCandidates = candidates.filter((candidate) => candidate.current);
   const crossKindComparisonReference = kinds.has("image") && kinds.has("document") &&
     /\b(?:compare|comparison|difference|different|fark|farq|antar)\b/i.test(text) &&
-    /\b(?:this|that|these|those|my|our|uploaded|attached|sent|earlier|previous|prior|is|iss|yeh|ye|wo|woh|maine|mera|meri|dono)\b/i.test(text);
+    /\b(?:this|that|these|those|my|our|uploaded|attached|sent|earlier|previous|prior|iss|yeh|ye|wo|woh|maine|mera|meri|dono)\b/i.test(text);
 
   const aggregateRequest =
     (/\b(?:all|every|across|together|each|sabhi)\b/i.test(text) &&

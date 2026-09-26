@@ -152,3 +152,9 @@ test("generic current image plus snippet does not silently drop one resource", (
 test("an explicit old PDF should not select an unrelated current PDF", () => {
   assert.equal(chosen("Read the earlier PDF", [resource("current", "document", true)]).state, "none");
 });
+
+test("general image/PDF format question does not select historical attachments", () => {
+  assert.equal(chosen("Is there a difference between an image and a PDF?", [
+    resource("older-image", "image"), resource("older-pdf", "document"),
+  ]).state, "none");
+});
