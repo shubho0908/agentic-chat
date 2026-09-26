@@ -98,8 +98,8 @@ export function ExportSection({ conversationId }: ExportSectionProps) {
 
   return (
     <fieldset className="space-y-3">
+      <legend className="sr-only">Download format</legend>
       <TabsList className="grid h-11 w-full grid-cols-3 rounded-xl p-1">
-        <legend className="sr-only">Download format</legend>
         {exportFormats.map((format) => {
           const Icon = format.icon;
           const isSelected = selectedFormat === format.value;
