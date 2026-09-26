@@ -256,7 +256,12 @@ export async function readChatStream(
               return record &&
                 typeof record.id === "string" &&
                 typeof record.fileUrl === "string"
-                ? [{ id: record.id, fileUrl: record.fileUrl }]
+                ? [{ id: record.id, fileUrl: record.fileUrl,
+                    fileName: optionalString(record.fileName),
+                    fileType: optionalString(record.fileType),
+                    fileSize: optionalNumber(record.fileSize),
+                    kind: record.kind === "snippet" ? "snippet" as const : "document" as const,
+                  }]
                 : [];
             })
           : undefined,
@@ -266,10 +271,16 @@ export async function readChatStream(
               return record &&
                 typeof record.id === "string" &&
                 typeof record.fileUrl === "string"
-                ? [{ id: record.id, fileUrl: record.fileUrl }]
+                ? [{ id: record.id, fileUrl: record.fileUrl,
+                    fileName: optionalString(record.fileName),
+                    fileType: optionalString(record.fileType),
+                    fileSize: optionalNumber(record.fileSize),
+                    kind: "image" as const,
+                  }]
                 : [];
             })
           : undefined,
+        includeCurrentImages: optionalBoolean(parsed.includeCurrentImages),
         hasImages: optionalBoolean(parsed.hasImages) ?? false,
         imageCount: optionalNumber(parsed.imageCount) ?? 0,
         routingDecision: optionalString(

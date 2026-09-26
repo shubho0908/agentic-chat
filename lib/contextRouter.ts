@@ -1,5 +1,7 @@
 import { getMemoryContextResult } from "./memory";
 import { getRAGContext } from "./rag/retrieval/context";
+import { getCompleteIndexedDocuments } from "./rag/retrieval/fullContext";
+import { getContextBudgetTokens } from "./chat/messageHelpers";
 import type { Message } from "@/lib/schemas/chat";
 import { MessageRole } from "@/lib/schemas/chat";
 import { DegradedContextSource, RoutingDecision } from "@/types/chat";
@@ -16,6 +18,8 @@ import { selectConversationResource } from "./chat/resourceSelection";
 import { logger } from "@/lib/logger";
 import { safeFetch } from "@/lib/network/safeFetch";
 import { isTrustedAttachmentUrl } from "@/lib/network/ssrf";
+import { OPENAI_MODELS } from "@/constants/openai-models";
+import { truncateTextToTokenLimit } from "@/lib/utils/tokenCounter";
 
 const INLINE_ATTACHMENT_MAX_BYTES = 512 * 1024;
 
@@ -126,8 +130,9 @@ interface ContextRoutingMetadata {
   activeToolName?: string;
   documentContextState?: "ready" | "unavailable";
   documentEvidenceIds?: string[];
-  documentEvidenceFiles?: Array<{ id: string; fileUrl: string }>;
-  historicalImageFiles?: Array<{ id: string; fileUrl: string }>;
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "document" | "snippet" }>;
+  historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName: string; fileType: string; fileSize: number; kind: "image" }>;
+  includeCurrentImages?: boolean;
   citations?: Array<{
     id: string;
     source: string;
@@ -317,6 +322,7 @@ export async function routeContext(
   memoryEnabled: boolean = true,
   options?: {
     apiKey?: string;
+    model?: string;
     signal?: AbortSignal;
     currentMessageId?: string;
     branchId?: string;
@@ -408,9 +414,10 @@ export async function routeContext(
   }
   if (selection?.state === "selected" && selection.kind === "image") {
     const historicalImages = selection.resources.filter((resource) => !resource.current);
-    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl }) => ({ id, fileUrl }));
-    metadata.hasImages = hasImages || selection.resources.length > 0;
-    metadata.imageCount = imageCount + historicalImages.length;
+    metadata.includeCurrentImages = selection.resources.some((resource) => resource.current);
+    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
+    metadata.hasImages = selection.resources.length > 0;
+    metadata.imageCount = selection.resources.length;
     metadata.routingDecision = RoutingDecision.VisionOnly;
     metadata.skippedMemory = true;
     return { context: "", metadata };
@@ -421,9 +428,6 @@ export async function routeContext(
       : null;
   const catalogAttachmentInfo = selectedResource
     ? {
-        hasDocuments: selectedResource.resources.some((resource) =>
-          isSupportedForRAG(resource.fileType),
-        ),
         documentCount: selectedResource.resources.filter((resource) =>
           isSupportedForRAG(resource.fileType),
         ).length,
@@ -432,7 +436,7 @@ export async function routeContext(
           .map((resource) => resource.id),
         documentFiles: selectedResource.resources
           .filter((resource) => isSupportedForRAG(resource.fileType))
-          .map(({ id, fileUrl }) => ({ id, fileUrl })),
+          .map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: selectedResource.kind as "document" | "snippet" })),
         unsupportedDocumentCount: selectedResource.resources.filter(
           (resource) => !isSupportedForRAG(resource.fileType),
         ).length,
@@ -442,10 +446,17 @@ export async function routeContext(
     const kind = selectedResource.kind as "document" | "snippet";
     metadata.attachmentContextKind = kind;
     const historicalImages = selectedResource.images?.filter((resource) => !resource.current) || [];
-    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl }) => ({ id, fileUrl }));
-    const hasSelectedImages = hasImages || historicalImages.length > 0;
+    metadata.includeCurrentImages = selectedResource.images?.some((resource) => resource.current) ?? false;
+    if (historicalImages.length) metadata.historicalImageFiles = historicalImages.map(({ id, fileUrl, fileName, fileType, fileSize }) => ({ id, fileUrl, fileName, fileType, fileSize, kind: "image" as const }));
+    const hasSelectedImages = selectedResource.images
+      ? selectedResource.images.length > 0
+      : hasImages && (selectedResource.resources.some((resource) => resource.current) ||
+        /\b(?:this|current|new|attached)\s+(?:image|photo|picture|screenshot)\b/i.test(textQuery));
+    metadata.includeCurrentImages = selectedResource.images
+      ? selectedResource.images.some((resource) => resource.current) : hasSelectedImages;
     metadata.hasImages = hasSelectedImages;
-    metadata.imageCount = imageCount + historicalImages.length;
+    metadata.imageCount = selectedResource.images
+      ? selectedResource.images.length : hasSelectedImages ? imageCount : 0;
     metadata.documentEvidenceFiles = catalogAttachmentInfo.documentFiles;
     if (catalogAttachmentInfo.unsupportedDocumentCount > 0) {
       metadata.skippedMemory = true;
@@ -459,6 +470,28 @@ export async function routeContext(
         context: buildMissingDocumentContext(textQuery, kind),
         metadata,
       };
+    }
+    const model = options?.model ?? OPENAI_MODELS[0].id;
+    const fullText = conversationId
+      ? await getCompleteIndexedDocuments(
+          catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
+        )
+      : null;
+    // The injection layer must never silently truncate claimed "complete" text.
+    const fullTextFits = Boolean(fullText) &&
+      truncateTextToTokenLimit(fullText!, model,
+        Math.max(0, getContextBudgetTokens([
+          ...messages, { role: MessageRole.USER, content: textQuery },
+        ], model) - 2000)) === fullText;
+    if (fullText && fullTextFits) {
+      metadata.hasDocuments = true;
+      metadata.documentCount = catalogAttachmentInfo.documentCount;
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = catalogAttachmentInfo.documentAttachmentIds;
+      metadata.routingDecision = hasSelectedImages
+        ? RoutingDecision.Hybrid : RoutingDecision.DocumentsOnly;
+      metadata.skippedMemory = true;
+      return { context: fullText, metadata };
     }
     const inlineResult = await tryInlineAttachmentContent(
       catalogAttachmentInfo.documentAttachmentIds,
@@ -481,7 +514,36 @@ export async function routeContext(
     metadata.routingDecision = hasSelectedImages
       ? RoutingDecision.Hybrid
       : RoutingDecision.DocumentsOnly;
-    if (inlineResult || ragResult) {
+    // A processing wait may have completed the PDF after the first full-text check.
+    // Re-evaluate completeness before accepting query samples as the answer.
+    const completedFullText = !inlineResult && conversationId
+      ? await getCompleteIndexedDocuments(
+          catalogAttachmentInfo.documentAttachmentIds, userId, conversationId, kind,
+        ) : null;
+    const completedFullTextFits = Boolean(completedFullText) &&
+      truncateTextToTokenLimit(completedFullText!, model,
+        Math.max(0, getContextBudgetTokens([
+          ...messages, { role: MessageRole.USER, content: textQuery },
+        ], model) - 2000)) === completedFullText;
+    if (completedFullText && completedFullTextFits) {
+      metadata.documentContextState = "ready";
+      metadata.documentEvidenceIds = catalogAttachmentInfo.documentAttachmentIds;
+      metadata.skippedMemory = true;
+      return { context: completedFullText, metadata };
+    }
+    const coverageOnly = Boolean(ragResult?.context.includes("_coverage_samples>")) ||
+      Boolean(ragResult?.citations?.length &&
+        ragResult.citations.every((citation) => citation.relevance === "coverage-sample"));
+    const needsCompleteText = /\b(?:summarize|summary|compare|comparison|differentiate|differences?|similarities?|all|every|both|entire|whole|full|each|dono|sabhi)\b/i.test(textQuery);
+    const inlineFits = Boolean(inlineResult) &&
+      truncateTextToTokenLimit(inlineResult!.context, model,
+        Math.max(0, getContextBudgetTokens([
+          ...messages, { role: MessageRole.USER, content: textQuery },
+        ], model) - 2000)) === inlineResult!.context;
+    const allSelectedRetrieved = ragResult &&
+      catalogAttachmentInfo.documentAttachmentIds.every((id) => ragResult.usedAttachmentIds.includes(id));
+    if ((inlineResult && inlineFits) ||
+        (ragResult && !coverageOnly && !needsCompleteText && allSelectedRetrieved)) {
       metadata.documentContextState = "ready";
       metadata.documentEvidenceIds = inlineResult
         ? catalogAttachmentInfo.documentAttachmentIds

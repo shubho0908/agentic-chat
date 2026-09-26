@@ -9,7 +9,7 @@ const RAG_CONTEXT_RATIO = 0.3;
 const MAX_RAG_CONTEXT_TOKENS = 32000;
 const MIN_RAG_CONTEXT_TOKENS = 2000;
 
-function getContextBudgetTokens(messages: Message[], model: string): number {
+export function getContextBudgetTokens(messages: Message[], model: string): number {
   const contextWindow = OPENAI_MODELS.find(m => m.id === model)?.contextWindow ?? 128000;
   const tokenUsage = calculateTokenUsage(messages, model);
   const responseReserve = getResponseTokenReserve(model);

@@ -19,7 +19,8 @@ test("does not double attach a current image and does not mutate non-user turns"
   const messages = [{ role: MessageRole.USER, content: [{ type: "text" as const, text: "compare" }, { type: "image_url" as const, image_url: { url: "https://example.com/one.png" } }] }];
   const prepared = attachHistoricalImagesToModelTurn(messages, [{ id: "image-one", fileUrl: "https://example.com/one.png" }]);
   assert.equal(prepared.length, 2);
-  assert.deepEqual(prepared[1].content, [{ type: "text", text: "compare" }]);
+  assert.deepEqual(prepared[1].content, [{ type: "text", text: "compare" },
+    { type: "image_url", image_url: { url: "https://example.com/one.png" } }]);
   assert.deepEqual(attachHistoricalImagesToModelTurn([{ role: MessageRole.ASSISTANT, content: "hi" }], [{ id: "a", fileUrl: "https://example.com/one.png" }]), [{ role: MessageRole.ASSISTANT, content: "hi" }]);
 });
 
@@ -48,4 +49,26 @@ test("old selected image displaces an unrelated current image, not the request t
   assert.equal(JSON.stringify(model).includes("new.png"), false);
   assert.equal(JSON.stringify(model).includes("old.png"), true);
   assert.equal(JSON.stringify(model).includes("Describe the earlier image"), true);
+});
+
+test("selected earlier and current images remain in mixed aggregate requests", () => {
+  const messages = [{ role: MessageRole.USER, content: [
+    { type: "text" as const, text: "Compare both images with the PDFs" },
+    { type: "image_url" as const, image_url: { url: "https://utfs.io/f/current.png" } },
+  ] }];
+  const model = toOpenAIChatMessages(attachHistoricalImagesToModelTurn(messages,[
+    { id: "old", fileUrl: "https://utfs.io/f/old.png" },
+  ], true));
+  assert.match(JSON.stringify(model), /old.png/);
+  assert.match(JSON.stringify(model), /current.png/);
+});
+
+test("old document context strips an unrelated current image without removing request text", () => {
+  const messages = [{ role: MessageRole.USER, id: "now", content: [
+    { type: "text" as const, text: "Summarize the previous document" },
+    { type: "image_url" as const, image_url: { url: "https://utfs.io/f/unrelated.png" } },
+  ] }];
+  const input = attachHistoricalImagesToModelTurn(messages, [], false, true);
+  assert.deepEqual(input[0].content, [{ type: "text", text: "Summarize the previous document" }]);
+  assert.equal(JSON.stringify(input).includes("unrelated.png"), false);
 });

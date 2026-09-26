@@ -186,7 +186,7 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
               conversationId,
               null,
               memoryEnabled,
-              { apiKey, currentMessageId: messages[messages.length - 1]?.id, branchId },
+              { apiKey, model, currentMessageId: messages[messages.length - 1]?.id, branchId },
             );
 
             memoryStatusInfo = {
@@ -196,6 +196,8 @@ export function createChatStreamHandler(options: StreamHandlerOptions) {
 
             enhancedMessages = attachHistoricalImagesToModelTurn(
               enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+              contextResult.metadata.includeCurrentImages,
+              contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
             );
             if (contextResult.context) {
               enhancedMessages = injectContextToMessages(

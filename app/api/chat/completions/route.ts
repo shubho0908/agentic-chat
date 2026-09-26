@@ -387,6 +387,7 @@ export async function POST(request: NextRequest) {
               memoryEnabled,
               {
                 apiKey,
+                model: validatedModel,
                 currentMessageId:
                   validatedMessages[validatedMessages.length - 1]?.id,
                 branchId,
@@ -405,6 +406,8 @@ export async function POST(request: NextRequest) {
 
         enhancedMessages = attachHistoricalImagesToModelTurn(
           enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+          contextResult.metadata.includeCurrentImages,
+          contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
         );
         if (contextResult.context) {
           enhancedMessages = injectContextToMessages(

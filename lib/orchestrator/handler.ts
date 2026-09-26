@@ -225,6 +225,7 @@ export function createOrchestratorStreamHandler(
             memoryEnabled,
             {
               apiKey,
+              model,
               signal: workSignal,
               currentMessageId: messages[messages.length - 1]?.id,
               branchId,
@@ -233,6 +234,8 @@ export function createOrchestratorStreamHandler(
           memoryStatusInfo = { ...memoryStatusInfo, ...contextResult.metadata };
           enhancedMessages = attachHistoricalImagesToModelTurn(
             enhancedMessages, contextResult.metadata.historicalImageFiles || [],
+            contextResult.metadata.includeCurrentImages,
+            contextResult.metadata.hasDocuments && !contextResult.metadata.includeCurrentImages,
           );
           if (contextResult.context) {
             enhancedMessages = injectContextToMessages(

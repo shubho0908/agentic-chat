@@ -20,6 +20,7 @@ export function encodeMemoryStatus(memoryStatusInfo: MemoryStatus): Uint8Array {
     documentEvidenceIds: memoryStatusInfo.documentEvidenceIds,
     documentEvidenceFiles: memoryStatusInfo.documentEvidenceFiles,
     historicalImageFiles: memoryStatusInfo.historicalImageFiles,
+    includeCurrentImages: memoryStatusInfo.includeCurrentImages,
     hasImages: memoryStatusInfo.hasImages,
     imageCount: memoryStatusInfo.imageCount,
     routingDecision: memoryStatusInfo.routingDecision,

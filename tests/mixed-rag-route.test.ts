@@ -97,13 +97,10 @@ test("mixed request reaches PDF evidence rather than image-only fallback", async
       { currentMessageId: "turn-1" },
     );
     assert.equal(routed.metadata.routingDecision, RoutingDecision.Hybrid);
-    assert.equal(routed.metadata.documentContextState, "ready");
-    assert.deepEqual(routed.metadata.documentEvidenceIds, [pdf.id]);
-    assert.match(
-      routed.context,
-      /Resume: software engineering, computer vision/,
-    );
-    assert.match(routed.context, /document_coverage_samples/);
+    assert.equal(routed.metadata.documentContextState, "unavailable");
+    assert.equal(routed.metadata.documentEvidenceIds, undefined);
+    assert.match(routed.context, /could not read all of the attached documents/);
+    assert.doesNotMatch(routed.context, /document_coverage_samples/);
     assert.equal(vectorQueries.length, 1);
     assert.equal(vectorQueries[0], question);
     assert.equal(

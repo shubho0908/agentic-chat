@@ -53,8 +53,9 @@ export interface MemoryStatus {
   attachmentContextKind?: "document" | "snippet";
   documentContextState?: "ready" | "unavailable";
   documentEvidenceIds?: string[];
-  documentEvidenceFiles?: Array<{ id: string; fileUrl: string }>;
-  historicalImageFiles?: Array<{ id: string; fileUrl: string }>;
+  documentEvidenceFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "document" | "snippet" }>;
+  historicalImageFiles?: Array<{ id: string; fileUrl: string; fileName?: string; fileType?: string; fileSize?: number; kind?: "image" }>;
+  includeCurrentImages?: boolean;
   hasImages: boolean;
   imageCount: number;
   routingDecision?: RoutingDecision;

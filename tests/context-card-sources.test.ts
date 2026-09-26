@@ -195,6 +195,40 @@ test("snippet status only displays snippet tiles, not an ordinary text document 
   assert.doesNotMatch(html, /notes\.txt/);
 });
 
+test("a scoped historical document renders its real title and clickable tile, even without current attachments", () => {
+  const status: MemoryStatus = {
+    ...base,
+    documentEvidenceFiles: [{ id: "old-id", fileUrl: doc("old").fileUrl,
+      fileName: "old.pdf", fileType: "application/pdf", fileSize: 100,
+      kind: "document" }],
+    documentEvidenceIds: ["old-id"],
+  };
+  const html = render(status, []);
+  assert.match(html, /old\.pdf/);
+  assert.match(html, /Document from this conversation/);
+  assert.match(html, /Relevant passages used/);
+  assert.doesNotMatch(html, /File preview is not available/);
+  assert.match(html, /type="button"/);
+});
+
+test("historical snippet and mixed document plus image get separate correct tiles", () => {
+  const snippet = render({ ...base, attachmentContextKind: "snippet",
+    documentEvidenceFiles: [{ id: "paste", fileUrl: "https://example.com/paste.txt",
+      fileName: "pasted-text-2.txt", fileType: "text/plain", fileSize: 42, kind: "snippet" }],
+    documentEvidenceIds: ["paste"] }, []);
+  assert.match(snippet, /pasted-text-2\.txt/);
+  const mixed = render({ ...base, hasImages: true, imageCount: 1,
+    routingDecision: RoutingDecision.Hybrid,
+    documentEvidenceFiles: [{ id: "old-doc", fileUrl: doc("old").fileUrl,
+      fileName: "old.pdf", fileType: "application/pdf", fileSize: 100, kind: "document" }],
+    historicalImageFiles: [{ id: "old-image", fileUrl: "https://example.com/portrait.png",
+      fileName: "portrait.png", fileType: "image/png", fileSize: 12, kind: "image" }],
+    documentEvidenceIds: ["old-doc"] }, []);
+  assert.match(mixed, /old\.pdf/);
+  assert.match(mixed, /portrait\.png/);
+  assert.doesNotMatch(mixed, /File previews are not available/);
+});
+
 test("a historical image never makes an unrelated current image look like the selected preview", () => {
   const html = render(
     {
@@ -210,4 +244,14 @@ test("a historical image never makes an unrelated current image look like the se
   );
   assert.doesNotMatch(html, /scene\.png/);
   assert.match(html, /File preview is not available/);
+});
+
+test("explicit current and historical image selection renders both previews without attribution swap", () => {
+  const html = render({ ...base, hasDocuments:false, documentCount:0, hasImages:true,
+    imageCount:2, routingDecision:RoutingDecision.VisionOnly,
+    historicalImageFiles:[{ id:"older", fileUrl:"https://utfs.io/f/older.png",
+      fileName:"older.png", fileType:"image/png", fileSize:50, kind:"image" }],
+    includeCurrentImages:true }, [image]);
+  assert.match(html,/older\.png/);
+  assert.match(html,/scene\.png/);
 });

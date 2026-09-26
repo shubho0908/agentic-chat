@@ -23,7 +23,7 @@ test("old image outside client window is selected and added to the model turn ov
   await mock([doc], [{ id: "older", attachments: [image] }], async () => {
     const request = "What is in the image I sent earlier?";
     const result = await routeContext(request, "owner", [], "conv", null, false, { currentMessageId: "now" });
-    assert.deepEqual(result.metadata.historicalImageFiles, [{ id: "old-image", fileUrl: image.fileUrl }]);
+    assert.deepEqual(result.metadata.historicalImageFiles, [{ ...image, kind: "image" }]);
     const prepared = attachHistoricalImagesToModelTurn([{ role: MessageRole.USER, content: request }], result.metadata.historicalImageFiles || []);
     assert.deepEqual((toOpenAIChatMessages(prepared)[0] as {content: unknown[]}).content[1], { type: "image_url", image_url: { url: image.fileUrl } });
     assert.equal(result.metadata.documentEvidenceFiles, undefined);
@@ -47,7 +47,7 @@ test("an old document remains the selected evidence 4 turns later rather than th
     // The unavailable result still must preserve the selected old ID, not route to image-only.
     try {
       const result = await routeContext("What did the earlier document say?", "owner", [], "conv", null, false, { currentMessageId: "now" });
-      assert.deepEqual(result.metadata.documentEvidenceFiles, [{ id: "old-text", fileUrl: textDoc.fileUrl }]);
+      assert.deepEqual(result.metadata.documentEvidenceFiles, [{ ...textDoc, kind: "document" }]);
       assert.equal(result.metadata.routingDecision, RoutingDecision.DocumentsOnly);
       assert.equal(result.metadata.attachmentContextKind, "document");
     } finally {
@@ -63,8 +63,8 @@ test("old image and current document comparison provides both image part and sco
     Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: async () => [] });
     try {
       const result = await routeContext("Compare the earlier image with this PDF", "owner", [], "conv", null, false, { currentMessageId: "now" });
-      assert.deepEqual(result.metadata.historicalImageFiles, [{ id: image.id, fileUrl: image.fileUrl }]);
-      assert.deepEqual(result.metadata.documentEvidenceFiles, [{ id: doc.id, fileUrl: doc.fileUrl }]);
+      assert.deepEqual(result.metadata.historicalImageFiles, [{ ...image, kind: "image" }]);
+      assert.deepEqual(result.metadata.documentEvidenceFiles, [{ ...doc, kind: "document" }]);
       assert.equal(result.metadata.routingDecision, RoutingDecision.Hybrid);
     } finally { Object.defineProperty(prisma.attachment, "findMany", { configurable: true, value: oldAttachmentFind }); }
   });
