@@ -5,14 +5,12 @@ import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { AccordionContent } from "@/components/ui/accordionContent";
 import Image from "next/image";
 import { Brain, ChevronRight, FileText, ImageIcon } from "lucide-react";
-import {
-  filterDocumentAttachments,
-  filterImageAttachments,
-} from "@/lib/attachmentUtils";
 import type { Attachment } from "@/lib/schemas/chat";
 import { RoutingDecision, type MemoryStatus } from "@/types/chat";
 import { ImageLightbox } from "../imageLightbox";
 import { DocumentPreview } from "../documentPreview";
+import { ContextFileList } from "./contextFileList";
+import { resolveContextSources } from "./contextSources";
 
 interface ContextCardsProps {
   memoryStatus: MemoryStatus;
@@ -80,53 +78,7 @@ export function ContextCards({
 
   if (!isFileContext || total === 0) return null;
 
-  const documentSources = memoryStatus.documentEvidenceFiles;
-  const candidateDocuments = isSnippet
-    ? (attachments ?? []).filter((attachment) => attachment.kind === "snippet")
-    : filterDocumentAttachments(attachments);
-  const sourcedAttachment = (source: {
-    id: string; fileUrl: string; fileName?: string; fileType?: string;
-    fileSize?: number; kind?: "image" | "document" | "snippet";
-  }, kind: "image" | "document" | "snippet"): Attachment | null => {
-    if (!source.id || !source.fileName || !source.fileType ||
-        typeof source.fileSize !== "number" || source.fileSize < 0 ||
-        source.kind !== kind) return null;
-    try {
-      const url = new URL(source.fileUrl);
-      if (url.protocol !== "https:") return null;
-    } catch { return null; }
-    return {
-      id: source.id, fileUrl: source.fileUrl, fileName: source.fileName,
-      fileType: source.fileType, fileSize: source.fileSize, kind,
-    };
-  };
-  const uniqueSource = <T extends { id: string; fileUrl: string }>(source: T, all: T[]) =>
-    all.filter((item) => item.id === source.id).length === 1 &&
-    all.filter((item) => item.fileUrl === source.fileUrl).length === 1;
-  const safeDocuments = (documentSources ?? []).flatMap((source) => {
-    if (!uniqueSource(source, documentSources ?? [])) return [];
-    const currentMatches = candidateDocuments.filter((file) => file.fileUrl === source.fileUrl);
-    if (currentMatches.length === 1) return [currentMatches[0]];
-    const historical = sourcedAttachment(source, isSnippet ? "snippet" : "document");
-    return historical ? [historical] : [];
-  });
-  const imageAttachments = filterImageAttachments(attachments);
-  const historicalImageSources = memoryStatus.historicalImageFiles ?? [];
-  const safeHistoricalImages = historicalImageSources.flatMap((source) =>
-    uniqueSource(source, historicalImageSources)
-      ? [sourcedAttachment(source, "image")].filter((file): file is Attachment => file !== null)
-      : []);
-  const currentImageCount = Math.max(0, imageCount - historicalImageSources.length);
-  const currentSources = memoryStatus.selectedCurrentImageFiles;
-  const safeCurrentImages = currentSources
-    ? currentSources.flatMap((source) => {
-        if (!uniqueSource(source, currentSources)) return [];
-        const matches = imageAttachments.filter((file) => file.fileUrl === source.fileUrl);
-        return matches.length === 1 ? [matches[0]] : [];
-      })
-    : (historicalImageSources.length === 0 || memoryStatus.includeCurrentImages) &&
-      imageAttachments.length === currentImageCount ? imageAttachments : [];
-  const safeImages = [...safeHistoricalImages, ...safeCurrentImages];
+  const { safeImages, safeDocuments } = resolveContextSources(memoryStatus, attachments);
   const previewFiles = [...safeImages, ...safeDocuments];
   const missingDocumentCount = documentCount - safeDocuments.length;
   const hasActualFiles = previewFiles.length > 0;
@@ -216,123 +168,22 @@ export function ContextCards({
         </AccordionPrimitive.Header>
         <AccordionContent className="space-y-3 pb-0">
           {multiple && (
-            <section
-              className="px-3.5 pb-3.5 pt-0 sm:px-4"
-              aria-label="Context used"
-            >
-              <div
-                className="mb-3.5 border-t border-border/35 dark:border-white/[0.06]"
-                aria-hidden="true"
-              />
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
-                  <FileText className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-[13px] font-semibold">Context used</h3>
-                  <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                    {hasActualFiles
-                      ? "Available file previews for this request."
-                      : "Sources from this conversation are available for this request."}
-                  </p>
-                </div>
-              </div>
-              {unavailable && (
-                <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-                  {isSnippet ? "Snippet" : "Document"} context unavailable -
-                  retry after processing.
-                </p>
-              )}
-              <div className="mt-3.5">
-                {hasActualFiles ? (
-                  <>
-                    {safeImages.length > 0 && (
-                      <div>
-                        <p className="mb-2 text-xs font-medium">
-                          Images ({safeImages.length})
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {safeImages.map((file) => (
-                            <button
-                              key={file.id ?? file.fileUrl}
-                              type="button"
-                              onClick={() => setOpenedImage(file)}
-                              className={`w-[calc(50%-4px)] min-w-0 max-w-52 overflow-hidden rounded-xl border text-left transition-colors hover:border-foreground/40 sm:w-52 border-border/70 dark:border-chat-user-bubble-border ${focus}`}
-                            >
-                              <span className="relative block aspect-[2.3] bg-muted">
-                                <Image
-                                  src={file.fileUrl}
-                                  alt=""
-                                  fill
-                                  unoptimized
-                                  sizes="208px"
-                                  className="object-cover"
-                                />
-                              </span>
-                              <span className="block truncate px-2 pt-1 text-[11px] font-medium">
-                                {file.fileName}
-                              </span>
-                              <span className="block px-2 pb-1.5 text-[10px] text-muted-foreground">
-                                {formatSize(file.fileSize)}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {safeDocuments.length > 0 && (
-                      <div className={safeImages.length ? "mt-4 pt-0" : ""}>
-                        <p className="mb-2 text-xs font-medium">
-                          {isSnippet ? "Snippets" : "Documents"} (
-                          {safeDocuments.length})
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          {safeDocuments.map((file) => (
-                            <button
-                              key={file.id ?? file.fileUrl}
-                              type="button"
-                              onClick={() => setOpenedDocument(file)}
-                              className={`flex min-w-0 items-center gap-2 rounded-xl border bg-muted/35 p-2.5 text-left hover:border-foreground/40 border-border/70 dark:border-chat-user-bubble-border ${focus}`}
-                            >
-                              <FileText className="size-5 shrink-0 text-violet-500" />
-                              <span className="min-w-0">
-                                <span className="block truncate text-[11px] font-medium">
-                                  {file.fileName}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {formatSize(file.fileSize)}
-                                </span>
-                                <span className="block text-[10px] text-muted-foreground">
-                                  {documentEvidenceLabel(file)}
-                                </span>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {missingDocumentCount > 0 && (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {missingDocumentCount}{" "}
-                        {missingDocumentCount === 1
-                          ? `${documentNoun} preview`
-                          : `${documentNoun} previews`}{" "}
-                        unavailable for this context.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    {imageCount > 0 &&
-                      `${imageCount} ${imageCount === 1 ? "image" : "images"}`}
-                    {imageCount > 0 && documentCount > 0 && " · "}
-                    {documentCount > 0 &&
-                      `${documentCount} ${documentCount === 1 ? documentNoun : documentPlural}`}
-                    . File previews are not available for this context.
-                  </p>
-                )}
-              </div>
-            </section>
+            <ContextFileList
+              safeImages={safeImages}
+              safeDocuments={safeDocuments}
+              hasActualFiles={hasActualFiles}
+              unavailable={unavailable}
+              isSnippet={isSnippet}
+              imageCount={imageCount}
+              documentCount={documentCount}
+              documentNoun={documentNoun}
+              documentPlural={documentPlural}
+              missingDocumentCount={missingDocumentCount}
+              documentEvidenceLabel={documentEvidenceLabel}
+              formatSize={formatSize}
+              onOpenImage={setOpenedImage}
+              onOpenDocument={setOpenedDocument}
+            />
           )}
 
           {!multiple && hasActualFiles && selectedFile && (
