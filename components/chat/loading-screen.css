@@ -1,0 +1,178 @@
+/* iMessage-style authenticated loading screen.
+   Chat bubble tails follow the two-curve technique taught by Samuel Kraft in
+   "Creating iOS-style chat bubbles with CSS":
+   https://samuelkraft.com/blog/ios-chat-bubbles-css
+   The `::before` shape extends past the corner and a page-coloured `::after`
+   carves the tail out of it; the two curves only meet cleanly when the pseudo
+   element's height equals the bubble's border radius. The measurements that
+   keep that true are documented on `.ls-bubble` below. Used with credit.
+
+   Colours are the iMessage palette, switched by the app's `dark` class
+   (next-themes). Only the page background comes from the app token, because the
+   tail cutout is painted in the page colour and has to match the surface. */
+.loading-screen {
+	--ls-me-bg: #007aff;
+	--ls-me-bar: rgba(255, 255, 255, 0.45);
+	--ls-them-bg: #e9e9eb;
+	--ls-them-bar: #d1d1d6;
+	--ls-tail-cut: var(--background);
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	/* `100%` rather than `100dvh` so the screen fills whatever box renders it. */
+	min-height: 100%;
+	align-items: center;
+	justify-content: center;
+	gap: 22px;
+	overflow: hidden;
+	background: var(--background);
+
+	/* Durations are mirrored by EXIT_MS in the gate, which holds the screen
+	   mounted this long before swapping in real content. */
+	animation: ls-fade-in 450ms ease-out both;
+}
+
+.loading-screen.ls-exiting {
+	animation: none;
+	opacity: 0;
+	transition: opacity 450ms ease-in;
+}
+
+@keyframes ls-fade-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+.dark .loading-screen {
+	--ls-me-bg: #3593f3;
+	--ls-them-bg: #38393b;
+	--ls-them-bar: #545558;
+}
+
+.loading-feed {
+	width: min(420px, 88vw);
+	height: 300px;
+	overflow: hidden;
+	padding: 0 28px 8px;
+	-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 100%);
+	mask-image: linear-gradient(to bottom, transparent 0, #000 56px, #000 100%);
+}
+
+.loading-feed-stack {
+	display: flex;
+	height: 100%;
+	flex-direction: column;
+	justify-content: flex-end;
+	gap: 7px;
+	transition: transform 155ms cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+.ls-bubble {
+	position: relative;
+	display: flex;
+	word-wrap: break-word;
+	flex-direction: column;
+	gap: 5px;
+	line-height: 24px;
+	padding: 15px;
+	max-width: 78%;
+	/* Must stay in sync with the 18px radius and the 18px pseudo element height
+	   below. A bubble has to be at least 2x18px tall or the browser scales the
+	   radius and the tail's two curves stop lining up — 15px padding keeps the
+	   shortest bubble (one 7px bar) at 37px, well clear of that floor. */
+	border-radius: 18px;
+}
+
+.ls-bubble::before,
+.ls-bubble::after {
+	content: "";
+	position: absolute;
+	bottom: 0;
+	height: 18px;
+}
+
+.ls-me {
+	background: var(--ls-me-bg);
+	align-self: flex-end;
+}
+
+.ls-me::before {
+	right: -7px;
+	width: 20px;
+	background: var(--ls-me-bg);
+	border-bottom-left-radius: 16px 14px;
+}
+
+.ls-me::after {
+	right: -26px;
+	width: 26px;
+	background: var(--ls-tail-cut);
+	border-bottom-left-radius: 10px;
+}
+
+.ls-them {
+	background: var(--ls-them-bg);
+	align-self: flex-start;
+}
+
+.ls-them::before {
+	left: -7px;
+	width: 20px;
+	background: var(--ls-them-bg);
+	border-bottom-right-radius: 16px 14px;
+}
+
+.ls-them::after {
+	left: -26px;
+	width: 26px;
+	background: var(--ls-tail-cut);
+	border-bottom-right-radius: 10px;
+}
+
+.ls-bar {
+	height: 7px;
+	border-radius: 3.5px;
+	background: var(--ls-them-bar);
+}
+
+.ls-me .ls-bar {
+	background: var(--ls-me-bar);
+}
+
+.pop-me {
+	transform-origin: 100% 100%;
+	animation: ls-pop-me 260ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+
+@keyframes ls-pop-me {
+	0% { opacity: 0; transform: translateY(8px) scale(0.5); }
+	18% { opacity: 1; }
+	55% { transform: translateY(-0.5px) scale(1.046); }
+	78% { transform: translateY(0) scale(0.994); }
+	100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pop-them {
+	transform-origin: 0 100%;
+	animation: ls-pop-them 240ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+
+@keyframes ls-pop-them {
+	0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+	20% { opacity: 1; }
+	58% { transform: translateY(0) scale(1.022); }
+	80% { transform: scale(0.997); }
+	100% { opacity: 1; transform: scale(1); }
+}
+
+.loading-caption {
+	font-size: 13px;
+	letter-spacing: 0.01em;
+	color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pop-me, .pop-them { animation: none; }
+	.loading-screen { animation: none; }
+	.loading-screen.ls-exiting { transition: none; }
+}

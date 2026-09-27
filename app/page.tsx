@@ -5,6 +5,7 @@ import { Loader } from "lucide-react";
 import { LandingEntry } from "@/components/landingEntry";
 import { JsonLd } from "@/components/seo/jsonLd";
 import { HomeContent } from "@/components/homeContent";
+import { AuthLoadingGate } from "@/components/chat/authLoadingGate";
 import { auth } from "@/lib/auth";
 import {
   absoluteUrl,
@@ -88,12 +89,16 @@ export default function Home() {
       <JsonLd data={homeStructuredData} />
       <Suspense
         fallback={
-          <div className="flex h-screen items-center justify-center">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader className="size-5 animate-spin" />
-              <span>Loading…</span>
-            </div>
-          </div>
+          <AuthLoadingGate
+            spinner={
+              <div className="flex h-screen items-center justify-center">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader className="size-5 animate-spin" />
+                  <span>Loading…</span>
+                </div>
+              </div>
+            }
+          />
         }
       >
         <SessionGate currentYear={currentYear} />

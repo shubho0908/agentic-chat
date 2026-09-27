@@ -12,6 +12,7 @@ import { ChatContainer } from "@/components/chat/chatContainer";
 import { ChatInput } from "@/components/chat/chatInput";
 import { ChatHeader } from "@/components/chatHeader";
 import { ConversationNotFound } from "@/components/conversationNotFound";
+import { AuthLoadingGate } from "@/components/chat/authLoadingGate";
 import { AuthModal } from "@/components/authModal";
 import { ArtifactProvider, useArtifacts } from "@/contexts/artifact-context";
 import { ArtifactPanel } from "@/components/artifacts/ArtifactPanel";
@@ -155,7 +156,7 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
   // show the loading state when there is genuinely no data yet.
   if (isLoadingConversation && !conversationData && messages.length === 0) {
     return (
-      <>
+      <div className="flex h-screen flex-col">
         <ChatHeader
           onNewChat={clearChat}
           byokTriggerRef={byokTriggerRef}
@@ -165,13 +166,17 @@ function ChatPageInner({ conversationId }: ChatPageClientProps) {
           onToggleSharing={handleToggleSharing}
           isToggling={isToggling}
         />
-        <div className="flex h-full items-center justify-center">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader className="size-5 animate-spin" />
-            <span>Loading conversation…</span>
-          </div>
-        </div>
-      </>
+        <AuthLoadingGate
+          spinner={
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader className="size-5 animate-spin" />
+                <span>Loading conversation…</span>
+              </div>
+            </div>
+          }
+        />
+      </div>
     );
   }
 
