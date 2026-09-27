@@ -31,12 +31,6 @@ export const ProtectedConversationLink = ({
     const targetPath = appRoutes.conversation(conversationId);
     const currentPath = window.location.pathname;
 
-    onClick?.(e);
-
-    if (currentPath === targetPath) {
-      return;
-    }
-
     const isStreamingInDifferentConversation =
       isStreaming && streamingConversationId !== conversationId;
 
@@ -44,6 +38,13 @@ export const ProtectedConversationLink = ({
       e.preventDefault();
       pendingNavigation.current = targetPath;
       setShowDialog(true);
+      return;
+    }
+
+    onClick?.(e);
+
+    if (currentPath === targetPath) {
+      return;
     }
   };
 
