@@ -31,6 +31,15 @@ export const ProtectedConversationLink = ({
     const targetPath = appRoutes.conversation(conversationId);
     const currentPath = window.location.pathname;
 
+    // Already on this conversation: there is nothing to switch to, so dismiss
+    // the mobile sidebar and stop. The streaming guard below must not run here —
+    // a stream in some other conversation (reachable via browser history) would
+    // otherwise raise a switch dialog for a navigation that changes nothing.
+    if (currentPath === targetPath) {
+      onClick?.(e);
+      return;
+    }
+
     const isStreamingInDifferentConversation =
       isStreaming && streamingConversationId !== conversationId;
 
@@ -42,10 +51,6 @@ export const ProtectedConversationLink = ({
     }
 
     onClick?.(e);
-
-    if (currentPath === targetPath) {
-      return;
-    }
   };
 
   const handleConfirm = () => {
