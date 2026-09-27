@@ -425,6 +425,7 @@ const SidebarMenuButton = ({
   size = "default",
   tooltip,
   className,
+  onClick,
   ref,
   ...props
 }: React.ComponentProps<"button"> & {
@@ -434,7 +435,19 @@ const SidebarMenuButton = ({
   ref?: React.Ref<HTMLButtonElement>;
 } & VariantProps<typeof sidebarMenuButtonVariants>) => {
   const Comp = asChild ? Slot : "button"
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, setOpenMobile } = useSidebar()
+
+  // No defaultPrevented check: next/link calls preventDefault on every click, so
+  // that condition would skip the close on essentially every navigation.
+  const handleClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      onClick?.(event)
+      if (isMobile) {
+        setOpenMobile(false)
+      }
+    },
+    [onClick, isMobile, setOpenMobile]
+  )
 
   const button = (
     <Comp
@@ -443,6 +456,7 @@ const SidebarMenuButton = ({
       data-size={size}
       data-active={isActive}
       className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+      onClick={handleClick}
       {...props}
     />
   )
