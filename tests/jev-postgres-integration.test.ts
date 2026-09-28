@@ -9,6 +9,8 @@ const database = process.env.JEV_TEST_DATABASE_URL;
 test("historical breaker rows are reclassified by PostgreSQL", { skip: !database }, async () => {
   assert.equal(process.env.DATABASE_URL, database);
   const marker = `jev-historical-${Date.now()}`;
+  const before = (await queryJevStats({ days: 1, checkpoint: "tool_router", mode: "shadow" }))[0];
+  const previous = before?.outcomes ?? {};
   const base = {
     checkpoint: "tool_router", schemaVersion: "1", modelVersion: "unknown",
     mode: "shadow", outcome: "error", fallbackUsed: true, latencyMs: 0,
@@ -20,9 +22,10 @@ test("historical breaker rows are reclassified by PostgreSQL", { skip: !database
       { ...base, fallbackReason: "error" },
     ] });
     const [stats] = await queryJevStats({ days: 1, checkpoint: "tool_router", mode: "shadow" });
-    assert.equal(stats.total, 2);
-    assert.deepEqual(stats.outcomes, { circuit_open: 1, error: 1 });
-    assert.deepEqual(stats.modes[0].outcomes, { circuit_open: 1, error: 1 });
+    assert.equal(stats.total - (before?.total ?? 0), 2);
+    assert.equal(stats.outcomes.circuit_open - (previous.circuit_open ?? 0), 1);
+    assert.equal(stats.outcomes.error - (previous.error ?? 0), 1);
+    assert.equal(stats.modes[0].outcomes.circuit_open - (before?.modes[0]?.outcomes.circuit_open ?? 0), 1);
   } finally {
     await prisma.jevDecision.deleteMany({ where: { conversationId: marker } });
   }

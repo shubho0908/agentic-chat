@@ -52,7 +52,7 @@ class JevCircuitOpenError extends Error {
 
 export class JevHttpError extends Error {
   constructor(readonly status: number, readonly responseBody: string) {
-    super(`Jev request failed with status ${status}`);
+    super(`Jev request failed with status ${status}: ${responseBody.slice(0, 200)}`);
     this.name = "JevHttpError";
   }
 }

@@ -142,6 +142,7 @@ test("evaluate surfaces HTTP errors", async () => {
       assert.ok(error instanceof JevHttpError);
       assert.equal(error.status, 429);
       assert.equal(error.responseBody, "rate limited");
+      assert.match(error.message, /429: rate limited/);
       return true;
     });
   } finally {
