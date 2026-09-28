@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   JevCheckpoint,
   JevMode,
+  JevFallbackReason,
   type JevCheckpointName,
   type JevModeValue,
 } from "./types";
@@ -238,19 +239,20 @@ export async function queryJevStats(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
-       outcome,
+       CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END AS outcome,
        COUNT(*)::int AS count
      FROM jev_decisions
      WHERE created_at >= $1
        AND ($2::text IS NULL OR checkpoint = $2)
        AND ($3::text IS NULL OR mode = $3)
      GROUP BY GROUPING SETS (
-       (checkpoint, outcome),
-       (checkpoint, mode, outcome)
+       (checkpoint, CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END),
+       (checkpoint, mode, CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END)
      )`,
         since,
         checkpoint,
         mode,
+        JevFallbackReason.CIRCUIT_OPEN,
       );
       const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,

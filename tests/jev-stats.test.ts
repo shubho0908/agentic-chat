@@ -1,4 +1,5 @@
 import test from "node:test";
+import { prisma } from "@/lib/prisma";
 import assert from "node:assert/strict";
 
 import {
@@ -6,6 +7,7 @@ import {
   JEV_STATS_MAX_DAYS,
   mergeJevStats,
   parseJevStatsQuery,
+  queryJevStats,
 } from "@/lib/jev/stats";
 
 function params(query: string): URLSearchParams {
@@ -392,4 +394,40 @@ test("stats cache drops a computation that never settles once its deadline passe
   const served = await load(statsQuery());
   assert.equal(releases.length, 2);
   assert.equal(served.window.since, new Date(2).toISOString());
+});
+
+test("stats query separates historical breaker blocks from real failures in all modes", async () => {
+  const client = prisma as unknown as Record<string, unknown>;
+  const original = client.$transaction;
+  const queries: string[] = [];
+  const tx = {
+    $executeRawUnsafe: async () => 1,
+    $queryRawUnsafe: async (sql: string, ...args: unknown[]) => {
+      queries.push(sql);
+      if (queries.length === 1) {
+        assert.equal(args[3], "circuit_open");
+        assert.match(sql, /CASE WHEN fallback_reason = \$4 THEN \$4 ELSE outcome END/);
+        return [
+          { checkpoint: "tool_router", mode: null, mode_grouped: 1, outcome: "error", count: 196 },
+          { checkpoint: "tool_router", mode: null, mode_grouped: 1, outcome: "circuit_open", count: 6200 },
+          { checkpoint: "tool_router", mode: "shadow", mode_grouped: 0, outcome: "error", count: 196 },
+          { checkpoint: "tool_router", mode: "shadow", mode_grouped: 0, outcome: "circuit_open", count: 6200 },
+        ];
+      }
+      return [
+        { checkpoint: "tool_router", mode: null, mode_grouped: 1, total: 6396, fallback_rate: 1, p50: 0, p95: 20 },
+        { checkpoint: "tool_router", mode: "shadow", mode_grouped: 0, total: 6396, fallback_rate: 1, p50: 0, p95: 20 },
+      ];
+    },
+  };
+  client.$transaction = async (run: (transaction: unknown) => Promise<unknown>) => run(tx);
+  try {
+    const [stats] = await queryJevStats({ days: 2, checkpoint: "tool_router", mode: null });
+    assert.deepEqual(stats.outcomes, { error: 196, circuit_open: 6200 });
+    assert.deepEqual(stats.modes[0].outcomes, { error: 196, circuit_open: 6200 });
+    assert.equal(stats.total, 6396);
+    assert.equal(queries.length, 2);
+  } finally {
+    client.$transaction = original;
+  }
 });

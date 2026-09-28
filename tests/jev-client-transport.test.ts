@@ -60,7 +60,9 @@ function captureLogs(): { entries: Array<Record<string, unknown>>; restore: () =
 /** Evaluations that miss their budget count as breaker failures, so tests that
  *  provoke them must not leak that state into the next test. */
 function resetJevBreaker(): void {
-  getCircuitBreaker("jev-decision-client").recordSuccess();
+  for (const checkpoint of Object.values(JevCheckpoint)) {
+    getCircuitBreaker(`jev-decision-client:${checkpoint}`).recordSuccess();
+  }
 }
 
 test("evaluate validates response shape and returns model version", async () => {
@@ -170,7 +172,7 @@ test("evaluate sends the correct request shape", async () => {
 
 test("caller-cancelled evaluate rejects fast without counting against the breaker", async () => {
   const client = new JevDecisionClient({ apiKey: "t" });
-  const breaker = getCircuitBreaker("jev-decision-client");
+  const breaker = getCircuitBreaker(`jev-decision-client:${JevCheckpoint.PLANNER}`);
 
   const original = globalThis.fetch;
   let fetchCalls = 0;
@@ -361,7 +363,7 @@ test("classifyJevFailure maps every failure family a checkpoint can see", async 
     "timeout",
   );
 
-  const breaker = getCircuitBreaker("jev-decision-client");
+  const breaker = getCircuitBreaker(`jev-decision-client:${JevCheckpoint.PLANNER}`);
   const client = new JevDecisionClient({ apiKey: "t" });
   const original = globalThis.fetch;
   globalThis.fetch = (async () =>
@@ -375,6 +377,61 @@ test("classifyJevFailure maps every failure family a checkpoint can see", async 
   } finally {
     globalThis.fetch = original;
     resetJevBreaker();
+  }
+});
+
+test("a failed checkpoint opens only its own breaker", async () => {
+  const client = new JevDecisionClient({ apiKey: "t" });
+  const original = globalThis.fetch;
+  const cache = getCircuitBreaker(`jev-decision-client:${JevCheckpoint.CACHE_GATE}`);
+  const router = getCircuitBreaker(`jev-decision-client:${JevCheckpoint.TOOL_ROUTER}`);
+  cache.recordSuccess();
+  router.recordSuccess();
+  let calls = 0;
+  globalThis.fetch = (async () => {
+    calls++;
+    return jsonResponse({ model: "m", answers: { q: { type: "noul", noul: 0.5 } } });
+  }) as typeof fetch;
+  try {
+    for (let i = 0; i < 5; i++) cache.recordFailure();
+    await assert.rejects(
+      () => client.evaluate({ ...evalInput(), checkpoint: JevCheckpoint.CACHE_GATE }),
+      (error: unknown) => classifyJevFailure(error) === "circuit_open",
+    );
+    assert.equal(calls, 0);
+    const result = await client.evaluate({ ...evalInput(), checkpoint: JevCheckpoint.TOOL_ROUTER });
+    assert.equal(result.modelVersion, "m");
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+    cache.recordSuccess();
+    router.recordSuccess();
+  }
+});
+
+test("circuit_open is a distinct decision outcome in durable telemetry", async () => {
+  const { logJevDecision } = await import("@/lib/jev/telemetry");
+  const logs = captureLogs();
+  const previous = process.env.OBSERVABILITY_VERBOSE;
+  process.env.OBSERVABILITY_VERBOSE = "true";
+  try {
+    logJevDecision({
+      checkpoint: JevCheckpoint.TOOL_ROUTER,
+      schemaVersion: "1.0.0",
+      modelVersion: "unknown",
+      mode: "shadow",
+      latencyMs: 0,
+      outcome: "error",
+      fallbackUsed: true,
+      fallbackReason: "circuit_open",
+    });
+    const decision = logs.entries.find((entry) => entry.event === "jev_decision");
+    assert.equal(decision?.outcome, "circuit_open");
+    assert.equal(decision?.fallbackReason, "circuit_open");
+  } finally {
+    logs.restore();
+    if (previous === undefined) delete process.env.OBSERVABILITY_VERBOSE;
+    else process.env.OBSERVABILITY_VERBOSE = previous;
   }
 });
 

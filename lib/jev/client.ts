@@ -162,7 +162,7 @@ export class JevDecisionClient {
   }
 
   async evaluate(input: JevEvaluateInput): Promise<JevEvaluateResult> {
-    const breaker = getCircuitBreaker(CIRCUIT_BREAKER_NAME);
+    const breaker = getCircuitBreaker(`${CIRCUIT_BREAKER_NAME}:${input.checkpoint}`);
     if (!breaker.canAttempt()) {
       logWarn({
         event: "jev_circuit_open",

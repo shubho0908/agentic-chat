@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { logInfo, logMetric, logWarn } from "@/lib/observability";
 import { prisma } from "@/lib/prisma";
-import type { JevDecisionRecord } from "./types";
+import { JevFallbackReason, type JevDecisionRecord } from "./types";
 
 /** Durable copy of the redacted decision record. Fire-and-forget: callers
  * never await it and a database failure must never affect a request. Only
@@ -28,6 +28,9 @@ async function persistJevDecision(record: JevDecisionRecord): Promise<void> {
 }
 
 export function logJevDecision(record: JevDecisionRecord): void {
+  if (record.fallbackReason === JevFallbackReason.CIRCUIT_OPEN) {
+    record = { ...record, outcome: JevFallbackReason.CIRCUIT_OPEN };
+  }
   if (!process.env.DATABASE_URL || process.env.NODE_ENV === "test") {
     // Logging still runs below; only durable persistence is gated.
   } else {
