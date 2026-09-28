@@ -190,6 +190,8 @@ model JevDecision {
   confidence     Float?
   fallbackUsed   Boolean  @map("fallback_used")
   fallbackReason String?  @map("fallback_reason")
+  failureStatus  Int?     @map("failure_status")
+  failureDetail  String?  @map("failure_detail") @db.VarChar(200)
   inputTokens    Int?     @map("input_tokens")
   outputTokens   Int?     @map("output_tokens")
   latencyMs      Int      @map("latency_ms")

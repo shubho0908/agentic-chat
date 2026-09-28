@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   JevCheckpoint,
   JevMode,
+  JevFallbackReason,
   type JevCheckpointName,
   type JevModeValue,
 } from "./types";
@@ -238,19 +239,20 @@ export async function queryJevStats(
         `SELECT checkpoint,
        CASE WHEN GROUPING(mode) = 1 THEN NULL ELSE mode END AS mode,
        GROUPING(mode)::int AS mode_grouped,
-       outcome,
+       CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END AS outcome,
        COUNT(*)::int AS count
      FROM jev_decisions
      WHERE created_at >= $1
        AND ($2::text IS NULL OR checkpoint = $2)
        AND ($3::text IS NULL OR mode = $3)
      GROUP BY GROUPING SETS (
-       (checkpoint, outcome),
-       (checkpoint, mode, outcome)
+       (checkpoint, CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END),
+       (checkpoint, mode, CASE WHEN fallback_reason = $4 THEN $4 ELSE outcome END)
      )`,
         since,
         checkpoint,
         mode,
+        JevFallbackReason.CIRCUIT_OPEN,
       );
       const latencyRows = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT checkpoint,
@@ -305,6 +307,14 @@ export async function queryJevStats(
   );
 }
 
+export interface JevCacheFailure {
+  createdAt: string;
+  fallbackReason: string | null;
+  failureStatus: number | null;
+  failureDetail: string | null;
+  requestId: string | null;
+}
+
 export interface JevStatsPayload {
   window: {
     days: number;
@@ -313,6 +323,7 @@ export interface JevStatsPayload {
     since: string;
   };
   checkpoints: JevCheckpointStats[];
+  recentCacheFailures: JevCacheFailure[];
 }
 
 export async function computeJevStatsPayload(
@@ -322,6 +333,23 @@ export async function computeJevStatsPayload(
     Date.now() - query.days * 24 * 60 * 60 * 1000,
   ).toISOString();
   const checkpoints = await queryJevStats(query);
+  const recentCacheFailures =
+    query.checkpoint === null || query.checkpoint === JevCheckpoint.CACHE_GATE
+      ? await prisma.jevDecision.findMany({
+          where: {
+            checkpoint: JevCheckpoint.CACHE_GATE,
+            fallbackUsed: true,
+            createdAt: { gte: new Date(since) },
+            ...(query.mode && { mode: query.mode }),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: {
+            createdAt: true, fallbackReason: true, failureStatus: true,
+            failureDetail: true, requestId: true,
+          },
+        })
+      : [];
   return {
     window: {
       days: query.days,
@@ -330,6 +358,10 @@ export async function computeJevStatsPayload(
       since,
     },
     checkpoints,
+    recentCacheFailures: recentCacheFailures.map(({ createdAt, ...failure }) => ({
+      ...failure,
+      createdAt: createdAt.toISOString(),
+    })),
   };
 }
 

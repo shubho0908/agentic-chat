@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { getJevOnFailure } from "@/lib/jev/config";
 import { JevCheckpoint, JevOnFailure } from "@/lib/jev/types";
 import { gateCacheHit, type JevCacheGateState } from "@/lib/jev/cacheGate";
+import { JevDecisionClient } from "@/lib/jev/client";
+import { getCircuitBreaker } from "@/lib/circuitBreaker";
 import { gatePassages } from "@/lib/jev/passageGate";
 import { gateMemoryEvidence } from "@/lib/jev/memoryEvidenceGate";
 import {
@@ -12,10 +14,7 @@ import {
   MemoryGateReason,
 } from "@/lib/jev/memoryGate";
 import type { RetrievalCandidate } from "@/lib/rag/retrieval/hybrid";
-import type {
-  JevDecisionClient,
-  JevEvaluateResult,
-} from "@/lib/jev/client";
+import type { JevEvaluateResult } from "@/lib/jev/client";
 import { withEnv } from "@/tests/helpers";
 
 function fakeResult(
@@ -272,4 +271,30 @@ test("memory gate active closed skips unvettable retrieval, open keeps the legac
   );
   assert.equal(open.reasonCode, MemoryGateReason.LEGACY_HEURISTIC);
   assert.equal(memoryGateDegradation(open), null);
+});
+
+test("cache gate captures HTTP failure status and a bounded response in its decision", async () => {
+  const oldFetch = globalThis.fetch;
+  const oldMode = process.env.JEV_CACHE_GATE_MODE;
+  const oldVerbose = process.env.OBSERVABILITY_VERBOSE;
+  process.env.JEV_CACHE_GATE_MODE = "active";
+  process.env.OBSERVABILITY_VERBOSE = "true";
+  globalThis.fetch = (async () => new Response("x".repeat(800), { status: 529 })) as typeof fetch;
+  const logs = captureLogs();
+  try {
+    const result = await gateCacheHit(CACHE_STATE, undefined, new JevDecisionClient({ apiKey: "test" }));
+    assert.equal(result.serve, false);
+    const row = logs.entries.find((entry) => entry.event === "jev_decision" && entry.checkpoint === "cache_gate");
+    assert.equal(row?.fallbackReason, "error");
+    assert.equal(row?.failureStatus, 529);
+    assert.equal(String(row?.failureDetail).length, 200);
+  } finally {
+    logs.restore();
+    globalThis.fetch = oldFetch;
+    getCircuitBreaker("jev-decision-client:cache_gate").recordSuccess();
+    if (oldMode === undefined) delete process.env.JEV_CACHE_GATE_MODE;
+    else process.env.JEV_CACHE_GATE_MODE = oldMode;
+    if (oldVerbose === undefined) delete process.env.OBSERVABILITY_VERBOSE;
+    else process.env.OBSERVABILITY_VERBOSE = oldVerbose;
+  }
 });
