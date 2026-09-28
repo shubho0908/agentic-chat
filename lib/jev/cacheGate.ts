@@ -3,6 +3,7 @@ import {
   JevConfigurationError,
   JevDecisionClient,
   JevInvalidResponseError,
+  JevHttpError,
   classifyJevFailure,
 } from "./client";
 import { getJevMode, getJevOnFailure } from "./config";
@@ -146,6 +147,7 @@ export async function gateCacheHit(
         outcome: serve ? "invalid_response_serve" : "invalid_response_veto",
         fallbackUsed: true,
         fallbackReason: JevFallbackReason.INVALID,
+        failureDetail: result.rawBody?.slice(0, 200),
         requestId,
         conversationId,
         inputTokens: result.usage?.input_tokens,
@@ -202,6 +204,12 @@ export async function gateCacheHit(
       outcome: serve ? "error_serve" : "error_veto",
       fallbackUsed: true,
       fallbackReason: classifyJevFailure(error),
+      failureStatus: error instanceof JevHttpError ? error.status : undefined,
+      failureDetail: error instanceof JevHttpError
+        ? error.responseBody.slice(0, 200)
+        : error instanceof JevInvalidResponseError
+          ? error.responseBody?.slice(0, 200)
+          : undefined,
       requestId,
       conversationId,
     });

@@ -235,6 +235,7 @@ function statsPayload(query: JevStatsQuery, marker: number): JevStatsPayload {
   return {
     window: { ...query, since: new Date(marker).toISOString() },
     checkpoints: [],
+    recentCacheFailures: [],
   };
 }
 

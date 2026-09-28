@@ -39,6 +39,8 @@ async function callStatsRoute(options: {
   const getSession = mock.method(auth.api, "getSession", async () => options.session);
   const client = prisma as unknown as Record<string, unknown>;
   const originalTransaction = client.$transaction;
+  const originalFindMany = prisma.jevDecision.findMany;
+  prisma.jevDecision.findMany = (async () => []) as typeof prisma.jevDecision.findMany;
   let databaseQueries = 0;
   let transactions = 0;
   const statementTimeouts: unknown[] = [];
@@ -76,6 +78,7 @@ async function callStatsRoute(options: {
     };
   } finally {
     client.$transaction = originalTransaction;
+    prisma.jevDecision.findMany = originalFindMany;
     getSession.mock.restore();
     if (previousAllowed === undefined) delete process.env[JEV_STATS_ALLOWED_EMAIL_ENV];
     else process.env[JEV_STATS_ALLOWED_EMAIL_ENV] = previousAllowed;

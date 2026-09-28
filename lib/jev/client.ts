@@ -50,6 +50,13 @@ class JevCircuitOpenError extends Error {
   }
 }
 
+export class JevHttpError extends Error {
+  constructor(readonly status: number, readonly responseBody: string) {
+    super(`Jev request failed with status ${status}`);
+    this.name = "JevHttpError";
+  }
+}
+
 export class JevInvalidResponseError extends Error {
   readonly responseBody?: string;
 
@@ -282,11 +289,7 @@ export class JevDecisionClient {
     const body = await response.text();
 
     if (!response.ok) {
-      const error = new Error(
-        `Jev request failed with status ${response.status}: ${body.slice(0, 200)}`,
-      );
-      (error as Error & { status?: number }).status = response.status;
-      throw error;
+      throw new JevHttpError(response.status, truncateJevResponseBody(body));
     }
 
     try {

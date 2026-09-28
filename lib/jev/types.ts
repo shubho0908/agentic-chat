@@ -131,6 +131,8 @@ export interface JevDecisionRecord {
   confidence?: number;
   fallbackUsed: boolean;
   fallbackReason?: JevFallbackReasonValue;
+  failureStatus?: number;
+  failureDetail?: string;
   inputTokens?: number;
   outputTokens?: number;
   requestId?: string;

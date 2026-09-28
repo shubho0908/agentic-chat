@@ -6,6 +6,7 @@ import {
   JevEvaluationCancelledError,
   JevEvaluationTimeoutError,
   JevInvalidResponseError,
+  JevHttpError,
   classifyJevFailure,
 } from "@/lib/jev/client";
 import { getCircuitBreaker } from "@/lib/circuitBreaker";
@@ -137,7 +138,12 @@ test("evaluate surfaces HTTP errors", async () => {
   globalThis.fetch = (async () =>
     new Response("rate limited", { status: 429 })) as typeof fetch;
   try {
-    await assert.rejects(() => client.evaluate(evalInput()));
+    await assert.rejects(() => client.evaluate(evalInput()), (error: unknown) => {
+      assert.ok(error instanceof JevHttpError);
+      assert.equal(error.status, 429);
+      assert.equal(error.responseBody, "rate limited");
+      return true;
+    });
   } finally {
     globalThis.fetch = original;
   }
@@ -409,7 +415,17 @@ test("a failed checkpoint opens only its own breaker", async () => {
   }
 });
 
-test("circuit_open is a distinct decision outcome in durable telemetry", async () => {
+test("circuit_open is a distinct decision outcome in logs and persisted data", async () => {
+  const { prisma } = await import("@/lib/prisma");
+  const originalCreate = prisma.jevDecision.create;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const writableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = writableEnv.NODE_ENV;
+  process.env.DATABASE_URL = "postgresql://localhost/test";
+  writableEnv.NODE_ENV = "development";
+  let resolveWrite: (value: unknown) => void = () => {};
+  const written = new Promise<unknown>((resolve) => { resolveWrite = resolve; });
+  prisma.jevDecision.create = (async (args: unknown) => { resolveWrite(args); return {} as never; }) as typeof prisma.jevDecision.create;
   const { logJevDecision } = await import("@/lib/jev/telemetry");
   const logs = captureLogs();
   const previous = process.env.OBSERVABILITY_VERBOSE;
@@ -428,8 +444,16 @@ test("circuit_open is a distinct decision outcome in durable telemetry", async (
     const decision = logs.entries.find((entry) => entry.event === "jev_decision");
     assert.equal(decision?.outcome, "circuit_open");
     assert.equal(decision?.fallbackReason, "circuit_open");
+    const stored = await written as { data: { outcome: string; fallbackReason: string } };
+    assert.equal(stored.data.outcome, "circuit_open");
+    assert.equal(stored.data.fallbackReason, "circuit_open");
   } finally {
     logs.restore();
+    prisma.jevDecision.create = originalCreate;
+    if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = originalDatabaseUrl;
+    if (originalNodeEnv === undefined) delete writableEnv.NODE_ENV;
+    else writableEnv.NODE_ENV = originalNodeEnv;
     if (previous === undefined) delete process.env.OBSERVABILITY_VERBOSE;
     else process.env.OBSERVABILITY_VERBOSE = previous;
   }
