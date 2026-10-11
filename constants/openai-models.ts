@@ -90,9 +90,10 @@ interface OpenAIModel {
 }
 
 /**
- * Effort levels for models that always run a reasoning pass: GPT-6 Astra
- * rejects "none" and starts at "low".
- * Source: https://developers.openai.com/api/docs/models/gpt-6-astra
+ * GPT-6 Astra and GPT-6.1 Sol always run a reasoning pass: they reject
+ * "none" and start at "low".
+ * Sources: https://developers.openai.com/api/docs/models/gpt-6-astra,
+ * https://developers.openai.com/api/docs/models/gpt-6.1-sol
  */
 const EFFORTS_WITHOUT_NONE: readonly ReasoningEffortLevel[] = [
   "low",
@@ -103,15 +104,12 @@ const EFFORTS_WITHOUT_NONE: readonly ReasoningEffortLevel[] = [
 ];
 
 /**
- * Models available as of 2026-09-23 — the latest two OpenAI generations: the
- * GPT-6 family (Astra, Sol, Luna) and the GPT-5.6 family it supersedes. GPT-5.5
- * and older are excluded: OpenAI's model selection guidance now starts at GPT-6
- * (https://developers.openai.com/api/docs/models) and GPT-5.5 was retired from
- * ChatGPT, ChatGPT Work, and Codex on 2026-10-14
- * (https://help.openai.com/en/articles/6825453-chatgpt-release-notes).
+ * Chat models verified on 2026-10-11: GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol,
+ * GPT-6 Luna, and the existing GPT-5.6 family. This is the app's curated chat
+ * catalog, not the complete OpenAI API model or deprecation list.
  *
  * Per-model sources: https://developers.openai.com/api/docs/models/gpt-6-astra,
- * .../gpt-6-sol, .../gpt-6-luna, .../gpt-5.6-sol, .../gpt-5.6-terra,
+ * .../gpt-6.1-sol, .../gpt-6-sol, .../gpt-6-luna, .../gpt-5.6-sol, .../gpt-5.6-terra,
  * .../gpt-5.6-luna; migration guide:
  * https://developers.openai.com/api/docs/guides/latest-model. Deprecation
  * schedule: https://developers.openai.com/api/docs/deprecations
@@ -128,6 +126,18 @@ export const OPENAI_MODELS: OpenAIModel[] = [
     supportedReasoningEfforts: EFFORTS_WITHOUT_NONE,
     defaultReasoningEffort: "medium",
     pricing: { input: 10.0, output: 50.0 },
+  },
+  {
+    id: "gpt-6.1-sol",
+    name: "GPT-6.1 Sol",
+    description: "Near-Astra performance for complex work at a lower cost",
+    contextWindow: 1050000,
+    category: "reasoning",
+    capabilities: ["text", "vision"],
+    hasReasoning: true,
+    supportedReasoningEfforts: EFFORTS_WITHOUT_NONE,
+    defaultReasoningEffort: "medium",
+    pricing: { input: 2.0, output: 10.0 },
   },
   {
     id: "gpt-6-sol",

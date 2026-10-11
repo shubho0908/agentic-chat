@@ -64,7 +64,7 @@ function supportsCustomTemperature(model: string): boolean {
 /**
  * Tool calling on the GPT-6 family requires the Responses API: Chat
  * Completions supports function calling for GPT-6 Sol/Luna only with
- * reasoning effort "none", and not at all for GPT-6 Astra.
+ * reasoning effort "none", and not at all for GPT-6 Astra or GPT-6.1 Sol.
  * Source: https://developers.openai.com/api/docs/guides/latest-model#update-api-and-model-parameters
  */
 export function requiresResponsesApiForToolCalling(model: string): boolean {
